@@ -11,6 +11,7 @@
     "analyze:dep": "node ./scripts/depAnalysis.js",
     "quarantine:orphans": "node ./scripts/quarantineOrphans.js",
     "cleanup:unused": "node ./scripts/quarantineOrphans.js && echo Review __trash__ before permanent deletion"
+    ,"organize:preview": "node ./scripts/organizePreview.js"
   },
   "dependencies": {
     "@expo/vector-icons": "^15.0.2",

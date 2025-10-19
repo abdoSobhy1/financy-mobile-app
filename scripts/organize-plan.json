@@ -1,0 +1,25 @@
+{
+  "generatedAt": "2025-10-19T09:05:18.813Z",
+  "plan": [
+    {
+      "from": "assets/splash-icon.png",
+      "to": "src/assets/images/splash-icon.png"
+    },
+    {
+      "from": "assets/logo.svg",
+      "to": "src/assets/images/logo.svg"
+    },
+    {
+      "from": "assets/icon.png",
+      "to": "src/assets/images/icon.png"
+    },
+    {
+      "from": "assets/favicon.png",
+      "to": "src/assets/images/favicon.png"
+    },
+    {
+      "from": "assets/adaptive-icon.png",
+      "to": "src/assets/images/adaptive-icon.png"
+    }
+  ]
+}

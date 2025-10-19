@@ -39,3 +39,40 @@ yarn-error.*
 # generated native folders
 /ios
 /android
+
+# Firebase config files
+google-services.json
+GoogleService-Info.plist
+
+# Database files
+*.db
+*.sqlite
+*.sqlite3
+
+# Build artifacts
+build/
+*.ipa
+*.apk
+*.aab
+
+# Test files
+test-*
+*.test.*
+__tests__/
+coverage/
+
+# Temporary export files
+financy-export-*
+database-*
+
+# Development tools
+.expo-shared/
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Environment files
+.env

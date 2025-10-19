@@ -1,0 +1,42 @@
+import React from "react";
+import { createStackNavigator } from "@react-navigation/stack";
+import { AnalysisScreen } from "../screens/analysis/AnalysisScreen";
+import { CreateCustomChartScreen } from "../screens/analysis/CreateCustomChartScreen";
+import { UI } from "../constants";
+import { AnalysisStackParamList } from "../types";
+
+const Stack = createStackNavigator<AnalysisStackParamList>();
+
+const AnalysisStackNavigator: React.FC = () => {
+  return (
+    <Stack.Navigator
+      screenOptions={{
+        headerShown: false,
+      }}>
+      <Stack.Screen
+        name="AnalysisHome"
+        component={AnalysisScreen}
+        options={{
+          headerShown: false,
+        }}
+      />
+      <Stack.Screen
+        name="CreateCustomChart"
+        component={CreateCustomChartScreen}
+        options={({ route }) => ({
+          title: route.params?.isEditing ? "Edit Chart" : "Create Chart",
+          presentation: "modal",
+          headerStyle: {
+            backgroundColor: UI.COLORS.BACKGROUND,
+          },
+          headerTintColor: UI.COLORS.TEXT_PRIMARY,
+          headerTitleStyle: {
+            fontWeight: "600",
+          },
+        })}
+      />
+    </Stack.Navigator>
+  );
+};
+
+export default AnalysisStackNavigator;
