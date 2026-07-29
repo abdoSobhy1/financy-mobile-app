@@ -50,6 +50,8 @@ import {
   TransactionTypeToggle,
   TransactionFormFields,
 } from "../components/forms/transaction";
+import { useAppTheme } from "../theme";
+import { VoiceInputButton } from "../components/input";
 
 type AddTransactionScreenNavigationProp = StackNavigationProp<
   TransactionStackParamList,
@@ -61,6 +63,7 @@ type AddTransactionScreenRouteProp = RouteProp<
 >;
 
 const AddTransactionScreen: React.FC = () => {
+  const { colors, typography, spacing, radius } = useAppTheme();
   const navigation = useNavigation<AddTransactionScreenNavigationProp>();
   const route = useRoute<AddTransactionScreenRouteProp>();
   const editTransaction = route.params?.editTransaction;
@@ -329,11 +332,27 @@ const AddTransactionScreen: React.FC = () => {
     [dispatch, handleCategoryChange],
   );
 
+  const handleVoiceResult = useCallback(
+    (parsed: any[]) => {
+      if (!parsed || parsed.length === 0) return;
+      const tx = parsed[0];
+      setFormData((prev) => ({
+        ...prev,
+        amount: tx.amount ? tx.amount.toString() : prev.amount,
+        description: tx.description || prev.description,
+        type: tx.type || prev.type,
+        categoryId: tx.categoryId || prev.categoryId,
+        date: tx.date || prev.date,
+      }));
+      if (tx.categoryId) {
+        handleCategoryChange(tx.categoryId);
+      }
+    },
+    [handleCategoryChange],
+  );
+
   return (
-    <LinearGradient
-      colors={[UI.COLORS.BACKGROUND, "#0F0F2D", UI.COLORS.BACKGROUND]}
-      locations={[0, 0.4, 1]}
-      style={styles.gradient}>
+    <View style={[styles.gradient, { backgroundColor: colors.background }]}>
       <SafeAreaView style={styles.container}>
         <KeyboardAvoidingView
           style={styles.keyboardAvoid}
@@ -372,6 +391,15 @@ const AddTransactionScreen: React.FC = () => {
                 }
               }}
             />
+
+            {/* Voice Input Button: Prominent Fast Path (Requirement 5) */}
+            <View style={{ marginBottom: spacing.s20 }}>
+              <VoiceInputButton
+                onResult={handleVoiceResult}
+                variant="prominent"
+                label="Speak Transaction"
+              />
+            </View>
 
             <TransactionFormFields
               formData={formData}
@@ -459,26 +487,58 @@ const AddTransactionScreen: React.FC = () => {
               </>
             )}
 
-            {/* More options disclosure (Notes & Date override) */}
+            {/* More options disclosure (Notes & Date override) (Requirement 3) */}
             <TouchableOpacity
-              style={styles.moreOptionsToggle}
+              style={[
+                styles.moreOptionsToggle,
+                {
+                  backgroundColor: colors.surfaceVariant,
+                  borderRadius: radius.medium,
+                  paddingVertical: spacing.s12,
+                  paddingHorizontal: spacing.s16,
+                  borderColor: colors.outline,
+                  borderWidth: StyleSheet.hairlineWidth,
+                  marginBottom: spacing.s12,
+                },
+              ]}
               onPress={() => setShowMoreOptions((prev) => !prev)}
               activeOpacity={0.7}>
-              <Text style={styles.moreOptionsText}>
+              <Text
+                style={[
+                  typography.labelMedium,
+                  { color: colors.onSurfaceVariant },
+                ]}>
                 {showMoreOptions ? "Fewer options" : "More options"}
               </Text>
               <Ionicons
                 name={showMoreOptions ? "chevron-up" : "chevron-down"}
                 size={16}
-                color={UI.COLORS.PRIMARY_LIGHT}
+                color={colors.onSurfaceVariant}
               />
             </TouchableOpacity>
 
             {showMoreOptions && (
-              <View style={styles.moreOptionsSection}>
+              <View
+                style={[
+                  styles.moreOptionsSection,
+                  {
+                    backgroundColor: colors.surface,
+                    borderRadius: radius.medium,
+                    padding: spacing.s16,
+                    borderColor: colors.outline,
+                    borderWidth: StyleSheet.hairlineWidth,
+                    marginBottom: spacing.s16,
+                  },
+                ]}>
                 {/* ── Date ──────────────────────────────────────────── */}
-                <View style={styles.section}>
-                  <Text style={styles.label}>Date</Text>
+                <View style={[styles.section, { marginBottom: spacing.s16 }]}>
+                  <Text
+                    style={[
+                      typography.labelMedium,
+                      { color: colors.primary, marginBottom: spacing.s8 },
+                    ]}>
+                    Date
+                  </Text>
                   <CustomDatePicker
                     value={formData.date}
                     onDateChange={(date) => updateFormField("date", date)}
@@ -486,33 +546,68 @@ const AddTransactionScreen: React.FC = () => {
                     showLabel={false}
                     style={[
                       styles.dateCard,
-                      errors.date && styles.dateCardError,
+                      errors.date && {
+                        borderColor: colors.error,
+                        borderWidth: 1.5,
+                      },
                     ]}
                   />
                   {errors.date && (
-                    <Text style={styles.errorText}>{errors.date}</Text>
+                    <Text
+                      style={[
+                        typography.caption,
+                        { color: colors.error, marginTop: spacing.s4 },
+                      ]}>
+                      {errors.date}
+                    </Text>
                   )}
                 </View>
 
                 {/* ── Notes ─────────────────────────────────────────── */}
                 <View style={styles.section}>
-                  <Text style={styles.label}>Notes</Text>
-                  <View style={styles.inputCard}>
+                  <Text
+                    style={[
+                      typography.labelMedium,
+                      { color: colors.primary, marginBottom: spacing.s8 },
+                    ]}>
+                    Notes
+                  </Text>
+                  <View
+                    style={[
+                      styles.inputCard,
+                      {
+                        backgroundColor: colors.surfaceVariant,
+                        borderRadius: radius.medium,
+                        borderColor: colors.outline,
+                        borderWidth: StyleSheet.hairlineWidth,
+                        paddingHorizontal: spacing.s12,
+                      },
+                    ]}>
                     <View
                       style={[
                         styles.iconBox,
-                        { alignSelf: "flex-start", marginTop: 14 },
+                        {
+                          alignSelf: "flex-start",
+                          marginTop: 14,
+                          backgroundColor: colors.primaryContainer,
+                          borderRadius: radius.small,
+                        },
                       ]}>
                       <Ionicons
                         name="pencil-outline"
                         size={18}
-                        color={UI.COLORS.PRIMARY_LIGHT}
+                        color={colors.primary}
                       />
                     </View>
                     <TextInput
-                      style={[styles.input, styles.textArea]}
+                      style={[
+                        styles.input,
+                        styles.textArea,
+                        typography.bodyMedium,
+                        { color: colors.onSurface },
+                      ]}
                       placeholder="Additional notes…"
-                      placeholderTextColor={UI.COLORS.TEXT_MUTED}
+                      placeholderTextColor={colors.onSurfaceVariant}
                       value={formData.note}
                       onChangeText={(text) => updateFormField("note", text)}
                       multiline
@@ -526,8 +621,22 @@ const AddTransactionScreen: React.FC = () => {
 
             {/* Submit error */}
             {errors.submit && (
-              <View style={styles.errorAlert}>
-                <Text style={styles.errorAlertText}>{errors.submit}</Text>
+              <View
+                style={[
+                  styles.errorAlert,
+                  {
+                    backgroundColor: colors.errorContainer,
+                    borderColor: colors.error,
+                    borderRadius: radius.medium,
+                  },
+                ]}>
+                <Text
+                  style={[
+                    typography.labelMedium,
+                    { color: colors.onErrorContainer },
+                  ]}>
+                  {errors.submit}
+                </Text>
               </View>
             )}
 
@@ -535,7 +644,7 @@ const AddTransactionScreen: React.FC = () => {
           </ScrollView>
         </KeyboardAvoidingView>
       </SafeAreaView>
-    </LinearGradient>
+    </View>
   );
 };
 

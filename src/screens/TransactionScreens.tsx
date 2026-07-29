@@ -35,6 +35,7 @@ import {
   AdvancedFilters,
 } from "../components/filters/AdvancedFiltersModal";
 import { UI } from "../constants";
+import { useAppTheme } from "../theme";
 import { getCurrentBillingPeriod } from "../utils/billingPeriod";
 import { findMatchingBudgetForCategory } from "../utils";
 import { smsService } from "../services/smsService";
@@ -69,6 +70,7 @@ interface DateRange {
 }
 
 export const TransactionListScreen: React.FC = () => {
+  const { colors, typography, spacing, radius } = useAppTheme();
   const dispatch = useDispatch<AppDispatch>();
   const navigation = useNavigation<TransactionListNavigationProp>();
   const { showAlert, AlertComponent } = useCustomAlert();
@@ -466,17 +468,21 @@ export const TransactionListScreen: React.FC = () => {
   );
 
   return (
-    <LinearGradient
-      colors={["#0a0a2e", "#1a1040", "#0d0d30"]}
-      style={{ flex: 1 }}>
-      <SafeAreaView style={{ flex: 1, padding: UI.SPACING.MD }}>
+    <View style={{ flex: 1, backgroundColor: colors.background }}>
+      <SafeAreaView style={{ flex: 1, paddingHorizontal: spacing.s16 }}>
         <StatusBar
           barStyle="light-content"
           backgroundColor="transparent"
           translucent
         />
 
-        <Text style={styles.screenTitle}>Transactions</Text>
+        <Text
+          style={[
+            typography.displaySmall,
+            { color: colors.onBackground, marginBottom: spacing.s16, fontWeight: "800" },
+          ]}>
+          Transactions
+        </Text>
         <>
           {headerComponent}
           <TransactionFilterBar
@@ -507,7 +513,7 @@ export const TransactionListScreen: React.FC = () => {
             <RefreshControl
               refreshing={refreshing}
               onRefresh={handleRefresh}
-              tintColor={UI.COLORS.PRIMARY}
+              tintColor={colors.primary}
             />
           }
           showsVerticalScrollIndicator={false}
@@ -566,7 +572,7 @@ export const TransactionListScreen: React.FC = () => {
           />
         )}
       </SafeAreaView>
-    </LinearGradient>
+    </View>
   );
 };
 

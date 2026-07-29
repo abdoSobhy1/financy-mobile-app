@@ -1,7 +1,9 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { View, Text, Modal, TouchableOpacity, TextInput, ScrollView, StyleSheet } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { UI } from "../../constants";
+import { Category } from "../../types";
+import { useAppTheme } from "../../theme";
 
 const PREDEFINED_COLORS = [
   "#EF4444",
@@ -92,6 +94,8 @@ interface CategoryCreationModalProps {
   visible: boolean;
   onClose: () => void;
   onCreateCategory: (category: CategoryData) => void;
+  onUpdateCategory?: (id: string, category: CategoryData) => void;
+  category?: Category | null;
   type?: "income" | "expense";
   title?: string;
 }
@@ -100,14 +104,35 @@ export const CategoryCreationModal: React.FC<CategoryCreationModalProps> = ({
   visible,
   onClose,
   onCreateCategory,
+  onUpdateCategory,
+  category,
   type,
   title = "Add New Category",
 }) => {
+  const { colors, typography, spacing, radius } = useAppTheme();
   const [categoryName, setCategoryName] = useState("");
   const [categoryColor, setCategoryColor] = useState("");
   const [categoryIcon, setCategoryIcon] = useState("");
   const [isManualIcon, setIsManualIcon] = useState(false);
   const [categoryType, setCategoryType] = useState<"income" | "expense">(type || "expense");
+
+  useEffect(() => {
+    if (visible) {
+      if (category) {
+        setCategoryName(category.name || "");
+        setCategoryColor(category.color || "");
+        setCategoryIcon(category.icon || "");
+        setIsManualIcon(true);
+        setCategoryType(category.type || type || "expense");
+      } else {
+        setCategoryName("");
+        setCategoryColor("");
+        setCategoryIcon("");
+        setIsManualIcon(false);
+        setCategoryType(type || "expense");
+      }
+    }
+  }, [visible, category, type]);
 
   const handleNameChange = (text: string) => {
     setCategoryName(text);
@@ -120,12 +145,18 @@ export const CategoryCreationModal: React.FC<CategoryCreationModalProps> = ({
   const handleCreate = () => {
     if (!categoryName.trim()) return;
 
-    onCreateCategory({
+    const data: CategoryData = {
       name: categoryName.trim(),
       type: categoryType,
       color: categoryColor || undefined,
       icon: categoryIcon || undefined,
-    });
+    };
+
+    if (category && onUpdateCategory) {
+      onUpdateCategory(category.id, data);
+    } else {
+      onCreateCategory(data);
+    }
 
     // Reset form
     setCategoryName("");
@@ -156,7 +187,7 @@ export const CategoryCreationModal: React.FC<CategoryCreationModalProps> = ({
       <View style={styles.modalOverlay}>
         <View style={styles.modal}>
           <View style={styles.modalHeader}>
-            <Text style={styles.modalTitle}>{title}</Text>
+            <Text style={styles.modalTitle}>{category ? "Edit Category" : title}</Text>
             <TouchableOpacity onPress={handleClose} style={styles.closeButton}>
               <Ionicons name="close" size={24} color={UI.COLORS.TEXT_SECONDARY} />
             </TouchableOpacity>
@@ -262,7 +293,9 @@ export const CategoryCreationModal: React.FC<CategoryCreationModalProps> = ({
               onPress={handleCreate}
               style={[styles.addButton, styles.modalButton, !categoryName.trim() && styles.addButtonDisabled]}
               disabled={!categoryName.trim()}>
-              <Text style={[styles.addButtonText, !categoryName.trim() && styles.addButtonTextDisabled]}>Add Category</Text>
+              <Text style={[styles.addButtonText, !categoryName.trim() && styles.addButtonTextDisabled]}>
+                {category ? "Save changes" : "Add Category"}
+              </Text>
             </TouchableOpacity>
           </View>
         </View>

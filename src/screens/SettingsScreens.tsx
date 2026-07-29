@@ -31,6 +31,11 @@ import {
 } from "../components/ui";
 import { runSyncApplyTest, runAllSyncApplyTests } from "../debug/runSyncTest";
 import { UI } from "../constants";
+import { useAppTheme, categoryPalette } from "../theme";
+import {
+  getCategoryColorKey,
+  getCategoryIconName,
+} from "../utils/categoryDictionary";
 import NotificationService from "../services/notificationService";
 import { smsService } from "../services/smsService";
 import {
@@ -41,6 +46,7 @@ import {
   fetchCategories,
   addCategory,
   deleteCategory,
+  updateCategory,
 } from "../store/slices/categoriesSlice";
 import {
   fetchWallets,
@@ -159,6 +165,7 @@ export const SettingsScreen: React.FC = () => {
   const [debugLoggingEnabled, setDebugLoggingEnabled] =
     useState(getDebugMode());
   const [addCategoryModalVisible, setAddCategoryModalVisible] = useState(false);
+  const [editingCategory, setEditingCategory] = useState<Category | null>(null);
   const [showFirebaseCleanup, setShowFirebaseCleanup] = useState(false);
   const [showCategoryManagement, setShowCategoryManagement] = useState(false);
   const { items: wallets } = useSelector((state: RootState) => state.wallets);
@@ -507,6 +514,25 @@ export const SettingsScreen: React.FC = () => {
     }
   };
 
+  const handleCategoryUpdate = async (
+    id: string,
+    categoryData: {
+      name: string;
+      type: "income" | "expense";
+      color?: string;
+      icon?: string;
+    },
+  ) => {
+    try {
+      await dispatch(updateCategory({ id, updates: categoryData })).unwrap();
+      setAddCategoryModalVisible(false);
+      setEditingCategory(null);
+      showSuccess(`Category "${categoryData.name}" updated`);
+    } catch (e: any) {
+      showError(e?.message || "Failed to update category");
+    }
+  };
+
   // ── Export Category Map (dev tool) ────────────────────────────
   const handleExportCategoryMap = async () => {
     try {
@@ -728,7 +754,14 @@ export const SettingsScreen: React.FC = () => {
               showAlert={showAlert}
               showSuccess={showSuccess}
               showError={showError}
-              onAddCategory={() => setAddCategoryModalVisible(true)}
+              onAddCategory={() => {
+                setEditingCategory(null);
+                setAddCategoryModalVisible(true);
+              }}
+              onEditCategory={(cat) => {
+                setEditingCategory(cat);
+                setAddCategoryModalVisible(true);
+              }}
             />
           )}
 
@@ -1063,9 +1096,14 @@ export const SettingsScreen: React.FC = () => {
 
         <CategoryCreationModal
           visible={addCategoryModalVisible}
-          onClose={() => setAddCategoryModalVisible(false)}
+          onClose={() => {
+            setAddCategoryModalVisible(false);
+            setEditingCategory(null);
+          }}
+          category={editingCategory}
           onCreateCategory={handleNewCategoryAdd}
-          title="Add New Category"
+          onUpdateCategory={handleCategoryUpdate}
+          title={editingCategory ? "Edit Category" : "Add New Category"}
         />
 
         <FirebaseCleanupModal
@@ -1104,6 +1142,7 @@ interface CategoryManagementProps {
   showSuccess: (message: string) => void;
   showError: (message: string) => void;
   onAddCategory: () => void;
+  onEditCategory: (cat: Category) => void;
 }
 
 const CategoryManagement: React.FC<CategoryManagementProps> = ({
@@ -1111,6 +1150,7 @@ const CategoryManagement: React.FC<CategoryManagementProps> = ({
   showSuccess,
   showError,
   onAddCategory,
+  onEditCategory,
 }) => {
   const dispatch = useDispatch<AppDispatch>();
   const { items: categories } = useSelector(
@@ -1151,32 +1191,105 @@ const CategoryManagement: React.FC<CategoryManagementProps> = ({
     title: string;
     items: Category[];
     color: string;
-  }) => (
-    <View style={{ marginBottom: 14 }}>
-      <Text style={[styles.catGroupTitle, { color }]}>
-        {title} ({items.length})
-      </Text>
-      {items.map((cat) => (
-        <View key={cat.id} style={styles.catRow}>
-          <View style={styles.catLeft}>
-            {cat.icon ? (
-              <Ionicons name={cat.icon as any} size={16} color={cat.color || color} style={{ marginRight: 8 }} />
-            ) : (
+  }) => {
+    const { colors, typography, spacing, radius } = useAppTheme();
+    const isDark = true;
+
+    return (
+      <View style={{ marginBottom: spacing.s16 }}>
+        <Text
+          style={[
+            typography.titleMedium,
+            { color, marginBottom: spacing.s8 },
+          ]}>
+          {title} ({items.length})
+        </Text>
+        {items.map((cat) => {
+          const paletteKey = getCategoryColorKey(cat.name);
+          const colorPair = categoryPalette[paletteKey] || {
+            light: cat.color || color,
+            dark: cat.color || color,
+            textLight: "#FFFFFF",
+            textDark: "#FFFFFF",
+          };
+          const iconBg = isDark ? colorPair.dark : colorPair.light;
+          const iconColor = isDark ? colorPair.textDark : colorPair.textLight;
+          const iconName = getCategoryIconName(cat);
+
+          return (
+            <TouchableOpacity
+              key={cat.id}
+              activeOpacity={0.75}
+              onPress={() => onEditCategory(cat)}
+              style={[
+                styles.catRow,
+                {
+                  backgroundColor: colors.surfaceVariant,
+                  borderRadius: radius.medium,
+                  paddingVertical: spacing.s12,
+                  paddingHorizontal: spacing.s16,
+                  marginBottom: spacing.s8,
+                  borderColor: colors.outline,
+                  borderWidth: 1,
+                },
+              ]}>
+              <View style={styles.catLeft}>
+                <View
+                  style={{
+                    width: 36,
+                    height: 36,
+                    borderRadius: 18,
+                    backgroundColor: iconBg,
+                    alignItems: "center",
+                    justifyContent: "center",
+                    marginRight: spacing.s12,
+                  }}>
+                  <Ionicons
+                    name={iconName as any}
+                    size={18}
+                    color={iconColor}
+                  />
+                </View>
+                <Text
+                  style={[
+                    typography.titleMedium,
+                    { color: colors.onSurface },
+                  ]}>
+                  {cat.name}
+                </Text>
+              </View>
               <View
-                style={[styles.catDot, { backgroundColor: cat.color || color }]}
-              />
-            )}
-            <Text style={styles.catName}>{cat.name}</Text>
-          </View>
-          <TouchableOpacity
-            onPress={() => handleDelete(cat)}
-            disabled={deletingId === cat.id}>
-            <Ionicons name="trash-outline" size={17} color="#FF6B6B" />
-          </TouchableOpacity>
-        </View>
-      ))}
-    </View>
-  );
+                style={{
+                  flexDirection: "row",
+                  alignItems: "center",
+                  gap: 16,
+                }}>
+                <TouchableOpacity
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                  onPress={() => onEditCategory(cat)}>
+                  <Ionicons
+                    name="pencil-outline"
+                    size={18}
+                    color={colors.primary}
+                  />
+                </TouchableOpacity>
+                <TouchableOpacity
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                  onPress={() => handleDelete(cat)}
+                  disabled={deletingId === cat.id}>
+                  <Ionicons
+                    name="trash-outline"
+                    size={18}
+                    color={colors.error}
+                  />
+                </TouchableOpacity>
+              </View>
+            </TouchableOpacity>
+          );
+        })}
+      </View>
+    );
+  };
 
   return (
     <GlassCard style={{ marginTop: -4 }}>

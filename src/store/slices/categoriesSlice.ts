@@ -55,6 +55,9 @@ export const updateCategory = createAsyncThunk(
     if (updates.color !== undefined) {
       categoryUpdates.color = updates.color;
     }
+    if (updates.icon !== undefined) {
+      categoryUpdates.icon = updates.icon;
+    }
 
     await db.categories.updateCategory(id, categoryUpdates);
     return await db.categories.getCategoryById(id);
