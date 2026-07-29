@@ -566,12 +566,10 @@ export const SettingsScreen: React.FC = () => {
   // RENDER
   // ═══════════════════════════════════════════════════════════════
   return (
-    <LinearGradient
-      colors={["#0a0a2e", "#1a1040", "#0d0d30"]}
-      style={{ flex: 1 }}>
+    <View style={{ flex: 1, backgroundColor: colors.background }}>
       <SafeAreaView style={{ flex: 1 }}>
         <StatusBar
-          barStyle="light-content"
+          barStyle={isDark ? "light-content" : "dark-content"}
           backgroundColor="transparent"
           translucent
         />
@@ -590,7 +588,7 @@ export const SettingsScreen: React.FC = () => {
               <>
                 <View style={styles.accountRow}>
                   <LinearGradient
-                    colors={[UI.COLORS.PRIMARY, UI.COLORS.PRIMARY_DARK]}
+                    colors={["#6C5CE7", "#4834D4"]}
                     style={styles.avatar}>
                     <Ionicons name="person" size={20} color="#fff" />
                   </LinearGradient>
@@ -670,7 +668,7 @@ export const SettingsScreen: React.FC = () => {
                     syncing || newSyncState.isSyncing ? (
                       <ActivityIndicator
                         size="small"
-                        color={UI.COLORS.PRIMARY_LIGHT}
+                        color="#A29BFE"
                       />
                     ) : undefined
                   }
@@ -823,12 +821,12 @@ export const SettingsScreen: React.FC = () => {
                       }}
                       trackColor={{
                         false: "rgba(255,255,255,0.08)",
-                        true: UI.COLORS.PRIMARY + "50",
+                        true: "#6C5CE750",
                       }}
                       thumbColor={
                         debugLoggingEnabled
-                          ? UI.COLORS.PRIMARY
-                          : UI.COLORS.TEXT_SECONDARY
+                          ? "#6C5CE7"
+                          : "#A0A0C8"
                       }
                     />
                   }
@@ -1029,7 +1027,7 @@ export const SettingsScreen: React.FC = () => {
                       <Ionicons
                         name="checkmark"
                         size={18}
-                        color={UI.COLORS.PRIMARY}
+                        color="#6C5CE7"
                       />
                     )}
                   </TouchableOpacity>
@@ -1050,7 +1048,7 @@ export const SettingsScreen: React.FC = () => {
                   onPress={saveBillingDay}
                   disabled={settings.loading}>
                   <LinearGradient
-                    colors={[UI.COLORS.PRIMARY, UI.COLORS.PRIMARY_DARK]}
+                    colors={["#6C5CE7", "#4834D4"]}
                     style={styles.modalSaveBtn}
                     start={{ x: 0, y: 0 }}
                     end={{ x: 1, y: 1 }}>
@@ -1248,7 +1246,7 @@ const CategoryManagement: React.FC<CategoryManagementProps> = ({
       <CatList title="Income" items={income} color="#2ED573" />
       <CatList title="Expense" items={expense} color="#FF6B6B" />
       <TouchableOpacity style={styles.addCatBtn} onPress={onAddCategory}>
-        <Ionicons name="add-circle" size={20} color={UI.COLORS.PRIMARY_LIGHT} />
+        <Ionicons name="add-circle" size={20} color="#A29BFE" />
         <Text style={styles.addCatText}>Add Category</Text>
       </TouchableOpacity>
     </GlassCard>
@@ -1269,7 +1267,7 @@ const styles = StyleSheet.create({
   screenTitle: {
     fontSize: 32,
     fontWeight: "800",
-    color: UI.COLORS.TEXT_PRIMARY,
+    color: "#F0F0FF",
     letterSpacing: 0.3,
     marginBottom: 24,
   },
@@ -1278,7 +1276,7 @@ const styles = StyleSheet.create({
   sectionLabel: {
     fontSize: 12,
     fontWeight: "700",
-    color: UI.COLORS.PRIMARY_LIGHT,
+    color: "#A29BFE",
     textTransform: "uppercase",
     letterSpacing: 1,
     marginBottom: 10,
@@ -1321,11 +1319,11 @@ const styles = StyleSheet.create({
   rowTitle: {
     fontSize: 15,
     fontWeight: "600",
-    color: UI.COLORS.TEXT_PRIMARY,
+    color: "#F0F0FF",
   },
   rowSubtitle: {
     fontSize: 12,
-    color: UI.COLORS.TEXT_MUTED,
+    color: "#5E5E80",
     marginTop: 2,
     lineHeight: 16,
   },
@@ -1393,7 +1391,7 @@ const styles = StyleSheet.create({
   },
   catName: {
     fontSize: 14,
-    color: UI.COLORS.TEXT_PRIMARY,
+    color: "#F0F0FF",
   },
   addCatBtn: {
     flexDirection: "row",
@@ -1410,7 +1408,7 @@ const styles = StyleSheet.create({
   addCatText: {
     fontSize: 14,
     fontWeight: "600",
-    color: UI.COLORS.PRIMARY_LIGHT,
+    color: "#A29BFE",
   },
 
   // ── Modal ───────────────────────────────────────────
@@ -1433,13 +1431,13 @@ const styles = StyleSheet.create({
   modalTitle: {
     fontSize: 18,
     fontWeight: "700",
-    color: UI.COLORS.TEXT_PRIMARY,
+    color: "#F0F0FF",
     textAlign: "center",
     marginBottom: 6,
   },
   modalSubtitle: {
     fontSize: 13,
-    color: UI.COLORS.TEXT_MUTED,
+    color: "#5E5E80",
     textAlign: "center",
     marginBottom: 18,
   },
@@ -1460,10 +1458,10 @@ const styles = StyleSheet.create({
   },
   dayText: {
     fontSize: 15,
-    color: UI.COLORS.TEXT_PRIMARY,
+    color: "#F0F0FF",
   },
   dayTextActive: {
-    color: UI.COLORS.PRIMARY_LIGHT,
+    color: "#A29BFE",
     fontWeight: "600",
   },
   modalActions: {
@@ -1483,7 +1481,7 @@ const styles = StyleSheet.create({
   modalCancelText: {
     fontSize: 15,
     fontWeight: "600",
-    color: UI.COLORS.TEXT_MUTED,
+    color: "#5E5E80",
   },
   modalSaveBtn: {
     flex: 1,

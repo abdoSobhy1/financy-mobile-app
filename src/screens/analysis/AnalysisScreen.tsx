@@ -26,12 +26,24 @@ import {
   BarChartSection,
   CustomChartCard,
 } from "../../components/analysis/ChartCard";
+import { useAppTheme } from "../../theme";
 // Glass tokens
 const GLASS = {
   bg: "rgba(255,255,255,0.04)",
   border: "rgba(108,92,231,0.18)",
   borderLight: "rgba(108,92,231,0.10)",
 };
+// Fixed chart palette — stable per category index, works on dark bg
+const CHART_PALETTE = [
+  "#6C5CE7", // purple
+  "#10B981", // emerald
+  "#F59E0B", // amber
+  "#EF4444", // red
+  "#06B6D4", // cyan
+  "#8B5CF6", // violet
+  "#14B8A6", // teal
+  "#F97316", // orange
+];
 import { FloatingActionButton } from "../../components/ui/FloatingActionButton";
 import { useToast } from "../../components/ui";
 import { UI } from "../../constants";
@@ -78,6 +90,7 @@ export const AnalysisScreen: React.FC = () => {
   const navigation = useNavigation<AnalysisScreenNavigationProp>();
   const dispatch = useDispatch();
   const { showSuccess, showError } = useToast();
+  const { colors, isDark } = useAppTheme();
 
   const [refreshing, setRefreshing] = useState(false);
   const [currentBillingPeriod, setCurrentBillingPeriod] = useState(() => {
@@ -267,14 +280,7 @@ export const AnalysisScreen: React.FC = () => {
         amount: Math.abs(data.amount), // Use absolute values
         color:
           data.category.color ||
-          [
-            UI.COLORS.PRIMARY,
-            UI.COLORS.SUCCESS,
-            UI.COLORS.WARNING,
-            UI.COLORS.ERROR,
-            UI.COLORS.ACCENT,
-            "#8B5CF6",
-          ][index % 6],
+          CHART_PALETTE[index % CHART_PALETTE.length],
       }));
     }
 
@@ -326,14 +332,7 @@ export const AnalysisScreen: React.FC = () => {
         return {
           name: budget.name,
           amount: Math.abs(used), // Use absolute values
-          color: [
-            UI.COLORS.PRIMARY,
-            UI.COLORS.SUCCESS,
-            UI.COLORS.WARNING,
-            UI.COLORS.ERROR,
-            UI.COLORS.ACCENT,
-            "#8B5CF6",
-          ][index % 6],
+          color: CHART_PALETTE[index % CHART_PALETTE.length],
         };
       });
     }
@@ -388,14 +387,7 @@ export const AnalysisScreen: React.FC = () => {
       return Array.from(agg.values()).map((data, index) => ({
         name: data.name,
         amount: data.amount,
-        color: [
-          UI.COLORS.PRIMARY,
-          UI.COLORS.SUCCESS,
-          UI.COLORS.WARNING,
-          UI.COLORS.ERROR,
-          UI.COLORS.ACCENT,
-          "#8B5CF6",
-        ][index % 6],
+        color: CHART_PALETTE[index % CHART_PALETTE.length],
       }));
     }
 
@@ -407,14 +399,7 @@ export const AnalysisScreen: React.FC = () => {
       return debts.map((debt, index) => ({
         name: debt.name || "Debt",
         amount: Math.abs(debt.totalAmount || 0), // Use absolute values
-        color: [
-          UI.COLORS.ERROR,
-          UI.COLORS.WARNING,
-          UI.COLORS.PRIMARY,
-          UI.COLORS.ACCENT,
-          UI.COLORS.SUCCESS,
-          "#8B5CF6",
-        ][index % 6],
+        color: CHART_PALETTE[index % CHART_PALETTE.length],
       }));
     }
 
@@ -470,7 +455,7 @@ export const AnalysisScreen: React.FC = () => {
         id: trend.month,
         name: trend.month,
         type: "trend" as const,
-        color: UI.COLORS.PRIMARY,
+        color: colors.primary,
       },
       amount: Math.abs(trend.balance || trend.value || 0),
       percentage: 0, // Will be calculated
@@ -525,7 +510,7 @@ export const AnalysisScreen: React.FC = () => {
             <Ionicons
               name="calendar-outline"
               size={14}
-              color={UI.COLORS.PRIMARY}
+            color={colors.primary}
             />
             <Text style={styles.periodSelectorText}>
               {selectedPeriod.charAt(0).toUpperCase() + selectedPeriod.slice(1)}
@@ -672,19 +657,19 @@ export const AnalysisScreen: React.FC = () => {
         title: "Total Income",
         value: summary.totalIncome,
         icon: "trending-up",
-        color: UI.COLORS.SUCCESS,
+        color: colors.success,
       },
       {
         title: "Total Spend",
         value: Math.abs(summary.totalExpenses),
         icon: "trending-down",
-        color: UI.COLORS.ERROR,
+        color: colors.error,
       },
       {
         title: "Net Balance",
         value: summary.balance,
         icon: summary.balance >= 0 ? "checkmark-circle" : "alert-circle",
-        color: summary.balance >= 0 ? UI.COLORS.SUCCESS : UI.COLORS.ERROR,
+        color: summary.balance >= 0 ? colors.success : colors.error,
       },
     ];
 
@@ -693,31 +678,31 @@ export const AnalysisScreen: React.FC = () => {
         title: "My Expenses (مصاريفي)",
         value: expenseBreakdown.myExpenses,
         icon: "person",
-        color: UI.COLORS.PRIMARY,
+        color: colors.primary,
       },
       {
         title: "Unbudgeted",
         value: expenseBreakdown.unbudgeted,
         icon: "help-circle",
-        color: UI.COLORS.TEXT_MUTED,
+        color: "#8D9287",
       },
       {
         title: "Normal Expenses",
         value: expenseBreakdown.normalExpenses,
         icon: "card",
-        color: UI.COLORS.WARNING,
+        color: "#F59E0B",
       },
       {
         title: "Debt Payments",
         value: expenseBreakdown.debts,
         icon: "remove-circle",
-        color: UI.COLORS.ERROR,
+        color: colors.error,
       },
       {
         title: "Bills",
         value: expenseBreakdown.bills,
         icon: "receipt",
-        color: UI.COLORS.ACCENT,
+        color: "#06B6D4",
       },
     ].filter((item) => item.value > 0); // Only show items with values
 
@@ -798,7 +783,7 @@ export const AnalysisScreen: React.FC = () => {
                         styles.categoryDot,
                         {
                           backgroundColor:
-                            item.category.color || UI.COLORS.PRIMARY,
+                            item.category.color || colors.primary,
                         },
                       ]}
                     />
@@ -833,16 +818,7 @@ export const AnalysisScreen: React.FC = () => {
         percentage: item.percentage,
         color:
           item.category.color ||
-          [
-            UI.COLORS.PRIMARY,
-            UI.COLORS.SUCCESS,
-            UI.COLORS.WARNING,
-            UI.COLORS.ERROR,
-            UI.COLORS.ACCENT,
-            "#8B5CF6",
-            "#10B981",
-            "#06B6D4",
-          ][index % 8],
+          CHART_PALETTE[index % CHART_PALETTE.length],
       }));
 
     if (categoryData.length === 0) return null;
@@ -1104,17 +1080,7 @@ export const AnalysisScreen: React.FC = () => {
         datasets: topCategories.map((category, index) => ({
           data: sortedDays.map((d) => d[category.id] || 0),
           color: () =>
-            category.color ||
-            [
-              UI.COLORS.PRIMARY,
-              UI.COLORS.SUCCESS,
-              UI.COLORS.WARNING,
-              UI.COLORS.ERROR,
-              UI.COLORS.ACCENT,
-              "#8B5CF6",
-              "#10B981",
-              "#06B6D4",
-            ][index % 8],
+            category.color || CHART_PALETTE[index % CHART_PALETTE.length],
           strokeWidth: 2,
         })),
         legend: topCategories.map((c) => c.name),
@@ -1209,15 +1175,15 @@ export const AnalysisScreen: React.FC = () => {
       datasets: [
         {
           data: currentData,
-          color: () => UI.COLORS.PRIMARY,
+          color: () => colors.primary,
         },
         {
           data: previousData,
-          color: () => UI.COLORS.SUCCESS,
+          color: () => colors.success,
         },
         {
           data: averageData,
-          color: () => UI.COLORS.WARNING,
+          color: () => "#F59E0B",
         },
       ],
       legend: ["Current Period", "Previous Period", "Historical Average"],
@@ -1262,7 +1228,7 @@ export const AnalysisScreen: React.FC = () => {
               style={styles.createFirstChartButton}
               onPress={handleCreateChart}>
               <LinearGradient
-                colors={[UI.COLORS.PRIMARY, UI.COLORS.PRIMARY_DARK]}
+                colors={[colors.primary, colors.primaryContainer ?? colors.primary + "80"]}
                 style={styles.gradientBtn}
                 start={{ x: 0, y: 0 }}
                 end={{ x: 1, y: 0 }}>
@@ -1288,7 +1254,7 @@ export const AnalysisScreen: React.FC = () => {
           <TouchableOpacity
             style={styles.addChartButton}
             onPress={handleCreateChart}>
-            <Ionicons name="add" size={20} color={UI.COLORS.TEXT_PRIMARY} />
+            <Ionicons name="add" size={20} color={colors.onBackground} />
             <Text style={styles.addChartText}>Add Chart</Text>
           </TouchableOpacity>
         </View>
@@ -1339,7 +1305,7 @@ export const AnalysisScreen: React.FC = () => {
             <TouchableOpacity
               onPress={() => setPeriodSelectionModal(false)}
               style={styles.closeButton}>
-              <Ionicons name="close" size={24} color={UI.COLORS.TEXT_PRIMARY} />
+              <Ionicons name="close" size={24} color={colors.onBackground} />
             </TouchableOpacity>
           </View>
 
@@ -1372,7 +1338,7 @@ export const AnalysisScreen: React.FC = () => {
                   <Ionicons
                     name="checkmark-circle"
                     size={24}
-                    color={UI.COLORS.PRIMARY}
+                    color={colors.primary}
                   />
                 )}
               </TouchableOpacity>
@@ -1418,7 +1384,7 @@ export const AnalysisScreen: React.FC = () => {
                 })
               }
               style={styles.closeButton}>
-              <Ionicons name="close" size={24} color={UI.COLORS.TEXT_PRIMARY} />
+              <Ionicons name="close" size={24} color={colors.onBackground} />
             </TouchableOpacity>
           </View>
 
@@ -1442,7 +1408,7 @@ export const AnalysisScreen: React.FC = () => {
                   style={[
                     styles.categoryColorIndicator,
                     {
-                      backgroundColor: item.category.color || UI.COLORS.PRIMARY,
+                      backgroundColor: item.category.color || colors.primary,
                     },
                   ]}
                 />
@@ -1465,7 +1431,7 @@ export const AnalysisScreen: React.FC = () => {
                         {
                           width: `${(item.amount / totalAmount) * 100}%`,
                           backgroundColor:
-                            item.category.color || UI.COLORS.PRIMARY,
+                            item.category.color || colors.primary,
                         },
                       ]}
                     />
@@ -1488,7 +1454,7 @@ export const AnalysisScreen: React.FC = () => {
               <Ionicons
                 name="pie-chart"
                 size={20}
-                color={UI.COLORS.TEXT_PRIMARY}
+                color={colors.onBackground}
               />
               <Text style={styles.createChartButtonText}>
                 Create Custom Chart
@@ -1515,7 +1481,7 @@ export const AnalysisScreen: React.FC = () => {
         style={{ marginTop: 16 }}
         onPress={() => navigation.goBack()}>
         <LinearGradient
-          colors={[UI.COLORS.PRIMARY, UI.COLORS.PRIMARY_DARK]}
+          colors={["#6C5CE7", "#6C5CE780"]}
           style={styles.gradientBtn}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 0 }}>
@@ -1538,7 +1504,7 @@ export const AnalysisScreen: React.FC = () => {
               <RefreshControl
                 refreshing={refreshing}
                 onRefresh={handleRefresh}
-                tintColor={UI.COLORS.PRIMARY}
+                tintColor={colors.primary}
               />
             }>
             {renderEmptyState()}
@@ -1549,10 +1515,8 @@ export const AnalysisScreen: React.FC = () => {
   }
 
   return (
-    <LinearGradient
-      colors={["#0a0a2e", "#1a1040", "#0d0d30"]}
-      style={{ flex: 1 }}>
-      <StatusBar barStyle="light-content" />
+    <View style={{ flex: 1, backgroundColor: colors.background }}>
+      <StatusBar barStyle={isDark ? "light-content" : "dark-content"} />
       <SafeAreaView style={{ flex: 1 }}>
         <ScrollView
           style={styles.container}
@@ -1560,7 +1524,7 @@ export const AnalysisScreen: React.FC = () => {
             <RefreshControl
               refreshing={refreshing}
               onRefresh={handleRefresh}
-              tintColor={UI.COLORS.PRIMARY}
+              tintColor={colors.primary}
             />
           }>
           {renderHeader()}
@@ -1581,7 +1545,7 @@ export const AnalysisScreen: React.FC = () => {
         {renderComparisonModal()}
         {renderPeriodSelectionModal()}
       </SafeAreaView>
-    </LinearGradient>
+    </View>
   );
 };
 
@@ -1612,7 +1576,7 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: "700",
     letterSpacing: 1.5,
-    color: UI.COLORS.PRIMARY,
+    color: "#6C5CE7",
     marginBottom: 4,
   },
   title: {
@@ -1679,7 +1643,7 @@ const styles = StyleSheet.create({
     borderRadius: 18,
   },
   toggleButtonActive: {
-    backgroundColor: UI.COLORS.PRIMARY,
+    backgroundColor: "#6C5CE7",
   },
   toggleButtonText: {
     fontSize: 12,
@@ -1701,9 +1665,9 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: 32,
     fontWeight: "800",
-    color: UI.COLORS.TEXT_PRIMARY,
+    color: "#F0F0FF",
     letterSpacing: 0.3,
-    marginBottom: UI.SPACING.SM,
+    marginBottom: 8,
   },
   subSectionTitle: {
     fontSize: 16,
@@ -1984,7 +1948,7 @@ const styles = StyleSheet.create({
     color: "rgba(255,255,255,0.7)",
   },
   periodOptionTextActive: {
-    color: UI.COLORS.PRIMARY,
+    color: "#6C5CE7",
     fontWeight: "700",
   },
   comparisonOption: {
@@ -2005,7 +1969,7 @@ const styles = StyleSheet.create({
     color: "rgba(255,255,255,0.7)",
   },
   comparisonOptionTextActive: {
-    color: UI.COLORS.PRIMARY,
+    color: "#6C5CE7",
     fontWeight: "700",
   },
   comparisonOptionSubtext: {
@@ -2053,7 +2017,7 @@ const styles = StyleSheet.create({
     color: "rgba(255,255,255,0.7)",
   },
   categoryOptionTextActive: {
-    color: UI.COLORS.PRIMARY,
+    color: "#6C5CE7",
     fontWeight: "700",
   },
   categoryAmount: {
@@ -2081,7 +2045,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     gap: 8,
-    backgroundColor: UI.COLORS.PRIMARY,
+    backgroundColor: "#6C5CE7",
     padding: 14,
     borderRadius: 14,
     marginTop: 20,
@@ -2116,7 +2080,7 @@ const styles = StyleSheet.create({
     marginBottom: 2,
   },
   periodOptionTitleActive: {
-    color: UI.COLORS.PRIMARY,
+    color: "#6C5CE7",
     fontWeight: "700",
   },
   periodOptionDescription: {
