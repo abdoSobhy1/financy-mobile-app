@@ -1,33 +1,49 @@
-import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
+import { createSlice, createAsyncThunk, PayloadAction } from "@reduxjs/toolkit";
 import { Category, CategoryFormData } from "../../types";
 import { db } from "../../database/queries";
 
 // Async thunks for database operations
-export const fetchCategories = createAsyncThunk("categories/fetchCategories", async () => {
-  return await db.categories.getAllCategories();
-});
+export const fetchCategories = createAsyncThunk(
+  "categories/fetchCategories",
+  async () => {
+    return await db.categories.getAllCategories();
+  },
+);
 
-export const fetchCategoriesByType = createAsyncThunk("categories/fetchCategoriesByType", async (type: "income" | "expense") => {
-  return await db.categories.getCategoriesByType(type);
-});
+export const fetchCategoriesByType = createAsyncThunk(
+  "categories/fetchCategoriesByType",
+  async (type: "income" | "expense") => {
+    return await db.categories.getCategoriesByType(type);
+  },
+);
 
-export const addCategory = createAsyncThunk("categories/addCategory", async (categoryData: CategoryFormData) => {
-  const category: Omit<Category, "id" | "createdAt"> = {
-    name: categoryData.name,
-    type: categoryData.type,
-    color: categoryData.color,
-    entryCount: 0,
-    // Sync fields
-    updatedAt: Date.now(),
-    deleted: false,
-    syncStatus: "pending",
-  };
-  return await db.categories.createCategory(category);
-});
+export const addCategory = createAsyncThunk(
+  "categories/addCategory",
+  async (categoryData: CategoryFormData) => {
+    const category: Omit<Category, "id" | "createdAt"> = {
+      name: categoryData.name,
+      type: categoryData.type,
+      color: categoryData.color,
+      icon: categoryData.icon,
+      entryCount: 0,
+      // Sync fields
+      updatedAt: Date.now(),
+      deleted: false,
+      syncStatus: "pending",
+    };
+    return await db.categories.createCategory(category);
+  },
+);
 
 export const updateCategory = createAsyncThunk(
   "categories/updateCategory",
-  async ({ id, updates }: { id: string; updates: Partial<CategoryFormData> }) => {
+  async ({
+    id,
+    updates,
+  }: {
+    id: string;
+    updates: Partial<CategoryFormData>;
+  }) => {
     const categoryUpdates: Partial<Omit<Category, "id" | "createdAt">> = {};
 
     if (updates.name !== undefined) {
@@ -42,27 +58,36 @@ export const updateCategory = createAsyncThunk(
 
     await db.categories.updateCategory(id, categoryUpdates);
     return await db.categories.getCategoryById(id);
-  }
+  },
 );
 
-export const deleteCategory = createAsyncThunk("categories/deleteCategory", async (id: string) => {
-  await db.categories.deleteCategory(id);
-  return id;
-});
+export const deleteCategory = createAsyncThunk(
+  "categories/deleteCategory",
+  async (id: string) => {
+    await db.categories.deleteCategory(id);
+    return id;
+  },
+);
 
-export const fetchCategoryUsageStats = createAsyncThunk("categories/fetchCategoryUsageStats", async () => {
-  return await db.categories.getCategoryUsageStats();
-});
+export const fetchCategoryUsageStats = createAsyncThunk(
+  "categories/fetchCategoryUsageStats",
+  async () => {
+    return await db.categories.getCategoryUsageStats();
+  },
+);
 
-export const fetchTopSpendingCategories = createAsyncThunk("categories/fetchTopSpendingCategories", async (limit: number = 5) => {
-  return await db.categories.getTopSpendingCategories(limit);
-});
+export const fetchTopSpendingCategories = createAsyncThunk(
+  "categories/fetchTopSpendingCategories",
+  async (limit: number = 5) => {
+    return await db.categories.getTopSpendingCategories(limit);
+  },
+);
 
 export const checkCategoryNameUnique = createAsyncThunk(
   "categories/checkCategoryNameUnique",
   async ({ name, excludeId }: { name: string; excludeId?: string }) => {
     return await db.categories.isCategoryNameUnique(name, excludeId);
-  }
+  },
 );
 
 // State interface
@@ -102,6 +127,13 @@ const categoriesSlice = createSlice({
   reducers: {
     clearError: (state) => {
       state.error = null;
+    },
+    markCategorySynced: (state, action: PayloadAction<string>) => {
+      const item = state.items[action.payload];
+      if (item) {
+        item.syncStatus = "synced";
+        (item as any).sync_status = "synced";
+      }
     },
   },
   extraReducers: (builder) => {
@@ -198,9 +230,13 @@ const categoriesSlice = createSlice({
           if (oldCategory && oldCategory.type !== category.type) {
             // Remove from old type array
             if (oldCategory.type === "income") {
-              state.incomeCategories = state.incomeCategories.filter((id) => id !== category.id);
+              state.incomeCategories = state.incomeCategories.filter(
+                (id) => id !== category.id,
+              );
             } else {
-              state.expenseCategories = state.expenseCategories.filter((id) => id !== category.id);
+              state.expenseCategories = state.expenseCategories.filter(
+                (id) => id !== category.id,
+              );
             }
 
             // Add to new type array
@@ -231,9 +267,13 @@ const categoriesSlice = createSlice({
         if (category) {
           // Remove from type-specific arrays
           if (category.type === "income") {
-            state.incomeCategories = state.incomeCategories.filter((categoryId) => categoryId !== id);
+            state.incomeCategories = state.incomeCategories.filter(
+              (categoryId) => categoryId !== id,
+            );
           } else {
-            state.expenseCategories = state.expenseCategories.filter((categoryId) => categoryId !== id);
+            state.expenseCategories = state.expenseCategories.filter(
+              (categoryId) => categoryId !== id,
+            );
           }
         }
 
@@ -257,5 +297,9 @@ const categoriesSlice = createSlice({
   },
 });
 
-export const { clearError } = categoriesSlice.actions;
+export const { clearError, markCategorySynced } = categoriesSlice.actions;
 export default categoriesSlice.reducer;
+
+// Selectors
+export const selectAllCategories = (state: { categories: CategoriesState }) =>
+  Object.values(state.categories.items);

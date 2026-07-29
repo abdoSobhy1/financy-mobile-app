@@ -1,4 +1,4 @@
-import { Transaction, Category, Budget, Bill, Settings, Debt, DebtPayment } from "../../types";
+import { Transaction, Category, Budget, Bill, Settings, Debt, DebtPayment, Wallet } from "../../types";
 import { DateUtils } from "../../utils/dateUtils";
 
 // Database table schemas
@@ -13,6 +13,9 @@ export interface TransactionTable {
   note?: string;
   linked_bill_id?: string;
   linked_debt_payment_id?: string;
+  wallet_id?: string;
+  from_wallet_id?: string;
+  to_wallet_id?: string;
   created_at: string;
   duplicated_at?: string;
   // Sync fields
@@ -26,6 +29,7 @@ export interface CategoryTable {
   name: string;
   type: string;
   color?: string;
+  icon?: string;
   entry_count: number;
   created_at: string;
   // Sync fields
@@ -120,6 +124,20 @@ export interface DebtPaymentTable {
   sync_status: string;
 }
 
+export interface WalletTable {
+  id: string;
+  name: string;
+  icon?: string;
+  color?: string;
+  balance: number;
+  created_at: string;
+  updated_at: string;
+  // Sync fields
+  sync_updated_at: number;
+  deleted: number;
+  sync_status: string;
+}
+
 // Model transformation functions
 export const transformTransaction = (row: TransactionTable): Transaction => ({
   id: row.id,
@@ -132,6 +150,9 @@ export const transformTransaction = (row: TransactionTable): Transaction => ({
   note: row.note,
   linkedBillId: row.linked_bill_id,
   linkedDebtPaymentId: row.linked_debt_payment_id,
+  walletId: row.wallet_id || undefined,
+  fromWalletId: row.from_wallet_id || undefined,
+  toWalletId: row.to_wallet_id || undefined,
   createdAt: row.created_at,
   duplicatedAt: row.duplicated_at,
   // Sync fields
@@ -145,6 +166,7 @@ export const transformCategory = (row: CategoryTable): Category => ({
   name: row.name,
   type: row.type as Category["type"],
   color: row.color,
+  icon: row.icon || undefined,
   entryCount: row.entry_count,
   createdAt: row.created_at,
   // Sync fields
@@ -231,13 +253,16 @@ export const transformSettings = (row: SettingsTable): Settings => ({
 export const toTransactionTable = (transaction: Omit<Transaction, "id" | "createdAt">): Omit<TransactionTable, "id" | "created_at"> => ({
   amount: transaction.amount,
   type: transaction.type,
-  category_id: transaction.categoryId,
+  category_id: transaction.categoryId || "",
   budget_id: transaction.budgetId,
   description: transaction.description,
   date: transaction.date,
   note: transaction.note,
   linked_bill_id: transaction.linkedBillId,
   linked_debt_payment_id: transaction.linkedDebtPaymentId,
+  wallet_id: transaction.walletId || null,
+  from_wallet_id: transaction.fromWalletId || null,
+  to_wallet_id: transaction.toWalletId || null,
   duplicated_at: transaction.duplicatedAt,
   // Sync fields
   sync_updated_at: transaction.updatedAt || Date.now(),
@@ -249,6 +274,7 @@ export const toCategoryTable = (category: Omit<Category, "id" | "createdAt">): O
   name: category.name,
   type: category.type,
   color: category.color,
+  icon: category.icon || undefined,
   entry_count: category.entryCount,
   // Sync fields
   sync_updated_at: category.updatedAt || Date.now(),
@@ -377,4 +403,28 @@ export const fromDebtPaymentTable = (row: DebtPaymentTable): DebtPayment => ({
   updatedAt: typeof row.updated_at === "string" ? Date.parse(row.updated_at) : row.updated_at,
   deleted: Boolean(row.deleted),
   syncStatus: row.sync_status as "pending" | "synced" | "error",
+});
+
+export const transformWallet = (row: WalletTable): Wallet => ({
+  id: row.id,
+  name: row.name,
+  icon: row.icon || undefined,
+  color: row.color || undefined,
+  balance: row.balance,
+  createdAt: row.created_at,
+  updatedAt: row.sync_updated_at,
+  deleted: Boolean(row.deleted),
+  syncStatus: row.sync_status as "pending" | "synced" | "error",
+});
+
+export const toWalletTable = (
+  wallet: Omit<Wallet, "id" | "createdAt" | "updatedAt">
+): Omit<WalletTable, "id" | "created_at" | "updated_at"> => ({
+  name: wallet.name,
+  icon: wallet.icon,
+  color: wallet.color,
+  balance: wallet.balance,
+  sync_updated_at: Date.now(),
+  deleted: wallet.deleted ? 1 : 0,
+  sync_status: wallet.syncStatus || "pending",
 });

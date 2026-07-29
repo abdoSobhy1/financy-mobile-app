@@ -59,11 +59,13 @@ class OfflineFirstSync {
     recordId: string,
     operation: "insert" | "update" | "delete",
     data: any,
-    skipSyncLog: boolean = false
+    skipSyncLog: boolean = false,
   ): Promise<void> {
     // Don't log sync operations when applying remote changes to prevent loops
     if (skipSyncLog) {
-      console.log(`⏭️ Skipping sync log for ${tableName}:${recordId} (remote change application)`);
+      console.log(
+        `⏭️ Skipping sync log for ${tableName}:${recordId} (remote change application)`,
+      );
       return;
     }
     try {
@@ -99,18 +101,24 @@ class OfflineFirstSync {
           logEntry.created_at,
           logEntry.is_processed,
           logEntry.retry_count,
-        ]
+        ],
       );
 
       // More verbose debug: include a short payload preview and stack trace origin
-      const preview = logEntry.payload ? (logEntry.payload.length > 200 ? logEntry.payload.substring(0, 200) + "..." : logEntry.payload) : "";
+      const preview = logEntry.payload
+        ? logEntry.payload.length > 200
+          ? logEntry.payload.substring(0, 200) + "..."
+          : logEntry.payload
+        : "";
       const stack = new Error().stack || "";
       console.log(
         `🔄 Logged ${operation} operation for ${tableName}:${recordId} created_at=${new Date(
-          logEntry.created_at
-        ).toISOString()} payload_preview=${preview}`
+          logEntry.created_at,
+        ).toISOString()} payload_preview=${preview}`,
       );
-      console.log(`🔍 logOperation call stack (top 3):\n${stack.split("\n").slice(0, 4).join("\n")}`);
+      console.log(
+        `🔍 logOperation call stack (top 3):\n${stack.split("\n").slice(0, 4).join("\n")}`,
+      );
 
       // Try to sync immediately if online (but don't block the operation)
       this.attemptSync();
@@ -159,12 +167,19 @@ class OfflineFirstSync {
       // Read last sync attempt marker so we only process recent operations
       let since = 0;
       try {
-        const settingsRepo = new (await import("../database/queries/settings")).SettingsRepository();
+        const settingsRepo = new (
+          await import("../database/queries/settings")
+        ).SettingsRepository();
         const settings = await settingsRepo.getSettings();
         since = settings.syncUpdatedAt || 0;
-        console.log(`🔁 Processing only sync_log entries created after ${new Date(since).toISOString()} (since=${since})`);
+        console.log(
+          `🔁 Processing only sync_log entries created after ${new Date(since).toISOString()} (since=${since})`,
+        );
       } catch (err) {
-        console.warn("⚠️ Could not read last sync attempt marker; processing all pending sync_log entries", err);
+        console.warn(
+          "⚠️ Could not read last sync attempt marker; processing all pending sync_log entries",
+          err,
+        );
         since = 0;
       }
 
@@ -183,18 +198,25 @@ class OfflineFirstSync {
         params.push(since);
       }
 
-      const result = (await database.getAllAsync(sql, params)) as SyncLogEntry[];
+      const result = (await database.getAllAsync(
+        sql,
+        params,
+      )) as SyncLogEntry[];
 
-      console.log(`🔎 Found ${result.length} pending sync operations to process`);
+      console.log(
+        `🔎 Found ${result.length} pending sync operations to process`,
+      );
       result.forEach((r, i) =>
         console.log(
           `   [${i + 1}] log_id=${r.log_id} table=${r.table_name} id=${r.record_id} op=${r.operation} retry=${r.retry_count} created_at=${new Date(
-            r.created_at
-          ).toISOString()}`
-        )
+            r.created_at,
+          ).toISOString()}`,
+        ),
       );
 
-      console.log(`� Processing ${result.length} pending sync operations (since=${since})`);
+      console.log(
+        `� Processing ${result.length} pending sync operations (since=${since})`,
+      );
 
       for (const logEntry of result) {
         await this.processSingleOperation(logEntry);
@@ -222,10 +244,19 @@ class OfflineFirstSync {
       }
 
       // Map operation names from database style to sync service style
-      const syncOperation = logEntry.operation === "insert" ? "create" : logEntry.operation;
+      const syncOperation =
+        logEntry.operation === "insert" ? "create" : logEntry.operation;
 
       // Use the existing sync service to perform the actual sync
-      await syncService.syncLocalChanges(collectionName, syncOperation, logEntry.record_id, data);
+      await syncService.syncLocalChanges(
+        collectionName,
+        syncOperation,
+        logEntry.record_id,
+        data,
+      );
+
+      // Mark record as synced in its own table
+      await this.markRecordSynced(logEntry.table_name, logEntry.record_id);
 
       // Mark as processed
       await this.markOperationAsProcessed(logEntry.log_id!);
@@ -235,7 +266,10 @@ class OfflineFirstSync {
       // Sync operation failed - marked for retry
 
       // Increment retry count and update error message
-      await this.markOperationAsFailed(logEntry.log_id!, error instanceof Error ? error.message : "Unknown error");
+      await this.markOperationAsFailed(
+        logEntry.log_id!,
+        error instanceof Error ? error.message : "Unknown error",
+      );
 
       // If we've retried too many times, mark as processed to avoid infinite loops
       if (logEntry.retry_count >= 5) {
@@ -250,11 +284,18 @@ class OfflineFirstSync {
    * then return the number of new sync_log entries for the corresponding table.
    * Useful to assert that applying remote documents does not create local sync_log entries.
    */
-  public async applyRemoteAndCheckNoLog(tableName: string, docId: string, docData: any): Promise<{ newLogCount: number; error?: string }> {
+  public async applyRemoteAndCheckNoLog(
+    tableName: string,
+    docId: string,
+    docData: any,
+  ): Promise<{ newLogCount: number; error?: string }> {
     try {
       await this.db.ensureInitialized();
       const database = this.db.getDatabase();
-      const beforeRow = (await database.getFirstAsync(`SELECT COUNT(*) as count FROM sync_log WHERE table_name = ?`, [tableName])) as {
+      const beforeRow = (await database.getFirstAsync(
+        `SELECT COUNT(*) as count FROM sync_log WHERE table_name = ?`,
+        [tableName],
+      )) as {
         count: number;
       } | null;
       const before = beforeRow?.count || 0;
@@ -262,9 +303,16 @@ class OfflineFirstSync {
       // Call the sync service helper
       const syncModule = await import("./syncService");
       const syncSvc = syncModule.syncService;
-      await syncSvc.applyRemoteDocumentForTest(this.TABLE_TO_COLLECTION[tableName], docId, docData as any);
+      await syncSvc.applyRemoteDocumentForTest(
+        this.TABLE_TO_COLLECTION[tableName],
+        docId,
+        docData as any,
+      );
 
-      const afterRow = (await database.getFirstAsync(`SELECT COUNT(*) as count FROM sync_log WHERE table_name = ?`, [tableName])) as {
+      const afterRow = (await database.getFirstAsync(
+        `SELECT COUNT(*) as count FROM sync_log WHERE table_name = ?`,
+        [tableName],
+      )) as {
         count: number;
       } | null;
       const after = afterRow?.count || 0;
@@ -277,23 +325,48 @@ class OfflineFirstSync {
   }
 
   /**
+   * Mark a database record's sync_status column as synced
+   */
+  private async markRecordSynced(
+    tableName: string,
+    recordId: string,
+  ): Promise<void> {
+    const collectionName = this.TABLE_TO_COLLECTION[tableName];
+    if (!collectionName) {
+      throw new Error(`Invalid table name: ${tableName}`);
+    }
+    const database = this.db.getDatabase();
+    await database.runAsync(
+      `UPDATE ${tableName} SET sync_status = 'synced' WHERE id = ?`,
+      [recordId],
+    );
+    syncService.notifyRecordSynced(collectionName, recordId);
+  }
+
+  /**
    * Mark an operation as successfully processed
    */
   private async markOperationAsProcessed(logId: number): Promise<void> {
     const database = this.db.getDatabase();
-    await database.runAsync(`UPDATE sync_log SET is_processed = 1 WHERE log_id = ?`, [logId]);
+    await database.runAsync(
+      `UPDATE sync_log SET is_processed = 1 WHERE log_id = ?`,
+      [logId],
+    );
   }
 
   /**
    * Mark an operation as failed and increment retry count
    */
-  private async markOperationAsFailed(logId: number, errorMessage: string): Promise<void> {
+  private async markOperationAsFailed(
+    logId: number,
+    errorMessage: string,
+  ): Promise<void> {
     const database = this.db.getDatabase();
     await database.runAsync(
       `UPDATE sync_log 
        SET retry_count = retry_count + 1, error_message = ? 
        WHERE log_id = ?`,
-      [errorMessage, logId]
+      [errorMessage, logId],
     );
   }
 
@@ -308,7 +381,9 @@ class OfflineFirstSync {
     // Exponential backoff: 5s, 10s, 20s, 40s, 60s max
     const retryDelay = Math.min(5000 * Math.pow(2, retryCount), 60000);
 
-    console.log(`⏳ Scheduling retry in ${retryDelay / 1000}s (attempt ${retryCount + 1})`);
+    console.log(
+      `⏳ Scheduling retry in ${retryDelay / 1000}s (attempt ${retryCount + 1})`,
+    );
 
     this.retryTimeout = setTimeout(() => {
       this.attemptSync();
@@ -340,7 +415,9 @@ class OfflineFirstSync {
       await this.db.ensureInitialized();
       const database = this.db.getDatabase();
 
-      const result = (await database.getFirstAsync(`SELECT COUNT(*) as count FROM sync_log WHERE is_processed = 0`)) as { count: number };
+      const result = (await database.getFirstAsync(
+        `SELECT COUNT(*) as count FROM sync_log WHERE is_processed = 0`,
+      )) as { count: number };
 
       return result?.count || 0;
     } catch (error) {
@@ -364,13 +441,19 @@ class OfflineFirstSync {
       const database = this.db.getDatabase();
       const netInfo = await NetInfo.fetch();
 
-      const pendingResult = (await database.getFirstAsync(`SELECT COUNT(*) as count FROM sync_log WHERE is_processed = 0`)) as { count: number };
+      const pendingResult = (await database.getFirstAsync(
+        `SELECT COUNT(*) as count FROM sync_log WHERE is_processed = 0`,
+      )) as { count: number };
 
-      const failedResult = (await database.getFirstAsync(`SELECT COUNT(*) as count FROM sync_log WHERE is_processed = 0 AND retry_count > 0`)) as {
+      const failedResult = (await database.getFirstAsync(
+        `SELECT COUNT(*) as count FROM sync_log WHERE is_processed = 0 AND retry_count > 0`,
+      )) as {
         count: number;
       };
 
-      const lastAttemptResult = (await database.getFirstAsync(`SELECT MAX(created_at) as last_attempt FROM sync_log`)) as {
+      const lastAttemptResult = (await database.getFirstAsync(
+        `SELECT MAX(created_at) as last_attempt FROM sync_log`,
+      )) as {
         last_attempt: number | null;
       };
 
@@ -407,7 +490,7 @@ class OfflineFirstSync {
       const result = await database.runAsync(
         `DELETE FROM sync_log 
          WHERE is_processed = 1 AND created_at < ?`,
-        [sevenDaysAgo]
+        [sevenDaysAgo],
       );
 
       console.log(`🧹 Cleaned up ${result.changes} old sync operations`);
@@ -459,35 +542,43 @@ class OfflineFirstSync {
     });
 
     // Setup periodic sync (every 2 minutes when online)
-    this.periodicSyncInterval = setInterval(async () => {
-      try {
-        const netInfo = await NetInfo.fetch();
-        if (netInfo.isConnected) {
-          const pendingCount = await this.getPendingOperationsCount();
-          if (pendingCount > 0) {
-            console.log(`⏰ Periodic sync: ${pendingCount} pending operations`);
-            await this.forceSyncAll();
-          }
+    this.periodicSyncInterval = setInterval(
+      async () => {
+        try {
+          const netInfo = await NetInfo.fetch();
+          if (netInfo.isConnected) {
+            const pendingCount = await this.getPendingOperationsCount();
+            if (pendingCount > 0) {
+              console.log(
+                `⏰ Periodic sync: ${pendingCount} pending operations`,
+              );
+              await this.forceSyncAll();
+            }
 
-          // Always attempt a delta sync to pull recent remote changes
-          try {
-            await syncService.performDeltaSync();
-            console.log("⏰ Periodic delta sync completed");
-          } catch (deltaErr) {
-            console.warn("Periodic delta sync failed:", deltaErr);
+            // Always attempt a delta sync to pull recent remote changes
+            try {
+              await syncService.performDeltaSync();
+              console.log("⏰ Periodic delta sync completed");
+            } catch (deltaErr) {
+              console.warn("Periodic delta sync failed:", deltaErr);
+            }
           }
+        } catch (error) {
+          console.error("Periodic sync failed:", error);
         }
-      } catch (error) {
-        console.error("Periodic sync failed:", error);
-      }
-    }, 10 * 60 * 1000); // Every 2 minutes
+      },
+      10 * 60 * 1000,
+    ); // Every 2 minutes
 
     // Cleanup old operations periodically (every hour)
-    const cleanupInterval = setInterval(() => {
-      this.cleanupOldOperations().catch((error) => {
-        console.error("Cleanup failed:", error);
-      });
-    }, 60 * 60 * 1000); // Every hour
+    const cleanupInterval = setInterval(
+      () => {
+        this.cleanupOldOperations().catch((error) => {
+          console.error("Cleanup failed:", error);
+        });
+      },
+      60 * 60 * 1000,
+    ); // Every hour
 
     // Return cleanup function
     return () => {
@@ -517,7 +608,9 @@ class OfflineFirstSync {
   public setupNetworkListener(): () => void {
     const unsubscribe = NetInfo.addEventListener((state) => {
       if (state.isConnected) {
-        console.log("📡 Network connected, attempting to sync pending operations and perform delta sync");
+        console.log(
+          "📡 Network connected, attempting to sync pending operations and perform delta sync",
+        );
 
         // Force local pending operations to cloud
         this.forceSyncAll().catch((error) => {
@@ -528,9 +621,13 @@ class OfflineFirstSync {
         syncService
           .performDeltaSync()
           .then(() => console.log("✅ Delta sync on network restore completed"))
-          .catch((err) => console.error("Delta sync on network restore failed:", err));
+          .catch((err) =>
+            console.error("Delta sync on network restore failed:", err),
+          );
       } else {
-        console.log("📡 Network disconnected, operations will be queued locally");
+        console.log(
+          "📡 Network disconnected, operations will be queued locally",
+        );
       }
     });
 
@@ -590,7 +687,9 @@ class OfflineFirstSync {
       // Check if we have any local data (indicates not a fresh install)
       const hasLocalData = await this.checkForLocalData();
       if (hasLocalData) {
-        console.log("📱 Local data exists, performing conflicts-only sync instead");
+        console.log(
+          "📱 Local data exists, performing conflicts-only sync instead",
+        );
         await this.syncConflictsOnly();
         return true; // Return true to indicate sync was performed
       }
@@ -610,23 +709,39 @@ class OfflineFirstSync {
       const independentCollections = ["categories", "settings"];
       let totalPulled = 0;
 
-      console.log("☁️ Phase 1: Syncing independent collections (categories, settings)");
+      console.log(
+        "☁️ Phase 1: Syncing independent collections (categories, settings)",
+      );
       for (const tableName of independentCollections) {
         const collectionName = this.TABLE_TO_COLLECTION[tableName];
         if (collectionName) {
-          const count = await this.pullCollectionFromCloud(collectionName, tableName);
+          const count = await this.pullCollectionFromCloud(
+            collectionName,
+            tableName,
+          );
           totalPulled += count;
         }
       }
 
       // Phase 2: Collections with dependencies
-      const dependentCollections = ["budgets", "transactions", "bills", "debts", "debt_payments"];
+      const dependentCollections = [
+        "budgets",
+        "transactions",
+        "bills",
+        "debts",
+        "debt_payments",
+      ];
 
-      console.log("☁️ Phase 2: Syncing dependent collections (budgets, transactions, bills, debts, debt_payments)");
+      console.log(
+        "☁️ Phase 2: Syncing dependent collections (budgets, transactions, bills, debts, debt_payments)",
+      );
       for (const tableName of dependentCollections) {
         const collectionName = this.TABLE_TO_COLLECTION[tableName];
         if (collectionName) {
-          const count = await this.pullCollectionFromCloud(collectionName, tableName);
+          const count = await this.pullCollectionFromCloud(
+            collectionName,
+            tableName,
+          );
           totalPulled += count;
         }
       }
@@ -634,11 +749,15 @@ class OfflineFirstSync {
       // Phase 3: Retry failed inserts (foreign key constraints)
       const retryCount = await this.retryFailedInserts();
       if (retryCount > 0) {
-        console.log(`☁️ Phase 3: Successfully retried ${retryCount} failed inserts`);
+        console.log(
+          `☁️ Phase 3: Successfully retried ${retryCount} failed inserts`,
+        );
         totalPulled += retryCount;
       }
 
-      console.log(`☁️ Initial cloud pull completed: ${totalPulled} items restored`);
+      console.log(
+        `☁️ Initial cloud pull completed: ${totalPulled} items restored`,
+      );
       return totalPulled > 0;
     } catch (error) {
       console.error("❌ Initial cloud pull failed:", error);
@@ -650,7 +769,11 @@ class OfflineFirstSync {
    * Comprehensive cloud data restore - pulls all cloud data and compares by ID to avoid duplicates
    * This is used by the "Restore Cloud Data" button to sync all data regardless of local data state
    */
-  async performComprehensiveCloudRestore(): Promise<{ itemsUpdated: number; itemsCreated: number; errors: string[] }> {
+  async performComprehensiveCloudRestore(): Promise<{
+    itemsUpdated: number;
+    itemsCreated: number;
+    errors: string[];
+  }> {
     const notificationService = NotificationService.getInstance();
     let notificationId: string | null = null;
 
@@ -658,7 +781,9 @@ class OfflineFirstSync {
       console.log("☁️ Starting comprehensive cloud data restore...");
 
       // Show sync notification
-      notificationId = await notificationService.showSyncNotification("Restoring data from cloud...");
+      notificationId = await notificationService.showSyncNotification(
+        "Restoring data from cloud...",
+      );
 
       // Check if user is authenticated
       const { authService } = await import("./authService");
@@ -676,19 +801,37 @@ class OfflineFirstSync {
       // Clear any existing failed inserts from previous attempts
       syncService.clearFailedInserts();
 
-      const result = { itemsUpdated: 0, itemsCreated: 0, errors: [] as string[] };
+      const result = {
+        itemsUpdated: 0,
+        itemsCreated: 0,
+        errors: [] as string[],
+      };
 
       // Process collections in dependency order
       const independentCollections = ["categories", "settings"];
-      const dependentCollections = ["budgets", "transactions", "bills", "debts", "debt_payments"];
-      const allCollections = [...independentCollections, ...dependentCollections];
+      const dependentCollections = [
+        "budgets",
+        "transactions",
+        "bills",
+        "debts",
+        "debt_payments",
+      ];
+      const allCollections = [
+        ...independentCollections,
+        ...dependentCollections,
+      ];
 
-      console.log("☁️ Phase 1: Syncing independent collections (categories, settings)");
+      console.log(
+        "☁️ Phase 1: Syncing independent collections (categories, settings)",
+      );
       for (const tableName of independentCollections) {
         const collectionName = this.TABLE_TO_COLLECTION[tableName];
         if (collectionName) {
           try {
-            const stats = await this.syncCollectionWithIdComparison(collectionName, tableName);
+            const stats = await this.syncCollectionWithIdComparison(
+              collectionName,
+              tableName,
+            );
             result.itemsUpdated += stats.updated;
             result.itemsCreated += stats.created;
           } catch (error) {
@@ -699,12 +842,17 @@ class OfflineFirstSync {
         }
       }
 
-      console.log("☁️ Phase 2: Syncing dependent collections (budgets, transactions, bills, debts, debt_payments)");
+      console.log(
+        "☁️ Phase 2: Syncing dependent collections (budgets, transactions, bills, debts, debt_payments)",
+      );
       for (const tableName of dependentCollections) {
         const collectionName = this.TABLE_TO_COLLECTION[tableName];
         if (collectionName) {
           try {
-            const stats = await this.syncCollectionWithIdComparison(collectionName, tableName);
+            const stats = await this.syncCollectionWithIdComparison(
+              collectionName,
+              tableName,
+            );
             result.itemsUpdated += stats.updated;
             result.itemsCreated += stats.created;
           } catch (error) {
@@ -718,13 +866,15 @@ class OfflineFirstSync {
       // Phase 3: Retry failed inserts (foreign key constraints)
       const retryCount = await this.retryFailedInserts();
       if (retryCount > 0) {
-        console.log(`☁️ Phase 3: Successfully retried ${retryCount} failed inserts`);
+        console.log(
+          `☁️ Phase 3: Successfully retried ${retryCount} failed inserts`,
+        );
         result.itemsCreated += retryCount;
       }
 
       const totalItems = result.itemsUpdated + result.itemsCreated;
       console.log(
-        `☁️ Comprehensive cloud restore completed: ${result.itemsCreated} created, ${result.itemsUpdated} updated, ${result.errors.length} errors`
+        `☁️ Comprehensive cloud restore completed: ${result.itemsCreated} created, ${result.itemsUpdated} updated, ${result.errors.length} errors`,
       );
 
       // Dismiss sync notification
@@ -748,7 +898,10 @@ class OfflineFirstSync {
   /**
    * Sync a collection by comparing cloud data with local data by ID
    */
-  private async syncCollectionWithIdComparison(collectionName: CollectionName, tableName: string): Promise<{ created: number; updated: number }> {
+  private async syncCollectionWithIdComparison(
+    collectionName: CollectionName,
+    tableName: string,
+  ): Promise<{ created: number; updated: number }> {
     console.log(`🔄 Syncing ${collectionName} with ID comparison...`);
 
     // Check if user is authenticated first
@@ -763,7 +916,8 @@ class OfflineFirstSync {
 
     try {
       // Get all cloud documents
-      const cloudDocuments = await syncService.getAllDocumentsFromCollection(collectionName);
+      const cloudDocuments =
+        await syncService.getAllDocumentsFromCollection(collectionName);
 
       if (cloudDocuments.length === 0) {
         console.log(`☁️ No ${collectionName} found in cloud`);
@@ -774,13 +928,18 @@ class OfflineFirstSync {
       const localDocuments = await this.getLocalDocumentsByTable(tableName);
       const localById = new Map(localDocuments.map((doc) => [doc.id, doc]));
 
-      console.log(`📊 ${collectionName}: ${cloudDocuments.length} cloud items, ${localDocuments.length} local items`);
+      console.log(
+        `📊 ${collectionName}: ${cloudDocuments.length} cloud items, ${localDocuments.length} local items`,
+      );
 
       // Process each cloud document
       for (const cloudDoc of cloudDocuments) {
         try {
           // Special handling for categories - handle soft deletion of default categories
-          if ((tableName === "categories" && cloudDoc.deleted === true) || cloudDoc.deleted === 1) {
+          if (
+            (tableName === "categories" && cloudDoc.deleted === true) ||
+            cloudDoc.deleted === 1
+          ) {
             const localDoc = localById.get(cloudDoc.id);
             if (localDoc && (await this.isDefaultCategory(cloudDoc.id))) {
               // Soft delete default category instead of skipping
@@ -788,25 +947,33 @@ class OfflineFirstSync {
               await this.softDeleteCategory(cloudDoc.id);
               result.updated++;
             } else {
-              console.log(`🗑️ Skipping deleted ${tableName} document: ${cloudDoc.id}`);
+              console.log(
+                `🗑️ Skipping deleted ${tableName} document: ${cloudDoc.id}`,
+              );
             }
             continue;
           }
 
           // Skip deleted documents for other collections
           if (cloudDoc.deleted === true || cloudDoc.deleted === 1) {
-            console.log(`🗑️ Skipping deleted ${tableName} document: ${cloudDoc.id}`);
+            console.log(
+              `🗑️ Skipping deleted ${tableName} document: ${cloudDoc.id}`,
+            );
             continue;
           }
 
           // Validate document has minimum required data
           if (!cloudDoc || !cloudDoc.id) {
-            console.warn(`⚠️ Skipping invalid ${tableName} document (no ID):`, cloudDoc);
+            console.warn(
+              `⚠️ Skipping invalid ${tableName} document (no ID):`,
+              cloudDoc,
+            );
             continue;
           }
 
           const localDoc = localById.get(cloudDoc.id);
-          const cloudUpdatedAt = cloudDoc.updatedAt || cloudDoc.sync_updated_at || 0;
+          const cloudUpdatedAt =
+            cloudDoc.updatedAt || cloudDoc.sync_updated_at || 0;
 
           if (!localDoc) {
             // Document doesn't exist locally - create it
@@ -815,23 +982,35 @@ class OfflineFirstSync {
             result.created++;
           } else {
             // Document exists locally - check if cloud version is newer
-            const localUpdatedAt = (localDoc as any).updated_at || (localDoc as any).sync_updated_at || 0;
+            const localUpdatedAt =
+              (localDoc as any).updated_at ||
+              (localDoc as any).sync_updated_at ||
+              0;
 
             if (cloudUpdatedAt > localUpdatedAt) {
-              console.log(`🔄 Updating ${tableName}: ${cloudDoc.id} (cloud: ${cloudUpdatedAt}, local: ${localUpdatedAt})`);
+              console.log(
+                `🔄 Updating ${tableName}: ${cloudDoc.id} (cloud: ${cloudUpdatedAt}, local: ${localUpdatedAt})`,
+              );
               await this.updateLocalDocumentFromCloud(tableName, cloudDoc);
               result.updated++;
             } else {
-              console.log(`⏭️  Skipping ${tableName}: ${cloudDoc.id} (local is up to date)`);
+              console.log(
+                `⏭️  Skipping ${tableName}: ${cloudDoc.id} (local is up to date)`,
+              );
             }
           }
         } catch (error) {
-          console.error(`❌ Failed to process ${tableName}:${cloudDoc.id}:`, error);
+          console.error(
+            `❌ Failed to process ${tableName}:${cloudDoc.id}:`,
+            error,
+          );
           // Continue with other documents
         }
       }
 
-      console.log(`✅ ${collectionName} sync completed: ${result.created} created, ${result.updated} updated`);
+      console.log(
+        `✅ ${collectionName} sync completed: ${result.created} created, ${result.updated} updated`,
+      );
       return result;
     } catch (error) {
       console.error(`❌ Failed to sync ${collectionName}:`, error);
@@ -848,19 +1027,33 @@ class OfflineFirstSync {
 
     switch (tableName) {
       case "transactions":
-        return await database.getAllAsync("SELECT * FROM transactions WHERE deleted = 0 OR deleted IS NULL");
+        return await database.getAllAsync(
+          "SELECT * FROM transactions WHERE deleted = 0 OR deleted IS NULL",
+        );
       case "categories":
-        return await database.getAllAsync("SELECT * FROM categories WHERE deleted = 0 OR deleted IS NULL");
+        return await database.getAllAsync(
+          "SELECT * FROM categories WHERE deleted = 0 OR deleted IS NULL",
+        );
       case "budgets":
-        return await database.getAllAsync("SELECT * FROM budgets WHERE deleted = 0 OR deleted IS NULL");
+        return await database.getAllAsync(
+          "SELECT * FROM budgets WHERE deleted = 0 OR deleted IS NULL",
+        );
       case "bills":
-        return await database.getAllAsync("SELECT * FROM bills WHERE deleted = 0 OR deleted IS NULL");
+        return await database.getAllAsync(
+          "SELECT * FROM bills WHERE deleted = 0 OR deleted IS NULL",
+        );
       case "debts":
-        return await database.getAllAsync("SELECT * FROM debts WHERE deleted = 0 OR deleted IS NULL");
+        return await database.getAllAsync(
+          "SELECT * FROM debts WHERE deleted = 0 OR deleted IS NULL",
+        );
       case "debt_payments":
-        return await database.getAllAsync("SELECT * FROM debt_payments WHERE deleted = 0 OR deleted IS NULL");
+        return await database.getAllAsync(
+          "SELECT * FROM debt_payments WHERE deleted = 0 OR deleted IS NULL",
+        );
       case "settings":
-        return await database.getAllAsync("SELECT * FROM settings WHERE deleted = 0 OR deleted IS NULL");
+        return await database.getAllAsync(
+          "SELECT * FROM settings WHERE deleted = 0 OR deleted IS NULL",
+        );
       default:
         return [];
     }
@@ -869,7 +1062,10 @@ class OfflineFirstSync {
   /**
    * Update a local document with data from the cloud
    */
-  private async updateLocalDocumentFromCloud(tableName: string, cloudDocument: any): Promise<void> {
+  private async updateLocalDocumentFromCloud(
+    tableName: string,
+    cloudDocument: any,
+  ): Promise<void> {
     await this.db.ensureInitialized();
     const database = this.db.getDatabase();
 
@@ -892,18 +1088,21 @@ class OfflineFirstSync {
             localData.note,
             localData.updatedAt,
             localData.id,
-          ]
+          ],
         );
         break;
 
       case "categories":
-        await database.runAsync(`UPDATE categories SET name = ?, type = ?, color = ?, updated_at = ? WHERE id = ?`, [
-          localData.name,
-          localData.type,
-          localData.color,
-          localData.updatedAt,
-          localData.id,
-        ]);
+        await database.runAsync(
+          `UPDATE categories SET name = ?, type = ?, color = ?, updated_at = ? WHERE id = ?`,
+          [
+            localData.name,
+            localData.type,
+            localData.color,
+            localData.updatedAt,
+            localData.id,
+          ],
+        );
         break;
 
       case "budgets":
@@ -920,7 +1119,7 @@ class OfflineFirstSync {
             localData.resetDay,
             localData.updatedAt,
             localData.id,
-          ]
+          ],
         );
         break;
 
@@ -940,7 +1139,7 @@ class OfflineFirstSync {
             localData.paid,
             localData.updatedAt,
             localData.id,
-          ]
+          ],
         );
         break;
 
@@ -960,7 +1159,7 @@ class OfflineFirstSync {
             localData.budgetId,
             localData.updatedAt,
             localData.id,
-          ]
+          ],
         );
         break;
 
@@ -977,7 +1176,7 @@ class OfflineFirstSync {
             localData.note,
             localData.updatedAt,
             localData.id,
-          ]
+          ],
         );
         break;
 
@@ -985,28 +1184,43 @@ class OfflineFirstSync {
         // Handle both legacy key-value format and new structured format
         if (localData.key && localData.value) {
           // Legacy key-value format
-          await database.runAsync(`UPDATE settings SET key = ?, value = ?, updated_at = ? WHERE id = ?`, [
-            localData.key,
-            localData.value,
-            localData.updatedAt,
-            localData.id,
-          ]);
+          await database.runAsync(
+            `UPDATE settings SET key = ?, value = ?, updated_at = ? WHERE id = ?`,
+            [localData.key, localData.value, localData.updatedAt, localData.id],
+          );
         } else {
           // New structured format with billing period and other settings
           const updates: string[] = ["updated_at = ?"];
-          const params: any[] = [localData.updatedAt || new Date().toISOString()];
+          const params: any[] = [
+            localData.updatedAt || new Date().toISOString(),
+          ];
 
-          if (localData.billingPeriodStartDay !== undefined || localData.billing_period_start_day !== undefined) {
+          if (
+            localData.billingPeriodStartDay !== undefined ||
+            localData.billing_period_start_day !== undefined
+          ) {
             updates.push("billing_period_start_day = ?");
-            params.push(localData.billingPeriodStartDay || localData.billing_period_start_day);
+            params.push(
+              localData.billingPeriodStartDay ||
+                localData.billing_period_start_day,
+            );
           }
           if (localData.currency !== undefined) {
             updates.push("currency = ?");
             params.push(localData.currency);
           }
-          if (localData.firebaseSync !== undefined || localData.firebase_sync !== undefined) {
+          if (
+            localData.firebaseSync !== undefined ||
+            localData.firebase_sync !== undefined
+          ) {
             updates.push("firebase_sync = ?");
-            params.push(localData.firebaseSync !== undefined ? (localData.firebaseSync ? 1 : 0) : localData.firebase_sync);
+            params.push(
+              localData.firebaseSync !== undefined
+                ? localData.firebaseSync
+                  ? 1
+                  : 0
+                : localData.firebase_sync,
+            );
           }
           if (localData.theme !== undefined) {
             updates.push("theme = ?");
@@ -1015,7 +1229,10 @@ class OfflineFirstSync {
 
           params.push(localData.id);
 
-          await database.runAsync(`UPDATE settings SET ${updates.join(", ")} WHERE id = ?`, params);
+          await database.runAsync(
+            `UPDATE settings SET ${updates.join(", ")} WHERE id = ?`,
+            params,
+          );
         }
         break;
     }
@@ -1027,7 +1244,10 @@ class OfflineFirstSync {
   public async pushAllDataToCloud(): Promise<{
     totalUploaded: number;
     totalSkipped: number;
-    collections: Record<string, { uploaded: number; skipped: number; errors: number }>;
+    collections: Record<
+      string,
+      { uploaded: number; skipped: number; errors: number }
+    >;
     errors: string[];
   }> {
     const notificationService = NotificationService.getInstance();
@@ -1037,7 +1257,9 @@ class OfflineFirstSync {
       console.log("⬆️ Starting comprehensive data push to cloud...");
 
       // Show sync notification
-      notificationId = await notificationService.showSyncNotification("Pushing local data to cloud...");
+      notificationId = await notificationService.showSyncNotification(
+        "Pushing local data to cloud...",
+      );
 
       // Check if user is authenticated
       const { authService } = await import("./authService");
@@ -1055,48 +1277,75 @@ class OfflineFirstSync {
       const result = {
         totalUploaded: 0,
         totalSkipped: 0,
-        collections: {} as Record<string, { uploaded: number; skipped: number; errors: number }>,
+        collections: {} as Record<
+          string,
+          { uploaded: number; skipped: number; errors: number }
+        >,
         errors: [] as string[],
       };
 
       // Read last sync attempt marker so we only push local items updated since then
-      const settingsRepo = new (await import("../database/queries/settings")).SettingsRepository();
+      const settingsRepo = new (
+        await import("../database/queries/settings")
+      ).SettingsRepository();
       let since = 0;
       try {
         const settings = await settingsRepo.getSettings();
         since = settings.syncUpdatedAt || 0;
-        console.log(`⬆️ Pushing only local items updated after ${new Date(since).toISOString()}`);
+        console.log(
+          `⬆️ Pushing only local items updated after ${new Date(since).toISOString()}`,
+        );
       } catch (err) {
-        console.warn("Could not read settings.syncUpdatedAt, falling back to full push:", err);
+        console.warn(
+          "Could not read settings.syncUpdatedAt, falling back to full push:",
+          err,
+        );
         since = 0;
       }
 
       // Process all collections
-      const allCollections = ["categories", "budgets", "transactions", "bills", "debts", "debt_payments", "settings"];
+      const allCollections = [
+        "categories",
+        "budgets",
+        "transactions",
+        "bills",
+        "debts",
+        "debt_payments",
+        "settings",
+      ];
 
       for (const tableName of allCollections) {
         const collectionName = this.TABLE_TO_COLLECTION[tableName];
         if (collectionName) {
           try {
             console.log(`⬆️ Pushing ${tableName} to cloud (since=${since})...`);
-            const stats = await this.pushCollectionToCloud(collectionName, tableName);
+            const stats = await this.pushCollectionToCloud(
+              collectionName,
+              tableName,
+            );
 
             result.collections[tableName] = stats;
             result.totalUploaded += stats.uploaded;
             result.totalSkipped += stats.skipped;
 
-            console.log(`✅ ${tableName}: ${stats.uploaded} uploaded, ${stats.skipped} skipped, ${stats.errors} errors`);
+            console.log(
+              `✅ ${tableName}: ${stats.uploaded} uploaded, ${stats.skipped} skipped, ${stats.errors} errors`,
+            );
           } catch (error) {
             const errorMsg = `Failed to push ${tableName}: ${error instanceof Error ? error.message : error}`;
             result.errors.push(errorMsg);
-            result.collections[tableName] = { uploaded: 0, skipped: 0, errors: 1 };
+            result.collections[tableName] = {
+              uploaded: 0,
+              skipped: 0,
+              errors: 1,
+            };
             console.error(`❌ ${errorMsg}`);
           }
         }
       }
 
       console.log(
-        `🚀 Data push completed: ${result.totalUploaded} uploaded, ${result.totalSkipped} skipped, ${result.errors.length} collection errors`
+        `🚀 Data push completed: ${result.totalUploaded} uploaded, ${result.totalSkipped} skipped, ${result.errors.length} collection errors`,
       );
 
       // Dismiss sync notification
@@ -1123,13 +1372,15 @@ class OfflineFirstSync {
   private async pushCollectionToCloud(
     collectionName: CollectionName,
     tableName: string,
-    since: number = 0
+    since: number = 0,
   ): Promise<{ uploaded: number; skipped: number; errors: number }> {
     // Check if user is authenticated first
     const { authService } = await import("./authService");
     const isAuthenticated = await authService.isAuthenticatedAsync();
     if (!isAuthenticated) {
-      console.log(`🔐 User not authenticated, skipping ${collectionName} push to cloud`);
+      console.log(
+        `🔐 User not authenticated, skipping ${collectionName} push to cloud`,
+      );
       return { uploaded: 0, skipped: 0, errors: 0 };
     }
 
@@ -1153,47 +1404,84 @@ class OfflineFirstSync {
       }
 
       // Get all cloud documents for comparison
-      const cloudDocuments = await syncService.getAllDocumentsFromCollection(collectionName);
+      const cloudDocuments =
+        await syncService.getAllDocumentsFromCollection(collectionName);
       const cloudById = new Map(cloudDocuments.map((doc) => [doc.id, doc]));
 
-      console.log(`📊 ${tableName}: ${localDocuments.length} local items, ${cloudDocuments.length} cloud items`);
+      console.log(
+        `📊 ${tableName}: ${localDocuments.length} local items, ${cloudDocuments.length} cloud items`,
+      );
 
       // Process each local document
       for (const localDoc of localDocuments) {
         try {
           // Skip deleted items
-          if ((localDoc as any).deleted === 1 || (localDoc as any).deleted === true) {
-            console.log(`🗑️ Skipping deleted ${tableName}: ${(localDoc as any).id}`);
+          if (
+            (localDoc as any).deleted === 1 ||
+            (localDoc as any).deleted === true
+          ) {
+            console.log(
+              `🗑️ Skipping deleted ${tableName}: ${(localDoc as any).id}`,
+            );
             result.skipped++;
             continue;
           }
 
           const cloudDoc = cloudById.get((localDoc as any).id);
-          const localUpdatedAt = (localDoc as any).updated_at || (localDoc as any).sync_updated_at || 0;
+          const localUpdatedAt =
+            (localDoc as any).updated_at ||
+            (localDoc as any).sync_updated_at ||
+            0;
 
           // Convert local database format to cloud format
-          const cloudFormatDoc = this.convertLocalToCloudFormat(tableName, localDoc);
+          const cloudFormatDoc = this.convertLocalToCloudFormat(
+            tableName,
+            localDoc,
+          );
 
           if (!cloudDoc) {
             // Document doesn't exist in cloud - upload it
-            console.log(`⬆️ Uploading new ${tableName}: ${(localDoc as any).id}`);
-            await syncService.syncLocalChanges(collectionName, "create", (localDoc as any).id, cloudFormatDoc);
+            console.log(
+              `⬆️ Uploading new ${tableName}: ${(localDoc as any).id}`,
+            );
+            await syncService.syncLocalChanges(
+              collectionName,
+              "create",
+              (localDoc as any).id,
+              cloudFormatDoc,
+            );
+            await this.markRecordSynced(tableName, (localDoc as any).id);
             result.uploaded++;
           } else {
             // Document exists in cloud - check if local is newer
-            const cloudUpdatedAt = cloudDoc.updatedAt || cloudDoc.sync_updated_at || 0;
+            const cloudUpdatedAt =
+              cloudDoc.updatedAt || cloudDoc.sync_updated_at || 0;
 
             if (localUpdatedAt > cloudUpdatedAt) {
-              console.log(`⬆️ Updating cloud ${tableName}: ${(localDoc as any).id} (local: ${localUpdatedAt}, cloud: ${cloudUpdatedAt})`);
-              await syncService.syncLocalChanges(collectionName, "update", (localDoc as any).id, cloudFormatDoc);
+              console.log(
+                `⬆️ Updating cloud ${tableName}: ${(localDoc as any).id} (local: ${localUpdatedAt}, cloud: ${cloudUpdatedAt})`,
+              );
+              await syncService.syncLocalChanges(
+                collectionName,
+                "update",
+                (localDoc as any).id,
+                cloudFormatDoc,
+              );
+              await this.markRecordSynced(tableName, (localDoc as any).id);
               result.uploaded++;
             } else {
-              console.log(`⏭️ Skipping ${tableName}: ${(localDoc as any).id} (cloud is up to date)`);
+              console.log(
+                `⏭️ Skipping ${tableName}: ${(localDoc as any).id} (cloud is up to date)`,
+              );
+              await this.markRecordSynced(tableName, (localDoc as any).id);
               result.skipped++;
             }
           }
         } catch (error) {
-          console.error(`❌ Failed to push ${tableName}:${(localDoc as any).id}:`, error);
+          console.error(
+            `❌ Failed to push ${tableName}:${(localDoc as any).id}:`,
+            error,
+          );
           result.errors++;
         }
       }
@@ -1208,7 +1496,11 @@ class OfflineFirstSync {
   /**
    * Enhanced category sync that handles bidirectional sync and soft deletion for default categories
    */
-  public async syncCategoriesWithMobile(): Promise<{ uploaded: number; downloaded: number; softDeleted: number }> {
+  public async syncCategoriesWithMobile(): Promise<{
+    uploaded: number;
+    downloaded: number;
+    softDeleted: number;
+  }> {
     try {
       console.log("🔄 Starting enhanced category sync...");
 
@@ -1223,36 +1515,68 @@ class OfflineFirstSync {
 
       // Step 1: Upload local categories to cloud (mobile → cloud)
       const localCategories = await this.getLocalDocumentsByTable("categories");
-      const cloudCategories = await syncService.getAllDocumentsFromCollection("categories");
+      const cloudCategories =
+        await syncService.getAllDocumentsFromCollection("categories");
       const cloudById = new Map(cloudCategories.map((cat) => [cat.id, cat]));
 
       for (const localCategory of localCategories) {
         const cloudCategory = cloudById.get(localCategory.id);
-        const localUpdatedAt = (localCategory as any).updated_at || (localCategory as any).sync_updated_at || 0;
+        const localUpdatedAt =
+          (localCategory as any).updated_at ||
+          (localCategory as any).sync_updated_at ||
+          0;
 
         if (!cloudCategory) {
           // Upload new category to cloud
-          console.log(`⬆️ Uploading new category to cloud: ${localCategory.id}`);
-          const cloudFormatCategory = this.convertLocalToCloudFormat("categories", localCategory);
-          await syncService.syncLocalChanges("categories", "create", localCategory.id, cloudFormatCategory);
+          console.log(
+            `⬆️ Uploading new category to cloud: ${localCategory.id}`,
+          );
+          const cloudFormatCategory = this.convertLocalToCloudFormat(
+            "categories",
+            localCategory,
+          );
+          await syncService.syncLocalChanges(
+            "categories",
+            "create",
+            localCategory.id,
+            cloudFormatCategory,
+          );
+          await this.markRecordSynced("categories", localCategory.id);
           result.uploaded++;
         } else {
-          const cloudUpdatedAt = cloudCategory.updatedAt || cloudCategory.sync_updated_at || 0;
+          const cloudUpdatedAt =
+            cloudCategory.updatedAt || cloudCategory.sync_updated_at || 0;
           if (localUpdatedAt > cloudUpdatedAt) {
             // Local is newer, upload to cloud
             console.log(`⬆️ Updating cloud category: ${localCategory.id}`);
-            const cloudFormatCategory = this.convertLocalToCloudFormat("categories", localCategory);
-            await syncService.syncLocalChanges("categories", "update", localCategory.id, cloudFormatCategory);
+            const cloudFormatCategory = this.convertLocalToCloudFormat(
+              "categories",
+              localCategory,
+            );
+            await syncService.syncLocalChanges(
+              "categories",
+              "update",
+              localCategory.id,
+              cloudFormatCategory,
+            );
+            await this.markRecordSynced("categories", localCategory.id);
             result.uploaded++;
+          } else {
+            await this.markRecordSynced("categories", localCategory.id);
           }
         }
       }
 
       // Step 2: Download and sync cloud categories to local (cloud → mobile)
-      const stats = await this.syncCollectionWithIdComparison("categories", "categories");
+      const stats = await this.syncCollectionWithIdComparison(
+        "categories",
+        "categories",
+      );
       result.downloaded = stats.created + stats.updated;
 
-      console.log(`✅ Category sync completed: ${result.uploaded} uploaded, ${result.downloaded} downloaded, ${result.softDeleted} soft deleted`);
+      console.log(
+        `✅ Category sync completed: ${result.uploaded} uploaded, ${result.downloaded} downloaded, ${result.softDeleted} soft deleted`,
+      );
       return result;
     } catch (error) {
       console.error("❌ Category sync failed:", error);
@@ -1276,7 +1600,10 @@ class OfflineFirstSync {
     await this.db.ensureInitialized();
     const database = this.db.getDatabase();
 
-    await database.runAsync(`UPDATE categories SET deleted = 1, updated_at = ? WHERE id = ?`, [Date.now(), categoryId]);
+    await database.runAsync(
+      `UPDATE categories SET deleted = 1, updated_at = ? WHERE id = ?`,
+      [Date.now(), categoryId],
+    );
 
     console.log(`🔄 Soft deleted category: ${categoryId}`);
   }
@@ -1290,7 +1617,9 @@ class OfflineFirstSync {
       const database = this.db.getDatabase();
 
       // Check for any transactions (main indicator of user data)
-      const result = (await database.getFirstAsync("SELECT COUNT(*) as count FROM transactions LIMIT 1")) as { count: number } | null;
+      const result = (await database.getFirstAsync(
+        "SELECT COUNT(*) as count FROM transactions LIMIT 1",
+      )) as { count: number } | null;
 
       return result ? result.count > 0 : false;
     } catch (error) {
@@ -1302,12 +1631,16 @@ class OfflineFirstSync {
   /**
    * Pull all documents from a specific Firebase collection
    */
-  private async pullCollectionFromCloud(collectionName: CollectionName, tableName: string): Promise<number> {
+  private async pullCollectionFromCloud(
+    collectionName: CollectionName,
+    tableName: string,
+  ): Promise<number> {
     try {
       console.log(`☁️ Pulling ${collectionName} from cloud...`);
 
       // Get all documents from Firebase collection
-      const cloudDocuments = await syncService.getAllDocumentsFromCollection(collectionName);
+      const cloudDocuments =
+        await syncService.getAllDocumentsFromCollection(collectionName);
 
       if (cloudDocuments.length === 0) {
         console.log(`☁️ No ${collectionName} found in cloud`);
@@ -1322,7 +1655,10 @@ class OfflineFirstSync {
         try {
           // Validate document has minimum required data
           if (!doc || !doc.id) {
-            console.warn(`⚠️ Skipping invalid ${tableName} document (no ID):`, doc);
+            console.warn(
+              `⚠️ Skipping invalid ${tableName} document (no ID):`,
+              doc,
+            );
             skippedCount++;
             continue;
           }
@@ -1342,7 +1678,9 @@ class OfflineFirstSync {
         }
       }
 
-      console.log(`☁️ Inserted ${insertedCount}/${cloudDocuments.length} ${collectionName} from cloud (${skippedCount} skipped)`);
+      console.log(
+        `☁️ Inserted ${insertedCount}/${cloudDocuments.length} ${collectionName} from cloud (${skippedCount} skipped)`,
+      );
       return insertedCount;
     } catch (error) {
       console.error(`❌ Failed to pull ${collectionName} from cloud:`, error);
@@ -1364,7 +1702,10 @@ class OfflineFirstSync {
     console.log(`🔄 Retrying ${failedInserts.length} failed inserts...`);
 
     let successCount = 0;
-    const stillFailed: Array<{ collectionName: CollectionName; doc: FirestoreDocument<any> }> = [];
+    const stillFailed: Array<{
+      collectionName: CollectionName;
+      doc: FirestoreDocument<any>;
+    }> = [];
 
     for (const { collectionName, doc } of failedInserts) {
       try {
@@ -1375,7 +1716,10 @@ class OfflineFirstSync {
           successCount++;
         }
       } catch (error) {
-        console.error(`❌ Retry failed for ${collectionName}:${doc.id}:`, error);
+        console.error(
+          `❌ Retry failed for ${collectionName}:${doc.id}:`,
+          error,
+        );
         stillFailed.push({ collectionName, doc });
       }
     }
@@ -1383,18 +1727,26 @@ class OfflineFirstSync {
     // Update the failed inserts array with any that still failed
     syncService.clearFailedInserts();
     for (const failedItem of stillFailed) {
-      console.warn(`⚠️ Document ${failedItem.collectionName}:${failedItem.doc.id} still failing after retry`);
+      console.warn(
+        `⚠️ Document ${failedItem.collectionName}:${failedItem.doc.id} still failing after retry`,
+      );
     }
 
-    console.log(`🔄 Retry completed: ${successCount}/${failedInserts.length} successful`);
+    console.log(
+      `🔄 Retry completed: ${successCount}/${failedInserts.length} successful`,
+    );
     return successCount;
   }
 
   /**
    * Get table name from collection name (reverse mapping)
    */
-  private getTableNameFromCollection(collectionName: CollectionName): string | null {
-    for (const [tableName, colName] of Object.entries(this.TABLE_TO_COLLECTION)) {
+  private getTableNameFromCollection(
+    collectionName: CollectionName,
+  ): string | null {
+    for (const [tableName, colName] of Object.entries(
+      this.TABLE_TO_COLLECTION,
+    )) {
       if (colName === collectionName) {
         return tableName;
       }
@@ -1405,7 +1757,10 @@ class OfflineFirstSync {
   /**
    * Insert a cloud document into the appropriate local table
    */
-  private async insertCloudDocumentToLocal(tableName: string, document: any): Promise<void> {
+  private async insertCloudDocumentToLocal(
+    tableName: string,
+    document: any,
+  ): Promise<void> {
     await this.db.ensureInitialized();
     const database = this.db.getDatabase();
 
@@ -1427,7 +1782,7 @@ class OfflineFirstSync {
             localData.date,
             localData.note,
             localData.updatedAt,
-          ]
+          ],
         );
         break;
 
@@ -1435,7 +1790,14 @@ class OfflineFirstSync {
         await database.runAsync(
           `INSERT OR REPLACE INTO categories (id, name, type, color, icon, updated_at)
            VALUES (?, ?, ?, ?, ?, ?)`,
-          [localData.id, localData.name, localData.type, localData.color, localData.icon, localData.updatedAt]
+          [
+            localData.id,
+            localData.name,
+            localData.type,
+            localData.color,
+            localData.icon,
+            localData.updatedAt,
+          ],
         );
         break;
 
@@ -1452,7 +1814,7 @@ class OfflineFirstSync {
             localData.categoryId,
             localData.resetDay,
             localData.updatedAt,
-          ]
+          ],
         );
         break;
 
@@ -1471,7 +1833,7 @@ class OfflineFirstSync {
             localData.recurring,
             localData.paid,
             localData.updatedAt,
-          ]
+          ],
         );
         break;
 
@@ -1499,7 +1861,7 @@ class OfflineFirstSync {
             cleanedDebt.budgetId, // budget_id
             cleanedDebt.createdAt, // validated created_at
             cleanedDebt.updatedAt, // validated updated_at
-          ]
+          ],
         );
         break;
 
@@ -1517,7 +1879,7 @@ class OfflineFirstSync {
             localData.interest || 0,
             localData.note,
             localData.updatedAt,
-          ]
+          ],
         );
         break;
 
@@ -1528,7 +1890,7 @@ class OfflineFirstSync {
           await database.runAsync(
             `INSERT OR REPLACE INTO settings (id, key, value, updated_at)
              VALUES (?, ?, ?, ?)`,
-            [localData.id, localData.key, localData.value, localData.updatedAt]
+            [localData.id, localData.key, localData.value, localData.updatedAt],
           );
         } else {
           // New structured format with billing period and other settings
@@ -1537,13 +1899,23 @@ class OfflineFirstSync {
              VALUES (?, ?, ?, ?, ?, ?, ?)`,
             [
               localData.id,
-              localData.billingPeriodStartDay || localData.billing_period_start_day || 1,
+              localData.billingPeriodStartDay ||
+                localData.billing_period_start_day ||
+                28,
               localData.currency || "USD",
-              localData.firebaseSync !== undefined ? (localData.firebaseSync ? 1 : 0) : localData.firebase_sync || 0,
+              localData.firebaseSync !== undefined
+                ? localData.firebaseSync
+                  ? 1
+                  : 0
+                : localData.firebase_sync || 0,
               localData.theme || "system",
-              localData.createdAt || localData.created_at || new Date().toISOString(),
-              localData.updatedAt || localData.updated_at || new Date().toISOString(),
-            ]
+              localData.createdAt ||
+                localData.created_at ||
+                new Date().toISOString(),
+              localData.updatedAt ||
+                localData.updated_at ||
+                new Date().toISOString(),
+            ],
           );
         }
         break;
@@ -1566,9 +1938,15 @@ class OfflineFirstSync {
         return {
           ...baseFields,
           // Convert snake_case database fields to camelCase for cloud storage
-          billingPeriodStartDay: document.billing_period_start_day || document.billingPeriodStartDay || 1,
+          billingPeriodStartDay:
+            document.billing_period_start_day ||
+            document.billingPeriodStartDay ||
+            28,
           currency: document.currency || "USD",
-          firebaseSync: document.firebase_sync !== undefined ? Boolean(document.firebase_sync) : document.firebaseSync || false,
+          firebaseSync:
+            document.firebase_sync !== undefined
+              ? Boolean(document.firebase_sync)
+              : document.firebaseSync || false,
           theme: document.theme || "system",
           // Remove legacy key-value fields if they exist
           key: undefined,
@@ -1593,7 +1971,10 @@ class OfflineFirstSync {
           name: document.name,
           color: document.color || "#007AFF",
           icon: document.icon || "folder",
-          isDefault: document.is_default !== undefined ? Boolean(document.is_default) : document.isDefault || false,
+          isDefault:
+            document.is_default !== undefined
+              ? Boolean(document.is_default)
+              : document.isDefault || false,
         };
 
       case "budgets":
@@ -1614,7 +1995,11 @@ class OfflineFirstSync {
           budgetId: document.budget_id || document.budgetId || null,
           dueDay: document.due_day || document.dueDay,
           isRecurring:
-            document.is_recurring !== undefined ? Boolean(document.is_recurring) : document.isRecurring !== undefined ? document.isRecurring : true,
+            document.is_recurring !== undefined
+              ? Boolean(document.is_recurring)
+              : document.isRecurring !== undefined
+                ? document.isRecurring
+                : true,
           note: document.note || null,
         };
 
@@ -1622,10 +2007,16 @@ class OfflineFirstSync {
         return {
           ...baseFields,
           name: document.name || "Unnamed Debt",
-          totalAmount: document.total_amount || document.totalAmount || document.amount,
-          currentBalance: document.current_balance || document.currentBalance || document.total_amount || document.amount,
+          totalAmount:
+            document.total_amount || document.totalAmount || document.amount,
+          currentBalance:
+            document.current_balance ||
+            document.currentBalance ||
+            document.total_amount ||
+            document.amount,
           interestRate: document.interest_rate || document.interestRate || 0,
-          minimumPayment: document.minimum_payment || document.minimumPayment || 0,
+          minimumPayment:
+            document.minimum_payment || document.minimumPayment || 0,
           dueDate: document.due_date || document.dueDate || null,
           creditor: document.creditor || null,
           description: document.description || null,
@@ -1639,7 +2030,8 @@ class OfflineFirstSync {
           debtId: document.debt_id || document.debtId,
           amount: document.amount,
           date: document.date,
-          paymentDate: document.payment_date || document.paymentDate || document.date,
+          paymentDate:
+            document.payment_date || document.paymentDate || document.date,
           principal: document.principal || 0,
           interest: document.interest || 0,
           note: document.note || null,
@@ -1665,12 +2057,19 @@ class OfflineFirstSync {
     // Handle different field name mappings between cloud and local
     const baseFields = {
       id: document.id || data.id || `unknown-${Date.now()}`,
-      updatedAt: document.updatedAt || data.updatedAt || document.sync_updated_at || data.sync_updated_at || Date.now(),
+      updatedAt:
+        document.updatedAt ||
+        data.updatedAt ||
+        document.sync_updated_at ||
+        data.sync_updated_at ||
+        Date.now(),
     };
 
     // Helper function to ensure required fields have values
     const ensureValue = (value: any, defaultValue: any) => {
-      return value !== null && value !== undefined && value !== "" ? value : defaultValue;
+      return value !== null && value !== undefined && value !== ""
+        ? value
+        : defaultValue;
     };
 
     // Helper function to get value from either document or data
@@ -1679,7 +2078,10 @@ class OfflineFirstSync {
 
       // Try alternative field names if primary is not found
       for (const altField of alternativeFields) {
-        if (!value && (data[altField] !== undefined || document[altField] !== undefined)) {
+        if (
+          !value &&
+          (data[altField] !== undefined || document[altField] !== undefined)
+        ) {
           value = data[altField] || document[altField];
         }
       }
@@ -1695,7 +2097,10 @@ class OfflineFirstSync {
           type: ensureValue(getValue("type"), "expense"),
           categoryId: getValue("categoryId", "category_id") || null, // Allow null since no default categories
           budgetId: getValue("budgetId", "budget_id") || null,
-          description: ensureValue(getValue("description"), "Imported transaction"),
+          description: ensureValue(
+            getValue("description"),
+            "Imported transaction",
+          ),
           date: ensureValue(getValue("date"), new Date().toISOString()),
           note: getValue("note") || null,
         };
@@ -1714,7 +2119,10 @@ class OfflineFirstSync {
           ...baseFields,
           name: ensureValue(getValue("name"), "Imported Budget"),
           amount: ensureValue(getValue("amount"), 1), // Must be >= 0
-          periodType: ensureValue(getValue("periodType", "period_type"), "monthly"),
+          periodType: ensureValue(
+            getValue("periodType", "period_type"),
+            "monthly",
+          ),
           periodStart: getValue("periodStart", "period_start") || null,
           categoryId: getValue("categoryId", "category_id") || null,
           resetDay: ensureValue(getValue("resetDay", "reset_day"), 1), // Required NOT NULL field
@@ -1725,7 +2133,10 @@ class OfflineFirstSync {
           ...baseFields,
           name: ensureValue(getValue("name"), "Imported Bill"),
           amount: Math.max(ensureValue(getValue("amount"), 1), 0.01), // Must be > 0 due to CHECK constraint
-          dueDate: ensureValue(getValue("dueDate", "due_date"), new Date().toISOString()),
+          dueDate: ensureValue(
+            getValue("dueDate", "due_date"),
+            new Date().toISOString(),
+          ),
           categoryId: getValue("categoryId", "category_id") || null, // Allow null since no default categories
           budgetId: getValue("budgetId", "budget_id") || null,
           isRecurring: getValue("isRecurring", "is_recurring") ? 1 : 0,
@@ -1734,24 +2145,43 @@ class OfflineFirstSync {
         };
 
       case "debts":
-        const totalAmount = Math.max(ensureValue(getValue("totalAmount", "total_amount"), 1), 0.01);
+        const totalAmount = Math.max(
+          ensureValue(getValue("totalAmount", "total_amount"), 1),
+          0.01,
+        );
         return {
           ...baseFields,
           name: ensureValue(getValue("name"), "Imported Debt"),
           // Map to database snake_case fields for proper storage
           amount: totalAmount, // amount field for compatibility
           total_amount: totalAmount, // total_amount field
-          current_balance: Math.max(getValue("currentBalance", "current_balance") || totalAmount, 0),
-          monthly_payment: getValue("monthlyPayment", "monthly_payment", "minimumPayment", "minimum_payment") || null,
+          current_balance: Math.max(
+            getValue("currentBalance", "current_balance") || totalAmount,
+            0,
+          ),
+          monthly_payment:
+            getValue(
+              "monthlyPayment",
+              "monthly_payment",
+              "minimumPayment",
+              "minimum_payment",
+            ) || null,
           interest_rate: getValue("interestRate", "interest_rate") || null,
-          minimum_payment: getValue("minimumPayment", "minimum_payment") || null,
+          minimum_payment:
+            getValue("minimumPayment", "minimum_payment") || null,
           due_date: getValue("dueDate", "due_date") || null,
           creditor: getValue("creditor") || null,
           description: getValue("description") || null,
           category_id: getValue("categoryId", "category_id") || null,
           budget_id: getValue("budgetId", "budget_id") || null,
-          created_at: ensureValue(getValue("createdAt", "created_at"), new Date().toISOString()),
-          updated_at: ensureValue(getValue("updatedAt", "updated_at"), new Date().toISOString()),
+          created_at: ensureValue(
+            getValue("createdAt", "created_at"),
+            new Date().toISOString(),
+          ),
+          updated_at: ensureValue(
+            getValue("updatedAt", "updated_at"),
+            new Date().toISOString(),
+          ),
         };
 
       case "debt_payments":
@@ -1760,7 +2190,10 @@ class OfflineFirstSync {
           debtId: ensureValue(getValue("debtId", "debt_id"), ""),
           amount: Math.max(ensureValue(getValue("amount"), 1), 0.01), // Must be > 0
           date: ensureValue(getValue("date"), new Date().toISOString()),
-          paymentDate: ensureValue(getValue("paymentDate", "payment_date", "date"), new Date().toISOString()),
+          paymentDate: ensureValue(
+            getValue("paymentDate", "payment_date", "date"),
+            new Date().toISOString(),
+          ),
           principal: Math.max(getValue("principal") || 0, 0), // Default to 0 if not provided
           interest: Math.max(getValue("interest") || 0, 0), // Default to 0 if not provided
           note: getValue("note") || null,
@@ -1782,12 +2215,26 @@ class OfflineFirstSync {
           return {
             ...baseFields,
             // Map cloud camelCase to local snake_case and vice versa
-            billing_period_start_day: ensureValue(getValue("billingPeriodStartDay", "billing_period_start_day"), 1),
+            billing_period_start_day: ensureValue(
+              getValue("billingPeriodStartDay", "billing_period_start_day"),
+              28,
+            ),
             currency: ensureValue(getValue("currency"), "USD"),
-            firebase_sync: getValue("firebaseSync", "firebase_sync") !== undefined ? (getValue("firebaseSync", "firebase_sync") ? 1 : 0) : 0,
+            firebase_sync:
+              getValue("firebaseSync", "firebase_sync") !== undefined
+                ? getValue("firebaseSync", "firebase_sync")
+                  ? 1
+                  : 0
+                : 0,
             theme: ensureValue(getValue("theme"), "system"),
-            created_at: ensureValue(getValue("createdAt", "created_at"), new Date().toISOString()),
-            updated_at: ensureValue(getValue("updatedAt", "updated_at"), new Date().toISOString()),
+            created_at: ensureValue(
+              getValue("createdAt", "created_at"),
+              new Date().toISOString(),
+            ),
+            updated_at: ensureValue(
+              getValue("updatedAt", "updated_at"),
+              new Date().toISOString(),
+            ),
           };
         }
 

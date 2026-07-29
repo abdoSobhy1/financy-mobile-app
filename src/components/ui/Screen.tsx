@@ -1,5 +1,12 @@
 import React from "react";
-import { View, ScrollView, StyleSheet, StatusBar, ViewStyle, RefreshControl } from "react-native";
+import {
+  View,
+  ScrollView,
+  StyleSheet,
+  StatusBar,
+  ViewStyle,
+  RefreshControl,
+} from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { UI } from "../../constants";
 
@@ -34,7 +41,10 @@ const Screen: React.FC<ScreenProps> = ({
 
   return (
     <SafeAreaView style={styles.safeArea}>
-      <StatusBar barStyle="light-content" backgroundColor={UI.COLORS.BACKGROUND} />
+      <StatusBar
+        barStyle="light-content"
+        backgroundColor={UI.COLORS.BACKGROUND}
+      />
       {content}
     </SafeAreaView>
   );

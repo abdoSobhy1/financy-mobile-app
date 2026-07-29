@@ -1,13 +1,15 @@
 import React, { useState, useEffect, useMemo } from "react";
-import { View, Text, TouchableOpacity, StyleSheet } from "react-native";
+import { View } from "react-native";
 import { useDispatch, useSelector } from "react-redux";
 import { useNavigation } from "@react-navigation/native";
 import { useToast, CategorySelector } from "../../ui";
 import { AppDispatch, RootState } from "../../../store";
 import { addBudget, updateBudget } from "../../../store/slices/budgetsSlice";
-import { fetchCategories, addCategory } from "../../../store/slices/categoriesSlice";
+import {
+  fetchCategories,
+  addCategory,
+} from "../../../store/slices/categoriesSlice";
 import { Budget } from "../../../types";
-import { UI } from "../../../constants";
 import { generateId } from "../../../utils";
 import { UnifiedForm } from "../UnifiedForm";
 import { FormField } from "../FormField";
@@ -25,12 +27,18 @@ interface FormData {
   categoryId: string;
 }
 
-export const BudgetForm: React.FC<BudgetFormProps> = ({ budget, onSuccess, onCancel }) => {
+export const BudgetForm: React.FC<BudgetFormProps> = ({
+  budget,
+  onSuccess,
+  onCancel,
+}) => {
   const dispatch = useDispatch<AppDispatch>();
   const navigation = useNavigation();
   const { showSuccess, showError } = useToast();
 
-  const { items: categories } = useSelector((state: RootState) => state.categories);
+  const { items: categories } = useSelector(
+    (state: RootState) => state.categories,
+  );
   const { loading } = useSelector((state: RootState) => state.budgets);
 
   const isEditing = !!budget;
@@ -93,14 +101,17 @@ export const BudgetForm: React.FC<BudgetFormProps> = ({ budget, onSuccess, onCan
       };
 
       // DEBUG: log the exact payload before dispatch so we can confirm resetDay is correct
-      console.log("BudgetForm: submitting budgetData:", JSON.stringify(budgetData));
+      console.log(
+        "BudgetForm: submitting budgetData:",
+        JSON.stringify(budgetData),
+      );
 
       if (isEditing) {
         await dispatch(
           updateBudget({
             id: budget!.id,
             updates: budgetData,
-          })
+          }),
         ).unwrap();
         showSuccess("Budget updated successfully!");
       } else {
@@ -112,9 +123,12 @@ export const BudgetForm: React.FC<BudgetFormProps> = ({ budget, onSuccess, onCan
       setTimeout(() => navigation.goBack(), 1000);
     } catch (error) {
       console.error("Budget operation error:", error);
-      const errorMessage = error instanceof Error ? error.message : "Unknown error occurred";
+      const errorMessage =
+        error instanceof Error ? error.message : "Unknown error occurred";
       const action = isEditing ? "update" : "add";
-      showError(`Failed to ${action} budget: ${errorMessage}. Please try again.`);
+      showError(
+        `Failed to ${action} budget: ${errorMessage}. Please try again.`,
+      );
     }
   };
 
@@ -137,7 +151,9 @@ export const BudgetForm: React.FC<BudgetFormProps> = ({ budget, onSuccess, onCan
     const hasErrors = Object.keys(errors).length > 0;
 
     // Check required fields
-    const hasRequiredFields = !!(formData.name.trim() && formData.amount.trim());
+    const hasRequiredFields = !!(
+      formData.name.trim() && formData.amount.trim()
+    );
 
     return !hasErrors && hasRequiredFields;
   }, [errors, formData.name, formData.amount]);
@@ -205,67 +221,5 @@ export const BudgetForm: React.FC<BudgetFormProps> = ({ budget, onSuccess, onCan
     </UnifiedForm>
   );
 };
-
-const styles = StyleSheet.create({
-  fieldContainer: {
-    marginBottom: 20,
-  },
-  label: {
-    fontSize: 16,
-    fontWeight: "600",
-    color: UI.COLORS.TEXT_PRIMARY,
-    marginBottom: 8,
-  },
-  helperText: {
-    fontSize: 14,
-    color: UI.COLORS.TEXT_SECONDARY,
-    marginBottom: 12,
-  },
-  selectContainer: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 8,
-  },
-  errorContainer: {
-    borderColor: "#EF4444",
-  },
-  selectOption: {
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: UI.COLORS.BORDER,
-    backgroundColor: UI.COLORS.SURFACE,
-    minWidth: 80,
-  },
-  resetDayOption: {
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: UI.COLORS.BORDER,
-    backgroundColor: UI.COLORS.SURFACE,
-    width: "18%", // Five per row
-  },
-  selectedOption: {
-    backgroundColor: UI.COLORS.PRIMARY,
-    borderColor: UI.COLORS.PRIMARY,
-  },
-  selectOptionText: {
-    fontSize: 14,
-    color: UI.COLORS.TEXT_SECONDARY,
-    textAlign: "center",
-  },
-  selectedOptionText: {
-    color: "#FFFFFF",
-    fontWeight: "600",
-  },
-  errorText: {
-    fontSize: 14,
-    color: "#EF4444",
-    marginTop: 4,
-    marginLeft: 16,
-  },
-});
 
 export default BudgetForm;

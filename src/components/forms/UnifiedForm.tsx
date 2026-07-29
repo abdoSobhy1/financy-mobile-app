@@ -1,7 +1,18 @@
 import React, { ReactNode } from "react";
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator } from "react-native";
+import {
+  View,
+  Text,
+  StyleSheet,
+  ScrollView,
+  TouchableOpacity,
+  ActivityIndicator,
+  StatusBar,
+  KeyboardAvoidingView,
+  Platform,
+} from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
+import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons } from "@expo/vector-icons";
-import { Screen } from "../ui";
 import { UI } from "../../constants";
 
 interface UnifiedFormProps {
@@ -30,109 +41,175 @@ export const UnifiedForm: React.FC<UnifiedFormProps> = ({
   showDeleteButton = false,
 }) => {
   return (
-    <Screen>
-      <ScrollView style={styles.container} keyboardShouldPersistTaps="handled">
-        <View style={styles.header}>
-          <View style={styles.headerLeft}>
-            {showDeleteButton && onDelete && (
-              <TouchableOpacity onPress={onDelete} style={styles.deleteButton} disabled={loading}>
-                <Ionicons name="trash-outline" size={20} color={UI.COLORS.ERROR} />
-              </TouchableOpacity>
-            )}
-          </View>
-          <Text style={styles.title}>{title}</Text>
-          <View style={styles.headerRight} />
-        </View>
+    <LinearGradient
+      colors={[UI.COLORS.BACKGROUND, "#0F0F2D", UI.COLORS.BACKGROUND]}
+      locations={[0, 0.3, 1]}
+      style={styles.gradient}>
+      <SafeAreaView style={styles.safeArea}>
+        <StatusBar
+          barStyle="light-content"
+          backgroundColor="transparent"
+          translucent
+        />
 
-        <View style={styles.form}>
-          {children}
+        {/* ── Nav bar ───────────────────────────── */}
+        <View style={styles.navBar}>
+          <TouchableOpacity
+            style={styles.navBtn}
+            onPress={onCancel}
+            disabled={loading}>
+            <Ionicons name="close" size={18} color={UI.COLORS.TEXT_PRIMARY} />
+          </TouchableOpacity>
 
-          {/* Action Buttons */}
-          <View style={styles.buttonContainer}>
-            <TouchableOpacity style={[styles.button, styles.cancelButton]} onPress={onCancel} disabled={loading}>
-              <Text style={styles.cancelButtonText}>{cancelLabel}</Text>
-            </TouchableOpacity>
+          <Text style={styles.navTitle}>{title}</Text>
 
+          {showDeleteButton && onDelete ? (
             <TouchableOpacity
-              style={[styles.button, styles.submitButton, (!isValid || loading) && styles.disabledButton]}
-              onPress={onSubmit}
-              disabled={loading || !isValid}>
-              {loading ? <ActivityIndicator color="#FFFFFF" size="small" /> : <Text style={styles.submitButtonText}>{submitLabel}</Text>}
+              style={[styles.navBtn, styles.deleteBtn]}
+              onPress={onDelete}
+              disabled={loading}>
+              <Ionicons name="trash-outline" size={18} color="#FF6B6B" />
             </TouchableOpacity>
-          </View>
+          ) : (
+            <View style={styles.navPlaceholder} />
+          )}
         </View>
-      </ScrollView>
-    </Screen>
+
+        <KeyboardAvoidingView
+          style={{ flex: 1 }}
+          behavior={Platform.OS === "ios" ? "padding" : undefined}>
+          <ScrollView
+            style={styles.scrollView}
+            contentContainerStyle={styles.scrollContent}
+            keyboardShouldPersistTaps="handled"
+            showsVerticalScrollIndicator={false}>
+            {children}
+          </ScrollView>
+        </KeyboardAvoidingView>
+
+        {/* ── Bottom action bar ───────────────────── */}
+        <View style={styles.bottomBar}>
+          <TouchableOpacity
+            style={styles.cancelBtn}
+            onPress={onCancel}
+            disabled={loading}>
+            <Text style={styles.cancelBtnText}>{cancelLabel}</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            activeOpacity={0.8}
+            onPress={onSubmit}
+            disabled={loading || !isValid}>
+            <LinearGradient
+              colors={
+                !isValid || loading
+                  ? ["rgba(108,92,231,0.3)", "rgba(108,92,231,0.3)"]
+                  : [UI.COLORS.PRIMARY, UI.COLORS.PRIMARY_DARK]
+              }
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={styles.submitBtn}>
+              {loading ? (
+                <ActivityIndicator size="small" color="#fff" />
+              ) : (
+                <>
+                  <Ionicons name="checkmark-circle" size={18} color="#fff" />
+                  <Text style={styles.submitBtnText}>{submitLabel}</Text>
+                </>
+              )}
+            </LinearGradient>
+          </TouchableOpacity>
+        </View>
+      </SafeAreaView>
+    </LinearGradient>
   );
 };
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: UI.COLORS.BACKGROUND,
-  },
-  header: {
+  gradient: { flex: 1 },
+  safeArea: { flex: 1 },
+
+  // ── Nav ────────────────────────────────────────────
+  navBar: {
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "space-between",
-    padding: 20,
-    borderBottomWidth: 1,
-    borderBottomColor: UI.COLORS.BORDER,
+    paddingHorizontal: 20,
+    paddingVertical: 14,
+    gap: 12,
   },
-  headerLeft: {
-    width: 40,
-    alignItems: "flex-start",
+  navBtn: {
+    width: 38,
+    height: 38,
+    borderRadius: 12,
+    backgroundColor: "rgba(108,92,231,0.1)",
+    borderWidth: 1,
+    borderColor: "rgba(108,92,231,0.2)",
+    alignItems: "center",
+    justifyContent: "center",
   },
-  headerRight: {
-    width: 40,
+  deleteBtn: {
+    backgroundColor: "rgba(255,107,107,0.08)",
+    borderColor: "rgba(255,107,107,0.2)",
   },
-  deleteButton: {
-    padding: 8,
-  },
-  title: {
-    fontSize: 28,
+  navTitle: {
+    flex: 1,
+    fontSize: 18,
     fontWeight: "700",
     color: UI.COLORS.TEXT_PRIMARY,
     textAlign: "center",
-    flex: 1,
   },
-  form: {
-    flex: 1,
-    padding: 20,
+  navPlaceholder: { width: 38 },
+
+  // ── Scroll ─────────────────────────────────────────
+  scrollView: { flex: 1 },
+  scrollContent: {
+    paddingHorizontal: 20,
+    paddingTop: 8,
+    paddingBottom: 20,
   },
-  buttonContainer: {
+
+  // ── Bottom bar ─────────────────────────────────────
+  bottomBar: {
     flexDirection: "row",
+    paddingHorizontal: 20,
+    paddingVertical: 16,
     gap: 12,
-    marginTop: 32,
-    marginBottom: 40,
+    borderTopWidth: 1,
+    borderTopColor: "rgba(108,92,231,0.1)",
+    backgroundColor: "rgba(15,15,45,0.8)",
   },
-  button: {
+  cancelBtn: {
     flex: 1,
-    height: 56,
-    borderRadius: 12,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  cancelButton: {
-    backgroundColor: "transparent",
+    height: 52,
+    borderRadius: 14,
     borderWidth: 1,
-    borderColor: UI.COLORS.BORDER,
+    borderColor: "rgba(108,92,231,0.2)",
+    alignItems: "center",
+    justifyContent: "center",
   },
-  submitButton: {
-    backgroundColor: UI.COLORS.PRIMARY,
-  },
-  disabledButton: {
-    opacity: 0.7,
-  },
-  cancelButtonText: {
-    fontSize: 16,
+  cancelBtnText: {
+    fontSize: 15,
     fontWeight: "600",
-    color: UI.COLORS.TEXT_SECONDARY,
+    color: UI.COLORS.TEXT_MUTED,
   },
-  submitButtonText: {
-    fontSize: 16,
-    fontWeight: "600",
-    color: "#FFFFFF",
+  submitBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    height: 52,
+    paddingHorizontal: 28,
+    borderRadius: 14,
+    gap: 8,
+    shadowColor: UI.COLORS.PRIMARY,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.35,
+    shadowRadius: 10,
+    elevation: 6,
+  },
+  submitBtnText: {
+    fontSize: 15,
+    fontWeight: "700",
+    color: "#fff",
   },
 });
 

@@ -17,7 +17,7 @@ export const CATEGORY_TYPES = {
 } as const;
 
 export const UI = {
-  CARD_RADIUS: 12,
+  CARD_RADIUS: 16,
   SPACING: {
     XS: 4,
     SM: 8,
@@ -26,23 +26,32 @@ export const UI = {
     XL: 32,
   },
   COLORS: {
-    // Dark theme colors with frosted glass effect
-    BACKGROUND: "#0F0F23",
-    SURFACE: "#1A1A2E",
-    SURFACE_BLUR: "rgba(26, 26, 46, 0.8)",
-    CARD: "#16213E",
-    CARD_BLUR: "rgba(22, 33, 62, 0.9)",
-    PRIMARY: "#4F46E5",
-    PRIMARY_LIGHT: "#6366F1",
-    ACCENT: "#10B981",
-    ERROR: "#EF4444",
-    WARNING: "#F59E0B",
-    SUCCESS: "#10B981",
-    TEXT_PRIMARY: "#F8FAFC",
-    TEXT_SECONDARY: "#CBD5E1",
-    TEXT_MUTED: "#64748B",
-    BORDER: "#334155",
-    INPUT_BACKGROUND: "#1E293B",
+    // Dark premium palette – deep indigo base
+    BACKGROUND: "#0B0B1E",
+    SURFACE: "#141432",
+    SURFACE_BLUR: "rgba(20, 20, 50, 0.85)",
+    CARD: "#1B1B3A",
+    CARD_BLUR: "rgba(27, 27, 58, 0.9)",
+
+    // Brand
+    PRIMARY: "#6C5CE7",
+    PRIMARY_LIGHT: "#A29BFE",
+    PRIMARY_DARK: "#4834D4",
+
+    // Semantic
+    ACCENT: "#00D2D3",
+    ERROR: "#FF6B6B",
+    WARNING: "#FECA57",
+    SUCCESS: "#2ED573",
+
+    // Text
+    TEXT_PRIMARY: "#F0F0FF",
+    TEXT_SECONDARY: "#A0A0C8",
+    TEXT_MUTED: "#5E5E80",
+
+    // Chrome
+    BORDER: "#2A2A4A",
+    INPUT_BACKGROUND: "#1A1A3E",
   },
   FONTS: {
     REGULAR: "System",
@@ -73,6 +82,7 @@ export const VALIDATION = {
   TRANSACTION: {
     MIN_AMOUNT: 0.01,
     MAX_AMOUNT: 999999.99,
+    MIN_DESCRIPTION_LENGTH: 2,
     MAX_DESCRIPTION_LENGTH: 100,
     MAX_NOTE_LENGTH: 500,
   },

@@ -1,5 +1,6 @@
 import React, { useMemo } from "react";
-import { View, Text, StyleSheet, ScrollView } from "react-native";
+import { View, Text, StyleSheet } from "react-native";
+import { ScrollView } from "react-native-gesture-handler";
 import { useSelector } from "react-redux";
 import { RootState } from "../../store";
 import { Budget, Category, Transaction } from "../../types";
@@ -9,23 +10,33 @@ import { FilterButton } from "./FilterButton";
 interface BudgetBasedCategoryFilterProps {
   selectedBudgetId?: string;
   selectedCategoryIds: string[];
+  noBudget?: boolean;
   onBudgetSelect: (budgetId: string | undefined) => void;
   onCategorySelect: (categoryId: string) => void;
   onCategoryDeselect: (categoryId: string) => void;
+  onNoBudgetToggle?: (value: boolean) => void;
   showAllCategories?: boolean;
 }
 
-export const BudgetBasedCategoryFilter: React.FC<BudgetBasedCategoryFilterProps> = ({
+export const BudgetBasedCategoryFilter: React.FC<
+  BudgetBasedCategoryFilterProps
+> = ({
   selectedBudgetId,
   selectedCategoryIds,
+  noBudget = false,
   onBudgetSelect,
   onCategorySelect,
   onCategoryDeselect,
+  onNoBudgetToggle,
   showAllCategories = false,
 }) => {
   const { items: budgets } = useSelector((state: RootState) => state.budgets);
-  const { items: categories } = useSelector((state: RootState) => state.categories);
-  const { items: transactions } = useSelector((state: RootState) => state.transactions);
+  const { items: categories } = useSelector(
+    (state: RootState) => state.categories,
+  );
+  const { items: transactions } = useSelector(
+    (state: RootState) => state.transactions,
+  );
 
   // Convert budgets and categories from Record to Array for easier processing
   const budgetList = useMemo(() => {
@@ -33,11 +44,15 @@ export const BudgetBasedCategoryFilter: React.FC<BudgetBasedCategoryFilterProps>
   }, [budgets]);
 
   const categoryList = useMemo(() => {
-    return Object.values(categories).filter((category) => category && category.id);
+    return Object.values(categories).filter(
+      (category) => category && category.id,
+    );
   }, [categories]);
 
   const transactionList = useMemo(() => {
-    return Object.values(transactions).filter((transaction) => transaction && transaction.id);
+    return Object.values(transactions).filter(
+      (transaction) => transaction && transaction.id,
+    );
   }, [transactions]);
 
   // Get categories for selected budget based on transactions
@@ -47,7 +62,9 @@ export const BudgetBasedCategoryFilter: React.FC<BudgetBasedCategoryFilterProps>
     }
 
     // Find categories used in transactions for this budget
-    const budgetTransactions = transactionList.filter((t) => t.budgetId === selectedBudgetId);
+    const budgetTransactions = transactionList.filter(
+      (t) => t.budgetId === selectedBudgetId,
+    );
     const categoryIds = new Set(budgetTransactions.map((t) => t.categoryId));
 
     return categoryList.filter((category) => categoryIds.has(category.id));
@@ -63,7 +80,9 @@ export const BudgetBasedCategoryFilter: React.FC<BudgetBasedCategoryFilterProps>
 
   const getCategoryCount = (budgetId: string) => {
     // Count categories used in transactions for this budget
-    const budgetTransactions = transactionList.filter((t) => t.budgetId === budgetId);
+    const budgetTransactions = transactionList.filter(
+      (t) => t.budgetId === budgetId,
+    );
     const categoryIds = new Set(budgetTransactions.map((t) => t.categoryId));
     return categoryIds.size;
   };
@@ -74,13 +93,34 @@ export const BudgetBasedCategoryFilter: React.FC<BudgetBasedCategoryFilterProps>
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>Filter by Budget</Text>
         <View style={styles.filterGroup}>
-          <FilterButton label="All Budgets" isActive={!selectedBudgetId} onPress={() => onBudgetSelect(undefined)} count={categoryList.length} />
+          <FilterButton
+            label="All Budgets"
+            isActive={!selectedBudgetId && !noBudget}
+            onPress={() => {
+              onBudgetSelect(undefined);
+              onNoBudgetToggle?.(false);
+            }}
+            count={categoryList.length}
+          />
+          <FilterButton
+            label="No Budget"
+            isActive={noBudget}
+            onPress={() => {
+              onBudgetSelect(undefined);
+              onNoBudgetToggle?.(!noBudget);
+            }}
+            icon="remove-circle-outline"
+            color={UI.COLORS.WARNING}
+          />
           {budgetList.map((budget) => (
             <FilterButton
               key={budget.id}
               label={budget.name}
-              isActive={selectedBudgetId === budget.id}
-              onPress={() => onBudgetSelect(budget.id)}
+              isActive={selectedBudgetId === budget.id && !noBudget}
+              onPress={() => {
+                onBudgetSelect(budget.id);
+                onNoBudgetToggle?.(false);
+              }}
               count={getCategoryCount(budget.id)}
               color={undefined}
             />
@@ -94,26 +134,33 @@ export const BudgetBasedCategoryFilter: React.FC<BudgetBasedCategoryFilterProps>
           <View style={styles.categoryHeader}>
             <Text style={styles.sectionTitle}>
               Categories
-              {selectedBudgetId && <Text style={styles.budgetIndicator}> in {budgets[selectedBudgetId]?.name}</Text>}
+              {selectedBudgetId && (
+                <Text style={styles.budgetIndicator}>
+                  {" "}
+                  in {budgets[selectedBudgetId]?.name}
+                </Text>
+              )}
             </Text>
             <Text style={styles.categoryCount}>
-              {selectedCategoryIds.length} of {availableCategories.length} selected
+              {selectedCategoryIds.length} of {availableCategories.length}{" "}
+              selected
             </Text>
           </View>
 
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.categoryScrollContainer}>
-            <View style={styles.filterGroup}>
-              {availableCategories.map((category) => (
-                <FilterButton
-                  key={category.id}
-                  label={category.name}
-                  isActive={selectedCategoryIds.includes(category.id)}
-                  onPress={() => handleCategoryToggle(category.id)}
-                  color={category.color}
-                  icon={undefined}
-                />
-              ))}
-            </View>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.categoryScrollContainer}>
+            {availableCategories.map((category) => (
+              <FilterButton
+                key={category.id}
+                label={category.name}
+                isActive={selectedCategoryIds.includes(category.id)}
+                onPress={() => handleCategoryToggle(category.id)}
+                color={category.color}
+                icon={undefined}
+              />
+            ))}
           </ScrollView>
         </View>
       )}
@@ -121,8 +168,12 @@ export const BudgetBasedCategoryFilter: React.FC<BudgetBasedCategoryFilterProps>
       {/* Empty State */}
       {availableCategories.length === 0 && selectedBudgetId && (
         <View style={styles.emptyState}>
-          <Text style={styles.emptyStateText}>No categories found for selected budget</Text>
-          <Text style={styles.emptyStateSubtext}>Try selecting a different budget or add categories to this budget</Text>
+          <Text style={styles.emptyStateText}>
+            No categories found for selected budget
+          </Text>
+          <Text style={styles.emptyStateSubtext}>
+            Try selecting a different budget or add categories to this budget
+          </Text>
         </View>
       )}
 
@@ -130,8 +181,14 @@ export const BudgetBasedCategoryFilter: React.FC<BudgetBasedCategoryFilterProps>
       {selectedCategoryIds.length > 0 && (
         <View style={styles.summaryContainer}>
           <Text style={styles.summaryText}>
-            Filtering by {selectedCategoryIds.length} {selectedCategoryIds.length === 1 ? "category" : "categories"}
-            {selectedBudgetId && <Text style={styles.budgetSummary}> from {budgets[selectedBudgetId]?.name}</Text>}
+            Filtering by {selectedCategoryIds.length}{" "}
+            {selectedCategoryIds.length === 1 ? "category" : "categories"}
+            {selectedBudgetId && (
+              <Text style={styles.budgetSummary}>
+                {" "}
+                from {budgets[selectedBudgetId]?.name}
+              </Text>
+            )}
           </Text>
         </View>
       )}
@@ -175,6 +232,7 @@ const styles = StyleSheet.create({
   },
   categoryScrollContainer: {
     paddingHorizontal: 0,
+    gap: 8,
   },
   emptyState: {
     padding: UI.SPACING.LG,

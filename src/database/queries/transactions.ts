@@ -1,18 +1,53 @@
-﻿import { DatabaseManager } from "../index";
+import { DatabaseManager } from "../index";
 import { Transaction, TransactionFilters } from "../../types";
-import { TransactionTable, transformTransaction, toTransactionTable } from "../models";
+import {
+  TransactionTable,
+  transformTransaction,
+  toTransactionTable,
+} from "../models";
 import { generateId } from "../../utils";
 import { CategoryRepository } from "./categories";
 import { offlineFirstSync } from "../../services/OfflineFirstSync";
 import { SyncService } from "../../services/syncService";
-import { validateTransactionData, cleanTransactionData } from "../../utils/validation";
+import {
+  validateTransactionData,
+  cleanTransactionData,
+} from "../../utils/validation";
 
 export class TransactionRepository {
   private db = DatabaseManager.getInstance();
 
+  private async applyWalletBalanceDelta(
+    transaction: Partial<Transaction>,
+    multiplier: 1 | -1,
+  ): Promise<void> {
+    const { WalletRepository } = await import("./wallets");
+    const walletRepo = new WalletRepository();
+
+    if (transaction.type === "income" && transaction.walletId) {
+      await walletRepo.updateWalletBalance(
+        transaction.walletId,
+        Number(transaction.amount || 0) * multiplier,
+      );
+    } else if (transaction.type === "expense" && transaction.walletId) {
+      await walletRepo.updateWalletBalance(
+        transaction.walletId,
+        -Number(transaction.amount || 0) * multiplier,
+      );
+    } else if (
+      transaction.type === "transfer" &&
+      transaction.fromWalletId &&
+      transaction.toWalletId
+    ) {
+      const amt = Number(transaction.amount || 0) * multiplier;
+      await walletRepo.updateWalletBalance(transaction.fromWalletId, -amt);
+      await walletRepo.updateWalletBalance(transaction.toWalletId, amt);
+    }
+  }
+
   async createTransaction(
     transaction: Omit<Transaction, "id" | "createdAt">,
-    options?: { skipSync?: boolean; useProvidedId?: string }
+    options?: { skipSync?: boolean; useProvidedId?: string },
   ): Promise<Transaction> {
     validateTransactionData(transaction);
     const cleanedTransaction = cleanTransactionData(transaction);
@@ -24,15 +59,18 @@ export class TransactionRepository {
 
     await database.runAsync(
       `INSERT INTO transactions (
-        id, amount, type, category_id, budget_id, description, 
+        id, amount, type, category_id, budget_id, wallet_id, from_wallet_id, to_wallet_id, description, 
         date, note, linked_bill_id, linked_debt_payment_id, created_at, duplicated_at, sync_updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         id,
         tableData.amount,
         tableData.type,
         tableData.category_id,
         tableData.budget_id || null,
+        tableData.wallet_id || null,
+        tableData.from_wallet_id || null,
+        tableData.to_wallet_id || null,
         tableData.description,
         tableData.date,
         tableData.note || null,
@@ -41,7 +79,7 @@ export class TransactionRepository {
         createdAt,
         tableData.duplicated_at || null,
         Date.now(),
-      ]
+      ],
     );
 
     // Debug: log budget assignment and transaction date to help diagnose period calculation issues
@@ -52,7 +90,7 @@ export class TransactionRepository {
         "date:",
         tableData.date,
         "amount:",
-        tableData.amount
+        tableData.amount,
       );
     }
 
@@ -63,8 +101,15 @@ export class TransactionRepository {
       updatedAt: Date.now(),
     };
 
+    await this.applyWalletBalanceDelta(newTransaction, 1);
+
     if (!options?.skipSync) {
-      await offlineFirstSync.logOperation("transactions", id, "insert", newTransaction);
+      await offlineFirstSync.logOperation(
+        "transactions",
+        id,
+        "insert",
+        newTransaction,
+      );
     }
     return newTransaction;
   }
@@ -72,7 +117,10 @@ export class TransactionRepository {
   // DEBUG helper: force push a single transaction to remote using SyncService
   static async pushTransactionNow(id: string): Promise<void> {
     const db = DatabaseManager.getInstance().getDatabase();
-    const rows = (await db.getAllAsync(`SELECT * FROM transactions WHERE id = ? LIMIT 1`, [id])) as any[];
+    const rows = (await db.getAllAsync(
+      `SELECT * FROM transactions WHERE id = ? LIMIT 1`,
+      [id],
+    )) as any[];
     if (!rows || rows.length === 0) {
       throw new Error(`transaction ${id} not found`);
     }
@@ -92,7 +140,17 @@ export class TransactionRepository {
 
     try {
       // Call syncLocalChanges with explicit params: collectionName, operation, documentId, data
-      await SyncService.getInstance().syncLocalChanges("transactions", "create", id, row);
+      await SyncService.getInstance().syncLocalChanges(
+        "transactions",
+        "create",
+        id,
+        row,
+      );
+      await db.runAsync(
+        "UPDATE transactions SET sync_status = 'synced' WHERE id = ?",
+        [id],
+      );
+      SyncService.getInstance().notifyRecordSynced("transactions", id);
       console.log(`✅ pushTransactionNow completed for id=${id}`);
     } catch (err) {
       console.error(`❌ pushTransactionNow failed for id=${id}`, err);
@@ -102,12 +160,17 @@ export class TransactionRepository {
 
   async getTransactionById(id: string): Promise<Transaction | null> {
     const database = this.db.getDatabase();
-    const result = (await database.getFirstAsync("SELECT * FROM transactions WHERE id = ?", [id])) as TransactionTable | null;
+    const result = (await database.getFirstAsync(
+      "SELECT * FROM transactions WHERE id = ?",
+      [id],
+    )) as TransactionTable | null;
 
     return result ? transformTransaction(result) : null;
   }
 
-  async getAllTransactions(filters?: TransactionFilters): Promise<Transaction[]> {
+  async getAllTransactions(
+    filters?: TransactionFilters,
+  ): Promise<Transaction[]> {
     try {
       await this.db.ensureInitialized();
       const database = this.db.getDatabase();
@@ -136,7 +199,10 @@ export class TransactionRepository {
 
       query += " ORDER BY date DESC, created_at DESC";
 
-      const result = (await database.getAllAsync(query, params)) as TransactionTable[];
+      const result = (await database.getAllAsync(
+        query,
+        params,
+      )) as TransactionTable[];
       return result.map(transformTransaction);
     } catch (error) {
       console.error("Error getting all transactions:", error);
@@ -147,7 +213,7 @@ export class TransactionRepository {
   async updateTransaction(
     id: string,
     updates: Partial<Omit<Transaction, "id" | "createdAt">>,
-    options?: { skipSync?: boolean }
+    options?: { skipSync?: boolean },
   ): Promise<Transaction> {
     if (Object.keys(updates).length === 0) {
       throw new Error("No updates provided");
@@ -163,6 +229,8 @@ export class TransactionRepository {
     if (!currentTransaction) {
       throw new Error("Transaction not found");
     }
+
+    await this.applyWalletBalanceDelta(currentTransaction, -1);
 
     const updateFields: string[] = [];
     const updateValues: any[] = [];
@@ -185,6 +253,21 @@ export class TransactionRepository {
     if (cleanedUpdates.budgetId !== undefined) {
       updateFields.push("budget_id = ?");
       updateValues.push(cleanedUpdates.budgetId || null);
+    }
+
+    if (cleanedUpdates.walletId !== undefined) {
+      updateFields.push("wallet_id = ?");
+      updateValues.push(cleanedUpdates.walletId || null);
+    }
+
+    if (cleanedUpdates.fromWalletId !== undefined) {
+      updateFields.push("from_wallet_id = ?");
+      updateValues.push(cleanedUpdates.fromWalletId || null);
+    }
+
+    if (cleanedUpdates.toWalletId !== undefined) {
+      updateFields.push("to_wallet_id = ?");
+      updateValues.push(cleanedUpdates.toWalletId || null);
     }
 
     if (cleanedUpdates.description !== undefined) {
@@ -210,16 +293,30 @@ export class TransactionRepository {
     const query = `UPDATE transactions SET ${updateFields.join(", ")} WHERE id = ?`;
     await database.runAsync(query, updateValues);
 
-    const updatedTransaction = { ...currentTransaction, ...cleanedUpdates, updatedAt: Date.now() };
+    const updatedTransaction = {
+      ...currentTransaction,
+      ...cleanedUpdates,
+      updatedAt: Date.now(),
+    };
+
+    await this.applyWalletBalanceDelta(updatedTransaction, 1);
 
     if (!options?.skipSync) {
-      await offlineFirstSync.logOperation("transactions", id, "update", updatedTransaction);
+      await offlineFirstSync.logOperation(
+        "transactions",
+        id,
+        "update",
+        updatedTransaction,
+      );
     }
 
     return updatedTransaction;
   }
 
-  async deleteTransaction(id: string, options?: { skipSync?: boolean }): Promise<void> {
+  async deleteTransaction(
+    id: string,
+    options?: { skipSync?: boolean },
+  ): Promise<void> {
     await this.db.ensureInitialized();
     const database = this.db.getDatabase();
 
@@ -228,32 +325,45 @@ export class TransactionRepository {
       throw new Error("Transaction not found");
     }
 
+    await this.applyWalletBalanceDelta(transaction, -1);
+
     // If this transaction is linked to a bill, update the bill to unpaid and unlink
     if (transaction.linkedBillId) {
-      await database.runAsync("UPDATE bills SET paid = 0, linked_transaction_id = NULL, updated_at = ?, sync_updated_at = ? WHERE id = ?", [
-        new Date().toISOString(),
-        Date.now(),
-        transaction.linkedBillId,
-      ]);
-      console.log(`Unlinked and marked bill ${transaction.linkedBillId} as unpaid when deleting transaction ${id}`);
+      await database.runAsync(
+        "UPDATE bills SET paid = 0, linked_transaction_id = NULL, updated_at = ?, sync_updated_at = ? WHERE id = ?",
+        [new Date().toISOString(), Date.now(), transaction.linkedBillId],
+      );
+      console.log(
+        `Unlinked and marked bill ${transaction.linkedBillId} as unpaid when deleting transaction ${id}`,
+      );
     }
 
     // If this transaction is linked to a debt payment, delete the debt payment and restore balance
     if (transaction.linkedDebtPaymentId) {
-      const debtPayment = (await database.getFirstAsync("SELECT * FROM debt_payments WHERE id = ?", [transaction.linkedDebtPaymentId])) as any;
+      const debtPayment = (await database.getFirstAsync(
+        "SELECT * FROM debt_payments WHERE id = ?",
+        [transaction.linkedDebtPaymentId],
+      )) as any;
 
       if (debtPayment) {
         // Restore debt balance
-        await database.runAsync("UPDATE debts SET current_balance = current_balance + ?, updated_at = ?, sync_updated_at = ? WHERE id = ?", [
-          debtPayment.principal,
-          new Date().toISOString(),
-          Date.now(),
-          debtPayment.debt_id,
-        ]);
+        await database.runAsync(
+          "UPDATE debts SET current_balance = current_balance + ?, updated_at = ?, sync_updated_at = ? WHERE id = ?",
+          [
+            debtPayment.principal,
+            new Date().toISOString(),
+            Date.now(),
+            debtPayment.debt_id,
+          ],
+        );
 
         // Delete the debt payment
-        await database.runAsync("DELETE FROM debt_payments WHERE id = ?", [transaction.linkedDebtPaymentId]);
-        console.log(`Deleted linked debt payment ${transaction.linkedDebtPaymentId} and restored balance when deleting transaction ${id}`);
+        await database.runAsync("DELETE FROM debt_payments WHERE id = ?", [
+          transaction.linkedDebtPaymentId,
+        ]);
+        console.log(
+          `Deleted linked debt payment ${transaction.linkedDebtPaymentId} and restored balance when deleting transaction ${id}`,
+        );
       }
     }
 
@@ -269,21 +379,25 @@ export class TransactionRepository {
     await this.db.ensureInitialized();
     const database = this.db.getDatabase();
 
-    const results = (await database.getAllAsync("SELECT * FROM transactions WHERE linked_bill_id = ? ORDER BY date DESC", [
-      billId,
-    ])) as TransactionTable[];
+    const results = (await database.getAllAsync(
+      "SELECT * FROM transactions WHERE linked_bill_id = ? ORDER BY date DESC",
+      [billId],
+    )) as TransactionTable[];
 
     return results.map(transformTransaction);
   }
 
   // Helper function to get transactions linked to debt payments
-  async getTransactionsByDebtPaymentId(debtPaymentId: string): Promise<Transaction[]> {
+  async getTransactionsByDebtPaymentId(
+    debtPaymentId: string,
+  ): Promise<Transaction[]> {
     await this.db.ensureInitialized();
     const database = this.db.getDatabase();
 
-    const results = (await database.getAllAsync("SELECT * FROM transactions WHERE linked_debt_payment_id = ? ORDER BY date DESC", [
-      debtPaymentId,
-    ])) as TransactionTable[];
+    const results = (await database.getAllAsync(
+      "SELECT * FROM transactions WHERE linked_debt_payment_id = ? ORDER BY date DESC",
+      [debtPaymentId],
+    )) as TransactionTable[];
 
     return results.map(transformTransaction);
   }
@@ -309,7 +423,11 @@ export class TransactionRepository {
     return duplicatedTransaction;
   }
 
-  async getTransactionStats(): Promise<{ totalExpenses: number; totalIncome: number; totalTransactions: number }> {
+  async getTransactionStats(): Promise<{
+    totalExpenses: number;
+    totalIncome: number;
+    totalTransactions: number;
+  }> {
     await this.db.ensureInitialized();
     const database = this.db.getDatabase();
 
@@ -319,8 +437,21 @@ export class TransactionRepository {
         COALESCE(SUM(CASE WHEN type = 'income' THEN amount ELSE 0 END), 0) as totalIncome,
         COUNT(*) as totalTransactions
       FROM transactions
-    `)) as { totalExpenses: number; totalIncome: number; totalTransactions: number };
+    `)) as {
+      totalExpenses: number;
+      totalIncome: number;
+      totalTransactions: number;
+    };
 
     return result;
+  }
+
+  async getLastTransaction(): Promise<Transaction | null> {
+    await this.db.ensureInitialized();
+    const database = this.db.getDatabase();
+    const result = (await database.getFirstAsync(
+      "SELECT * FROM transactions ORDER BY created_at DESC LIMIT 1",
+    )) as TransactionTable | null;
+    return result ? transformTransaction(result) : null;
   }
 }

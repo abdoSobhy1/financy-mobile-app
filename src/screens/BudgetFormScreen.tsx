@@ -14,7 +14,7 @@ const BudgetFormScreen: React.FC = () => {
   const navigation = useNavigation<BudgetFormScreenNavigationProp>();
   const { budgetId } = (route.params as { budgetId?: string }) || {};
 
-  const budget = useSelector((state: RootState) => (budgetId ? state.budgets.items[budgetId] : null));
+  const budget = useSelector((state: RootState) => (budgetId && state.budgets ? state.budgets.items[budgetId] : null));
 
   const handleSuccess = () => {
     // Navigate back to the budget list

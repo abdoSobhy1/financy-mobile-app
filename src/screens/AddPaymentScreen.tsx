@@ -1,18 +1,34 @@
 import React, { useState, useEffect } from "react";
-import { View, Text, StyleSheet, TextInput, TouchableOpacity, ActivityIndicator, ScrollView } from "react-native";
+import {
+  View,
+  Text,
+  StyleSheet,
+  TextInput,
+  TouchableOpacity,
+  ActivityIndicator,
+  ScrollView,
+  StatusBar,
+  KeyboardAvoidingView,
+  Platform,
+} from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
+import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons } from "@expo/vector-icons";
 import { useDispatch } from "react-redux";
 import { useNavigation, useRoute } from "@react-navigation/native";
 import { StackNavigationProp } from "@react-navigation/stack";
 import { RouteProp } from "@react-navigation/native";
-import { Screen, useToast } from "../components/ui";
+import { useToast } from "../components/ui";
 import { AppDispatch } from "../store";
 import { makeDebtPayment } from "../store/slices/debtsSlice";
 import { formatCurrency } from "../utils";
 import { DebtStackParamList } from "../navigation/DebtStackNavigator";
 import { UI } from "../constants";
 
-type AddPaymentScreenNavigationProp = StackNavigationProp<DebtStackParamList, "AddPayment">;
+type AddPaymentScreenNavigationProp = StackNavigationProp<
+  DebtStackParamList,
+  "AddPayment"
+>;
 type AddPaymentScreenRouteProp = RouteProp<DebtStackParamList, "AddPayment">;
 
 const AddPaymentScreen: React.FC = () => {
@@ -21,7 +37,8 @@ const AddPaymentScreen: React.FC = () => {
   const route = useRoute<AddPaymentScreenRouteProp>();
   const { showSuccess, showError } = useToast();
 
-  const { debtId, debtName, currentBalance, minimumPayment, interestRate } = route.params;
+  const { debtId, debtName, currentBalance, minimumPayment, interestRate } =
+    route.params;
 
   const [paymentData, setPaymentData] = useState({
     amount: "",
@@ -37,11 +54,9 @@ const AddPaymentScreen: React.FC = () => {
     if (paymentData.amount && !paymentData.principal && !paymentData.interest) {
       const amount = Number(paymentData.amount);
       if (interestRate && amount > 0) {
-        // Simple monthly interest calculation
         const monthlyRate = interestRate / 100 / 12;
         const interestPayment = currentBalance * monthlyRate;
         const principalPayment = Math.max(0, amount - interestPayment);
-
         setPaymentData((prev) => ({
           ...prev,
           principal: principalPayment.toFixed(2),
@@ -59,18 +74,20 @@ const AddPaymentScreen: React.FC = () => {
 
   const validatePayment = () => {
     const newErrors: Record<string, string> = {};
-
-    if (!paymentData.amount.trim()) newErrors.amount = "Payment amount is required";
-    else if (isNaN(Number(paymentData.amount)) || Number(paymentData.amount) <= 0) {
+    if (!paymentData.amount.trim())
+      newErrors.amount = "Payment amount is required";
+    else if (
+      isNaN(Number(paymentData.amount)) ||
+      Number(paymentData.amount) <= 0
+    )
       newErrors.amount = "Please enter a valid payment amount";
-    } else if (Number(paymentData.amount) > currentBalance) {
-      newErrors.amount = `Payment cannot exceed remaining balance (${formatCurrency(currentBalance)})`;
-    }
+    else if (Number(paymentData.amount) > currentBalance)
+      newErrors.amount = `Cannot exceed balance (${formatCurrency(currentBalance)})`;
 
-    const totalSplit = Number(paymentData.principal || 0) + Number(paymentData.interest || 0);
-    if (Math.abs(totalSplit - Number(paymentData.amount)) > 0.01) {
+    const totalSplit =
+      Number(paymentData.principal || 0) + Number(paymentData.interest || 0);
+    if (Math.abs(totalSplit - Number(paymentData.amount)) > 0.01)
       newErrors.split = "Principal + Interest must equal payment amount";
-    }
 
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
@@ -78,20 +95,21 @@ const AddPaymentScreen: React.FC = () => {
 
   const handleSubmit = async () => {
     if (!validatePayment()) return;
-
     setLoading(true);
     try {
-      const paymentFormData = {
-        amount: Number(paymentData.amount),
-        date: new Date().toISOString(), // Add required date field
-        paymentDate: new Date().toISOString(), // Optional, same as date in this case
-        principal: Number(paymentData.principal || paymentData.amount),
-        interest: Number(paymentData.interest || 0),
-        note: paymentData.note.trim() || undefined,
-      };
-
-      await dispatch(makeDebtPayment({ debtId, paymentData: paymentFormData })).unwrap();
-
+      await dispatch(
+        makeDebtPayment({
+          debtId,
+          paymentData: {
+            amount: Number(paymentData.amount),
+            date: new Date().toISOString(),
+            paymentDate: new Date().toISOString(),
+            principal: Number(paymentData.principal || paymentData.amount),
+            interest: Number(paymentData.interest || 0),
+            note: paymentData.note.trim() || undefined,
+          },
+        }),
+      ).unwrap();
       showSuccess("Payment recorded successfully!");
       navigation.goBack();
     } catch (error) {
@@ -99,10 +117,6 @@ const AddPaymentScreen: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  };
-
-  const handleCancel = () => {
-    navigation.goBack();
   };
 
   const handleQuickAmount = (percentage: number) => {
@@ -116,303 +130,565 @@ const AddPaymentScreen: React.FC = () => {
   };
 
   return (
-    <Screen>
-      <ScrollView style={styles.container} keyboardShouldPersistTaps="handled">
-        {/* Debt Info Card */}
-        <View style={styles.debtInfo}>
-          <Text style={styles.debtName}>{debtName}</Text>
-          <Text style={styles.debtBalance}>Current Balance: {formatCurrency(currentBalance)}</Text>
-          {minimumPayment && <Text style={styles.minimumPayment}>Minimum Payment: {formatCurrency(minimumPayment)}</Text>}
-          {interestRate && <Text style={styles.interestRateText}>Interest Rate: {interestRate}% APR</Text>}
-        </View>
+    <LinearGradient
+      colors={[UI.COLORS.BACKGROUND, "#0F0F2D", UI.COLORS.BACKGROUND]}
+      locations={[0, 0.3, 1]}
+      style={styles.gradient}>
+      <SafeAreaView style={styles.safeArea}>
+        <StatusBar
+          barStyle="light-content"
+          backgroundColor="transparent"
+          translucent
+        />
 
-        {/* Quick Amount Buttons */}
-        <View style={styles.quickAmounts}>
-          <Text style={styles.sectionTitle}>Quick Amounts</Text>
-          <View style={styles.quickButtonsRow}>
-            {minimumPayment && (
-              <TouchableOpacity
-                style={styles.quickButton}
-                onPress={() =>
-                  setPaymentData((prev) => ({
-                    ...prev,
-                    amount: minimumPayment.toFixed(2),
-                    principal: "",
-                    interest: "",
-                  }))
-                }>
-                <Text style={styles.quickButtonText}>Minimum</Text>
-                <Text style={styles.quickButtonAmount}>{formatCurrency(minimumPayment)}</Text>
-              </TouchableOpacity>
+        {/* ── Nav bar ───────────────────────────────── */}
+        <View style={styles.navBar}>
+          <TouchableOpacity
+            style={styles.navBtn}
+            onPress={() => navigation.goBack()}>
+            <Ionicons name="close" size={18} color={UI.COLORS.TEXT_PRIMARY} />
+          </TouchableOpacity>
+          <View style={styles.navCenter}>
+            <Text style={styles.navTitle}>Record Payment</Text>
+            <Text style={styles.navSubtitle} numberOfLines={1}>
+              {debtName}
+            </Text>
+          </View>
+          <TouchableOpacity
+            style={[styles.navBtn, styles.savePill]}
+            onPress={handleSubmit}
+            disabled={loading}>
+            {loading ? (
+              <ActivityIndicator size="small" color="#fff" />
+            ) : (
+              <Ionicons name="checkmark" size={18} color="#fff" />
             )}
-            <TouchableOpacity style={styles.quickButton} onPress={() => handleQuickAmount(0.25)}>
-              <Text style={styles.quickButtonText}>25%</Text>
-              <Text style={styles.quickButtonAmount}>{formatCurrency(currentBalance * 0.25)}</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.quickButton} onPress={() => handleQuickAmount(0.5)}>
-              <Text style={styles.quickButtonText}>50%</Text>
-              <Text style={styles.quickButtonAmount}>{formatCurrency(currentBalance * 0.5)}</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.quickButton} onPress={() => handleQuickAmount(1.0)}>
-              <Text style={styles.quickButtonText}>Pay Off</Text>
-              <Text style={styles.quickButtonAmount}>{formatCurrency(currentBalance)}</Text>
-            </TouchableOpacity>
-          </View>
+          </TouchableOpacity>
         </View>
 
-        <View style={styles.form}>
-          {/* Payment Amount */}
-          <View style={styles.inputGroup}>
-            <Text style={styles.label}>Payment Amount *</Text>
-            <View style={[styles.inputContainer, errors.amount && styles.inputError]}>
-              <Ionicons name="cash" size={20} color="#64748B" style={styles.inputIcon} />
-              <TextInput
-                style={styles.input}
-                placeholder="0.00"
-                placeholderTextColor="#64748B"
-                value={paymentData.amount}
-                onChangeText={(text) =>
-                  setPaymentData((prev) => ({
-                    ...prev,
-                    amount: text,
-                    principal: "",
-                    interest: "",
-                  }))
-                }
-                keyboardType="decimal-pad"
-                autoFocus
-              />
-            </View>
-            {errors.amount && <Text style={styles.errorText}>{errors.amount}</Text>}
-          </View>
+        <KeyboardAvoidingView
+          style={{ flex: 1 }}
+          behavior={Platform.OS === "ios" ? "padding" : undefined}>
+          <ScrollView
+            style={styles.scrollView}
+            contentContainerStyle={styles.scrollContent}
+            keyboardShouldPersistTaps="handled"
+            showsVerticalScrollIndicator={false}>
+            {/* ── Debt Info Hero ─────────────────────── */}
+            <LinearGradient
+              colors={["#1B1464", "#6C5CE7", "#A29BFE"]}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={styles.debtInfoCard}>
+              <View style={[styles.decorCircle, styles.circle1]} />
+              <View style={[styles.decorCircle, styles.circle2]} />
 
-          {/* Principal & Interest Split */}
-          <View style={styles.splitSection}>
-            <Text style={styles.sectionTitle}>Payment Breakdown</Text>
-            <View style={styles.row}>
-              <View style={[styles.inputGroup, { flex: 1, marginRight: 8 }]}>
-                <Text style={styles.label}>Principal</Text>
-                <View style={styles.inputContainer}>
-                  <Ionicons name="trending-down" size={20} color={UI.COLORS.PRIMARY} style={styles.inputIcon} />
-                  <TextInput
-                    style={styles.input}
-                    placeholder="0.00"
-                    placeholderTextColor="#64748B"
-                    value={paymentData.principal}
-                    onChangeText={(text) => setPaymentData((prev) => ({ ...prev, principal: text }))}
-                    keyboardType="decimal-pad"
+              <Text style={styles.heroLabel}>Current Balance</Text>
+              <Text style={styles.heroValue}>
+                {formatCurrency(currentBalance)}
+              </Text>
+              <View style={styles.heroStatsRow}>
+                {!!minimumPayment && (
+                  <View style={styles.heroStat}>
+                    <Text style={styles.heroStatLabel}>Min. Payment</Text>
+                    <Text style={styles.heroStatValue}>
+                      {formatCurrency(minimumPayment)}
+                    </Text>
+                  </View>
+                )}
+                {!!interestRate && (
+                  <View style={styles.heroStat}>
+                    <Text style={styles.heroStatLabel}>Interest Rate</Text>
+                    <Text style={[styles.heroStatValue, { color: "#F59E0B" }]}>
+                      {interestRate}% APR
+                    </Text>
+                  </View>
+                )}
+              </View>
+            </LinearGradient>
+
+            {/* ── Quick Amounts ──────────────────────── */}
+            <View style={styles.section}>
+              <Text style={styles.sectionLabel}>Quick Amounts</Text>
+              <View style={styles.quickRow}>
+                {!!minimumPayment && (
+                  <TouchableOpacity
+                    style={styles.quickChip}
+                    onPress={() =>
+                      setPaymentData((prev) => ({
+                        ...prev,
+                        amount: minimumPayment!.toFixed(2),
+                        principal: "",
+                        interest: "",
+                      }))
+                    }>
+                    <Text style={styles.quickChipLabel}>Minimum</Text>
+                    <Text style={styles.quickChipValue}>
+                      {formatCurrency(minimumPayment)}
+                    </Text>
+                  </TouchableOpacity>
+                )}
+                <TouchableOpacity
+                  style={styles.quickChip}
+                  onPress={() => handleQuickAmount(0.25)}>
+                  <Text style={styles.quickChipLabel}>25%</Text>
+                  <Text style={styles.quickChipValue}>
+                    {formatCurrency(currentBalance * 0.25)}
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.quickChip}
+                  onPress={() => handleQuickAmount(0.5)}>
+                  <Text style={styles.quickChipLabel}>50%</Text>
+                  <Text style={styles.quickChipValue}>
+                    {formatCurrency(currentBalance * 0.5)}
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.quickChip, styles.quickChipAccent]}
+                  onPress={() => handleQuickAmount(1.0)}>
+                  <Text style={[styles.quickChipLabel, { color: "#2ED573" }]}>
+                    Pay Off
+                  </Text>
+                  <Text style={styles.quickChipValue}>
+                    {formatCurrency(currentBalance)}
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+
+            {/* ── Payment Amount ─────────────────────── */}
+            <View style={styles.section}>
+              <Text style={styles.sectionLabel}>Payment Amount</Text>
+              <View
+                style={[
+                  styles.inputCard,
+                  errors.amount && styles.inputCardError,
+                ]}>
+                <View style={styles.inputIconBox}>
+                  <Ionicons
+                    name="cash"
+                    size={16}
+                    color={UI.COLORS.PRIMARY_LIGHT}
                   />
                 </View>
+                <TextInput
+                  style={styles.input}
+                  placeholder="0.00"
+                  placeholderTextColor="rgba(255,255,255,0.25)"
+                  value={paymentData.amount}
+                  onChangeText={(text) =>
+                    setPaymentData((prev) => ({
+                      ...prev,
+                      amount: text,
+                      principal: "",
+                      interest: "",
+                    }))
+                  }
+                  keyboardType="decimal-pad"
+                  autoFocus
+                />
               </View>
+              {errors.amount && (
+                <View style={styles.errorRow}>
+                  <Ionicons name="alert-circle" size={14} color="#FF6B6B" />
+                  <Text style={styles.errorText}>{errors.amount}</Text>
+                </View>
+              )}
+            </View>
 
-              <View style={[styles.inputGroup, { flex: 1, marginLeft: 8 }]}>
-                <Text style={styles.label}>Interest</Text>
-                <View style={styles.inputContainer}>
-                  <Ionicons name="trending-up" size={20} color="#EF4444" style={styles.inputIcon} />
-                  <TextInput
-                    style={styles.input}
-                    placeholder="0.00"
-                    placeholderTextColor="#64748B"
-                    value={paymentData.interest}
-                    onChangeText={(text) => setPaymentData((prev) => ({ ...prev, interest: text }))}
-                    keyboardType="decimal-pad"
-                  />
+            {/* ── Breakdown ──────────────────────────── */}
+            <View style={styles.section}>
+              <Text style={styles.sectionLabel}>Payment Breakdown</Text>
+              <View style={styles.splitRow}>
+                <View style={styles.splitCard}>
+                  <View style={styles.splitHeader}>
+                    <View
+                      style={[styles.splitDot, { backgroundColor: "#2ED573" }]}
+                    />
+                    <Text style={styles.splitLabel}>Principal</Text>
+                  </View>
+                  <View style={styles.splitInputWrap}>
+                    <TextInput
+                      style={styles.splitInput}
+                      placeholder="0.00"
+                      placeholderTextColor="rgba(255,255,255,0.25)"
+                      value={paymentData.principal}
+                      onChangeText={(text) =>
+                        setPaymentData((prev) => ({ ...prev, principal: text }))
+                      }
+                      keyboardType="decimal-pad"
+                    />
+                  </View>
+                </View>
+
+                <View style={styles.splitCard}>
+                  <View style={styles.splitHeader}>
+                    <View
+                      style={[styles.splitDot, { backgroundColor: "#F59E0B" }]}
+                    />
+                    <Text style={styles.splitLabel}>Interest</Text>
+                  </View>
+                  <View style={styles.splitInputWrap}>
+                    <TextInput
+                      style={styles.splitInput}
+                      placeholder="0.00"
+                      placeholderTextColor="rgba(255,255,255,0.25)"
+                      value={paymentData.interest}
+                      onChangeText={(text) =>
+                        setPaymentData((prev) => ({ ...prev, interest: text }))
+                      }
+                      keyboardType="decimal-pad"
+                    />
+                  </View>
                 </View>
               </View>
+              {errors.split && (
+                <View style={styles.errorRow}>
+                  <Ionicons name="alert-circle" size={14} color="#FF6B6B" />
+                  <Text style={styles.errorText}>{errors.split}</Text>
+                </View>
+              )}
+              <View style={styles.tipRow}>
+                <Ionicons name="bulb" size={13} color="#F59E0B" />
+                <Text style={styles.tipText}>
+                  Principal reduces your balance, interest is the cost of
+                  borrowing
+                </Text>
+              </View>
             </View>
 
-            {errors.split && <Text style={styles.errorText}>{errors.split}</Text>}
-
-            <Text style={styles.splitHelper}>Tip: Principal reduces your debt balance, interest is the cost of borrowing</Text>
-          </View>
-
-          {/* Payment Note */}
-          <View style={styles.inputGroup}>
-            <Text style={styles.label}>Note (Optional)</Text>
-            <View style={styles.inputContainer}>
-              <Ionicons name="document-text" size={20} color="#64748B" style={styles.inputIcon} />
-              <TextInput
-                style={styles.input}
-                placeholder="Payment note or reference..."
-                placeholderTextColor="#64748B"
-                value={paymentData.note}
-                onChangeText={(text) => setPaymentData((prev) => ({ ...prev, note: text }))}
-                multiline
-              />
+            {/* ── Note ───────────────────────────────── */}
+            <View style={styles.section}>
+              <Text style={styles.sectionLabel}>Note (Optional)</Text>
+              <View style={styles.inputCard}>
+                <View style={styles.inputIconBox}>
+                  <Ionicons
+                    name="document-text"
+                    size={16}
+                    color={UI.COLORS.PRIMARY_LIGHT}
+                  />
+                </View>
+                <TextInput
+                  style={[styles.input, { minHeight: 48 }]}
+                  placeholder="Payment note or reference..."
+                  placeholderTextColor="rgba(255,255,255,0.25)"
+                  value={paymentData.note}
+                  onChangeText={(text) =>
+                    setPaymentData((prev) => ({ ...prev, note: text }))
+                  }
+                  multiline
+                />
+              </View>
             </View>
-          </View>
+          </ScrollView>
+        </KeyboardAvoidingView>
+
+        {/* ── Bottom action bar ───────────────────── */}
+        <View style={styles.bottomBar}>
+          <TouchableOpacity
+            style={styles.cancelBtn}
+            onPress={() => navigation.goBack()}>
+            <Text style={styles.cancelBtnText}>Cancel</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            activeOpacity={0.8}
+            onPress={handleSubmit}
+            disabled={loading}>
+            <LinearGradient
+              colors={
+                loading
+                  ? ["rgba(108,92,231,0.4)", "rgba(108,92,231,0.4)"]
+                  : [UI.COLORS.PRIMARY, UI.COLORS.PRIMARY_DARK]
+              }
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={styles.submitBtn}>
+              {loading ? (
+                <ActivityIndicator size="small" color="#fff" />
+              ) : (
+                <>
+                  <Ionicons name="checkmark-circle" size={18} color="#fff" />
+                  <Text style={styles.submitBtnText}>Record Payment</Text>
+                </>
+              )}
+            </LinearGradient>
+          </TouchableOpacity>
         </View>
-      </ScrollView>
-
-      <View style={styles.actions}>
-        <TouchableOpacity onPress={handleCancel} style={styles.cancelButton}>
-          <Text style={styles.cancelButtonText}>Cancel</Text>
-        </TouchableOpacity>
-        <TouchableOpacity onPress={handleSubmit} style={[styles.submitButton, loading && styles.submitButtonDisabled]} disabled={loading}>
-          {loading ? <ActivityIndicator size="small" color="#FFFFFF" /> : <Text style={styles.submitButtonText}>Record Payment</Text>}
-        </TouchableOpacity>
-      </View>
-    </Screen>
+      </SafeAreaView>
+    </LinearGradient>
   );
 };
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
-  debtInfo: {
-    backgroundColor: "#1E293B",
-    margin: 20,
-    padding: 20,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: "rgba(148, 163, 184, 0.1)",
-  },
-  debtName: {
-    fontSize: 18,
-    fontWeight: "700",
-    color: "#F8FAFC",
-    marginBottom: 8,
-  },
-  debtBalance: {
-    fontSize: 16,
-    color: "#EF4444",
-    fontWeight: "600",
-    marginBottom: 4,
-  },
-  minimumPayment: {
-    fontSize: 14,
-    color: "#F59E0B",
-    marginBottom: 4,
-  },
-  interestRateText: {
-    fontSize: 14,
-    color: "#94A3B8",
-  },
-  quickAmounts: {
+  gradient: { flex: 1 },
+  safeArea: { flex: 1 },
+
+  // ── Nav ────────────────────────────────────────────
+  navBar: {
+    flexDirection: "row",
+    alignItems: "center",
     paddingHorizontal: 20,
+    paddingVertical: 14,
+    gap: 12,
+  },
+  navBtn: {
+    width: 38,
+    height: 38,
+    borderRadius: 12,
+    backgroundColor: "rgba(108,92,231,0.1)",
+    borderWidth: 1,
+    borderColor: "rgba(108,92,231,0.2)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  savePill: {
+    backgroundColor: UI.COLORS.PRIMARY,
+    borderColor: UI.COLORS.PRIMARY,
+  },
+  navCenter: { flex: 1, alignItems: "center" },
+  navTitle: {
+    fontSize: 17,
+    fontWeight: "700",
+    color: UI.COLORS.TEXT_PRIMARY,
+  },
+  navSubtitle: {
+    fontSize: 12,
+    color: UI.COLORS.TEXT_MUTED,
+    marginTop: 2,
+  },
+
+  // ── Scroll ─────────────────────────────────────────
+  scrollView: { flex: 1 },
+  scrollContent: { paddingHorizontal: 20, paddingBottom: 20 },
+
+  // ── Debt Info Hero ─────────────────────────────────
+  debtInfoCard: {
+    borderRadius: 20,
+    padding: 22,
+    overflow: "hidden",
+    position: "relative",
     marginBottom: 20,
   },
-  sectionTitle: {
-    fontSize: 16,
-    fontWeight: "600",
-    color: "#F8FAFC",
-    marginBottom: 12,
+  decorCircle: {
+    position: "absolute",
+    borderRadius: 999,
+    backgroundColor: "rgba(255,255,255,0.07)",
   },
-  quickButtonsRow: {
+  circle1: { width: 150, height: 150, top: -45, right: -30 },
+  circle2: { width: 90, height: 90, bottom: -20, left: -15 },
+  heroLabel: {
+    fontSize: 13,
+    color: "rgba(255,255,255,0.55)",
+    letterSpacing: 0.5,
+    marginBottom: 4,
+  },
+  heroValue: {
+    fontSize: 32,
+    fontWeight: "800",
+    color: "#FF6B6B",
+    letterSpacing: 0.5,
+    marginBottom: 14,
+  },
+  heroStatsRow: {
+    flexDirection: "row",
+    gap: 16,
+  },
+  heroStat: {},
+  heroStatLabel: {
+    fontSize: 11,
+    color: "rgba(255,255,255,0.45)",
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
+    marginBottom: 2,
+  },
+  heroStatValue: {
+    fontSize: 15,
+    fontWeight: "700",
+    color: "#fff",
+  },
+
+  // ── Sections ───────────────────────────────────────
+  section: { marginBottom: 20 },
+  sectionLabel: {
+    fontSize: 13,
+    fontWeight: "600",
+    color: UI.COLORS.PRIMARY_LIGHT,
+    letterSpacing: 0.5,
+    textTransform: "uppercase",
+    marginBottom: 10,
+  },
+
+  // ── Quick chips ────────────────────────────────────
+  quickRow: {
     flexDirection: "row",
     flexWrap: "wrap",
     gap: 8,
   },
-  quickButton: {
-    backgroundColor: "rgba(16, 185, 129, 0.1)",
-    borderRadius: 8,
-    padding: 12,
+  quickChip: {
+    backgroundColor: "rgba(108,92,231,0.08)",
+    borderRadius: 12,
+    paddingVertical: 10,
+    paddingHorizontal: 14,
     alignItems: "center",
-    minWidth: 80,
     borderWidth: 1,
-    borderColor: "rgba(16, 185, 129, 0.2)",
+    borderColor: "rgba(108,92,231,0.15)",
+    minWidth: 72,
   },
-  quickButtonText: {
+  quickChipAccent: {
+    backgroundColor: "rgba(46,213,115,0.06)",
+    borderColor: "rgba(46,213,115,0.2)",
+  },
+  quickChipLabel: {
     fontSize: 12,
-    fontWeight: "600",
-    color: UI.COLORS.PRIMARY,
-    marginBottom: 4,
+    fontWeight: "700",
+    color: UI.COLORS.PRIMARY_LIGHT,
+    marginBottom: 2,
   },
-  quickButtonAmount: {
-    fontSize: 10,
-    color: "#94A3B8",
+  quickChipValue: {
+    fontSize: 11,
+    color: UI.COLORS.TEXT_MUTED,
   },
-  form: {
-    paddingHorizontal: 20,
-  },
-  splitSection: {
-    marginBottom: 20,
-  },
-  splitHelper: {
-    fontSize: 12,
-    color: "#64748B",
-    fontStyle: "italic",
-    marginTop: 8,
-    lineHeight: 16,
-  },
-  inputGroup: {
-    marginBottom: 16,
-  },
-  label: {
-    fontSize: 16,
-    fontWeight: "600",
-    color: "#F8FAFC",
-    marginBottom: 8,
-  },
-  inputContainer: {
+
+  // ── Input cards ────────────────────────────────────
+  inputCard: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "#0F172A",
-    borderRadius: 12,
+    backgroundColor: "rgba(20,20,50,0.65)",
+    borderRadius: 14,
     borderWidth: 1,
-    borderColor: "rgba(148, 163, 184, 0.2)",
-    paddingHorizontal: 16,
-    paddingVertical: 4,
+    borderColor: "rgba(108,92,231,0.15)",
+    paddingHorizontal: 14,
   },
-  inputError: {
-    borderColor: "#EF4444",
+  inputCardError: {
+    borderColor: "rgba(255,107,107,0.5)",
   },
-  inputIcon: {
+  inputIconBox: {
+    width: 32,
+    height: 32,
+    borderRadius: 10,
+    backgroundColor: "rgba(108,92,231,0.12)",
+    alignItems: "center",
+    justifyContent: "center",
     marginRight: 12,
   },
   input: {
     flex: 1,
     fontSize: 16,
-    color: "#F8FAFC",
+    color: UI.COLORS.TEXT_PRIMARY,
     paddingVertical: 16,
   },
-  row: {
+
+  // ── Split (principal/interest) ─────────────────────
+  splitRow: {
     flexDirection: "row",
-    alignItems: "flex-start",
+    gap: 10,
+  },
+  splitCard: {
+    flex: 1,
+    backgroundColor: "rgba(20,20,50,0.65)",
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: "rgba(108,92,231,0.15)",
+    padding: 14,
+  },
+  splitHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    marginBottom: 8,
+  },
+  splitDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+  },
+  splitLabel: {
+    fontSize: 12,
+    fontWeight: "600",
+    color: UI.COLORS.TEXT_SECONDARY,
+  },
+  splitInputWrap: {
+    backgroundColor: "rgba(0,0,0,0.2)",
+    borderRadius: 10,
+    paddingHorizontal: 12,
+  },
+  splitInput: {
+    fontSize: 16,
+    fontWeight: "700",
+    color: UI.COLORS.TEXT_PRIMARY,
+    paddingVertical: 12,
+  },
+
+  // ── Error / Tip ────────────────────────────────────
+  errorRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    marginTop: 8,
   },
   errorText: {
     fontSize: 12,
-    color: "#EF4444",
-    marginTop: 4,
+    color: "#FF6B6B",
+    fontWeight: "500",
   },
-  actions: {
+  tipRow: {
     flexDirection: "row",
-    padding: 20,
+    alignItems: "center",
+    gap: 6,
+    marginTop: 10,
+    paddingHorizontal: 2,
+  },
+  tipText: {
+    fontSize: 12,
+    color: UI.COLORS.TEXT_MUTED,
+    fontStyle: "italic",
+    flex: 1,
+    lineHeight: 16,
+  },
+
+  // ── Bottom bar ─────────────────────────────────────
+  bottomBar: {
+    flexDirection: "row",
+    paddingHorizontal: 20,
+    paddingVertical: 16,
     gap: 12,
-    backgroundColor: "#1E293B",
     borderTopWidth: 1,
-    borderTopColor: "rgba(148, 163, 184, 0.1)",
+    borderTopColor: "rgba(108,92,231,0.1)",
+    backgroundColor: "rgba(15,15,45,0.8)",
   },
-  cancelButton: {
+  cancelBtn: {
     flex: 1,
     paddingVertical: 16,
-    paddingHorizontal: 20,
-    borderRadius: 12,
+    borderRadius: 14,
     borderWidth: 1,
-    borderColor: "rgba(148, 163, 184, 0.3)",
+    borderColor: "rgba(108,92,231,0.2)",
     alignItems: "center",
+    justifyContent: "center",
   },
-  cancelButtonText: {
-    fontSize: 16,
+  cancelBtnText: {
+    fontSize: 15,
     fontWeight: "600",
-    color: "#94A3B8",
+    color: UI.COLORS.TEXT_MUTED,
   },
-  submitButton: {
-    flex: 1,
+  submitBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
     paddingVertical: 16,
-    paddingHorizontal: 20,
-    borderRadius: 12,
-    backgroundColor: UI.COLORS.PRIMARY,
-    alignItems: "center",
+    paddingHorizontal: 28,
+    borderRadius: 14,
+    gap: 8,
+    shadowColor: UI.COLORS.PRIMARY,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.35,
+    shadowRadius: 10,
+    elevation: 6,
   },
-  submitButtonDisabled: {
-    opacity: 0.6,
-  },
-  submitButtonText: {
-    fontSize: 16,
-    fontWeight: "600",
-    color: "#FFFFFF",
+  submitBtnText: {
+    fontSize: 15,
+    fontWeight: "700",
+    color: "#fff",
   },
 });
 

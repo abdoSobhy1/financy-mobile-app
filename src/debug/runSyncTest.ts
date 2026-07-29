@@ -66,7 +66,7 @@ export async function runAllSyncApplyTests() {
           payload.principal = 1;
           break;
         case "settings":
-          payload.billingPeriodStartDay = 1;
+          payload.billingPeriodStartDay = 28;
           payload.currency = "USD";
           payload.firebaseSync = 0;
           break;

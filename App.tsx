@@ -2,16 +2,23 @@ import React, { useEffect, useState } from "react";
 import { View, Text, AppState } from "react-native";
 import { Provider } from "react-redux";
 import { SafeAreaProvider } from "react-native-safe-area-context";
+import { GestureHandlerRootView } from "react-native-gesture-handler";
+import { BottomSheetModalProvider } from "@gorhom/bottom-sheet";
 import * as SplashScreen from "expo-splash-screen";
 import { store } from "./src/store";
 import AppNavigator from "./src/navigation/AppNavigator";
 import { DatabaseManager } from "./src/database";
-import { LoadingOverlay, ErrorBoundary, ToastProvider } from "./src/components/ui";
+import {
+  LoadingOverlay,
+  ErrorBoundary,
+  ToastProvider,
+} from "./src/components/ui";
 import { initializeFirebase } from "./src/services/firebase";
 import { AuthProvider } from "./src/contexts/AuthContext";
 import { SyncProvider } from "./src/contexts/SyncProvider";
 import { offlineFirstSync } from "./src/services/OfflineFirstSync";
 import { useSyncDataRefresh } from "./src/hooks";
+import { ShimmerProvider } from "react-native-fast-shimmer";
 
 // Keep the splash screen visible while we fetch resources
 SplashScreen.preventAutoHideAsync();
@@ -45,7 +52,8 @@ export default function App() {
 
         // Run database migrations if needed for cloud compatibility
         console.log("Checking for database migrations...");
-        const { databaseMigration } = await import("./src/utils/databaseMigration");
+        const { databaseMigration } =
+          await import("./src/utils/databaseMigration");
         const needsMigrations = await databaseMigration.needsMigrations();
         if (needsMigrations) {
           console.log("Running database migrations for cloud compatibility...");
@@ -61,30 +69,40 @@ export default function App() {
         networkUnsubscribe = offlineFirstSync.initialize();
 
         // Setup app state listener to sync when app comes to foreground
-        appStateListener = AppState.addEventListener("change", async (nextAppState) => {
-          if (nextAppState === "active") {
-            console.log("📱 App became active, checking for pending sync operations");
-            offlineFirstSync.forceSyncAll().catch((error) => {
-              console.error("Background sync failed:", error);
-            });
+        appStateListener = AppState.addEventListener(
+          "change",
+          async (nextAppState) => {
+            if (nextAppState === "active") {
+              console.log(
+                "📱 App became active, checking for pending sync operations",
+              );
+              offlineFirstSync.forceSyncAll().catch((error) => {
+                console.error("Background sync failed:", error);
+              });
 
-            // Also ensure notifications are still scheduled
-            try {
-              const { default: NotificationService } = await import("./src/services/notificationService");
-              const notificationService = NotificationService.getInstance();
+              // Also ensure notifications are still scheduled
+              try {
+                const { default: NotificationService } =
+                  await import("./src/services/notificationService");
+                const notificationService = NotificationService.getInstance();
 
-              // Smart check - only reschedules if needed
-              await notificationService.checkAndRescheduleIfNeeded();
-            } catch (error) {
-              console.error("Failed to check/reschedule notifications:", error);
+                // Smart check - only reschedules if needed
+                await notificationService.checkAndRescheduleIfNeeded();
+              } catch (error) {
+                console.error(
+                  "Failed to check/reschedule notifications:",
+                  error,
+                );
+              }
             }
-          }
-        });
+          },
+        );
 
         // Initialize Notification Service
         console.log("Initializing notification service...");
         try {
-          const { default: NotificationService } = await import("./src/services/notificationService");
+          const { default: NotificationService } =
+            await import("./src/services/notificationService");
           const notificationService = NotificationService.getInstance();
           await notificationService.initialize();
           console.log("Notification service initialized successfully");
@@ -100,7 +118,10 @@ export default function App() {
         setIsLoading(false);
       } catch (error) {
         console.error("App initialization failed:", error);
-        const errorMessage = error instanceof Error ? `Initialization failed: ${error.message}` : "Failed to initialize app. Please restart.";
+        const errorMessage =
+          error instanceof Error
+            ? `Initialization failed: ${error.message}`
+            : "Failed to initialize app. Please restart.";
         setDbError(errorMessage);
         setIsLoading(false);
       } finally {
@@ -155,16 +176,24 @@ export default function App() {
   }
 
   return (
-    <SafeAreaProvider>
-      <ErrorBoundary>
-        <Provider store={store}>
-          <AuthProvider>
-            <ToastProvider>
-              <SyncProvider>{!isLoading && !dbError && <AppWithSyncRefresh />}</SyncProvider>
-            </ToastProvider>
-          </AuthProvider>
-        </Provider>
-      </ErrorBoundary>
-    </SafeAreaProvider>
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <SafeAreaProvider>
+        <ShimmerProvider duration={1000}>
+          <ErrorBoundary>
+            <Provider store={store}>
+              <AuthProvider>
+                <ToastProvider>
+                  <BottomSheetModalProvider>
+                    <SyncProvider>
+                      {!isLoading && !dbError && <AppWithSyncRefresh />}
+                    </SyncProvider>
+                  </BottomSheetModalProvider>
+                </ToastProvider>
+              </AuthProvider>
+            </Provider>
+          </ErrorBoundary>
+        </ShimmerProvider>
+      </SafeAreaProvider>
+    </GestureHandlerRootView>
   );
 }

@@ -1,21 +1,37 @@
 import React, { useEffect, useState } from "react";
-import { View, Text, StyleSheet, FlatList, TouchableOpacity } from "react-native";
+import {
+  View,
+  Text,
+  StyleSheet,
+  FlatList,
+  TouchableOpacity,
+  StatusBar,
+  ActivityIndicator,
+} from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
+import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons } from "@expo/vector-icons";
 import { useDispatch } from "react-redux";
 import { useNavigation, useRoute } from "@react-navigation/native";
 import { StackNavigationProp } from "@react-navigation/stack";
 import { RouteProp } from "@react-navigation/native";
-import { Screen, useToast } from "../components/ui";
+import { useToast, FloatingActionButton } from "../components/ui";
 import { DebtPaymentCard } from "../components/debt";
 import { AppDispatch } from "../store";
 import { DebtPayment } from "../types";
-import { formatCurrency } from "../utils";
+import { formatCurrency, formatDate } from "../utils";
 import { UI } from "../constants";
 import { DebtStackParamList } from "../navigation/DebtStackNavigator";
 import { db } from "../database/queries";
 
-type DebtPaymentsScreenNavigationProp = StackNavigationProp<DebtStackParamList, "DebtPayments">;
-type DebtPaymentsScreenRouteProp = RouteProp<DebtStackParamList, "DebtPayments">;
+type DebtPaymentsScreenNavigationProp = StackNavigationProp<
+  DebtStackParamList,
+  "DebtPayments"
+>;
+type DebtPaymentsScreenRouteProp = RouteProp<
+  DebtStackParamList,
+  "DebtPayments"
+>;
 
 const DebtPaymentsScreen: React.FC = () => {
   const dispatch = useDispatch<AppDispatch>();
@@ -35,7 +51,13 @@ const DebtPaymentsScreen: React.FC = () => {
     try {
       setLoading(true);
       const debtPayments = await db.debts.getPaymentsByDebt(debtId);
-      setPayments(debtPayments.sort((a, b) => new Date(b.paymentDate).getTime() - new Date(a.paymentDate).getTime()));
+      setPayments(
+        debtPayments.sort(
+          (a, b) =>
+            new Date(b.paymentDate).getTime() -
+            new Date(a.paymentDate).getTime(),
+        ),
+      );
     } catch (error) {
       showError("Failed to load payments");
     } finally {
@@ -45,17 +67,14 @@ const DebtPaymentsScreen: React.FC = () => {
 
   const handleDeletePayment = async (paymentId: string) => {
     try {
-      // You'll need to implement deletePayment in the debts repository
       await db.debts.deletePayment(paymentId);
-      await loadPayments(); // Refresh the list
+      await loadPayments();
     } catch (error) {
       showError("Failed to delete payment");
     }
   };
 
   const handleEditPayment = (payment: DebtPayment) => {
-    // For now, navigate to AddPayment with pre-filled data
-    // You could create a separate EditPaymentScreen later
     navigation.navigate("AddPayment", {
       debtId,
       debtName,
@@ -65,184 +84,403 @@ const DebtPaymentsScreen: React.FC = () => {
     });
   };
 
-  const totalPaid = payments.reduce((sum, payment) => sum + payment.amount, 0);
+  // ── Computed stats ─────────────────────────────────────────
+  const totalPaid = payments.reduce((sum, p) => sum + p.amount, 0);
+  const totalPrincipal = payments.reduce(
+    (sum, p) => sum + (p.principal || 0),
+    0,
+  );
+  const totalInterest = payments.reduce((sum, p) => sum + (p.interest || 0), 0);
+  const avgPayment = payments.length > 0 ? totalPaid / payments.length : 0;
+  const latestPaymentDate =
+    payments.length > 0 ? payments[0].paymentDate : null;
 
+  // ── Payment renderer ───────────────────────────────────────
   const renderPayment = ({ item }: { item: DebtPayment }) => (
-    <DebtPaymentCard payment={item} onEdit={handleEditPayment} onDelete={handleDeletePayment} />
+    <DebtPaymentCard
+      payment={item}
+      onEdit={handleEditPayment}
+      onDelete={handleDeletePayment}
+    />
   );
 
-  const renderEmptyState = () => (
-    <View style={styles.emptyState}>
-      <Ionicons name="receipt-outline" size={64} color={UI.COLORS.TEXT_SECONDARY} style={styles.emptyIcon} />
-      <Text style={styles.emptyTitle}>No Payments Yet</Text>
-      <Text style={styles.emptySubtitle}>Start making payments to track your progress on this debt.</Text>
-    </View>
-  );
-
-  return (
-    <Screen style={styles.container}>
-      <View style={styles.header}>
-        <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
-          <Ionicons name="arrow-back" size={24} color={UI.COLORS.TEXT_PRIMARY} />
+  // ── Header ─────────────────────────────────────────────────
+  const renderHeader = () => (
+    <View style={styles.headerContainer}>
+      {/* Navigation bar */}
+      <View style={styles.navBar}>
+        <TouchableOpacity
+          style={styles.backButton}
+          onPress={() => navigation.goBack()}>
+          <Ionicons
+            name="arrow-back"
+            size={18}
+            color={UI.COLORS.TEXT_PRIMARY}
+          />
         </TouchableOpacity>
-        <Text style={styles.title}>{debtName}</Text>
+        <View style={styles.navContent}>
+          <Text style={styles.navTitle} numberOfLines={1}>
+            {debtName}
+          </Text>
+          <Text style={styles.navSubtitle}>Payment History</Text>
+        </View>
         <View style={styles.placeholder} />
       </View>
 
+      {/* Hero summary card */}
       {payments.length > 0 && (
-        <View style={styles.summary}>
-          <Text style={styles.summaryLabel}>Total Paid</Text>
-          <Text style={styles.summaryAmount}>{formatCurrency(totalPaid)}</Text>
-          <Text style={styles.paymentCount}>
-            {payments.length} payment{payments.length !== 1 ? "s" : ""}
-          </Text>
+        <LinearGradient
+          colors={["#1B1464", "#6C5CE7", "#A29BFE"]}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={styles.heroCard}>
+          {/* Decorative */}
+          <View style={[styles.decorCircle, styles.circle1]} />
+          <View style={[styles.decorCircle, styles.circle2]} />
+
+          {/* Total paid */}
+          <Text style={styles.heroLabel}>Total Paid</Text>
+          <Text style={styles.heroValue}>{formatCurrency(totalPaid)}</Text>
+          {latestPaymentDate && (
+            <Text style={styles.heroSubtext}>
+              Last payment: {formatDate(latestPaymentDate)}
+            </Text>
+          )}
+
+          {/* Mini stats row */}
+          <View style={styles.statsRow}>
+            <View style={styles.statItem}>
+              <View style={[styles.statDot, { backgroundColor: "#2ED573" }]} />
+              <Text style={styles.statLabel}>Principal</Text>
+              <Text style={[styles.statValue, { color: "#2ED573" }]}>
+                {formatCurrency(totalPrincipal)}
+              </Text>
+            </View>
+            <View style={styles.statDivider} />
+            <View style={styles.statItem}>
+              <View style={[styles.statDot, { backgroundColor: "#F59E0B" }]} />
+              <Text style={styles.statLabel}>Interest</Text>
+              <Text style={[styles.statValue, { color: "#F59E0B" }]}>
+                {formatCurrency(totalInterest)}
+              </Text>
+            </View>
+          </View>
+        </LinearGradient>
+      )}
+
+      {/* Quick stats below hero */}
+      {payments.length > 0 && (
+        <View style={styles.quickStatsRow}>
+          <View style={styles.quickStatCard}>
+            <Ionicons name="receipt" size={16} color="#3B82F6" />
+            <Text style={styles.quickStatValue}>{payments.length}</Text>
+            <Text style={styles.quickStatLabel}>Payments</Text>
+          </View>
+          <View style={styles.quickStatCard}>
+            <Ionicons name="trending-up" size={16} color="#2ED573" />
+            <Text style={styles.quickStatValue}>
+              {formatCurrency(avgPayment)}
+            </Text>
+            <Text style={styles.quickStatLabel}>Avg. Payment</Text>
+          </View>
         </View>
       )}
 
-      <FlatList
-        data={payments}
-        renderItem={renderPayment}
-        keyExtractor={(item) => item.id}
-        contentContainerStyle={styles.listContainer}
-        ListEmptyComponent={loading ? null : renderEmptyState}
-        showsVerticalScrollIndicator={false}
-      />
+      {/* Section label */}
+      {payments.length > 0 && (
+        <Text style={styles.sectionLabel}>All Payments</Text>
+      )}
+    </View>
+  );
 
+  // ── Empty State ────────────────────────────────────────────
+  const renderEmptyState = () => (
+    <View style={styles.emptyState}>
+      <View style={styles.emptyIconCircle}>
+        <Ionicons name="receipt-outline" size={40} color={UI.COLORS.PRIMARY} />
+      </View>
+      <Text style={styles.emptyTitle}>No Payments Yet</Text>
+      <Text style={styles.emptySubtitle}>
+        Start making payments to track your progress on this debt.
+      </Text>
       <TouchableOpacity
-        style={styles.addButton}
+        activeOpacity={0.8}
         onPress={() =>
           navigation.navigate("AddPayment", {
             debtId,
             debtName,
-            currentBalance: 0, // You might want to pass the actual debt here
+            currentBalance: 0,
             minimumPayment: 0,
             interestRate: 0,
           })
         }>
-        <Ionicons name="add" size={24} color="white" />
+        <LinearGradient
+          colors={[UI.COLORS.PRIMARY, UI.COLORS.PRIMARY_DARK]}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={styles.emptyButton}>
+          <Ionicons name="add-circle" size={18} color="#fff" />
+          <Text style={styles.emptyButtonText}>Record a Payment</Text>
+        </LinearGradient>
       </TouchableOpacity>
-    </Screen>
+    </View>
+  );
+
+  return (
+    <LinearGradient
+      colors={[UI.COLORS.BACKGROUND, "#0F0F2D", UI.COLORS.BACKGROUND]}
+      locations={[0, 0.3, 1]}
+      style={styles.gradient}>
+      <SafeAreaView style={styles.safeArea}>
+        <StatusBar
+          barStyle="light-content"
+          backgroundColor="transparent"
+          translucent
+        />
+
+        {loading ? (
+          <View style={styles.centered}>
+            <ActivityIndicator size="large" color={UI.COLORS.PRIMARY} />
+          </View>
+        ) : (
+          <FlatList
+            data={payments}
+            renderItem={renderPayment}
+            keyExtractor={(item) => item.id}
+            ListHeaderComponent={renderHeader}
+            ListEmptyComponent={renderEmptyState}
+            contentContainerStyle={styles.listContainer}
+            showsVerticalScrollIndicator={false}
+          />
+        )}
+
+        <FloatingActionButton
+          icon="add"
+          onPress={() =>
+            navigation.navigate("AddPayment", {
+              debtId,
+              debtName,
+              currentBalance: 0,
+              minimumPayment: 0,
+              interestRate: 0,
+            })
+          }
+          style={{ position: "absolute", bottom: 30, right: 20 }}
+        />
+      </SafeAreaView>
+    </LinearGradient>
   );
 };
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
+  gradient: { flex: 1 },
+  safeArea: { flex: 1 },
+  centered: { flex: 1, justifyContent: "center", alignItems: "center" },
 
-  header: {
+  // ── Header ─────────────────────────────────────────
+  headerContainer: {
+    marginBottom: 8,
+  },
+  navBar: {
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "space-between",
-    paddingHorizontal: UI.SPACING.LG,
-    paddingVertical: UI.SPACING.MD,
-    borderBottomWidth: 1,
-    borderBottomColor: UI.COLORS.BORDER,
+    paddingVertical: 14,
+    marginBottom: 12,
+    gap: 12,
   },
-
   backButton: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: UI.COLORS.SURFACE,
+    width: 38,
+    height: 38,
+    borderRadius: 12,
+    backgroundColor: "rgba(108,92,231,0.1)",
+    borderWidth: 1,
+    borderColor: "rgba(108,92,231,0.2)",
     alignItems: "center",
     justifyContent: "center",
-    borderWidth: 1,
-    borderColor: UI.COLORS.BORDER,
   },
-
-  title: {
-    fontSize: 18,
-    fontWeight: "600",
-    color: UI.COLORS.TEXT_PRIMARY,
+  navContent: {
     flex: 1,
-    textAlign: "center",
-    marginHorizontal: UI.SPACING.MD,
   },
-
-  placeholder: {
-    width: 32,
-  },
-
-  summary: {
-    backgroundColor: UI.COLORS.SURFACE,
-    margin: UI.SPACING.LG,
-    padding: UI.SPACING.LG,
-    borderRadius: UI.CARD_RADIUS,
-    alignItems: "center",
-    borderWidth: 1,
-    borderColor: UI.COLORS.BORDER,
-  },
-
-  summaryLabel: {
-    fontSize: 14,
-    color: UI.COLORS.TEXT_SECONDARY,
-    marginBottom: 4,
-  },
-
-  summaryAmount: {
-    fontSize: 24,
+  navTitle: {
+    fontSize: 18,
     fontWeight: "700",
-    color: UI.COLORS.SUCCESS,
+    color: UI.COLORS.TEXT_PRIMARY,
+    letterSpacing: 0.2,
+  },
+  navSubtitle: {
+    fontSize: 12,
+    color: UI.COLORS.TEXT_MUTED,
+    marginTop: 2,
+  },
+  placeholder: { width: 38 },
+
+  // ── Hero Card ──────────────────────────────────────
+  heroCard: {
+    borderRadius: 20,
+    padding: 22,
+    overflow: "hidden",
+    position: "relative",
+  },
+  decorCircle: {
+    position: "absolute",
+    borderRadius: 999,
+    backgroundColor: "rgba(255,255,255,0.07)",
+  },
+  circle1: { width: 160, height: 160, top: -50, right: -30 },
+  circle2: { width: 100, height: 100, bottom: -25, left: -20 },
+  heroLabel: {
+    fontSize: 13,
+    color: "rgba(255,255,255,0.55)",
+    letterSpacing: 0.5,
     marginBottom: 4,
   },
-
-  paymentCount: {
+  heroValue: {
+    fontSize: 36,
+    fontWeight: "800",
+    color: "#2ED573",
+    letterSpacing: 0.5,
+    marginBottom: 4,
+  },
+  heroSubtext: {
     fontSize: 12,
-    color: UI.COLORS.TEXT_SECONDARY,
+    color: "rgba(255,255,255,0.4)",
+    marginBottom: 18,
   },
 
+  // ── Stats Row (inside hero) ────────────────────────
+  statsRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "rgba(0,0,0,0.2)",
+    borderRadius: 14,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+  },
+  statItem: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+  },
+  statDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+  },
+  statLabel: {
+    fontSize: 12,
+    color: "rgba(255,255,255,0.5)",
+  },
+  statValue: {
+    fontSize: 14,
+    fontWeight: "700",
+    marginLeft: "auto",
+  },
+  statDivider: {
+    width: 1,
+    height: 24,
+    backgroundColor: "rgba(255,255,255,0.12)",
+    marginHorizontal: 12,
+  },
+
+  // ── Quick Stats Row ────────────────────────────────
+  quickStatsRow: {
+    flexDirection: "row",
+    gap: 10,
+    marginTop: 12,
+  },
+  quickStatCard: {
+    flex: 1,
+    backgroundColor: "rgba(20,20,50,0.65)",
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: "rgba(108,92,231,0.15)",
+    paddingVertical: 14,
+    paddingHorizontal: 14,
+    alignItems: "center",
+    gap: 6,
+  },
+  quickStatValue: {
+    fontSize: 16,
+    fontWeight: "800",
+    color: UI.COLORS.TEXT_PRIMARY,
+  },
+  quickStatLabel: {
+    fontSize: 11,
+    fontWeight: "600",
+    color: UI.COLORS.TEXT_MUTED,
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
+  },
+
+  // ── Section Label ──────────────────────────────────
+  sectionLabel: {
+    fontSize: 13,
+    fontWeight: "600",
+    color: UI.COLORS.PRIMARY_LIGHT,
+    letterSpacing: 0.5,
+    textTransform: "uppercase",
+    marginTop: 20,
+    marginBottom: 12,
+  },
+
+  // ── List ───────────────────────────────────────────
   listContainer: {
-    paddingHorizontal: UI.SPACING.LG,
+    paddingHorizontal: 20,
     paddingBottom: 100,
+    flexGrow: 1,
   },
 
+  // ── Empty State ────────────────────────────────────
   emptyState: {
     flex: 1,
     alignItems: "center",
     justifyContent: "center",
-    paddingHorizontal: UI.SPACING.XL,
-    paddingVertical: UI.SPACING.XL * 2,
+    paddingHorizontal: 32,
+    paddingVertical: 80,
   },
-
-  emptyIcon: {
-    marginBottom: UI.SPACING.LG,
-    opacity: 0.5,
-  },
-
-  emptyTitle: {
-    fontSize: 20,
-    fontWeight: "600",
-    color: UI.COLORS.TEXT_PRIMARY,
-    marginBottom: UI.SPACING.SM,
-    textAlign: "center",
-  },
-
-  emptySubtitle: {
-    fontSize: 16,
-    color: UI.COLORS.TEXT_SECONDARY,
-    textAlign: "center",
-    lineHeight: 24,
-  },
-
-  addButton: {
-    position: "absolute",
-    right: UI.SPACING.LG,
-    bottom: UI.SPACING.LG + 20,
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    backgroundColor: UI.COLORS.PRIMARY,
+  emptyIconCircle: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: "rgba(108,92,231,0.1)",
+    borderWidth: 1,
+    borderColor: "rgba(108,92,231,0.2)",
     alignItems: "center",
     justifyContent: "center",
-    shadowColor: "#000",
-    shadowOffset: {
-      width: 0,
-      height: 4,
-    },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 8,
+    marginBottom: 20,
+  },
+  emptyTitle: {
+    fontSize: 22,
+    fontWeight: "700",
+    color: UI.COLORS.TEXT_PRIMARY,
+    marginBottom: 8,
+    textAlign: "center",
+  },
+  emptySubtitle: {
+    fontSize: 14,
+    color: UI.COLORS.TEXT_MUTED,
+    textAlign: "center",
+    lineHeight: 20,
+    marginBottom: 28,
+  },
+  emptyButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 24,
+    paddingVertical: 14,
+    borderRadius: 25,
+    gap: 8,
+    shadowColor: UI.COLORS.PRIMARY,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.35,
+    shadowRadius: 10,
+    elevation: 6,
+  },
+  emptyButtonText: {
+    fontSize: 15,
+    fontWeight: "700",
+    color: "#fff",
   },
 });
 

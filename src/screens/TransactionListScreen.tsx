@@ -1,14 +1,42 @@
 import React, { useEffect, useState } from "react";
-import { View, Text, StyleSheet, FlatList, TouchableOpacity, RefreshControl, Modal, TextInput } from "react-native";
+import {
+  View,
+  Text,
+  StyleSheet,
+  FlatList,
+  TouchableOpacity,
+  RefreshControl,
+  Modal,
+  TextInput,
+  StatusBar,
+} from "react-native";
 import { Ionicons } from "@expo/vector-icons";
+import { LinearGradient } from "expo-linear-gradient";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { useDispatch, useSelector } from "react-redux";
 import { RootState, AppDispatch } from "../store";
-import { Screen, Card, Button, useCustomAlert, useToast } from "../components/ui";
+import {
+  Screen,
+  Card,
+  Button,
+  useCustomAlert,
+  useToast,
+} from "../components/ui";
 import { UI } from "../constants";
-import { fetchTransactions, deleteTransaction, duplicateTransaction } from "../store/slices/transactionsSlice";
+import {
+  fetchTransactions,
+  deleteTransaction,
+  duplicateTransaction,
+} from "../store/slices/transactionsSlice";
 import { fetchCategories } from "../store/slices/categoriesSlice";
 import { Transaction, TransactionType } from "../types";
-import { format, startOfMonth, endOfMonth, startOfYear, endOfYear } from "date-fns";
+import {
+  format,
+  startOfMonth,
+  endOfMonth,
+  startOfYear,
+  endOfYear,
+} from "date-fns";
 
 type FilterPeriod = "all" | "month" | "year" | "custom";
 type FilterType = "all" | "income" | "expense";
@@ -20,8 +48,12 @@ interface DateRange {
 
 export const TransactionManagementScreen: React.FC = () => {
   const dispatch = useDispatch<AppDispatch>();
-  const { items: transactions, loading } = useSelector((state: RootState) => state.transactions);
-  const { items: categories } = useSelector((state: RootState) => state.categories);
+  const { items: transactions, loading } = useSelector(
+    (state: RootState) => state.transactions,
+  );
+  const { items: categories } = useSelector(
+    (state: RootState) => state.categories,
+  );
   const { showAlert, AlertComponent } = useCustomAlert();
   const { showSuccess, showError } = useToast();
 
@@ -70,28 +102,34 @@ export const TransactionManagementScreen: React.FC = () => {
 
     return filtered.filter((t) => {
       const transactionDate = new Date(t.date);
-      return transactionDate >= dateRange.start && transactionDate <= dateRange.end;
+      return (
+        transactionDate >= dateRange.start && transactionDate <= dateRange.end
+      );
     });
   };
 
   const filteredTransactions = getFilteredTransactions();
 
   const handleDeleteTransaction = (transaction: Transaction) => {
-    showAlert("Delete Transaction", `Are you sure you want to delete "${transaction.description}"?`, [
-      { text: "Cancel", style: "cancel" },
-      {
-        text: "Delete",
-        style: "destructive",
-        onPress: async () => {
-          try {
-            await dispatch(deleteTransaction(transaction.id)).unwrap();
-            showSuccess("Transaction deleted successfully");
-          } catch (error) {
-            showError("Failed to delete transaction");
-          }
+    showAlert(
+      "Delete Transaction",
+      `Are you sure you want to delete "${transaction.description}"?`,
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Delete",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              await dispatch(deleteTransaction(transaction.id)).unwrap();
+              showSuccess("Transaction deleted successfully");
+            } catch (error) {
+              showError("Failed to delete transaction");
+            }
+          },
         },
-      },
-    ]);
+      ],
+    );
   };
 
   const handleDuplicateTransaction = async (transaction: Transaction) => {
@@ -154,22 +192,40 @@ export const TransactionManagementScreen: React.FC = () => {
   const renderTransaction = ({ item }: { item: Transaction }) => (
     <View style={styles.transactionCard}>
       <View style={styles.transactionLeft}>
-        <View style={[styles.typeIcon, { backgroundColor: getAmountColor(item.type) + "20" }]}>
-          <Ionicons name={getTypeIcon(item.type)} size={20} color={getAmountColor(item.type)} />
+        <View
+          style={[
+            styles.typeIcon,
+            { backgroundColor: getAmountColor(item.type) + "20" },
+          ]}>
+          <Ionicons
+            name={getTypeIcon(item.type)}
+            size={20}
+            color={getAmountColor(item.type)}
+          />
         </View>
         <View style={styles.transactionInfo}>
           <Text style={styles.description}>{item.description}</Text>
-          <Text style={styles.category}>{getCategoryName(item.categoryId)}</Text>
-          <Text style={styles.date}>{format(new Date(item.date), "MMM dd, yyyy")}</Text>
+          <Text style={styles.category}>
+            {getCategoryName(item.categoryId)}
+          </Text>
+          <Text style={styles.date}>
+            {format(new Date(item.date), "MMM dd, yyyy")}
+          </Text>
         </View>
       </View>
       <View style={styles.transactionRight}>
-        <Text style={[styles.amount, { color: getAmountColor(item.type) }]}>{formatAmount(item.amount, item.type)}</Text>
+        <Text style={[styles.amount, { color: getAmountColor(item.type) }]}>
+          {formatAmount(item.amount, item.type)}
+        </Text>
         <View style={styles.actionButtons}>
-          <TouchableOpacity style={styles.actionButton} onPress={() => handleDuplicateTransaction(item)}>
+          <TouchableOpacity
+            style={styles.actionButton}
+            onPress={() => handleDuplicateTransaction(item)}>
             <Ionicons name="copy" size={16} color={UI.COLORS.TEXT_SECONDARY} />
           </TouchableOpacity>
-          <TouchableOpacity style={styles.actionButton} onPress={() => handleDeleteTransaction(item)}>
+          <TouchableOpacity
+            style={styles.actionButton}
+            onPress={() => handleDeleteTransaction(item)}>
             <Ionicons name="trash" size={16} color={UI.COLORS.ERROR} />
           </TouchableOpacity>
         </View>
@@ -177,16 +233,36 @@ export const TransactionManagementScreen: React.FC = () => {
     </View>
   );
 
-  const FilterButton = ({ label, isActive, onPress }: { label: string; isActive: boolean; onPress: () => void }) => (
-    <TouchableOpacity style={[styles.filterButton, isActive && styles.filterButtonActive]} onPress={onPress}>
-      <Text style={[styles.filterButtonText, isActive && styles.filterButtonTextActive]}>{label}</Text>
+  const FilterButton = ({
+    label,
+    isActive,
+    onPress,
+  }: {
+    label: string;
+    isActive: boolean;
+    onPress: () => void;
+  }) => (
+    <TouchableOpacity
+      style={[styles.filterButton, isActive && styles.filterButtonActive]}
+      onPress={onPress}>
+      <Text
+        style={[
+          styles.filterButtonText,
+          isActive && styles.filterButtonTextActive,
+        ]}>
+        {label}
+      </Text>
     </TouchableOpacity>
   );
 
   const getSummary = () => {
-    const income = filteredTransactions.filter((t) => t.type === "income").reduce((sum, t) => sum + t.amount, 0);
+    const income = filteredTransactions
+      .filter((t) => t.type === "income")
+      .reduce((sum, t) => sum + t.amount, 0);
 
-    const expenses = filteredTransactions.filter((t) => t.type === "expense").reduce((sum, t) => sum + t.amount, 0);
+    const expenses = filteredTransactions
+      .filter((t) => t.type === "expense")
+      .reduce((sum, t) => sum + t.amount, 0);
 
     return { income, expenses, net: income - expenses };
   };
@@ -194,158 +270,257 @@ export const TransactionManagementScreen: React.FC = () => {
   const summary = getSummary();
 
   return (
-    <Screen>
-      <View style={styles.header}>
-        <Text style={styles.title}>Transactions</Text>
-        <TouchableOpacity style={styles.filterIcon} onPress={() => setShowFilterModal(true)}>
-          <Ionicons name="filter" size={24} color={UI.COLORS.TEXT_PRIMARY} />
-        </TouchableOpacity>
-      </View>
-
-      {/* Summary Cards */}
-      <View style={styles.summaryContainer}>
-        <View style={[styles.summaryCard, { borderLeftColor: UI.COLORS.SUCCESS }]}>
-          <Text style={styles.summaryLabel}>Income</Text>
-          <Text style={[styles.summaryAmount, { color: UI.COLORS.SUCCESS }]}>+${summary.income.toFixed(2)}</Text>
+    <LinearGradient
+      colors={["#0a0a2e", "#1a1040", "#0d0d30"]}
+      style={{ flex: 1 }}>
+      <SafeAreaView style={{ flex: 1 }}>
+        <StatusBar
+          barStyle="light-content"
+          backgroundColor="transparent"
+          translucent
+        />
+        <View style={styles.header}>
+          <Text style={styles.title}>Transactions</Text>
+          <TouchableOpacity
+            style={styles.filterIcon}
+            onPress={() => setShowFilterModal(true)}>
+            <Ionicons name="filter" size={24} color={UI.COLORS.TEXT_PRIMARY} />
+          </TouchableOpacity>
         </View>
-        <View style={[styles.summaryCard, { borderLeftColor: UI.COLORS.ERROR }]}>
-          <Text style={styles.summaryLabel}>Expenses</Text>
-          <Text style={[styles.summaryAmount, { color: UI.COLORS.ERROR }]}>-${summary.expenses.toFixed(2)}</Text>
-        </View>
-        <View style={[styles.summaryCard, { borderLeftColor: UI.COLORS.TEXT_PRIMARY }]}>
-          <Text style={styles.summaryLabel}>Net</Text>
-          <Text style={[styles.summaryAmount, { color: summary.net >= 0 ? UI.COLORS.SUCCESS : UI.COLORS.ERROR }]}>${summary.net.toFixed(2)}</Text>
-        </View>
-      </View>
 
-      {/* Active Filters */}
-      <View style={styles.activeFilters}>
-        <Text style={styles.activeFiltersLabel}>Showing {filteredTransactions.length} transactions</Text>
-        <Text style={styles.activeFiltersText}>
-          {filterType !== "all" && `${filterType} • `}
-          {filterPeriod === "month" && "This month"}
-          {filterPeriod === "year" && "This year"}
-          {filterPeriod === "custom" && `${format(customDateRange.start, "MMM dd")} - ${format(customDateRange.end, "MMM dd")}`}
-          {filterPeriod === "all" && "All time"}
-        </Text>
-      </View>
-
-      <FlatList
-        data={filteredTransactions}
-        renderItem={renderTransaction}
-        keyExtractor={(item) => item.id}
-        style={styles.list}
-        showsVerticalScrollIndicator={false}
-        refreshControl={<RefreshControl refreshing={loading} onRefresh={() => dispatch(fetchTransactions())} tintColor={UI.COLORS.PRIMARY} />}
-        ListEmptyComponent={
-          <View style={styles.emptyState}>
-            <Ionicons name="receipt" size={48} color={UI.COLORS.TEXT_MUTED} />
-            <Text style={styles.emptyStateText}>No transactions found</Text>
-            <Text style={styles.emptyStateSubtext}>
-              {filterType !== "all" || filterPeriod !== "all" ? "Try adjusting your filters" : "Start by adding your first transaction"}
+        {/* Summary Cards */}
+        <View style={styles.summaryContainer}>
+          <View
+            style={[
+              styles.summaryCard,
+              { borderLeftColor: UI.COLORS.SUCCESS },
+            ]}>
+            <Text style={styles.summaryLabel}>Income</Text>
+            <Text style={[styles.summaryAmount, { color: UI.COLORS.SUCCESS }]}>
+              +${summary.income.toFixed(2)}
             </Text>
           </View>
-        }
-      />
-
-      {/* Filter Modal */}
-      <Modal visible={showFilterModal} animationType="slide" transparent>
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Filter Transactions</Text>
-              <TouchableOpacity onPress={() => setShowFilterModal(false)}>
-                <Ionicons name="close" size={24} color={UI.COLORS.TEXT_PRIMARY} />
-              </TouchableOpacity>
-            </View>
-
-            <View style={styles.filterSection}>
-              <Text style={styles.filterSectionTitle}>Transaction Type</Text>
-              <View style={styles.filterButtonGroup}>
-                <FilterButton label="All" isActive={filterType === "all"} onPress={() => setFilterType("all")} />
-                <FilterButton label="Income" isActive={filterType === "income"} onPress={() => setFilterType("income")} />
-                <FilterButton label="Expense" isActive={filterType === "expense"} onPress={() => setFilterType("expense")} />
-              </View>
-            </View>
-
-            <View style={styles.filterSection}>
-              <Text style={styles.filterSectionTitle}>Time Period</Text>
-              <View style={styles.filterButtonGroup}>
-                <FilterButton label="All Time" isActive={filterPeriod === "all"} onPress={() => setFilterPeriod("all")} />
-                <FilterButton label="This Month" isActive={filterPeriod === "month"} onPress={() => setFilterPeriod("month")} />
-                <FilterButton label="This Year" isActive={filterPeriod === "year"} onPress={() => setFilterPeriod("year")} />
-                <FilterButton label="Custom" isActive={filterPeriod === "custom"} onPress={() => setShowCustomDateModal(true)} />
-              </View>
-            </View>
-
-            <TouchableOpacity style={styles.applyButton} onPress={() => setShowFilterModal(false)}>
-              <Text style={styles.applyButtonText}>Apply Filters</Text>
-            </TouchableOpacity>
+          <View
+            style={[styles.summaryCard, { borderLeftColor: UI.COLORS.ERROR }]}>
+            <Text style={styles.summaryLabel}>Expenses</Text>
+            <Text style={[styles.summaryAmount, { color: UI.COLORS.ERROR }]}>
+              -${summary.expenses.toFixed(2)}
+            </Text>
+          </View>
+          <View
+            style={[
+              styles.summaryCard,
+              { borderLeftColor: UI.COLORS.TEXT_PRIMARY },
+            ]}>
+            <Text style={styles.summaryLabel}>Net</Text>
+            <Text
+              style={[
+                styles.summaryAmount,
+                {
+                  color: summary.net >= 0 ? UI.COLORS.SUCCESS : UI.COLORS.ERROR,
+                },
+              ]}>
+              ${summary.net.toFixed(2)}
+            </Text>
           </View>
         </View>
-      </Modal>
 
-      {/* Custom Date Range Modal */}
-      <Modal visible={showCustomDateModal} animationType="slide" transparent>
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Custom Date Range</Text>
-              <TouchableOpacity onPress={() => setShowCustomDateModal(false)}>
-                <Ionicons name="close" size={24} color={UI.COLORS.TEXT_PRIMARY} />
-              </TouchableOpacity>
+        {/* Active Filters */}
+        <View style={styles.activeFilters}>
+          <Text style={styles.activeFiltersLabel}>
+            Showing {filteredTransactions.length} transactions
+          </Text>
+          <Text style={styles.activeFiltersText}>
+            {filterType !== "all" && `${filterType} • `}
+            {filterPeriod === "month" && "This month"}
+            {filterPeriod === "year" && "This year"}
+            {filterPeriod === "custom" &&
+              `${format(customDateRange.start, "MMM dd")} - ${format(customDateRange.end, "MMM dd")}`}
+            {filterPeriod === "all" && "All time"}
+          </Text>
+        </View>
+
+        <FlatList
+          data={filteredTransactions}
+          renderItem={renderTransaction}
+          keyExtractor={(item) => item.id}
+          style={styles.list}
+          showsVerticalScrollIndicator={false}
+          refreshControl={
+            <RefreshControl
+              refreshing={loading}
+              onRefresh={() => dispatch(fetchTransactions())}
+              tintColor={UI.COLORS.PRIMARY}
+            />
+          }
+          ListEmptyComponent={
+            <View style={styles.emptyState}>
+              <Ionicons name="receipt" size={48} color={UI.COLORS.TEXT_MUTED} />
+              <Text style={styles.emptyStateText}>No transactions found</Text>
+              <Text style={styles.emptyStateSubtext}>
+                {filterType !== "all" || filterPeriod !== "all"
+                  ? "Try adjusting your filters"
+                  : "Start by adding your first transaction"}
+              </Text>
             </View>
+          }
+        />
 
-            <View style={styles.dateInputContainer}>
-              <Text style={styles.dateInputLabel}>Start Date (YYYY-MM-DD)</Text>
-              <TextInput
-                style={styles.dateInput}
-                value={customStartDate}
-                onChangeText={setCustomStartDate}
-                placeholder="2024-01-01"
-                placeholderTextColor={UI.COLORS.TEXT_MUTED}
-              />
-            </View>
+        {/* Filter Modal */}
+        <Modal visible={showFilterModal} animationType="slide" transparent>
+          <View style={styles.modalOverlay}>
+            <View style={styles.modalContent}>
+              <View style={styles.modalHeader}>
+                <Text style={styles.modalTitle}>Filter Transactions</Text>
+                <TouchableOpacity onPress={() => setShowFilterModal(false)}>
+                  <Ionicons
+                    name="close"
+                    size={24}
+                    color={UI.COLORS.TEXT_PRIMARY}
+                  />
+                </TouchableOpacity>
+              </View>
 
-            <View style={styles.dateInputContainer}>
-              <Text style={styles.dateInputLabel}>End Date (YYYY-MM-DD)</Text>
-              <TextInput
-                style={styles.dateInput}
-                value={customEndDate}
-                onChangeText={setCustomEndDate}
-                placeholder="2024-12-31"
-                placeholderTextColor={UI.COLORS.TEXT_MUTED}
-              />
-            </View>
+              <View style={styles.filterSection}>
+                <Text style={styles.filterSectionTitle}>Transaction Type</Text>
+                <View style={styles.filterButtonGroup}>
+                  <FilterButton
+                    label="All"
+                    isActive={filterType === "all"}
+                    onPress={() => setFilterType("all")}
+                  />
+                  <FilterButton
+                    label="Income"
+                    isActive={filterType === "income"}
+                    onPress={() => setFilterType("income")}
+                  />
+                  <FilterButton
+                    label="Expense"
+                    isActive={filterType === "expense"}
+                    onPress={() => setFilterType("expense")}
+                  />
+                </View>
+              </View>
 
-            <View style={styles.modalActions}>
-              <TouchableOpacity style={styles.cancelButton} onPress={() => setShowCustomDateModal(false)}>
-                <Text style={styles.cancelButtonText}>Cancel</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.saveButton} onPress={handleCustomDateFilter}>
-                <Text style={styles.saveButtonText}>Apply</Text>
-              </TouchableOpacity>
+              <View style={styles.filterSection}>
+                <Text style={styles.filterSectionTitle}>Time Period</Text>
+                <View style={styles.filterButtonGroup}>
+                  <FilterButton
+                    label="All Time"
+                    isActive={filterPeriod === "all"}
+                    onPress={() => setFilterPeriod("all")}
+                  />
+                  <FilterButton
+                    label="This Month"
+                    isActive={filterPeriod === "month"}
+                    onPress={() => setFilterPeriod("month")}
+                  />
+                  <FilterButton
+                    label="This Year"
+                    isActive={filterPeriod === "year"}
+                    onPress={() => setFilterPeriod("year")}
+                  />
+                  <FilterButton
+                    label="Custom"
+                    isActive={filterPeriod === "custom"}
+                    onPress={() => setShowCustomDateModal(true)}
+                  />
+                </View>
+              </View>
             </View>
           </View>
-        </View>
-      </Modal>
+        </Modal>
 
-      <AlertComponent />
-    </Screen>
+        {/* Custom Date Range Modal */}
+        <Modal visible={showCustomDateModal} animationType="slide" transparent>
+          <View style={styles.modalOverlay}>
+            <View style={styles.modalContent}>
+              <View style={styles.modalHeader}>
+                <Text style={styles.modalTitle}>Custom Date Range</Text>
+                <TouchableOpacity onPress={() => setShowCustomDateModal(false)}>
+                  <Ionicons
+                    name="close"
+                    size={24}
+                    color={UI.COLORS.TEXT_PRIMARY}
+                  />
+                </TouchableOpacity>
+              </View>
+
+              <View style={styles.dateInputContainer}>
+                <Text style={styles.dateInputLabel}>
+                  Start Date (YYYY-MM-DD)
+                </Text>
+                <TextInput
+                  style={styles.dateInput}
+                  value={customStartDate}
+                  onChangeText={setCustomStartDate}
+                  placeholder="2024-01-01"
+                  placeholderTextColor={UI.COLORS.TEXT_MUTED}
+                />
+              </View>
+
+              <View style={styles.dateInputContainer}>
+                <Text style={styles.dateInputLabel}>End Date (YYYY-MM-DD)</Text>
+                <TextInput
+                  style={styles.dateInput}
+                  value={customEndDate}
+                  onChangeText={setCustomEndDate}
+                  placeholder="2024-12-31"
+                  placeholderTextColor={UI.COLORS.TEXT_MUTED}
+                />
+              </View>
+
+              <View style={styles.modalActions}>
+                <TouchableOpacity
+                  style={styles.cancelButton}
+                  onPress={() => setShowCustomDateModal(false)}>
+                  <Text style={styles.cancelButtonText}>Cancel</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.saveButton}
+                  onPress={handleCustomDateFilter}>
+                  <Text style={styles.saveButtonText}>Apply</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        </Modal>
+
+        <AlertComponent />
+      </SafeAreaView>
+    </LinearGradient>
   );
 };
 
 const styles = StyleSheet.create({
+  container: {
+    paddingBottom: 100,
+  },
   header: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    marginBottom: UI.SPACING.LG,
+    paddingHorizontal: UI.SPACING.LG,
+    paddingTop: UI.SPACING.MD,
+    paddingBottom: UI.SPACING.SM,
   },
   title: {
-    fontSize: 28,
-    fontWeight: "bold",
+    fontSize: 32,
+    fontWeight: "800",
     color: UI.COLORS.TEXT_PRIMARY,
+    letterSpacing: 0.3,
+  },
+  stickyHeader: {
+    paddingHorizontal: 20,
+    paddingTop: 10,
+    zIndex: 10,
+  },
+  screenTitle: {
+    fontSize: 32,
+    fontWeight: "800",
+    color: UI.COLORS.TEXT_PRIMARY,
+    letterSpacing: 0.3,
+    marginBottom: 16,
   },
   filterIcon: {
     padding: UI.SPACING.SM,

@@ -3,27 +3,35 @@ import { useSelector } from "react-redux";
 import { createSelector } from "@reduxjs/toolkit";
 import { RootState } from "../../../store";
 import { format, parseISO, subDays, subMonths, startOfMonth, endOfMonth } from "date-fns";
-import { Transaction, Category, Budget, Bill, Debt } from "../../../types";
+import { Transaction, Category, Budget, Debt } from "../../../types";
 
 // Stable selectors that only use memoization when actually transforming data
-const selectTransactionsArray = createSelector([(state: RootState) => state.transactions.items], (items) => Object.values(items));
+const selectTransactionsArray = createSelector([(state: RootState) => (state.transactions ? state.transactions.items : {})], (items) =>
+  Object.values(items || {})
+);
 
-const selectCategoriesArray = createSelector([(state: RootState) => state.categories.items], (items) => Object.values(items));
+const selectCategoriesArray = createSelector([(state: RootState) => (state.categories ? state.categories.items : {})], (items) =>
+  Object.values(items || {})
+);
 
-const selectBudgetsArray = createSelector([(state: RootState) => state.budgets.items], (items) => Object.values(items));
+const selectBudgetsArray = createSelector([(state: RootState) => (state.budgets ? state.budgets.items : {})], (items) => Object.values(items || {}));
 
-const selectBillsArray = createSelector([(state: RootState) => state.bills.items], (items) => Object.values(items));
+// Bills slice removed; default to empty array
+const selectBillsArray = createSelector([() => ({})], () => [] as any[]);
 
-const selectDebtsArray = createSelector([(state: RootState) => state.debts.items], (items) => Object.values(items));
+const selectDebtsArray = createSelector([(state: RootState) => (state.debts ? state.debts.items : {})], (items) => Object.values(items || {}));
 
-const selectDebtPaymentsArray = createSelector([(state: RootState) => state.debts.payments], (payments) => Object.values(payments));
+const selectDebtPaymentsArray = createSelector(
+  [(state: RootState) => (state.debts && (state.debts as any).payments ? (state.debts as any).payments : {})],
+  (payments) => Object.values(payments || {}) as any[]
+);
 
 const selectLoadingState = createSelector(
   [
-    (state: RootState) => state.transactions.loading,
-    (state: RootState) => state.categories.loading,
-    (state: RootState) => state.budgets.loading,
-    (state: RootState) => state.debts.loading,
+    (state: RootState) => (state.transactions ? state.transactions.loading : false),
+    (state: RootState) => (state.categories ? state.categories.loading : false),
+    (state: RootState) => (state.budgets ? state.budgets.loading : false),
+    (state: RootState) => (state.debts ? state.debts.loading : false),
   ],
   (transactionsLoading, categoriesLoading, budgetsLoading, debtsLoading) => transactionsLoading || categoriesLoading || budgetsLoading || debtsLoading
 );
@@ -109,6 +117,11 @@ export const useAnalysisData = (
         if (!categoryIds.includes(transaction.categoryId)) {
           return false;
         }
+      }
+
+      // Exclude transfers from analysis
+      if (transaction.type === "transfer") {
+        return false;
       }
 
       // Transaction type filter

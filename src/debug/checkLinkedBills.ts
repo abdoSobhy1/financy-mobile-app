@@ -28,22 +28,9 @@ export const debugLinkedBillIds = async () => {
       );
     }
 
-    // Get all bills
-    const allBills = await db.bills.getAllBills();
-    console.log("📋 Total bills:", allBills.length);
-
-    if (allBills.length > 0) {
-      console.log(
-        "🏠 Bills:",
-        allBills.map((b) => ({
-          id: b.id,
-          name: b.name,
-          amount: b.amount,
-          paid: b.paid,
-          linkedTransactionId: b.linkedTransactionId,
-        }))
-      );
-    }
+    // Bills data removed - skip bill checks
+    const allBills: any[] = [];
+    console.log("📋 Bills feature removed. Skipping bill checks.");
 
     // Check raw database for null/empty linkedBillId
     const nullLinkedTransactions = allTransactions.filter((t) => !t.linkedBillId);
@@ -68,7 +55,7 @@ export const debugLinkedBillIds = async () => {
       totalTransactions: allTransactions.length,
       linkedTransactions: linkedTransactions.length,
       nullLinkedTransactions: nullLinkedTransactions.length,
-      totalBills: allBills.length,
+      totalBills: 0,
       sampleLinkedTransactions: linkedTransactions.slice(0, 2),
       sampleNullTransactions: nullLinkedTransactions.slice(0, 2),
     };

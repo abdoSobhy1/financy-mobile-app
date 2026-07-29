@@ -1,5 +1,11 @@
 import React from "react";
-import { TouchableOpacity, StyleSheet, ViewStyle } from "react-native";
+import {
+  TouchableOpacity,
+  StyleSheet,
+  ViewStyle,
+  Platform,
+} from "react-native";
+import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons } from "@expo/vector-icons";
 import { UI } from "../../constants";
 
@@ -9,42 +15,58 @@ interface FloatingActionButtonProps {
   style?: ViewStyle;
   size?: number;
   color?: string;
-  backgroundColor?: string;
 }
 
 export const FloatingActionButton: React.FC<FloatingActionButtonProps> = ({
   onPress,
   icon,
   style,
-  size = 24,
-  color = UI.COLORS.TEXT_PRIMARY,
-  backgroundColor = UI.COLORS.PRIMARY,
+  size = 26,
+  color = "#fff",
 }) => {
   return (
-    <TouchableOpacity style={[styles.fab, { backgroundColor }, style]} onPress={onPress} activeOpacity={0.8}>
-      <Ionicons name={icon} size={size} color={color} />
+    <TouchableOpacity
+      style={[styles.fab, style]}
+      onPress={onPress}
+      activeOpacity={0.85}>
+      <LinearGradient
+        colors={[
+          UI.COLORS.PRIMARY_LIGHT,
+          UI.COLORS.PRIMARY,
+          UI.COLORS.PRIMARY_DARK,
+        ]}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={styles.gradient}>
+        <Ionicons name={icon} size={size} color={color} />
+      </LinearGradient>
     </TouchableOpacity>
   );
 };
 
 const styles = StyleSheet.create({
   fab: {
-    position: "absolute",
-    bottom: 20,
-    right: 20,
-    width: 56,
-    height: 56,
-    borderRadius: 28,
+    width: 58,
+    height: 58,
+    borderRadius: 29,
+    zIndex: 1000,
+    ...Platform.select({
+      ios: {
+        shadowColor: UI.COLORS.PRIMARY,
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.45,
+        shadowRadius: 12,
+      },
+      android: {
+        elevation: 10,
+      },
+    }),
+  },
+  gradient: {
+    width: 58,
+    height: 58,
+    borderRadius: 29,
     justifyContent: "center",
     alignItems: "center",
-    elevation: 8,
-    shadowColor: "#000",
-    shadowOffset: {
-      width: 0,
-      height: 4,
-    },
-    shadowOpacity: 0.3,
-    shadowRadius: 4.65,
-    zIndex: 1000,
   },
 });

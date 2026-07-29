@@ -136,10 +136,10 @@ export class SettingsRepository {
 
     const defaultSettings: Settings = {
       id: "default",
-      billingPeriodStartDay: 1,
+      billingPeriodStartDay: 28,
       currency: "USD",
       firebaseSync: false,
-      theme: "dark",
+      theme: "light",
       createdAt: now,
       updatedAt: now,
       syncUpdatedAt: Date.now(),
@@ -183,7 +183,7 @@ export class SettingsRepository {
       `
       UPDATE settings 
       SET 
-        billing_period_start_day = 1,
+        billing_period_start_day = 28,
         currency = 'USD',
         firebase_sync = 0,
         theme = 'dark',

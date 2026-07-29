@@ -1,5 +1,13 @@
 import React from "react";
-import { View, Text, StyleSheet, Modal, TouchableOpacity, TouchableWithoutFeedback } from "react-native";
+import {
+  View,
+  Text,
+  StyleSheet,
+  Modal,
+  TouchableOpacity,
+  TouchableWithoutFeedback,
+} from "react-native";
+import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons } from "@expo/vector-icons";
 import { UI } from "../../constants";
 
@@ -17,64 +25,103 @@ interface CustomAlertProps {
   onRequestClose?: () => void;
 }
 
-export const CustomAlert: React.FC<CustomAlertProps> = ({ visible, title, message, buttons, onRequestClose }) => {
+export const CustomAlert: React.FC<CustomAlertProps> = ({
+  visible,
+  title,
+  message,
+  buttons,
+  onRequestClose,
+}) => {
   const handleButtonPress = (button: CustomAlertButton) => {
-    // First close the dialog, then execute the button action after a small delay
-    if (onRequestClose) {
-      onRequestClose();
-    }
-
-    // Execute button action after dialog is closed
+    if (onRequestClose) onRequestClose();
     if (button.onPress) {
-      setTimeout(() => {
-        button.onPress!();
-      }, 100); // Small delay to ensure dialog is fully closed
+      setTimeout(() => button.onPress!(), 50);
     }
   };
 
-  const getButtonStyle = (style?: string) => {
-    switch (style) {
-      case "destructive":
-        return [styles.button, styles.destructiveButton];
-      case "cancel":
-        return [styles.button, styles.cancelButton];
-      default:
-        return [styles.button, styles.defaultButton];
-    }
-  };
-
-  const getButtonTextStyle = (style?: string) => {
-    switch (style) {
-      case "destructive":
-        return [styles.buttonText, styles.destructiveText];
-      case "cancel":
-        return [styles.buttonText, styles.cancelText];
-      default:
-        return [styles.buttonText, styles.defaultText];
-    }
-  };
+  // Decide icon/color based on whether there's a destructive action
+  const hasDestructive = buttons.some((b) => b.style === "destructive");
+  const iconName = hasDestructive ? "warning" : "information-circle";
+  const iconGradient: [string, string] = hasDestructive
+    ? ["#FF6B6B", "#EE5A24"]
+    : [UI.COLORS.PRIMARY, UI.COLORS.PRIMARY_DARK];
 
   return (
-    <Modal visible={visible} transparent animationType="fade" onRequestClose={onRequestClose}>
+    <Modal
+      visible={visible}
+      transparent
+      animationType="fade"
+      onRequestClose={onRequestClose}>
       <TouchableWithoutFeedback onPress={onRequestClose}>
         <View style={styles.overlay}>
           <TouchableWithoutFeedback>
-            <View style={styles.alertContainer}>
-              <View style={styles.alertContent}>
-                <View style={styles.header}>
-                  <Ionicons name="alert-circle" size={24} color={UI.COLORS.WARNING} style={styles.icon} />
-                  <Text style={styles.title}>{title}</Text>
-                </View>
+            <View style={styles.card}>
+              {/* Icon circle */}
+              <LinearGradient
+                colors={iconGradient}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={styles.iconCircle}>
+                <Ionicons name={iconName} size={24} color="#fff" />
+              </LinearGradient>
 
-                {message && <Text style={styles.message}>{message}</Text>}
+              {/* Title */}
+              <Text style={styles.title}>{title}</Text>
 
-                <View style={styles.buttonContainer}>
-                  {buttons.map((button, index) => (
-                    <TouchableOpacity key={index} style={getButtonStyle(button.style)} onPress={() => handleButtonPress(button)}>
-                      <Text style={getButtonTextStyle(button.style)}>{button.text}</Text>
+              {/* Message */}
+              {message && <Text style={styles.message}>{message}</Text>}
+
+              {/* Buttons */}
+              <View style={styles.buttonContainer}>
+                {buttons.map((button, index) => {
+                  if (button.style === "destructive") {
+                    return (
+                      <TouchableOpacity
+                        key={index}
+                        activeOpacity={0.8}
+                        onPress={() => handleButtonPress(button)}>
+                        <LinearGradient
+                          colors={["#FF6B6B", "#EE5A24"]}
+                          style={styles.gradientBtn}
+                          start={{ x: 0, y: 0 }}
+                          end={{ x: 1, y: 1 }}>
+                          <Text style={styles.gradientBtnText}>
+                            {button.text}
+                          </Text>
+                        </LinearGradient>
+                      </TouchableOpacity>
+                    );
+                  }
+
+                  if (button.style === "cancel") {
+                    return (
+                      <TouchableOpacity
+                        key={index}
+                        style={styles.cancelBtn}
+                        onPress={() => handleButtonPress(button)}>
+                        <Text style={styles.cancelBtnText}>{button.text}</Text>
+                      </TouchableOpacity>
+                    );
+                  }
+
+                  // default
+                  return (
+                    <TouchableOpacity
+                      key={index}
+                      activeOpacity={0.8}
+                      onPress={() => handleButtonPress(button)}>
+                      <LinearGradient
+                        colors={[UI.COLORS.PRIMARY, UI.COLORS.PRIMARY_DARK]}
+                        style={styles.gradientBtn}
+                        start={{ x: 0, y: 0 }}
+                        end={{ x: 1, y: 1 }}>
+                        <Text style={styles.gradientBtnText}>
+                          {button.text}
+                        </Text>
+                      </LinearGradient>
                     </TouchableOpacity>
-                  ))}
-                </View>
+                  );
+                })}
               </View>
             </View>
           </TouchableWithoutFeedback>
@@ -87,84 +134,87 @@ export const CustomAlert: React.FC<CustomAlertProps> = ({ visible, title, messag
 const styles = StyleSheet.create({
   overlay: {
     flex: 1,
-    backgroundColor: "rgba(0, 0, 0, 0.6)",
+    backgroundColor: "rgba(0,0,0,0.65)",
     justifyContent: "center",
     alignItems: "center",
   },
-  alertContainer: {
+  card: {
     width: "85%",
-    maxWidth: 400,
-  },
-  alertContent: {
-    backgroundColor: UI.COLORS.SURFACE,
-    borderRadius: UI.CARD_RADIUS,
-    padding: UI.SPACING.LG,
-    borderWidth: 1,
-    borderColor: UI.COLORS.BORDER,
-  },
-  header: {
-    flexDirection: "row",
+    maxWidth: 360,
+    backgroundColor: "#161638",
+    borderRadius: 22,
+    paddingTop: 28,
+    paddingBottom: 22,
+    paddingHorizontal: 24,
     alignItems: "center",
-    marginBottom: UI.SPACING.MD,
+    borderWidth: 1,
+    borderColor: "rgba(108,92,231,0.2)",
+    // shadow
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 12 },
+    shadowOpacity: 0.5,
+    shadowRadius: 24,
+    elevation: 16,
   },
-  icon: {
-    marginRight: UI.SPACING.SM,
+  iconCircle: {
+    width: 52,
+    height: 52,
+    borderRadius: 16,
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 16,
   },
   title: {
     fontSize: 18,
-    fontWeight: "600",
+    fontWeight: "700",
     color: UI.COLORS.TEXT_PRIMARY,
-    flex: 1,
+    textAlign: "center",
+    marginBottom: 8,
   },
   message: {
-    fontSize: 16,
-    color: UI.COLORS.TEXT_SECONDARY,
-    marginBottom: UI.SPACING.LG,
-    lineHeight: 22,
+    fontSize: 14,
+    color: UI.COLORS.TEXT_MUTED,
+    lineHeight: 20,
+    textAlign: "center",
+    marginBottom: 6,
   },
   buttonContainer: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    justifyContent: "flex-end",
-    gap: UI.SPACING.SM,
-    marginTop: UI.SPACING.SM,
+    width: "100%",
+    gap: 10,
+    marginTop: 18,
   },
-  button: {
-    paddingVertical: UI.SPACING.SM,
-    paddingHorizontal: UI.SPACING.MD,
-    borderRadius: UI.SPACING.SM,
-    minWidth: 80,
-    maxWidth: 150,
+  gradientBtn: {
+    height: 48,
+    borderRadius: 14,
     alignItems: "center",
-    flexShrink: 1,
+    justifyContent: "center",
+    shadowColor: UI.COLORS.PRIMARY,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 5,
   },
-  defaultButton: {
-    backgroundColor: UI.COLORS.PRIMARY,
+  gradientBtnText: {
+    fontSize: 15,
+    fontWeight: "700",
+    color: "#fff",
   },
-  cancelButton: {
-    backgroundColor: "transparent",
+  cancelBtn: {
+    height: 48,
+    borderRadius: 14,
+    alignItems: "center",
+    justifyContent: "center",
     borderWidth: 1,
-    borderColor: UI.COLORS.BORDER,
+    borderColor: "rgba(108,92,231,0.2)",
   },
-  destructiveButton: {
-    backgroundColor: UI.COLORS.ERROR,
-  },
-  buttonText: {
-    fontSize: 16,
-    fontWeight: "500",
-  },
-  defaultText: {
-    color: UI.COLORS.TEXT_PRIMARY,
-  },
-  cancelText: {
-    color: UI.COLORS.TEXT_SECONDARY,
-  },
-  destructiveText: {
-    color: UI.COLORS.TEXT_PRIMARY,
+  cancelBtnText: {
+    fontSize: 15,
+    fontWeight: "600",
+    color: UI.COLORS.TEXT_MUTED,
   },
 });
 
-// Helper hook for using custom alerts
+// ── useCustomAlert Hook ──────────────────────────────────────────────
 export const useCustomAlert = () => {
   const [alertConfig, setAlertConfig] = React.useState<{
     visible: boolean;
@@ -177,25 +227,18 @@ export const useCustomAlert = () => {
     buttons: [],
   });
 
-  const showAlert = (title: string, message?: string, buttons: CustomAlertButton[] = [{ text: "OK" }]) => {
-    // If an alert is currently visible, hide it first before showing the new one
+  const showAlert = (
+    title: string,
+    message?: string,
+    buttons: CustomAlertButton[] = [{ text: "OK" }],
+  ) => {
     if (alertConfig.visible) {
       setAlertConfig((prev) => ({ ...prev, visible: false }));
       setTimeout(() => {
-        setAlertConfig({
-          visible: true,
-          title,
-          message,
-          buttons,
-        });
+        setAlertConfig({ visible: true, title, message, buttons });
       }, 100);
     } else {
-      setAlertConfig({
-        visible: true,
-        title,
-        message,
-        buttons,
-      });
+      setAlertConfig({ visible: true, title, message, buttons });
     }
   };
 

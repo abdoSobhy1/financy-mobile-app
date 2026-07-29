@@ -99,6 +99,13 @@ const budgetsSlice = createSlice({
     clearError: (state) => {
       state.error = null;
     },
+    markBudgetSynced: (state, action: PayloadAction<string>) => {
+      const item = state.items[action.payload];
+      if (item) {
+        item.syncStatus = "synced";
+        (item as any).sync_status = "synced";
+      }
+    },
     updateBudgetBalance: (state, action: PayloadAction<{ budgetId: string; amount: number; isIncome: boolean }>) => {
       const { budgetId, amount, isIncome } = action.payload;
       const budget = state.items[budgetId];
@@ -244,5 +251,5 @@ const budgetsSlice = createSlice({
   },
 });
 
-export const { clearError, updateBudgetBalance } = budgetsSlice.actions;
+export const { clearError, updateBudgetBalance, markBudgetSynced } = budgetsSlice.actions;
 export default budgetsSlice.reducer;

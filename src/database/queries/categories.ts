@@ -3,12 +3,18 @@ import { Category } from "../../types";
 import { CategoryTable, transformCategory, toCategoryTable } from "../models";
 import { generateId } from "../../utils";
 import { offlineFirstSync } from "../../services/OfflineFirstSync";
-import { validateCategoryData, cleanCategoryData } from "../../utils/validation";
+import {
+  validateCategoryData,
+  cleanCategoryData,
+} from "../../utils/validation";
 
 export class CategoryRepository {
   private db = DatabaseManager.getInstance();
 
-  async createCategory(category: Omit<Category, "id" | "createdAt">, options?: { skipSync?: boolean; useProvidedId?: string }): Promise<Category> {
+  async createCategory(
+    category: Omit<Category, "id" | "createdAt">,
+    options?: { skipSync?: boolean; useProvidedId?: string },
+  ): Promise<Category> {
     // Validate the category data
     validateCategoryData(category);
 
@@ -22,10 +28,18 @@ export class CategoryRepository {
 
     await database.runAsync(
       `
-      INSERT INTO categories (id, name, type, color, entry_count, created_at)
-      VALUES (?, ?, ?, ?, ?, ?)
+      INSERT INTO categories (id, name, type, color, icon, entry_count, created_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
     `,
-      [id, tableData.name, tableData.type, tableData.color || null, tableData.entry_count, createdAt]
+      [
+        id,
+        tableData.name,
+        tableData.type,
+        tableData.color || null,
+        tableData.icon || null,
+        tableData.entry_count,
+        createdAt,
+      ],
     );
 
     const newCategory = {
@@ -36,7 +50,12 @@ export class CategoryRepository {
 
     // Log operation for offline-first sync (never fails)
     if (!options?.skipSync) {
-      await offlineFirstSync.logOperation("categories", id, "insert", newCategory);
+      await offlineFirstSync.logOperation(
+        "categories",
+        id,
+        "insert",
+        newCategory,
+      );
     }
 
     return newCategory;
@@ -44,7 +63,10 @@ export class CategoryRepository {
 
   async getCategoryById(id: string): Promise<Category | null> {
     const database = this.db.getDatabase();
-    const result = (await database.getFirstAsync("SELECT * FROM categories WHERE id = ?", [id])) as CategoryTable | null;
+    const result = (await database.getFirstAsync(
+      "SELECT * FROM categories WHERE id = ?",
+      [id],
+    )) as CategoryTable | null;
 
     return result ? transformCategory(result) : null;
   }
@@ -54,7 +76,9 @@ export class CategoryRepository {
       await this.db.ensureInitialized();
       const database = this.db.getDatabase();
       console.log("Querying categories table...");
-      const results = (await database.getAllAsync("SELECT * FROM categories ORDER BY entry_count DESC, type ASC, name ASC")) as CategoryTable[];
+      const results = (await database.getAllAsync(
+        "SELECT * FROM categories ORDER BY entry_count DESC, type ASC, name ASC",
+      )) as CategoryTable[];
 
       console.log(`Found ${results.length} categories in database`);
       return results.map(transformCategory);
@@ -66,14 +90,19 @@ export class CategoryRepository {
 
   async getCategoriesByType(type: "income" | "expense"): Promise<Category[]> {
     const database = this.db.getDatabase();
-    const results = (await database.getAllAsync("SELECT * FROM categories WHERE type = ? ORDER BY entry_count DESC, name ASC", [
-      type,
-    ])) as CategoryTable[];
+    const results = (await database.getAllAsync(
+      "SELECT * FROM categories WHERE type = ? ORDER BY entry_count DESC, name ASC",
+      [type],
+    )) as CategoryTable[];
 
     return results.map(transformCategory);
   }
 
-  async updateCategory(id: string, updates: Partial<Omit<Category, "id" | "createdAt">>, options?: { skipSync?: boolean }): Promise<void> {
+  async updateCategory(
+    id: string,
+    updates: Partial<Omit<Category, "id" | "createdAt">>,
+    options?: { skipSync?: boolean },
+  ): Promise<void> {
     const database = this.db.getDatabase();
 
     const setParts: string[] = [];
@@ -94,6 +123,11 @@ export class CategoryRepository {
       params.push(updates.color || null);
     }
 
+    if (updates.icon !== undefined) {
+      setParts.push("icon = ?");
+      params.push(updates.icon || null);
+    }
+
     if (setParts.length === 0) {
       return; // No updates to make
     }
@@ -106,33 +140,39 @@ export class CategoryRepository {
       SET ${setParts.join(", ")}
       WHERE id = ?
     `,
-      params
+      params,
     );
 
     // Log operation for offline-first sync (never fails)
     const updatedCategory = await this.getCategoryById(id);
     if (!options?.skipSync) {
-      await offlineFirstSync.logOperation("categories", id, "update", updatedCategory);
+      await offlineFirstSync.logOperation(
+        "categories",
+        id,
+        "update",
+        updatedCategory,
+      );
     }
   }
 
-  async deleteCategory(id: string, options?: { skipSync?: boolean }): Promise<void> {
+  async deleteCategory(
+    id: string,
+    options?: { skipSync?: boolean },
+  ): Promise<void> {
     const database = this.db.getDatabase();
 
     // Check if category has associated transactions
-    const transactionCount = (await database.getFirstAsync("SELECT COUNT(*) as count FROM transactions WHERE category_id = ?", [id])) as {
+    const transactionCount = (await database.getFirstAsync(
+      "SELECT COUNT(*) as count FROM transactions WHERE category_id = ?",
+      [id],
+    )) as {
       count: number;
     } | null;
 
     if (transactionCount && transactionCount.count > 0) {
-      throw new Error("Cannot delete category with associated transactions. Reassign transactions to another category first.");
-    }
-
-    // Check if category has associated bills
-    const billCount = (await database.getFirstAsync("SELECT COUNT(*) as count FROM bills WHERE category_id = ?", [id])) as { count: number } | null;
-
-    if (billCount && billCount.count > 0) {
-      throw new Error("Cannot delete category with associated bills. Reassign bills to another category first.");
+      throw new Error(
+        "Cannot delete category with associated transactions. Reassign transactions to another category first.",
+      );
     }
 
     await database.runAsync("DELETE FROM categories WHERE id = ?", [id]);
@@ -182,7 +222,7 @@ export class CategoryRepository {
   async getCategorySpendingForPeriod(
     categoryId: string,
     startDate: string,
-    endDate: string
+    endDate: string,
   ): Promise<{
     category: Category;
     totalSpent: number;
@@ -203,7 +243,7 @@ export class CategoryRepository {
       FROM transactions 
       WHERE category_id = ? AND date >= ? AND date <= ?
     `,
-      [categoryId, startDate, endDate]
+      [categoryId, startDate, endDate],
     )) as {
       transaction_count: number;
       total_spent: number;
@@ -236,7 +276,7 @@ export class CategoryRepository {
       ORDER BY total_spent DESC
       LIMIT ?
     `,
-      [limit]
+      [limit],
     )) as Array<CategoryTable & { total_spent: number }>;
 
     return results.map((row) => ({
@@ -245,7 +285,10 @@ export class CategoryRepository {
     }));
   }
 
-  async searchCategories(searchTerm: string, type?: "income" | "expense"): Promise<Category[]> {
+  async searchCategories(
+    searchTerm: string,
+    type?: "income" | "expense",
+  ): Promise<Category[]> {
     const database = this.db.getDatabase();
     let query = "SELECT * FROM categories WHERE name LIKE ?";
     const params = [`%${searchTerm}%`];
@@ -257,13 +300,20 @@ export class CategoryRepository {
 
     query += " ORDER BY name ASC";
 
-    const results = (await database.getAllAsync(query, params)) as CategoryTable[];
+    const results = (await database.getAllAsync(
+      query,
+      params,
+    )) as CategoryTable[];
     return results.map(transformCategory);
   }
 
-  async isCategoryNameUnique(name: string, excludeId?: string): Promise<boolean> {
+  async isCategoryNameUnique(
+    name: string,
+    excludeId?: string,
+  ): Promise<boolean> {
     const database = this.db.getDatabase();
-    let query = "SELECT COUNT(*) as count FROM categories WHERE LOWER(name) = LOWER(?)";
+    let query =
+      "SELECT COUNT(*) as count FROM categories WHERE LOWER(name) = LOWER(?)";
     const params = [name];
 
     if (excludeId) {
@@ -271,25 +321,34 @@ export class CategoryRepository {
       params.push(excludeId);
     }
 
-    const result = (await database.getFirstAsync(query, params)) as { count: number } | null;
+    const result = (await database.getFirstAsync(query, params)) as {
+      count: number;
+    } | null;
     return (result?.count || 0) === 0;
   }
 
   async incrementEntryCount(categoryId: string): Promise<void> {
     const database = this.db.getDatabase();
-    await database.runAsync("UPDATE categories SET entry_count = entry_count + 1 WHERE id = ?", [categoryId]);
+    await database.runAsync(
+      "UPDATE categories SET entry_count = entry_count + 1 WHERE id = ?",
+      [categoryId],
+    );
   }
 
   async decrementEntryCount(categoryId: string): Promise<void> {
     const database = this.db.getDatabase();
-    await database.runAsync("UPDATE categories SET entry_count = CASE WHEN entry_count > 0 THEN entry_count - 1 ELSE 0 END WHERE id = ?", [
-      categoryId,
-    ]);
+    await database.runAsync(
+      "UPDATE categories SET entry_count = CASE WHEN entry_count > 0 THEN entry_count - 1 ELSE 0 END WHERE id = ?",
+      [categoryId],
+    );
   }
 
   async updateEntryCount(categoryId: string, count: number): Promise<void> {
     const database = this.db.getDatabase();
-    await database.runAsync("UPDATE categories SET entry_count = ? WHERE id = ?", [count, categoryId]);
+    await database.runAsync(
+      "UPDATE categories SET entry_count = ? WHERE id = ?",
+      [count, categoryId],
+    );
   }
 
   async recalculateAllEntryCounts(): Promise<void> {

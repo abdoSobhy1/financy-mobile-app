@@ -1,5 +1,11 @@
 import React from "react";
-import { View, Text, TextInput, StyleSheet, TextInputProps } from "react-native";
+import {
+  View,
+  Text,
+  TextInput,
+  StyleSheet,
+  TextInputProps,
+} from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { UI } from "../../constants";
 
@@ -27,53 +33,79 @@ export const FormField: React.FC<FormFieldProps> = ({
         {label} {required && <Text style={styles.required}>*</Text>}
       </Text>
 
-      <View style={[styles.inputContainer, error && styles.inputError, multiline && styles.multilineContainer]}>
-        {icon && <Ionicons name={icon} size={20} color="#64748B" style={styles.inputIcon} />}
+      <View
+        style={[
+          styles.inputCard,
+          error && styles.inputCardError,
+          multiline && styles.multilineCard,
+        ]}>
+        {icon && (
+          <View style={styles.iconBox}>
+            <Ionicons
+              name={icon}
+              size={16}
+              color={error ? "#FF6B6B" : UI.COLORS.PRIMARY_LIGHT}
+            />
+          </View>
+        )}
         <TextInput
           style={[styles.input, multiline && styles.multilineInput]}
-          placeholderTextColor="#64748B"
+          placeholderTextColor="rgba(255,255,255,0.25)"
           multiline={multiline}
           textAlignVertical={multiline ? "top" : "center"}
           {...textInputProps}
         />
       </View>
 
-      {error && <Text style={styles.errorText}>{error}</Text>}
+      {error && (
+        <View style={styles.errorRow}>
+          <Ionicons name="alert-circle" size={14} color="#FF6B6B" />
+          <Text style={styles.errorText}>{error}</Text>
+        </View>
+      )}
     </View>
   );
 };
 
 const styles = StyleSheet.create({
   container: {
-    marginBottom: 20,
+    marginBottom: 18,
   },
   label: {
-    fontSize: 16,
+    fontSize: 13,
     fontWeight: "600",
-    color: UI.COLORS.TEXT_PRIMARY,
+    color: UI.COLORS.PRIMARY_LIGHT,
+    letterSpacing: 0.5,
+    textTransform: "uppercase",
     marginBottom: 8,
   },
   required: {
-    color: "#EF4444",
+    color: "#FF6B6B",
   },
-  inputContainer: {
+  inputCard: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: UI.COLORS.SURFACE,
-    borderRadius: 12,
+    backgroundColor: "rgba(20,20,50,0.65)",
+    borderRadius: 14,
     borderWidth: 1,
-    borderColor: UI.COLORS.BORDER,
-    paddingHorizontal: 16,
-    minHeight: 56,
+    borderColor: "rgba(108,92,231,0.15)",
+    paddingHorizontal: 14,
+    minHeight: 54,
   },
-  multilineContainer: {
+  multilineCard: {
     alignItems: "flex-start",
   },
-  inputError: {
-    borderColor: "#EF4444",
-    backgroundColor: "rgba(239, 68, 68, 0.05)",
+  inputCardError: {
+    borderColor: "rgba(255,107,107,0.5)",
+    backgroundColor: "rgba(255,107,107,0.04)",
   },
-  inputIcon: {
+  iconBox: {
+    width: 32,
+    height: 32,
+    borderRadius: 10,
+    backgroundColor: "rgba(108,92,231,0.12)",
+    alignItems: "center",
+    justifyContent: "center",
     marginRight: 12,
   },
   input: {
@@ -86,11 +118,17 @@ const styles = StyleSheet.create({
     paddingTop: 16,
     minHeight: 80,
   },
+  errorRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    marginTop: 6,
+    paddingHorizontal: 2,
+  },
   errorText: {
-    fontSize: 14,
-    color: "#EF4444",
-    marginTop: 4,
-    marginLeft: 16,
+    fontSize: 12,
+    color: "#FF6B6B",
+    fontWeight: "500",
   },
 });
 

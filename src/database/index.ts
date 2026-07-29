@@ -1,6 +1,7 @@
 import * as SQLite from "expo-sqlite";
 import { DATABASE } from "../constants";
-import addBillPaymentsTable from "./migrations/billPaymentsMigration";
+import { addWalletsTable } from "./migrations/walletsMigration";
+import { addCategoryIconColumn } from "./migrations/categoriesIconMigration";
 
 export class DatabaseManager {
   private static instance: DatabaseManager;
@@ -128,9 +129,12 @@ export class DatabaseManager {
       CREATE TABLE IF NOT EXISTS transactions (
         id TEXT PRIMARY KEY,
         amount REAL NOT NULL CHECK (amount > 0),
-        type TEXT NOT NULL CHECK (type IN ('income', 'expense', 'debt')),
+        type TEXT NOT NULL CHECK (type IN ('income', 'expense', 'debt', 'transfer')),
         category_id TEXT NOT NULL,
         budget_id TEXT,
+        wallet_id TEXT,
+        from_wallet_id TEXT,
+        to_wallet_id TEXT,
         description TEXT NOT NULL,
         date TEXT NOT NULL,
         note TEXT,
@@ -142,74 +146,21 @@ export class DatabaseManager {
       );
     `);
 
-    // Bills table
+    // Wallets table
     await this.db.execAsync(`
-      CREATE TABLE IF NOT EXISTS bills (
+      CREATE TABLE IF NOT EXISTS wallets (
         id TEXT PRIMARY KEY,
         name TEXT NOT NULL,
-        amount REAL NOT NULL CHECK (amount > 0),
-        due_date TEXT NOT NULL,
-        paid INTEGER NOT NULL DEFAULT 0 CHECK (paid IN (0, 1)),
-        budget_id TEXT,
-        category_id TEXT,
-        is_recurring INTEGER NOT NULL DEFAULT 0 CHECK (is_recurring IN (0, 1)),
-        recurring INTEGER NOT NULL DEFAULT 0 CHECK (recurring IN (0, 1)),
-        recurring_type TEXT CHECK (recurring_type IN ('monthly', 'weekly', 'yearly')),
+        icon TEXT,
+        color TEXT,
+        balance REAL NOT NULL DEFAULT 0,
         created_at TEXT NOT NULL DEFAULT (datetime('now')),
         updated_at TEXT NOT NULL DEFAULT (datetime('now')),
-        FOREIGN KEY (budget_id) REFERENCES budgets (id) ON DELETE SET NULL,
-        FOREIGN KEY (category_id) REFERENCES categories (id) ON DELETE SET NULL
+        sync_updated_at INTEGER NOT NULL DEFAULT 0,
+        deleted INTEGER NOT NULL DEFAULT 0 CHECK (deleted IN (0, 1)),
+        sync_status TEXT NOT NULL DEFAULT 'pending' CHECK (sync_status IN ('pending', 'synced', 'error'))
       );
     `);
-
-    // Migration: Make category_id optional in bills table
-    try {
-      // Check if the bills table has the constraint
-      const tableInfo = await this.db.getFirstAsync(`PRAGMA table_info(bills)`);
-      console.log("Bills table info:", tableInfo);
-
-      // We need to recreate the table to remove the NOT NULL constraint
-      // This is a safe migration since it relaxes constraints
-      await this.db.execAsync(`
-        BEGIN TRANSACTION;
-        
-        -- Create new bills table without NOT NULL constraint on category_id
-        CREATE TABLE IF NOT EXISTS bills_new (
-          id TEXT PRIMARY KEY,
-          name TEXT NOT NULL,
-          amount REAL NOT NULL CHECK (amount > 0),
-          due_date TEXT NOT NULL,
-          paid INTEGER NOT NULL DEFAULT 0 CHECK (paid IN (0, 1)),
-          budget_id TEXT,
-          category_id TEXT,
-          is_recurring INTEGER NOT NULL DEFAULT 0 CHECK (is_recurring IN (0, 1)),
-          recurring INTEGER NOT NULL DEFAULT 0 CHECK (recurring IN (0, 1)),
-          recurring_type TEXT CHECK (recurring_type IN ('monthly', 'weekly', 'yearly')),
-          created_at TEXT NOT NULL DEFAULT (datetime('now')),
-          updated_at TEXT NOT NULL DEFAULT (datetime('now')),
-          FOREIGN KEY (budget_id) REFERENCES budgets (id) ON DELETE SET NULL,
-          FOREIGN KEY (category_id) REFERENCES categories (id) ON DELETE SET NULL
-        );
-        
-        -- Copy data from old table to new table
-        INSERT INTO bills_new 
-        SELECT id, name, amount, due_date, paid, budget_id, category_id, is_recurring, recurring, recurring_type, created_at, updated_at
-        FROM bills;
-        
-        -- Drop old table
-        DROP TABLE bills;
-        
-        -- Rename new table
-        ALTER TABLE bills_new RENAME TO bills;
-        
-        COMMIT;
-      `);
-
-      console.log("Successfully migrated bills table to make category_id optional");
-    } catch (error: any) {
-      console.log("Bills table migration not needed or already applied:", error.message);
-      // If this fails, the table might not exist yet or already be correct
-    }
 
     // Settings table
     await this.db.execAsync(`
@@ -305,23 +256,7 @@ export class DatabaseManager {
     `);
 
     // Bill payments table
-    await this.db.execAsync(`
-      CREATE TABLE IF NOT EXISTS bill_payments (
-        id TEXT PRIMARY KEY,
-        bill_id TEXT NOT NULL,
-        amount REAL NOT NULL CHECK (amount > 0),
-        payment_date TEXT NOT NULL,
-        payment_method TEXT,
-        transaction_id TEXT,
-        note TEXT,
-        created_at TEXT NOT NULL DEFAULT (datetime('now')),
-        updated_at TEXT NOT NULL DEFAULT (datetime('now')),
-        sync_updated_at INTEGER NOT NULL DEFAULT 0,
-        deleted INTEGER NOT NULL DEFAULT 0 CHECK (deleted IN (0, 1)),
-        sync_status TEXT NOT NULL DEFAULT 'pending' CHECK (sync_status IN ('pending', 'synced', 'error')),
-        FOREIGN KEY (bill_id) REFERENCES bills (id) ON DELETE CASCADE
-      );
-    `);
+    // Bill payments removed
 
     // Add sync fields to existing tables (migrations)
     await this.addSyncFields();
@@ -349,21 +284,17 @@ export class DatabaseManager {
       CREATE INDEX IF NOT EXISTS idx_transactions_date ON transactions (date);
       CREATE INDEX IF NOT EXISTS idx_transactions_category ON transactions (category_id);
       CREATE INDEX IF NOT EXISTS idx_transactions_budget ON transactions (budget_id);
-      CREATE INDEX IF NOT EXISTS idx_transactions_type ON transactions (type);
-      CREATE INDEX IF NOT EXISTS idx_bills_due_date ON bills (due_date);
-      CREATE INDEX IF NOT EXISTS idx_bills_paid ON bills (paid);
+    CREATE INDEX IF NOT EXISTS idx_transactions_type ON transactions (type);
+    -- Bills table and indexes removed
       CREATE INDEX IF NOT EXISTS idx_debts_due_date ON debts (due_date);
       CREATE INDEX IF NOT EXISTS idx_debts_category ON debts (category_id);
       CREATE INDEX IF NOT EXISTS idx_debt_payments_debt_id ON debt_payments (debt_id);
-      CREATE INDEX IF NOT EXISTS idx_debt_payments_date ON debt_payments (payment_date);
-      CREATE INDEX IF NOT EXISTS idx_bill_payments_bill_id ON bill_payments (bill_id);
-      CREATE INDEX IF NOT EXISTS idx_bill_payments_date ON bill_payments (payment_date);
-      CREATE INDEX IF NOT EXISTS idx_bill_payments_sync_updated ON bill_payments (sync_updated_at);
-      CREATE INDEX IF NOT EXISTS idx_transactions_sync_updated ON transactions (sync_updated_at);
-      CREATE INDEX IF NOT EXISTS idx_categories_sync_updated ON categories (sync_updated_at);
-      CREATE INDEX IF NOT EXISTS idx_budgets_sync_updated ON budgets (sync_updated_at);
-      CREATE INDEX IF NOT EXISTS idx_bills_sync_updated ON bills (sync_updated_at);
-      CREATE INDEX IF NOT EXISTS idx_debts_sync_updated ON debts (sync_updated_at);
+  CREATE INDEX IF NOT EXISTS idx_debt_payments_date ON debt_payments (payment_date);
+  CREATE INDEX IF NOT EXISTS idx_transactions_sync_updated ON transactions (sync_updated_at);
+  CREATE INDEX IF NOT EXISTS idx_categories_sync_updated ON categories (sync_updated_at);
+  CREATE INDEX IF NOT EXISTS idx_budgets_sync_updated ON budgets (sync_updated_at);
+  -- Bills table removed; do not create index on bills
+  CREATE INDEX IF NOT EXISTS idx_debts_sync_updated ON debts (sync_updated_at);
       CREATE INDEX IF NOT EXISTS idx_sync_log_processed ON sync_log (is_processed);
       CREATE INDEX IF NOT EXISTS idx_sync_log_created ON sync_log (created_at);
       CREATE INDEX IF NOT EXISTS idx_sync_log_table ON sync_log (table_name);
@@ -374,8 +305,24 @@ export class DatabaseManager {
     if (!this.db) return;
 
     try {
-      // Run bill payments table migration
-      await addBillPaymentsTable(this.db);
+      // Ensure legacy bills tables are removed from existing databases
+      try {
+        await this.db.execAsync(`
+          DROP TABLE IF EXISTS bill_payments;
+          DROP TABLE IF EXISTS bills;
+        `);
+        console.log("Dropped legacy bills tables if they existed");
+      } catch (err) {
+        console.warn("Failed to drop legacy bills tables (non-fatal):", err);
+      }
+
+      // Run wallets migration
+      await addWalletsTable(this.db);
+
+      // Run categories icon migration
+      await addCategoryIconColumn(this.db);
+
+      // Migrations completed
       console.log("All migrations completed successfully");
     } catch (error) {
       console.error("Error running migrations:", error);
@@ -393,7 +340,7 @@ export class DatabaseManager {
       'sync_status TEXT DEFAULT "synced" CHECK (sync_status IN ("pending", "synced", "error"))',
     ];
 
-    const tables = ["transactions", "categories", "budgets", "bills", "debts", "debt_payments", "settings"];
+    const tables = ["transactions", "categories", "budgets", "debts", "debt_payments", "settings", "wallets"];
 
     for (const table of tables) {
       for (const field of syncFields) {
@@ -430,13 +377,14 @@ export class DatabaseManager {
 
     // Define missing columns for each table to support cloud data
     const missingColumns = {
-      transactions: ["updated_at TEXT NOT NULL DEFAULT (datetime('now'))", "linked_bill_id TEXT", "linked_debt_payment_id TEXT"],
+      transactions: ["updated_at TEXT NOT NULL DEFAULT (datetime('now'))", "linked_bill_id TEXT", "linked_debt_payment_id TEXT", "wallet_id TEXT", "from_wallet_id TEXT", "to_wallet_id TEXT"],
       categories: ["icon TEXT", "updated_at TEXT NOT NULL DEFAULT (datetime('now'))"],
       budgets: ["period_type TEXT NOT NULL DEFAULT 'monthly'", "period_start INTEGER", "category_id TEXT"],
-      bills: ["is_recurring INTEGER NOT NULL DEFAULT 0 CHECK (is_recurring IN (0, 1))", "linked_transaction_id TEXT"],
+      // bills removed
       debts: ["amount REAL", "monthly_payment REAL CHECK (monthly_payment >= 0)", "budget_id TEXT"],
       debt_payments: ["date TEXT", "updated_at TEXT NOT NULL DEFAULT (datetime('now'))", "linked_transaction_id TEXT"],
       settings: ["key TEXT", "value TEXT", "updated_at TEXT NOT NULL DEFAULT (datetime('now'))"],
+      wallets: ["icon TEXT", "color TEXT", "updated_at TEXT NOT NULL DEFAULT (datetime('now'))"],
     };
 
     // Add missing columns to each table
@@ -534,7 +482,7 @@ export class DatabaseManager {
     if (settingsResult && (settingsResult as any).count === 0) {
       await this.db.runAsync(`
         INSERT INTO settings (id, billing_period_start_day, currency, firebase_sync, theme)
-        VALUES ('default', 1, 'USD', 0, 'dark')
+        VALUES ('default', 28, 'USD', 0, 'dark')
       `);
     }
 
@@ -548,10 +496,10 @@ export class DatabaseManager {
 
     await this.db.execAsync(`
       DROP TABLE IF EXISTS transactions;
-      DROP TABLE IF EXISTS bills;
       DROP TABLE IF EXISTS budgets;
       DROP TABLE IF EXISTS categories;
       DROP TABLE IF EXISTS settings;
+      DROP TABLE IF EXISTS wallets;
     `);
 
     await this.createTables();
@@ -567,10 +515,10 @@ export class DatabaseManager {
       DELETE FROM debt_payments;
       DELETE FROM debts;
       DELETE FROM transactions;
-      DELETE FROM bills;
       DELETE FROM budgets;
+      DELETE FROM wallets;
       UPDATE settings SET 
-        billing_period_start_day = 1,
+        billing_period_start_day = 28,
         currency = 'USD',
         firebase_sync = 0,
         theme = 'dark',

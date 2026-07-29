@@ -1,11 +1,55 @@
 import React from "react";
-import { View, StyleSheet, Dimensions, Text, TouchableOpacity, ScrollView } from "react-native";
+import {
+  View,
+  StyleSheet,
+  Dimensions,
+  Text,
+  TouchableOpacity,
+  ScrollView,
+} from "react-native";
+import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons } from "@expo/vector-icons";
 import { PieChart, LineChart, BarChart } from "react-native-chart-kit";
-import Card from "../ui/Card";
 import { UI } from "../../constants";
 
 const { width } = Dimensions.get("window");
+
+/* ─── glass / gradient tokens ─── */
+const GLASS = {
+  bg: "rgba(255,255,255,0.04)",
+  border: "rgba(108,92,231,0.18)",
+  borderLight: "rgba(108,92,231,0.10)",
+  grid: "rgba(108,92,231,0.10)",
+  labelColor: "rgba(255,255,255,0.6)",
+};
+
+/* ─── shared transparent chart config ─── */
+const makeChartConfig = (overrides: Record<string, any> = {}) => ({
+  backgroundColor: "transparent",
+  backgroundGradientFrom: "transparent",
+  backgroundGradientTo: "transparent",
+  backgroundGradientFromOpacity: 0,
+  backgroundGradientToOpacity: 0,
+  decimalPlaces: 0,
+  color: (opacity = 1) => UI.COLORS.PRIMARY,
+  labelColor: () => GLASS.labelColor,
+  style: { borderRadius: 16 },
+  propsForBackgroundLines: {
+    strokeOpacity: 0.08,
+    stroke: GLASS.grid,
+  },
+  propsForLabels: {
+    fontSize: 11,
+    fontFamily: "System",
+  },
+  withHorizontalLines: true,
+  withVerticalLines: false,
+  ...overrides,
+});
+
+/* ════════════════════════════════════════════
+   ChartCard
+   ════════════════════════════════════════════ */
 
 export interface ChartCardProps {
   title: string;
@@ -34,42 +78,24 @@ export const ChartCard: React.FC<ChartCardProps> = ({
   emptyMessage = "No data available",
   isMultiCategory = false,
 }) => {
-  // Pie chart using react-native-chart-kit with improved Arabic support
+  /* ──── pie ──── */
   const renderPieChart = () => {
     if (!data || data.length === 0) return null;
 
-    // Process data with absolute values and proper text handling
-    const chartData = data.slice(0, 6).map((item, index) => {
-      let name = item.name || item.label || item.category?.name || `Item ${index + 1}`;
-      // Ensure name is properly formatted for display
-      if (typeof name === "string" && name.length > 15) {
+    const chartData = data.slice(0, 6).map((item: any, index: number) => {
+      let name =
+        item.name || item.label || item.category?.name || `Item ${index + 1}`;
+      if (typeof name === "string" && name.length > 15)
         name = name.substring(0, 15) + "...";
-      }
-      const amount = Math.abs(item.amount || 0); // Always use absolute values
 
       return {
-        name: String(name), // Ensure it's a string
-        population: amount,
+        name: String(name),
+        population: Math.abs(item.amount || 0),
         color: item.color || `hsl(${index * 60}, 70%, 60%)`,
-        legendFontColor: UI.COLORS.TEXT_PRIMARY,
-        legendFontSize: 12, // Good size for Arabic text
+        legendFontColor: GLASS.labelColor,
+        legendFontSize: 12,
       };
     });
-
-    const chartConfig = {
-      backgroundColor: UI.COLORS.BACKGROUND,
-      backgroundGradientFrom: UI.COLORS.BACKGROUND,
-      backgroundGradientTo: UI.COLORS.BACKGROUND,
-      decimalPlaces: 0,
-      color: (opacity = 1) => UI.COLORS.TEXT_PRIMARY,
-      labelColor: (opacity = 1) => UI.COLORS.TEXT_PRIMARY,
-      // Better text rendering for RTL languages
-      propsForLabels: {
-        fontSize: 12,
-        fontWeight: "400" as const,
-        fontFamily: "System" as const, // Use system font for better Arabic support
-      },
-    };
 
     return (
       <View style={styles.pieContainer}>
@@ -77,34 +103,29 @@ export const ChartCard: React.FC<ChartCardProps> = ({
           data={chartData}
           width={150}
           height={180}
-          chartConfig={chartConfig}
+          chartConfig={makeChartConfig()}
           accessor="population"
           backgroundColor="transparent"
           paddingLeft="15"
           center={[22, 0]}
-          hasLegend={false} // Disable built-in legend to use custom one
+          hasLegend={false}
           absolute={false}
         />
       </View>
     );
   };
 
-  // Line chart using react-native-chart-kit
+  /* ──── line ──── */
   const renderLineChart = () => {
     if (!data) return null;
 
     let chartData;
 
     if (isMultiCategory && data.labels && data.datasets) {
-      // Multi-category data with proper structure
       chartData = {
         labels: data.labels.map((label: string) => {
-          // If it's a date or day, extract day number only
           const dayMatch = label.match(/\d+/);
-          if (dayMatch) {
-            return dayMatch[0]; // Return just the day number
-          }
-          // Otherwise, truncate as before
+          if (dayMatch) return dayMatch[0];
           return label.length > 4 ? label.substring(0, 4) + "..." : label;
         }),
         datasets: data.datasets.map((dataset: any, index: number) => ({
@@ -112,35 +133,34 @@ export const ChartCard: React.FC<ChartCardProps> = ({
           color:
             dataset.color ||
             ((opacity = 1) =>
-              [UI.COLORS.PRIMARY, UI.COLORS.SUCCESS, UI.COLORS.WARNING, UI.COLORS.ERROR, UI.COLORS.ACCENT, "#8B5CF6", "#10B981", "#06B6D4"][
-                index % 8
-              ]),
+              [
+                UI.COLORS.PRIMARY,
+                UI.COLORS.SUCCESS,
+                UI.COLORS.WARNING,
+                UI.COLORS.ERROR,
+                UI.COLORS.ACCENT,
+                "#8B5CF6",
+                "#10B981",
+                "#06B6D4",
+              ][index % 8]),
           strokeWidth: dataset.strokeWidth || 2,
         })),
       };
     } else if (Array.isArray(data) && data.length > 0) {
-      // Single line data (monthly trends)
       chartData = {
         labels: data.map((item) => {
-          const label = item.month || item.name || item.label || item.category?.name || "";
-          // If it looks like a day number only (for daily charts), keep as is
-          if (label.match(/^\d{1,2}$/)) {
-            return label;
-          }
-          // If it's a month/year format like "Oct 2025", keep the month part
-          if (label.match(/^[A-Za-z]{3}\s\d{4}$/)) {
-            return label.split(" ")[0]; // Return just "Oct"
-          }
-          // If it's MM/DD format, keep as is
-          if (label.match(/^\d{1,2}\/\d{1,2}$/)) {
-            return label;
-          }
-          // Otherwise, truncate as before
+          const label =
+            item.month || item.name || item.label || item.category?.name || "";
+          if (label.match(/^\d{1,2}$/)) return label;
+          if (label.match(/^[A-Za-z]{3}\s\d{4}$/)) return label.split(" ")[0];
+          if (label.match(/^\d{1,2}\/\d{1,2}$/)) return label;
           return label.length > 6 ? label.substring(0, 6) + "..." : label;
         }),
         datasets: [
           {
-            data: data.map((item) => Math.abs(item.balance || item.value || item.amount || 0)), // Use absolute values
+            data: data.map((item) =>
+              Math.abs(item.balance || item.value || item.amount || 0),
+            ),
             color: (opacity = 1) => UI.COLORS.PRIMARY,
             strokeWidth: 2,
           },
@@ -150,57 +170,38 @@ export const ChartCard: React.FC<ChartCardProps> = ({
       return null;
     }
 
-    const chartConfig = {
-      backgroundColor: UI.COLORS.BACKGROUND,
-      backgroundGradientFrom: UI.COLORS.BACKGROUND,
-      backgroundGradientTo: UI.COLORS.BACKGROUND,
-      decimalPlaces: 0,
-      color: (opacity = 1) => UI.COLORS.PRIMARY,
-      labelColor: (opacity = 1) => UI.COLORS.TEXT_PRIMARY,
-      style: {
-        borderRadius: 16,
-      },
-      propsForDots: {
-        r: "3",
-        strokeWidth: "1",
-        stroke: UI.COLORS.PRIMARY,
-      },
-      propsForBackgroundLines: {
-        strokeOpacity: 0.1, // Subtle grid lines
-        stroke: UI.COLORS.TEXT_MUTED,
-      },
-      withHorizontalLines: true,
-      withVerticalLines: false,
-    };
-
     return (
       <View style={styles.lineContainer}>
         <LineChart
           data={chartData}
-          width={width - 40}
+          width={width - 56}
           height={220}
-          chartConfig={chartConfig}
+          chartConfig={makeChartConfig({
+            propsForDots: {
+              r: "3",
+              strokeWidth: "1",
+              stroke: UI.COLORS.PRIMARY,
+            },
+          })}
           bezier
-          fromZero={true}
-          style={{
-            marginVertical: 8,
-            borderRadius: 16,
-          }}
+          fromZero
+          style={{ marginVertical: 8, borderRadius: 16 }}
         />
       </View>
     );
   };
 
-  // Custom period comparison renderer
+  /* ──── period comparison (custom bar groups) ──── */
   const renderPeriodComparison = () => {
     if (!data || !data.datasets || !isMultiCategory) return null;
 
     const { labels, datasets, legend } = data;
-    const maxValue = Math.max(...datasets.flatMap((d) => d.data));
+    const maxValue = Math.max(...datasets.flatMap((d: any) => d.data));
+
+    const barColors = [UI.COLORS.PRIMARY, UI.COLORS.SUCCESS, UI.COLORS.WARNING];
 
     return (
       <View style={styles.comparisonMainContainer}>
-        {/* Grid background */}
         <View style={styles.comparisonGridContainer}>
           {[...Array(5)].map((_, i) => (
             <View key={i} style={styles.comparisonGridLine} />
@@ -209,28 +210,28 @@ export const ChartCard: React.FC<ChartCardProps> = ({
 
         <ScrollView
           horizontal
-          showsHorizontalScrollIndicator={true}
+          showsHorizontalScrollIndicator={false}
           contentContainerStyle={styles.comparisonScrollContent}
           style={styles.comparisonScroll}
-          nestedScrollEnabled={true}>
+          nestedScrollEnabled>
           {labels.map((categoryName: string, categoryIndex: number) => (
             <View key={categoryIndex} style={styles.categoryComparison}>
               <View style={styles.barsGroup}>
-                {datasets.map((dataset, datasetIndex) => {
+                {datasets.map((dataset: any, datasetIndex: number) => {
                   const value = dataset.data[categoryIndex] || 0;
-                  const height = maxValue > 0 ? (value / maxValue) * 100 : 0;
-                  const colors = [UI.COLORS.PRIMARY, UI.COLORS.SUCCESS, UI.COLORS.WARNING];
+                  const barHeight = maxValue > 0 ? (value / maxValue) * 100 : 0;
 
                   return (
                     <View key={datasetIndex} style={styles.barWrapper}>
                       <Text style={styles.barValue}>${Math.round(value)}</Text>
-                      <View
+                      <LinearGradient
+                        colors={[
+                          barColors[datasetIndex % barColors.length],
+                          barColors[datasetIndex % barColors.length] + "80",
+                        ]}
                         style={[
                           styles.comparisonBar,
-                          {
-                            height: Math.max(height, 2),
-                            backgroundColor: colors[datasetIndex % colors.length],
-                          },
+                          { height: Math.max(barHeight, 2) },
                         ]}
                       />
                     </View>
@@ -247,27 +248,29 @@ export const ChartCard: React.FC<ChartCardProps> = ({
     );
   };
 
-  // Bar chart renderer using react-native-chart-kit
+  /* ──── bar ──── */
   const renderBarChart = () => {
     if (!data) return null;
 
-    // If it's a multi-category period comparison, use custom renderer
     if (isMultiCategory && data.labels && data.datasets && data.legend) {
       return renderPeriodComparison();
     }
 
     let chartData;
-
     if (Array.isArray(data) && data.length > 0) {
-      // Single dataset
       chartData = {
         labels: data.slice(0, 8).map((item) => {
-          const label = item.month || item.name || item.label || item.category?.name || "";
+          const label =
+            item.month || item.name || item.label || item.category?.name || "";
           return label.length > 8 ? label.substring(0, 8) + "..." : label;
         }),
         datasets: [
           {
-            data: data.slice(0, 8).map((item) => Math.abs(item.balance || item.value || item.amount || 0)),
+            data: data
+              .slice(0, 8)
+              .map((item) =>
+                Math.abs(item.balance || item.value || item.amount || 0),
+              ),
           },
         ],
       };
@@ -275,52 +278,31 @@ export const ChartCard: React.FC<ChartCardProps> = ({
       return null;
     }
 
-    const chartConfig = {
-      backgroundColor: UI.COLORS.BACKGROUND,
-      backgroundGradientFrom: UI.COLORS.BACKGROUND,
-      backgroundGradientTo: UI.COLORS.BACKGROUND,
-      decimalPlaces: 0,
-      color: (opacity = 1) => UI.COLORS.PRIMARY,
-      labelColor: (opacity = 1) => UI.COLORS.TEXT_PRIMARY,
-      style: {
-        borderRadius: 16,
-      },
-      propsForBackgroundLines: {
-        strokeOpacity: 0.1, // Subtle grid lines
-        stroke: UI.COLORS.TEXT_MUTED,
-      },
-      withHorizontalLines: true,
-      withVerticalLines: false,
-      fromZero: true, // Start Y-axis from zero
-    };
-
     return (
       <View style={styles.barContainer}>
         <BarChart
           data={chartData}
-          width={width - 40}
+          width={width - 56}
           height={220}
-          chartConfig={chartConfig}
+          chartConfig={makeChartConfig({ fromZero: true })}
           verticalLabelRotation={30}
           fromZero
           showBarTops={false}
           yAxisLabel=""
           yAxisSuffix=""
-          style={{
-            marginVertical: 8,
-            borderRadius: 16,
-          }}
+          style={{ marginVertical: 8, borderRadius: 16 }}
         />
       </View>
     );
   };
 
+  /* ──── render switch ──── */
   const renderChart = () => {
     if (loading) {
       return (
         <View style={[styles.centerContainer, { height }]}>
-          <Ionicons name="reload" size={24} color={UI.COLORS.TEXT_SECONDARY} />
-          <Text style={[styles.centerText, { color: UI.COLORS.TEXT_SECONDARY }]}>Loading...</Text>
+          <Ionicons name="reload" size={24} color="rgba(255,255,255,0.3)" />
+          <Text style={styles.centerText}>Loading...</Text>
         </View>
       );
     }
@@ -329,7 +311,9 @@ export const ChartCard: React.FC<ChartCardProps> = ({
       return (
         <View style={[styles.centerContainer, { height }]}>
           <Ionicons name="warning" size={24} color={UI.COLORS.ERROR} />
-          <Text style={[styles.centerText, { color: UI.COLORS.ERROR }]}>{error}</Text>
+          <Text style={[styles.centerText, { color: UI.COLORS.ERROR }]}>
+            {error}
+          </Text>
         </View>
       );
     }
@@ -337,8 +321,12 @@ export const ChartCard: React.FC<ChartCardProps> = ({
     if (!data || data.length === 0) {
       return (
         <View style={[styles.centerContainer, { height }]}>
-          <Ionicons name="bar-chart-outline" size={24} color={UI.COLORS.TEXT_MUTED} />
-          <Text style={[styles.centerText, { color: UI.COLORS.TEXT_MUTED }]}>{emptyMessage}</Text>
+          <Ionicons
+            name="bar-chart-outline"
+            size={24}
+            color="rgba(255,255,255,0.2)"
+          />
+          <Text style={styles.centerText}>{emptyMessage}</Text>
         </View>
       );
     }
@@ -353,25 +341,34 @@ export const ChartCard: React.FC<ChartCardProps> = ({
       default:
         return (
           <View style={[styles.centerContainer, { height }]}>
-            <Text style={[styles.centerText, { color: UI.COLORS.TEXT_MUTED }]}>Chart type not supported</Text>
+            <Text style={styles.centerText}>Chart type not supported</Text>
           </View>
         );
     }
   };
 
+  /* ──── legend ──── */
   const renderLegend = () => {
     if (!data) return null;
 
     if (type === "pie" && Array.isArray(data) && data.length > 0) {
       return (
         <View style={styles.legendContainer}>
-          {data.slice(0, 6).map((item, index) => {
-            const amount = Math.abs(item.amount || 0); // Use absolute values
+          {data.slice(0, 6).map((item: any, index: number) => {
+            const amount = Math.abs(item.amount || 0);
             return (
               <View key={index} style={styles.legendItem}>
-                <View style={[styles.legendColor, { backgroundColor: item.color || UI.COLORS.PRIMARY }]} />
+                <View
+                  style={[
+                    styles.legendDot,
+                    { backgroundColor: item.color || UI.COLORS.PRIMARY },
+                  ]}
+                />
                 <View style={styles.legendTextContainer}>
-                  <Text style={styles.legendName} numberOfLines={1} allowFontScaling={false}>
+                  <Text
+                    style={styles.legendName}
+                    numberOfLines={1}
+                    allowFontScaling={false}>
                     {item.name || `Item ${index + 1}`}
                   </Text>
                   <Text style={styles.legendAmount}>
@@ -382,39 +379,52 @@ export const ChartCard: React.FC<ChartCardProps> = ({
               </View>
             );
           })}
-          {data.length > 6 && <Text style={[styles.moreText, { color: UI.COLORS.TEXT_MUTED }]}>+{data.length - 6} more categories</Text>}
+          {data.length > 6 && (
+            <Text style={styles.moreText}>
+              +{data.length - 6} more categories
+            </Text>
+          )}
         </View>
       );
     }
 
-    // Multi-category line or bar chart legend
-    if ((type === "line" || type === "bar") && isMultiCategory && data.legend && Array.isArray(data.legend)) {
+    // Multi-category legend
+    if (
+      (type === "line" || type === "bar") &&
+      isMultiCategory &&
+      data.legend &&
+      Array.isArray(data.legend)
+    ) {
+      const defaultColors = [
+        UI.COLORS.PRIMARY,
+        UI.COLORS.SUCCESS,
+        UI.COLORS.WARNING,
+        UI.COLORS.ERROR,
+        UI.COLORS.ACCENT,
+        "#8B5CF6",
+        "#10B981",
+        "#06B6D4",
+      ];
+
       return (
         <View style={styles.legendContainer}>
           {data.legend.map((categoryName: string, index: number) => {
-            // Get color from dataset if available, otherwise use extended color palette
-            const colors = [
-              UI.COLORS.PRIMARY,
-              UI.COLORS.SUCCESS,
-              UI.COLORS.WARNING,
-              UI.COLORS.ERROR,
-              UI.COLORS.ACCENT,
-              "#8B5CF6",
-              "#10B981",
-              "#06B6D4",
-            ];
-            const datasetColor =
-              data.datasets && data.datasets[index] && data.datasets[index].color
-                ? typeof data.datasets[index].color === "function"
-                  ? data.datasets[index].color()
-                  : data.datasets[index].color
-                : colors[index % colors.length];
+            const datasetColor = data.datasets?.[index]?.color
+              ? typeof data.datasets[index].color === "function"
+                ? data.datasets[index].color()
+                : data.datasets[index].color
+              : defaultColors[index % defaultColors.length];
 
             return (
               <View key={index} style={styles.legendItem}>
-                <View style={[styles.legendColor, { backgroundColor: datasetColor }]} />
+                <View
+                  style={[styles.legendDot, { backgroundColor: datasetColor }]}
+                />
                 <View style={styles.legendTextContainer}>
-                  <Text style={styles.legendName} numberOfLines={1} allowFontScaling={false}>
+                  <Text
+                    style={styles.legendName}
+                    numberOfLines={1}
+                    allowFontScaling={false}>
                     {categoryName}
                   </Text>
                 </View>
@@ -428,47 +438,80 @@ export const ChartCard: React.FC<ChartCardProps> = ({
     return null;
   };
 
+  /* ──── card shell ──── */
   return (
-    <Card onPress={onPress} style={styles.card} padding="none">
+    <TouchableOpacity
+      activeOpacity={onPress ? 0.7 : 1}
+      onPress={onPress}
+      style={styles.card}>
       <View style={styles.cardContent}>
-        <View style={styles.header}>
-          <Text style={[styles.titleText, { color: UI.COLORS.TEXT_PRIMARY }]}>{title}</Text>
-          <View style={styles.headerActions}>
-            {onCompare && (
-              <TouchableOpacity onPress={onCompare} style={styles.compareButton}>
-                <Ionicons name="bar-chart" size={18} color={UI.COLORS.PRIMARY} />
-              </TouchableOpacity>
-            )}
-            {onPress && <Ionicons name="chevron-forward" size={20} color={UI.COLORS.TEXT_SECONDARY} />}
+        {/* header */}
+        {title ? (
+          <View style={styles.header}>
+            <Text style={styles.titleText}>{title}</Text>
+            <View style={styles.headerActions}>
+              {onCompare && (
+                <TouchableOpacity
+                  onPress={onCompare}
+                  style={styles.compareButton}>
+                  <Ionicons
+                    name="bar-chart"
+                    size={16}
+                    color={UI.COLORS.PRIMARY}
+                  />
+                </TouchableOpacity>
+              )}
+              {onPress && (
+                <Ionicons
+                  name="chevron-forward"
+                  size={18}
+                  color="rgba(255,255,255,0.25)"
+                />
+              )}
+            </View>
           </View>
-        </View>
+        ) : null}
 
+        {/* chart */}
         <View style={styles.chartContainer}>{renderChart()}</View>
 
-        {renderLegend()}
+        {/* legend */}
+        {showLegend && renderLegend()}
       </View>
-    </Card>
+    </TouchableOpacity>
   );
 };
 
+/* ════════════════════════════════════════════
+   Section wrappers
+   ════════════════════════════════════════════ */
+
 export interface PieChartSectionProps {
   title: string;
-  data: {
-    name: string;
-    amount: number;
-    color: string;
-  }[];
+  data: { name: string; amount: number; color: string }[];
   onPress?: () => void;
   onCompare?: () => void;
 }
 
-export const PieChartSection: React.FC<PieChartSectionProps> = ({ title, data, onPress, onCompare }) => {
-  return <ChartCard title={title} data={data} type="pie" onPress={onPress} onCompare={onCompare} emptyMessage="No spending data available" />;
-};
+export const PieChartSection: React.FC<PieChartSectionProps> = ({
+  title,
+  data,
+  onPress,
+  onCompare,
+}) => (
+  <ChartCard
+    title={title}
+    data={data}
+    type="pie"
+    onPress={onPress}
+    onCompare={onCompare}
+    emptyMessage="No spending data available"
+  />
+);
 
 export interface LineChartSectionProps {
   title: string;
-  data: any[] | any; // Make it flexible to accept both monthly and category data
+  data: any[] | any;
   onPress?: () => void;
   onCompare?: () => void;
   comparisonData?: any[];
@@ -485,7 +528,8 @@ export const LineChartSection: React.FC<LineChartSectionProps> = ({
   comparisonMode = "monthly",
   isMultiCategory = false,
 }) => {
-  const chartData = comparisonMode === "category" && comparisonData ? comparisonData : data;
+  const chartData =
+    comparisonMode === "category" && comparisonData ? comparisonData : data;
 
   return (
     <ChartCard
@@ -519,7 +563,8 @@ export const BarChartSection: React.FC<BarChartSectionProps> = ({
   comparisonMode = "budget",
   isMultiCategory = false,
 }) => {
-  const chartData = comparisonMode === "category" && comparisonData ? comparisonData : data;
+  const chartData =
+    comparisonMode === "category" && comparisonData ? comparisonData : data;
 
   return (
     <ChartCard
@@ -533,6 +578,10 @@ export const BarChartSection: React.FC<BarChartSectionProps> = ({
     />
   );
 };
+
+/* ════════════════════════════════════════════
+   CustomChartCard
+   ════════════════════════════════════════════ */
 
 export interface CustomChartCardProps {
   chart: {
@@ -550,82 +599,107 @@ export interface CustomChartCardProps {
   onDuplicate?: () => void;
 }
 
-export const CustomChartCard: React.FC<CustomChartCardProps> = ({ chart, data, onPress, onEdit, onDelete, onDuplicate }) => {
-  return (
-    <Card onPress={onPress} style={styles.card} padding="none">
-      <View style={styles.cardContent}>
-        <View style={styles.customHeader}>
-          <View style={styles.chartInfo}>
-            <Text style={[styles.titleText, { color: UI.COLORS.TEXT_PRIMARY }]}>{chart.title}</Text>
-            <Text style={styles.chartMeta}>
-              {chart.chartType} • {chart.dataSource}
-            </Text>
-          </View>
-          <View style={styles.customActions}>
-            {onDuplicate && (
-              <TouchableOpacity style={[styles.actionButton, { backgroundColor: UI.COLORS.SURFACE }]} onPress={onDuplicate}>
-                <Ionicons name="copy" size={16} color={UI.COLORS.TEXT_SECONDARY} />
-              </TouchableOpacity>
-            )}
-            {onEdit && (
-              <TouchableOpacity style={[styles.actionButton, { backgroundColor: UI.COLORS.PRIMARY }]} onPress={onEdit}>
-                <Ionicons name="pencil" size={16} color={UI.COLORS.TEXT_PRIMARY} />
-              </TouchableOpacity>
-            )}
-            {onDelete && (
-              <TouchableOpacity style={[styles.actionButton, { backgroundColor: UI.COLORS.ERROR }]} onPress={onDelete}>
-                <Ionicons name="trash" size={16} color={UI.COLORS.TEXT_PRIMARY} />
-              </TouchableOpacity>
-            )}
-          </View>
+export const CustomChartCard: React.FC<CustomChartCardProps> = ({
+  chart,
+  data,
+  onPress,
+  onEdit,
+  onDelete,
+  onDuplicate,
+}) => (
+  <TouchableOpacity activeOpacity={0.7} onPress={onPress} style={styles.card}>
+    <View style={styles.cardContent}>
+      {/* header */}
+      <View style={styles.customHeader}>
+        <View style={styles.chartInfo}>
+          <Text style={styles.titleText}>{chart.title}</Text>
+          <Text style={styles.chartMeta}>
+            {chart.chartType} • {chart.dataSource}
+          </Text>
         </View>
-
-        <View style={styles.chartContainer}>
-          <ChartCard title="" data={data} type={chart.chartType} showLegend={false} height={180} emptyMessage="No data for this chart" />
+        <View style={styles.customActions}>
+          {onDuplicate && (
+            <TouchableOpacity style={styles.actionBtn} onPress={onDuplicate}>
+              <Ionicons name="copy" size={14} color="rgba(255,255,255,0.5)" />
+            </TouchableOpacity>
+          )}
+          {onEdit && (
+            <TouchableOpacity
+              style={[styles.actionBtn, styles.actionBtnPrimary]}
+              onPress={onEdit}>
+              <Ionicons name="pencil" size={14} color="#fff" />
+            </TouchableOpacity>
+          )}
+          {onDelete && (
+            <TouchableOpacity
+              style={[styles.actionBtn, styles.actionBtnDanger]}
+              onPress={onDelete}>
+              <Ionicons name="trash" size={14} color="#fff" />
+            </TouchableOpacity>
+          )}
         </View>
       </View>
-    </Card>
-  );
-};
+
+      {/* embedded chart */}
+      <View style={styles.chartContainer}>
+        <ChartCard
+          title=""
+          data={data}
+          type={chart.chartType}
+          showLegend={false}
+          height={180}
+          emptyMessage="No data for this chart"
+        />
+      </View>
+    </View>
+  </TouchableOpacity>
+);
+
+/* ════════════════════════════════════════════
+   Styles
+   ════════════════════════════════════════════ */
 
 const styles = StyleSheet.create({
+  /* ── card shell ── */
   card: {
-    marginHorizontal: UI.SPACING.MD,
-    marginBottom: UI.SPACING.LG,
+    marginHorizontal: 16,
+    marginBottom: 16,
+    backgroundColor: GLASS.bg,
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: GLASS.border,
+    overflow: "hidden",
   },
   cardContent: {
-    paddingHorizontal: UI.SPACING.LG,
-    paddingVertical: UI.SPACING.MD,
+    paddingHorizontal: 18,
+    paddingVertical: 16,
   },
+
+  /* ── header ── */
   header: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    marginBottom: UI.SPACING.SM,
+    marginBottom: 10,
   },
-  customHeader: {
+  titleText: {
+    fontSize: 17,
+    fontWeight: "700",
+    color: "#fff",
+    letterSpacing: 0.2,
+  },
+  headerActions: {
     flexDirection: "row",
-    justifyContent: "space-between",
     alignItems: "center",
-    marginBottom: UI.SPACING.SM,
+    gap: 8,
   },
-  chartInfo: {
-    flex: 1,
+  compareButton: {
+    padding: 6,
+    borderRadius: 10,
+    backgroundColor: "rgba(108,92,231,0.15)",
   },
-  chartMeta: {
-    fontSize: 12,
-    color: UI.COLORS.TEXT_MUTED,
-    marginTop: 2,
-    textTransform: "capitalize",
-  },
-  customActions: {
-    flexDirection: "row",
-    gap: UI.SPACING.SM,
-  },
-  actionButton: {
-    padding: UI.SPACING.SM,
-    borderRadius: 20,
-  },
+
+  /* ── chart area ── */
   chartContainer: {
     alignItems: "center",
   },
@@ -633,243 +707,128 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  pieChart: {
-    width: "100%",
-    minHeight: 200,
-    borderRadius: 8,
-    padding: 16,
-  },
-  pieSlice: {
-    position: "absolute",
-    width: "50%",
-    height: "50%",
-    top: "50%",
-    left: "50%",
-    transformOrigin: "0 0",
-  },
-  pieCenter: {
-    alignItems: "center" as const,
-    justifyContent: "center" as const,
-    marginTop: 16,
-    padding: 12,
-    backgroundColor: UI.COLORS.SURFACE,
-    borderRadius: 8,
-  },
-  pieCenterText: {
-    color: UI.COLORS.TEXT_PRIMARY,
-    fontSize: 16,
-    fontWeight: "bold",
-  },
   lineContainer: {
     width: "100%",
     alignItems: "center",
-    paddingHorizontal: UI.SPACING.SM,
   },
   barContainer: {
     width: "100%",
     alignItems: "center",
-    paddingHorizontal: UI.SPACING.SM,
   },
-  titleText: {
-    fontSize: 20,
-    fontWeight: "600",
-    color: UI.COLORS.TEXT_PRIMARY,
-  },
+
+  /* ── center states ── */
   centerContainer: {
     justifyContent: "center",
     alignItems: "center",
-    gap: UI.SPACING.SM,
+    gap: 8,
   },
   centerText: {
     textAlign: "center",
-    fontSize: 14,
+    fontSize: 13,
+    color: "rgba(255,255,255,0.3)",
   },
+
+  /* ── legend ── */
   legendContainer: {
-    marginTop: UI.SPACING.MD,
+    marginTop: 14,
     flexDirection: "row",
     flexWrap: "wrap",
-    gap: UI.SPACING.SM,
-    justifyContent: "flex-start",
+    gap: 8,
   },
   legendItem: {
     flexDirection: "row",
     alignItems: "center",
-    gap: UI.SPACING.XS,
+    gap: 6,
     flex: 1,
     minWidth: 100,
-    // maxWidth: "48%",
-    marginBottom: UI.SPACING.XS,
+    marginBottom: 4,
   },
-  legendColor: {
-    width: 12,
-    height: 12,
-    borderRadius: 6,
-  },
-  legendText: {
-    flex: 1,
-    fontSize: 12,
-    fontWeight: "500",
-    // Better support for Arabic and RTL text
-    fontFamily: "System",
-    textAlign: "left",
-    lineHeight: 18,
-    letterSpacing: 0, // Prevent letter spacing issues in Arabic
+  legendDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.3,
+    shadowRadius: 2,
+    elevation: 2,
   },
   legendTextContainer: {
     flex: 1,
-    marginLeft: UI.SPACING.XS,
   },
   legendName: {
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: "600",
-    color: UI.COLORS.TEXT_PRIMARY,
-    fontFamily: "System", // Better Arabic support
+    color: "rgba(255,255,255,0.85)",
+    fontFamily: "System",
     lineHeight: 16,
-    marginBottom: 2,
+    marginBottom: 1,
   },
   legendAmount: {
     fontSize: 11,
     fontWeight: "400",
-    color: UI.COLORS.TEXT_SECONDARY,
+    color: "rgba(255,255,255,0.45)",
     fontFamily: "System",
     lineHeight: 14,
   },
-  headerActions: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: UI.SPACING.SM,
-  },
-  compareButton: {
-    padding: UI.SPACING.XS,
-    borderRadius: 4,
-    backgroundColor: UI.COLORS.SURFACE,
-  },
-
-  // Pie chart styles (updated)
-  pieSegmentContainer: {
-    marginBottom: 12,
-  },
-  pieSegmentInfo: {
-    flexDirection: "row" as const,
-    justifyContent: "space-between" as const,
-    alignItems: "center" as const,
-    marginBottom: 4,
-  },
-  segmentLabel: {
-    fontSize: 14,
-    color: UI.COLORS.TEXT_PRIMARY,
-    fontWeight: "500" as const,
-    flex: 1,
-  },
-  segmentAmount: {
-    fontSize: 14,
-    color: UI.COLORS.TEXT_PRIMARY,
-    fontWeight: "600" as const,
-  },
-  pieSegmentBar: {
-    flexDirection: "row" as const,
-    alignItems: "center" as const,
-    gap: 8,
-  },
-  pieSegmentFill: {
-    height: 8,
-    borderRadius: 4,
-    minWidth: 20,
-    flex: 1,
-  },
-  segmentPercentage: {
-    fontSize: 12,
-    color: UI.COLORS.TEXT_SECONDARY,
-    fontWeight: "500" as const,
-    minWidth: 40,
-    textAlign: "right" as const,
-  },
-  pieSegment: {
-    padding: 8,
-    marginVertical: 2,
-    borderRadius: 4,
-    flexDirection: "row" as const,
-    justifyContent: "space-between" as const,
-    alignItems: "center" as const,
-  },
-  segmentValue: {
-    fontSize: 11,
-    color: UI.COLORS.BACKGROUND,
-    fontWeight: "600" as const,
-  },
-  pieCenterSubtext: {
-    fontSize: 10,
-    color: UI.COLORS.TEXT_MUTED,
-    textAlign: "center" as const,
-  },
-  // Simple bar chart styles
-  simpleBarContainer: {
-    alignItems: "center" as const,
-    paddingVertical: 10,
-  },
-  simpleBarChart: {
-    flexDirection: "row" as const,
-    alignItems: "flex-end" as const,
-    paddingHorizontal: 10,
-    minHeight: 220,
-  },
-  simpleBarColumn: {
-    alignItems: "center" as const,
-    marginHorizontal: 8,
-    minWidth: 50,
-  },
-  simpleBarValue: {
-    fontSize: 10,
-    color: UI.COLORS.TEXT_PRIMARY,
-    textAlign: "center" as const,
-    marginBottom: 4,
-    fontWeight: "500" as const,
-  },
-  simpleBarSpace: {
-    height: 200,
-    justifyContent: "flex-end" as const,
-    alignItems: "center" as const,
-  },
-  simpleBar: {
-    width: 30,
-    borderRadius: 4,
-    minHeight: 4,
-  },
-  simpleBarLabel: {
-    fontSize: 10,
-    color: UI.COLORS.TEXT_SECONDARY,
-    textAlign: "center" as const,
-    marginTop: 6,
-    lineHeight: 12,
-  },
   moreText: {
-    fontSize: 12,
+    fontSize: 11,
     fontStyle: "italic",
     textAlign: "center",
     marginTop: 4,
+    color: "rgba(255,255,255,0.3)",
+    width: "100%",
   },
-  // Period comparison styles
-  comparisonContainer: {
-    paddingVertical: 16,
-    height: 180,
+
+  /* ── custom chart card ── */
+  customHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 10,
   },
+  chartInfo: {
+    flex: 1,
+  },
+  chartMeta: {
+    fontSize: 11,
+    color: "rgba(108,92,231,0.6)",
+    marginTop: 2,
+    textTransform: "capitalize",
+  },
+  customActions: {
+    flexDirection: "row",
+    gap: 6,
+  },
+  actionBtn: {
+    padding: 7,
+    borderRadius: 10,
+    backgroundColor: "rgba(255,255,255,0.06)",
+  },
+  actionBtnPrimary: {
+    backgroundColor: "rgba(108,92,231,0.3)",
+  },
+  actionBtnDanger: {
+    backgroundColor: "rgba(255,107,107,0.25)",
+  },
+
+  /* ── period comparison bars ── */
   comparisonMainContainer: {
-    position: "relative" as const,
+    position: "relative",
     paddingVertical: 16,
     height: 200,
   },
   comparisonGridContainer: {
-    position: "absolute" as const,
+    position: "absolute",
     top: 16,
     left: 0,
     right: 0,
     height: 120,
-    justifyContent: "space-between" as const,
+    justifyContent: "space-between",
   },
   comparisonGridLine: {
     height: 1,
-    backgroundColor: UI.COLORS.TEXT_MUTED,
-    opacity: 0.1,
+    backgroundColor: GLASS.grid,
     marginHorizontal: 16,
   },
   comparisonScroll: {
@@ -879,51 +838,43 @@ const styles = StyleSheet.create({
   comparisonScrollContent: {
     paddingHorizontal: 16,
     gap: 24,
-    flexDirection: "row" as const,
-    minWidth: 400, // Ensure minimum width for scrolling
+    flexDirection: "row",
+    minWidth: 400,
   },
   categoryComparison: {
-    alignItems: "center" as const,
+    alignItems: "center",
     minWidth: 80,
     maxWidth: 100,
   },
-  categoryLabel: {
-    fontSize: 12,
-    color: UI.COLORS.TEXT_PRIMARY,
-    textAlign: "center" as const,
-    marginBottom: 8,
-    height: 32,
-    minWidth: 80,
-  },
   categoryLabelBottom: {
-    fontSize: 11,
-    color: UI.COLORS.TEXT_PRIMARY,
-    textAlign: "center" as const,
+    fontSize: 10,
+    color: "rgba(255,255,255,0.5)",
+    textAlign: "center",
     marginTop: 8,
     minWidth: 80,
-    lineHeight: 14,
+    lineHeight: 13,
   },
   barsGroup: {
-    flexDirection: "row" as const,
-    alignItems: "flex-end" as const,
+    flexDirection: "row",
+    alignItems: "flex-end",
     height: 120,
     gap: 3,
-    justifyContent: "center" as const,
+    justifyContent: "center",
   },
   barWrapper: {
-    alignItems: "center" as const,
+    alignItems: "center",
     width: 22,
   },
   barValue: {
     fontSize: 8,
-    color: UI.COLORS.TEXT_SECONDARY,
-    textAlign: "center" as const,
+    color: "rgba(255,255,255,0.35)",
+    textAlign: "center",
     marginBottom: 2,
     height: 10,
   },
   comparisonBar: {
     width: 18,
-    borderRadius: 2,
+    borderRadius: 4,
     minHeight: 2,
   },
 });

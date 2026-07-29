@@ -1,7 +1,27 @@
 import React, { useState, useEffect } from "react";
-import { View, Text, TouchableOpacity, Modal, StyleSheet, Platform, ScrollView } from "react-native";
+import {
+  View,
+  Text,
+  TouchableOpacity,
+  Modal,
+  StyleSheet,
+  Platform,
+  ScrollView,
+} from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { format, startOfMonth, endOfMonth, addMonths, subMonths, startOfWeek, addDays, isSameDay, isSameMonth, isToday, isValid } from "date-fns";
+import {
+  format,
+  startOfMonth,
+  endOfMonth,
+  addMonths,
+  subMonths,
+  startOfWeek,
+  addDays,
+  isSameDay,
+  isSameMonth,
+  isToday,
+  isValid,
+} from "date-fns";
 import { UI } from "../../constants";
 import { DateUtils } from "../../utils/dateUtils";
 
@@ -31,8 +51,12 @@ export const CustomDatePicker: React.FC<CustomDatePickerProps> = ({
   mode = "date",
 }) => {
   const [showPicker, setShowPicker] = useState(false);
-  const [currentMonth, setCurrentMonth] = useState(value && isValid(value) ? value : new Date());
-  const [selectedTime, setSelectedTime] = useState(value && isValid(value) ? value : new Date());
+  const [currentMonth, setCurrentMonth] = useState(
+    value && isValid(value) ? value : new Date(),
+  );
+  const [selectedTime, setSelectedTime] = useState(
+    value && isValid(value) ? value : new Date(),
+  );
 
   // Update internal state when value prop changes
   useEffect(() => {
@@ -46,30 +70,39 @@ export const CustomDatePicker: React.FC<CustomDatePickerProps> = ({
 
     if (DateUtils.isValid(value)) {
       const validDate = DateUtils.toDate(value);
-      console.log("CustomDatePicker: Setting valid date - NOT calling onDateChange", {
-        originalValue: value,
-        convertedDate: validDate,
-        label,
-        willCallOnDateChange: false,
-      });
+      console.log(
+        "CustomDatePicker: Setting valid date - NOT calling onDateChange",
+        {
+          originalValue: value,
+          convertedDate: validDate,
+          label,
+          willCallOnDateChange: false,
+        },
+      );
       setCurrentMonth(validDate);
       setSelectedTime(validDate);
     } else if (value) {
       // If we receive an invalid date, log a warning and use current date
-      console.warn("CustomDatePicker: Received invalid date value - CALLING onDateChange with TODAY!", {
-        value,
-        valueType: typeof value,
-        label,
-        stackTrace: new Error().stack?.split("\n").slice(1, 4),
-      });
+      console.warn(
+        "CustomDatePicker: Received invalid date value - CALLING onDateChange with TODAY!",
+        {
+          value,
+          valueType: typeof value,
+          label,
+          stackTrace: new Error().stack?.split("\n").slice(1, 4),
+        },
+      );
       const fallbackDate = new Date();
       setCurrentMonth(fallbackDate);
       setSelectedTime(fallbackDate);
       // Optionally notify parent component about the invalid date
-      console.log("CustomDatePicker: About to call onDateChange with fallback date (TODAY)", {
-        fallbackDate,
-        label,
-      });
+      console.log(
+        "CustomDatePicker: About to call onDateChange with fallback date (TODAY)",
+        {
+          fallbackDate,
+          label,
+        },
+      );
       onDateChange(fallbackDate);
     }
   }, [value, label]);
@@ -150,7 +183,8 @@ export const CustomDatePicker: React.FC<CustomDatePickerProps> = ({
         {Array.from({ length: Math.ceil(days.length / 7) }, (_, weekIndex) => (
           <View key={weekIndex} style={styles.weekRow}>
             {days.slice(weekIndex * 7, (weekIndex + 1) * 7).map((day) => {
-              const isSelected = value && isValid(value) && isSameDay(day, value);
+              const isSelected =
+                value && isValid(value) && isSameDay(day, value);
               const isCurrentMonth = isSameMonth(day, currentMonth);
               const isCurrentDay = isToday(day);
               const disabled = isDateDisabled(day);
@@ -198,13 +232,31 @@ export const CustomDatePicker: React.FC<CustomDatePickerProps> = ({
         <View style={styles.timePicker}>
           <View style={styles.timeColumn}>
             <Text style={styles.timeColumnHeader}>Hour</Text>
-            <ScrollView style={styles.timeScrollView} showsVerticalScrollIndicator={false}>
+            <ScrollView
+              style={styles.timeScrollView}
+              showsVerticalScrollIndicator={false}>
               {hours.map((hour) => (
                 <TouchableOpacity
                   key={hour}
-                  style={[styles.timeOption, isValid(selectedTime) && selectedTime.getHours() === hour && styles.selectedTimeOption]}
-                  onPress={() => handleTimeChange(hour, isValid(selectedTime) ? selectedTime.getMinutes() : 0)}>
-                  <Text style={[styles.timeOptionText, isValid(selectedTime) && selectedTime.getHours() === hour && styles.selectedTimeOptionText]}>
+                  style={[
+                    styles.timeOption,
+                    isValid(selectedTime) &&
+                      selectedTime.getHours() === hour &&
+                      styles.selectedTimeOption,
+                  ]}
+                  onPress={() =>
+                    handleTimeChange(
+                      hour,
+                      isValid(selectedTime) ? selectedTime.getMinutes() : 0,
+                    )
+                  }>
+                  <Text
+                    style={[
+                      styles.timeOptionText,
+                      isValid(selectedTime) &&
+                        selectedTime.getHours() === hour &&
+                        styles.selectedTimeOptionText,
+                    ]}>
                     {hour.toString().padStart(2, "0")}
                   </Text>
                 </TouchableOpacity>
@@ -216,16 +268,33 @@ export const CustomDatePicker: React.FC<CustomDatePickerProps> = ({
 
           <View style={styles.timeColumn}>
             <Text style={styles.timeColumnHeader}>Minute</Text>
-            <ScrollView style={styles.timeScrollView} showsVerticalScrollIndicator={false}>
+            <ScrollView
+              style={styles.timeScrollView}
+              showsVerticalScrollIndicator={false}>
               {minutes
                 .filter((m) => m % 5 === 0)
                 .map((minute) => (
                   <TouchableOpacity
                     key={minute}
-                    style={[styles.timeOption, isValid(selectedTime) && selectedTime.getMinutes() === minute && styles.selectedTimeOption]}
-                    onPress={() => handleTimeChange(isValid(selectedTime) ? selectedTime.getHours() : 0, minute)}>
+                    style={[
+                      styles.timeOption,
+                      isValid(selectedTime) &&
+                        selectedTime.getMinutes() === minute &&
+                        styles.selectedTimeOption,
+                    ]}
+                    onPress={() =>
+                      handleTimeChange(
+                        isValid(selectedTime) ? selectedTime.getHours() : 0,
+                        minute,
+                      )
+                    }>
                     <Text
-                      style={[styles.timeOptionText, isValid(selectedTime) && selectedTime.getMinutes() === minute && styles.selectedTimeOptionText]}>
+                      style={[
+                        styles.timeOptionText,
+                        isValid(selectedTime) &&
+                          selectedTime.getMinutes() === minute &&
+                          styles.selectedTimeOptionText,
+                      ]}>
                       {minute.toString().padStart(2, "0")}
                     </Text>
                   </TouchableOpacity>
@@ -253,37 +322,76 @@ export const CustomDatePicker: React.FC<CustomDatePickerProps> = ({
 
   return (
     <>
-      {showLabel && <Text style={styles.label}>{label}</Text>}
+      <View style={{ marginBottom: 18 }}>
+        {showLabel && <Text style={styles.label}>{label}</Text>}
 
-      <TouchableOpacity
-        style={[styles.dateInput, style, disabled && styles.disabledInput]}
-        onPress={() => !disabled && setShowPicker(true)}
-        disabled={disabled}>
-        <Text style={[styles.dateInputText, !value && styles.placeholderText, disabled && styles.disabledText]}>{formatDisplayDate(value)}</Text>
-        <Ionicons name="calendar-outline" size={20} color={disabled ? UI.COLORS.TEXT_MUTED : UI.COLORS.TEXT_SECONDARY} />
-      </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.dateInput, style, disabled && styles.disabledInput]}
+          onPress={() => !disabled && setShowPicker(true)}
+          disabled={disabled}>
+          <View style={styles.dateIconBox}>
+            <Ionicons
+              name="calendar-outline"
+              size={16}
+              color={UI.COLORS.PRIMARY_LIGHT}
+            />
+          </View>
+          <Text
+            style={[
+              styles.dateInputText,
+              !value && styles.placeholderText,
+              disabled && styles.disabledText,
+            ]}>
+            {formatDisplayDate(value)}
+          </Text>
+        </TouchableOpacity>
+      </View>
 
-      <Modal visible={showPicker} transparent animationType="slide" onRequestClose={() => setShowPicker(false)}>
+      <Modal
+        visible={showPicker}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setShowPicker(false)}>
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
             {/* Header */}
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>Select Date</Text>
-              <TouchableOpacity onPress={() => setShowPicker(false)} style={styles.closeButton}>
-                <Ionicons name="close" size={24} color={UI.COLORS.TEXT_PRIMARY} />
+              <TouchableOpacity
+                onPress={() => setShowPicker(false)}
+                style={styles.closeButton}>
+                <Ionicons
+                  name="close"
+                  size={24}
+                  color={UI.COLORS.TEXT_PRIMARY}
+                />
               </TouchableOpacity>
             </View>
 
             {/* Month Navigation */}
             <View style={styles.monthNavigation}>
-              <TouchableOpacity onPress={() => setCurrentMonth(subMonths(currentMonth, 1))} style={styles.monthArrow}>
-                <Ionicons name="chevron-back" size={24} color={UI.COLORS.TEXT_PRIMARY} />
+              <TouchableOpacity
+                onPress={() => setCurrentMonth(subMonths(currentMonth, 1))}
+                style={styles.monthArrow}>
+                <Ionicons
+                  name="chevron-back"
+                  size={24}
+                  color={UI.COLORS.TEXT_PRIMARY}
+                />
               </TouchableOpacity>
 
-              <Text style={styles.monthTitle}>{format(currentMonth, "MMMM yyyy")}</Text>
+              <Text style={styles.monthTitle}>
+                {format(currentMonth, "MMMM yyyy")}
+              </Text>
 
-              <TouchableOpacity onPress={() => setCurrentMonth(addMonths(currentMonth, 1))} style={styles.monthArrow}>
-                <Ionicons name="chevron-forward" size={24} color={UI.COLORS.TEXT_PRIMARY} />
+              <TouchableOpacity
+                onPress={() => setCurrentMonth(addMonths(currentMonth, 1))}
+                style={styles.monthArrow}>
+                <Ionicons
+                  name="chevron-forward"
+                  size={24}
+                  color={UI.COLORS.TEXT_PRIMARY}
+                />
               </TouchableOpacity>
             </View>
 
@@ -295,11 +403,15 @@ export const CustomDatePicker: React.FC<CustomDatePickerProps> = ({
 
             {/* Footer Actions */}
             <View style={styles.modalFooter}>
-              <TouchableOpacity style={styles.todayButton} onPress={() => handleDateSelect(new Date())}>
+              <TouchableOpacity
+                style={styles.todayButton}
+                onPress={() => handleDateSelect(new Date())}>
                 <Text style={styles.todayButtonText}>Today</Text>
               </TouchableOpacity>
 
-              <TouchableOpacity style={styles.confirmButton} onPress={() => setShowPicker(false)}>
+              <TouchableOpacity
+                style={styles.confirmButton}
+                onPress={() => setShowPicker(false)}>
                 <Text style={styles.confirmButtonText}>Done</Text>
               </TouchableOpacity>
             </View>
@@ -312,34 +424,43 @@ export const CustomDatePicker: React.FC<CustomDatePickerProps> = ({
 
 const styles = StyleSheet.create({
   label: {
-    fontSize: 14,
-    fontWeight: "500",
-    color: UI.COLORS.TEXT_PRIMARY,
-    marginBottom: UI.SPACING.SM,
+    fontSize: 13,
+    fontWeight: "600",
+    color: UI.COLORS.PRIMARY_LIGHT,
+    letterSpacing: 0.5,
+    textTransform: "uppercase",
+    marginBottom: 8,
   },
   dateInput: {
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "space-between",
+    backgroundColor: "rgba(20,20,50,0.65)",
+    borderRadius: 14,
     borderWidth: 1,
-    borderColor: UI.COLORS.BORDER,
-    borderRadius: UI.CARD_RADIUS,
-    backgroundColor: UI.COLORS.SURFACE,
-    paddingHorizontal: UI.SPACING.MD,
-    paddingVertical: UI.SPACING.MD,
-    minHeight: 48,
+    borderColor: "rgba(108,92,231,0.15)",
+    paddingHorizontal: 14,
+    minHeight: 54,
+  },
+  dateIconBox: {
+    width: 32,
+    height: 32,
+    borderRadius: 10,
+    backgroundColor: "rgba(108,92,231,0.12)",
+    alignItems: "center",
+    justifyContent: "center",
+    marginRight: 12,
   },
   disabledInput: {
-    backgroundColor: UI.COLORS.BACKGROUND,
-    opacity: 0.6,
+    opacity: 0.5,
   },
   dateInputText: {
     fontSize: 16,
     color: UI.COLORS.TEXT_PRIMARY,
     flex: 1,
+    paddingVertical: 16,
   },
   placeholderText: {
-    color: UI.COLORS.TEXT_MUTED,
+    color: "rgba(255,255,255,0.25)",
   },
   disabledText: {
     color: UI.COLORS.TEXT_MUTED,

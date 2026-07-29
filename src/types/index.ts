@@ -1,6 +1,6 @@
 // Global TypeScript types for the Finance Management App
 
-export type TransactionType = "income" | "expense";
+export type TransactionType = "income" | "expense" | "transfer";
 
 export interface Transaction {
   id: string;
@@ -14,6 +14,10 @@ export interface Transaction {
   // Linking fields for bills and debt payments
   linkedBillId?: string; // ID of associated bill payment
   linkedDebtPaymentId?: string; // ID of associated debt payment
+  // Wallet fields
+  walletId?: string;
+  fromWalletId?: string;
+  toWalletId?: string;
   createdAt: string; // ISO date string
   duplicatedAt?: string; // ISO date string for duplicated transactions
   // Sync fields
@@ -27,6 +31,7 @@ export interface Category {
   name: string;
   type: "income" | "expense";
   color?: string;
+  icon?: string;
   entryCount: number;
   createdAt: string;
   // Sync fields
@@ -50,23 +55,22 @@ export interface Budget {
   syncStatus?: "pending" | "synced" | "error"; // Local sync status
 }
 
+export interface Wallet {
+  id: string;
+  name: string;
+  icon?: string;
+  color?: string;
+  balance: number;
+  createdAt: string;
+  updatedAt: number; // Timestamp in ms for conflict resolution
+  deleted?: boolean; // Soft delete flag
+  syncStatus?: "pending" | "synced" | "error"; // Local sync status
+}
+
 export interface Bill {
   id: string;
   name: string;
-  amount: number;
-  dueDate: string; // ISO date string
-  paid: boolean;
-  budgetId?: string;
-  categoryId?: string;
-  linkedTransactionId?: string; // ID of associated transaction when paid
-  recurring: boolean;
-  recurringType?: "monthly" | "weekly" | "yearly";
-  createdAt: string;
-  updatedAt: string;
-  // Sync fields
-  syncUpdatedAt: number; // Timestamp in ms for conflict resolution
-  deleted?: boolean; // Soft delete flag
-  syncStatus?: "pending" | "synced" | "error"; // Local sync status
+  // Bills removed from types; placeholder kept for compatibility
 }
 
 export interface Debt {
@@ -168,6 +172,22 @@ export interface TransactionFormData {
   description: string;
   date: Date;
   note?: string;
+  walletId?: string;
+  fromWalletId?: string;
+  toWalletId?: string;
+}
+
+export interface ParsedTransaction {
+  amount?: number;
+  type?: TransactionType;
+  description?: string;
+  date?: Date;
+  note?: string;
+  categoryHint?: string; // fuzzy match to existing categories
+  confidence: number; // 0–1
+  rawText: string; // original voice/OCR text
+  categoryId?: string;
+  budgetId?: string;
 }
 
 export interface BudgetFormData {
@@ -177,19 +197,25 @@ export interface BudgetFormData {
   categoryId?: string;
 }
 
+export interface WalletFormData {
+  name: string;
+  icon?: string;
+  color?: string;
+  initialBalance: string;
+}
+
 export interface BillFormData {
   name: string;
-  amount: string;
-  dueDate: string; // Should be ISO string for Redux serialization
+  // Simplified bill data is handled as transactions now; keep minimal shape
   budgetId?: string;
-  recurring: boolean;
-  recurringType?: "monthly" | "weekly" | "yearly";
+  categoryId?: string;
 }
 
 export interface CategoryFormData {
   name: string;
   type: "income" | "expense";
   color?: string;
+  icon?: string;
 }
 
 // API response types
@@ -204,21 +230,24 @@ export type RootStackParamList = {
   Main: undefined;
   AddTransaction: { editTransaction?: Transaction };
   AddBudget: undefined;
-  AddBill: undefined;
 };
 
 export type RootTabParamList = {
   Transactions: undefined;
   Budgets: undefined;
-  Bills: undefined;
   Debts: undefined;
   Analysis: undefined;
   Settings: undefined;
 };
 
 export type TransactionStackParamList = {
+  Dashboard: undefined;
   TransactionList: undefined;
-  AddTransaction: { editTransaction?: Transaction };
+  AddTransaction: {
+    editTransaction?: Transaction;
+    categoryId?: string;
+    autoFocusAmount?: boolean;
+  };
   EditTransaction: { transactionId: string };
 };
 
@@ -228,11 +257,7 @@ export type BudgetStackParamList = {
   BudgetForm: { budgetId?: string };
 };
 
-export type BillStackParamList = {
-  BillList: undefined;
-  BillForm: { billId?: string };
-  BillPaymentHistory: { billId: string };
-};
+// Bill navigation stack removed
 
 export type DebtStackParamList = {
   DebtList: undefined;
@@ -245,6 +270,7 @@ export type SettingsStackParamList = {
   ExportData: undefined;
   BillingPeriodSettings: undefined;
   Import: undefined;
+  Wallets: undefined;
 };
 
 export type AnalysisStackParamList = {
@@ -301,49 +327,29 @@ export const COLLECTIONS = {
   TRANSACTIONS: "transactions",
   CATEGORIES: "categories",
   BUDGETS: "budgets",
-  BILLS: "bills",
+  // BILLS removed
   DEBTS: "debts",
   DEBT_PAYMENTS: "debt_payments",
   SETTINGS: "settings",
+  WALLETS: "wallets",
 } as const;
 
 export type CollectionName = (typeof COLLECTIONS)[keyof typeof COLLECTIONS];
 
-export interface BillPayment {
-  id: string;
-  billId: string;
-  amount: number;
-  paymentDate: string; // ISO date string
-  paymentMethod?: string;
-  transactionId?: string; // Link to associated transaction
-  note?: string;
-  createdAt: string;
-  updatedAt: string;
-  // Sync fields
-  syncUpdatedAt: number;
-  deleted?: boolean;
-  syncStatus?: "pending" | "synced" | "error";
-}
-
-export interface BillPaymentHistory {
-  billId: string;
-  payments: BillPayment[];
-  totalPaid: number;
-  lastPaymentDate?: string;
-  upcomingPayments: {
-    dueDate: string;
-    amount: number;
-    status: "upcoming" | "due" | "overdue" | "paid" | "skipped";
-  }[];
-}
-
 // Sync-enabled data types
-export type SyncableEntity = Transaction | Category | Budget | Bill | Debt | DebtPayment | BillPayment | Settings;
+export type SyncableEntity =
+  | Transaction
+  | Category
+  | Budget
+  | Debt
+  | DebtPayment
+  | Settings
+  | Wallet;
 
 // Generic sync document type
 export interface SyncDocument {
   id: string;
   updatedAt: number;
-  deleted?: boolean;
+  deleted?: boolean; // Sync fields
   syncStatus?: "pending" | "synced" | "error";
 }

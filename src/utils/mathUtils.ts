@@ -49,3 +49,14 @@ export const evaluateMathExpression = (expression: string): string => {
  * evaluateMathExpression("(100+50)/3") => "50"
  * evaluateMathExpression("invalid") => "invalid"
  */
+
+/**
+ * Normalizes Arabic and Persian numerals to Western numerals (0-9).
+ * Useful for handling input from keyboards with different numeral systems.
+ */
+export const normalizeNumerals = (input: string): string => {
+  if (!input) return input;
+  return input
+    .replace(/[٠١٢٣٤٥٦٧٨٩]/g, (d) => (d.charCodeAt(0) - 1632).toString())
+    .replace(/[۰۱۲۳۴۵۶۷۸۹]/g, (d) => (d.charCodeAt(0) - 1776).toString());
+};

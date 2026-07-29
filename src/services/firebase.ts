@@ -1,10 +1,14 @@
 // Firebase configuration and initialization
 import { initializeApp, FirebaseApp } from "firebase/app";
-import { getAuth, Auth, initializeAuth } from "firebase/auth";
-import { getFirestore as initFirestore, Firestore, connectFirestoreEmulator } from "firebase/firestore";
+import {
+  getAuth,
+  Auth,
+  initializeAuth,
+  getReactNativePersistence,
+} from "firebase/auth";
+import { getFirestore as initFirestore, Firestore } from "firebase/firestore";
 import { Platform } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-
 // Firebase configuration - Replace with your actual config
 const firebaseConfig = {
   apiKey: "AIzaSyBHTaSDwRxVbij2xi9K-sX5wgayv0wspUk",
@@ -28,7 +32,7 @@ export const initializeFirebase = () => {
     try {
       // Try to initialize with persistence first
       auth = initializeAuth(app, {
-        // Firebase v9+ automatically uses AsyncStorage when available
+        persistence: getReactNativePersistence(AsyncStorage),
       });
     } catch (error) {
       // If initializeAuth fails (e.g., already initialized), use getAuth
@@ -54,21 +58,27 @@ export const initializeFirebase = () => {
 // Export Firebase instances
 export const getFirebaseAuth = (): Auth => {
   if (!auth) {
-    throw new Error("Firebase Auth not initialized. Call initializeFirebase() first.");
+    throw new Error(
+      "Firebase Auth not initialized. Call initializeFirebase() first.",
+    );
   }
   return auth;
 };
 
 export const getFirestoreInstance = (): Firestore => {
   if (!db) {
-    throw new Error("Firestore not initialized. Call initializeFirebase() first.");
+    throw new Error(
+      "Firestore not initialized. Call initializeFirebase() first.",
+    );
   }
   return db;
 };
 
 export const getFirebaseApp = (): FirebaseApp => {
   if (!app) {
-    throw new Error("Firebase App not initialized. Call initializeFirebase() first.");
+    throw new Error(
+      "Firebase App not initialized. Call initializeFirebase() first.",
+    );
   }
   return app;
 };

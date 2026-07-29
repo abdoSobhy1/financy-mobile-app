@@ -1,19 +1,44 @@
-import React, { useEffect, useState } from "react";
-import { View, Text, FlatList, StyleSheet, RefreshControl, TouchableOpacity } from "react-native";
+import React, { useEffect, useState, useRef } from "react";
+import {
+  View,
+  Text,
+  FlatList,
+  StyleSheet,
+  RefreshControl,
+  TouchableOpacity,
+  StatusBar,
+} from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
+import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons } from "@expo/vector-icons";
 import { useDispatch, useSelector } from "react-redux";
 import { useNavigation } from "@react-navigation/native";
 import { StackNavigationProp } from "@react-navigation/stack";
 import { RootState, AppDispatch } from "../store";
-import { fetchBudgets, updateBudget, deleteBudget } from "../store/slices/budgetsSlice";
+import {
+  fetchBudgets,
+  updateBudget,
+  deleteBudget,
+} from "../store/slices/budgetsSlice";
 import { fetchTransactions } from "../store/slices/transactionsSlice";
 import { getCurrentBillingPeriod } from "../utils/billingPeriod";
-import { Screen, Card, Button, useCustomAlert, useToast, FloatingActionButton } from "../components/ui";
+import { getDateRangeForBillingPeriod } from "../utils";
+import {
+  Screen,
+  useCustomAlert,
+  useToast,
+  FloatingActionButton,
+} from "../components/ui";
 import { UI } from "../constants";
 import { formatCurrency, percentage } from "../utils";
 import { BudgetStackParamList, Budget } from "../types";
 
-type BudgetListNavigationProp = StackNavigationProp<BudgetStackParamList, "BudgetList">;
+import { Shimmer } from "react-native-fast-shimmer";
+
+type BudgetListNavigationProp = StackNavigationProp<
+  BudgetStackParamList,
+  "BudgetList"
+>;
 
 export const BudgetListScreen: React.FC = () => {
   const dispatch = useDispatch<AppDispatch>();
@@ -22,54 +47,95 @@ export const BudgetListScreen: React.FC = () => {
   const { showSuccess, showError } = useToast();
   const [refreshing, setRefreshing] = useState(false);
 
-  const { items: budgets, ids, loading } = useSelector((state: RootState) => state.budgets);
-  const { items: transactions } = useSelector((state: RootState) => state.transactions);
-  const [budgetProgressMap, setBudgetProgressMap] = useState<Record<string, { spent: number; remaining: number; percentageUsed: number }>>({});
+  const {
+    items: budgets,
+    ids,
+    loading,
+  } = useSelector((state: RootState) => state.budgets);
+  const { items: transactions } = useSelector(
+    (state: RootState) => state.transactions,
+  );
+  const settingsData = useSelector((state: RootState) => state.settings.data);
+  const [budgetProgressMap, setBudgetProgressMap] = useState<
+    Record<string, { spent: number; remaining: number; percentageUsed: number }>
+  >({});
+  const [progressLoaded, setProgressLoaded] = useState(false);
 
   useEffect(() => {
-    // Add a small delay to ensure database is fully initialized
-    const timer = setTimeout(() => {
-      loadData();
-    }, 100);
-
-    return () => clearTimeout(timer);
+    loadData();
   }, [dispatch]);
 
   const loadData = async () => {
     try {
       await dispatch(fetchBudgets()).unwrap();
       await dispatch(fetchTransactions()).unwrap();
-      // Compute per-budget progress for the current billing period so UI reflects the correct period
       try {
-        const { start, end } = await getCurrentBillingPeriod();
+        setProgressLoaded(false);
+        let start: Date;
+        let end: Date;
+        if (
+          settingsData &&
+          typeof settingsData.billingPeriodStartDay === "number"
+        ) {
+          const range = getDateRangeForBillingPeriod(
+            settingsData.billingPeriodStartDay,
+          );
+          start = range.start;
+          end = range.end;
+        } else {
+          const range = await getCurrentBillingPeriod();
+          start = range.start;
+          end = range.end;
+        }
+
         const queriesModule = await import("../database/queries");
         const fetchedBudgets = await dispatch(fetchBudgets()).unwrap();
 
         const promises = (fetchedBudgets || []).map(async (b: any) => {
           try {
-            const progress = await queriesModule.db.budgets.getBudgetProgressForPeriod(b.id, start.toISOString(), end.toISOString());
+            const progress =
+              await queriesModule.db.budgets.getBudgetProgressForPeriod(
+                b.id,
+                start.toISOString(),
+                end.toISOString(),
+              );
             return { id: b.id, progress };
           } catch (err) {
-            console.warn("Failed to load budget progress for period", b.id, err);
+            console.warn(
+              "Failed to load budget progress for period",
+              b.id,
+              err,
+            );
             return { id: b.id, progress: null };
           }
         });
 
         const results = await Promise.all(promises);
-        const map: Record<string, { spent: number; remaining: number; percentageUsed: number }> = {};
+        const map: Record<
+          string,
+          { spent: number; remaining: number; percentageUsed: number }
+        > = {};
         results.forEach((r: any) => {
           if (r.progress) {
-            map[r.id] = { spent: r.progress.spent, remaining: r.progress.remaining, percentageUsed: r.progress.percentageUsed };
+            map[r.id] = {
+              spent: r.progress.spent,
+              remaining: r.progress.remaining,
+              percentageUsed: r.progress.percentageUsed,
+            };
           }
         });
         setBudgetProgressMap(map);
+        setProgressLoaded(true);
       } catch (err) {
-        console.warn("Could not compute budget progress for current billing period:", err);
+        console.warn(
+          "Could not compute budget progress for current billing period:",
+          err,
+        );
+        setProgressLoaded(true);
       }
     } catch (error) {
       console.error("Failed to load budget data:", error);
       console.error("Error details:", JSON.stringify(error, null, 2));
-      // Don't throw - let the UI handle gracefully
     }
   };
 
@@ -80,11 +146,8 @@ export const BudgetListScreen: React.FC = () => {
   };
 
   const calculateBudgetSpent = (budgetId: string): number => {
-    // Prefer period-specific progress if available (current billing period)
     const prog = budgetProgressMap[budgetId];
     if (prog) return prog.spent;
-
-    // Fallback: sum all historical transactions (legacy behavior)
     return Object.values(transactions)
       .filter((t) => t.budgetId === budgetId && t.type === "expense")
       .reduce((sum, t) => sum + t.amount, 0);
@@ -95,202 +158,402 @@ export const BudgetListScreen: React.FC = () => {
   };
 
   const handleDeleteBudget = (budget: Budget) => {
-    showAlert("Delete Budget", `Are you sure you want to delete "${budget.name}"? This action cannot be undone.`, [
-      { text: "Cancel", style: "cancel" },
-      {
-        text: "Delete",
-        style: "destructive",
-        onPress: async () => {
-          try {
-            await dispatch(deleteBudget(budget.id)).unwrap();
-            showSuccess("Budget deleted successfully");
-          } catch (error) {
-            showError("Failed to delete budget");
-          }
+    showAlert(
+      "Delete Budget",
+      `Are you sure you want to delete "${budget.name}"? This action cannot be undone.`,
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Delete",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              await dispatch(deleteBudget(budget.id)).unwrap();
+              showSuccess("Budget deleted successfully");
+            } catch (error) {
+              showError("Failed to delete budget");
+            }
+          },
         },
-      },
-    ]);
+      ],
+    );
   };
 
+  // ── Skeleton Card ────────────────────────────────────────────
+  const renderSkeletonCard = () => (
+    <View style={styles.budgetCard}>
+      <View style={styles.budgetHeader}>
+        <View style={styles.budgetNameContainer}>
+          <Shimmer
+            style={[styles.skeletonBox, { width: 140, height: 20 }]}
+            linearGradients={["#6c5ce726", "#6c5ce74d", "#6c5ce726"]}
+            gradientStart={{ x: 0, y: 1 }}
+          />
+        </View>
+        <View style={styles.budgetHeaderRight}>
+          <Shimmer
+            style={[
+              styles.skeletonBox,
+              { width: 90, height: 20, marginBottom: 4 },
+            ]}
+            linearGradients={["#6c5ce726", "#6c5ce74d", "#6c5ce726"]}
+            gradientStart={{ x: 0, y: 1 }}
+          />
+          <Shimmer
+            style={[styles.skeletonBox, { width: 90, height: 20 }]}
+            linearGradients={["#6c5ce726", "#6c5ce74d", "#6c5ce726"]}
+            gradientStart={{ x: 0, y: 1 }}
+          />
+        </View>
+      </View>
+
+      <View style={{ marginBottom: 16 }}>
+        <Shimmer
+          style={[
+            styles.progressBar,
+            { backgroundColor: "rgba(108,92,231,0.12)" },
+          ]}
+          linearGradients={["#6c5ce726", "#6c5ce74d", "#6c5ce726"]}
+          gradientStart={{ x: 0, y: 1 }}
+        />
+      </View>
+
+      <View style={styles.budgetDetails}>
+        <View style={styles.detailItem}>
+          <Shimmer
+            style={[styles.skeletonBox, { width: 100, height: 20 }]}
+            linearGradients={["#6c5ce726", "#6c5ce74d", "#6c5ce726"]}
+            gradientStart={{ x: 0, y: 1 }}
+          />
+        </View>
+        <View style={styles.detailItem}>
+          <Shimmer
+            style={[styles.skeletonBox, { width: 100, height: 20 }]}
+            linearGradients={["#6c5ce726", "#6c5ce74d", "#6c5ce726"]}
+            gradientStart={{ x: 0, y: 1 }}
+          />
+        </View>
+      </View>
+    </View>
+  );
+
+  // ── Budget Card ──────────────────────────────────────────────
   const renderBudget = ({ item: id }: { item: string }) => {
     const budget = budgets[id];
     if (!budget) return null;
+
+    if (!progressLoaded) return renderSkeletonCard();
 
     const spent = calculateBudgetSpent(id);
     const remaining = budget.amount - spent;
     const progressPercentage = percentage(spent, budget.amount);
     const isOverBudget = spent > budget.amount;
 
+    // Choose progress bar gradient based on state
+    const progressColors: [string, string] = isOverBudget
+      ? ["#FF6B6B", "#EE4444"]
+      : [UI.COLORS.PRIMARY, UI.COLORS.PRIMARY_DARK];
+
     return (
-      <Card style={styles.budgetCard}>
+      <View style={styles.budgetCard}>
+        {/* Header row */}
         <View style={styles.budgetHeader}>
           <View style={styles.budgetNameContainer}>
-            <Ionicons name="wallet" size={20} color={UI.COLORS.PRIMARY} style={styles.budgetIcon} />
+            <View style={styles.iconCircle}>
+              <Ionicons
+                name="wallet"
+                size={16}
+                color={UI.COLORS.PRIMARY_LIGHT}
+              />
+            </View>
             <Text style={styles.budgetName}>{budget.name}</Text>
           </View>
           <View style={styles.budgetHeaderRight}>
-            <Text style={[styles.budgetAmount, isOverBudget && styles.overBudgetAmount]}>{formatCurrency(budget.amount)}</Text>
+            <Text
+              style={[
+                styles.budgetAmount,
+                isOverBudget && styles.overBudgetAmount,
+              ]}>
+              {formatCurrency(budget.amount)}
+            </Text>
             <View style={styles.budgetActions}>
-              <TouchableOpacity style={styles.actionButton} onPress={() => handleEditBudget(budget)}>
-                <Ionicons name="pencil" size={16} color={UI.COLORS.TEXT_SECONDARY} />
+              <TouchableOpacity
+                style={styles.actionButton}
+                onPress={() => handleEditBudget(budget)}>
+                <Ionicons
+                  name="pencil"
+                  size={14}
+                  color={UI.COLORS.TEXT_MUTED}
+                />
               </TouchableOpacity>
-              <TouchableOpacity style={styles.actionButton} onPress={() => handleDeleteBudget(budget)}>
-                <Ionicons name="trash" size={16} color={UI.COLORS.ERROR} />
+              <TouchableOpacity
+                style={styles.actionButton}
+                onPress={() => handleDeleteBudget(budget)}>
+                <Ionicons
+                  name="trash"
+                  size={14}
+                  color="rgba(255,107,107,0.7)"
+                />
               </TouchableOpacity>
             </View>
           </View>
         </View>
 
+        {/* Progress bar */}
         <View style={styles.progressContainer}>
           <View style={styles.progressBar}>
-            <View style={[styles.progressFill, { width: `${Math.min(progressPercentage, 100)}%` }, isOverBudget && styles.overBudgetFill]} />
+            <LinearGradient
+              colors={progressColors}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 0 }}
+              style={[
+                styles.progressFill,
+                { width: `${Math.min(progressPercentage, 100)}%` },
+              ]}
+            />
           </View>
-          <Text style={styles.progressText}>{progressPercentage}%</Text>
+          <Text
+            style={[
+              styles.progressText,
+              isOverBudget && styles.overBudgetText,
+            ]}>
+            {progressPercentage}%
+          </Text>
         </View>
 
+        {/* Details row */}
         <View style={styles.budgetDetails}>
           <View style={styles.detailItem}>
             <Text style={styles.detailLabel}>Spent</Text>
-            <Text style={[styles.detailValue, isOverBudget && styles.overBudgetText]}>{formatCurrency(spent)}</Text>
+            <Text
+              style={[
+                styles.detailValue,
+                isOverBudget && styles.overBudgetText,
+              ]}>
+              {formatCurrency(spent)}
+            </Text>
           </View>
-          <View style={styles.detailItem}>
+          <View style={[styles.detailItem, { alignItems: "flex-end" }]}>
             <Text style={styles.detailLabel}>Remaining</Text>
-            <Text style={[styles.detailValue, remaining < 0 && styles.overBudgetText]}>{formatCurrency(remaining)}</Text>
+            <Text
+              style={[
+                styles.detailValue,
+                remaining < 0 && styles.overBudgetText,
+              ]}>
+              {formatCurrency(remaining)}
+            </Text>
           </View>
         </View>
 
+        {/* Over-budget warning */}
         {isOverBudget && (
           <View style={styles.warningContainer}>
-            <View style={styles.warningContent}>
-              <Ionicons name="warning" size={16} color={UI.COLORS.ERROR} style={styles.warningIcon} />
-              <Text style={styles.warningText}>Over budget by {formatCurrency(Math.abs(remaining))}</Text>
-            </View>
+            <Ionicons
+              name="warning"
+              size={14}
+              color="#FF6B6B"
+              style={{ marginRight: 6 }}
+            />
+            <Text style={styles.warningText}>
+              Over budget by {formatCurrency(Math.abs(remaining))}
+            </Text>
           </View>
         )}
-      </Card>
+      </View>
     );
   };
 
+  // ── Header ───────────────────────────────────────────────────
   const renderHeader = () => (
     <View style={styles.header}>
       <Text style={styles.title}>Budgets</Text>
-      <Button
-        title="Add Budget"
-        onPress={() => navigation.navigate("BudgetForm", {})}
-        style={styles.addButton}
-        icon="add-circle"
-        iconPosition="left"
-      />
+      <Text style={styles.subtitle}>
+        Track your spending and stay on target
+      </Text>
     </View>
   );
 
+  // ── Empty State ──────────────────────────────────────────────
   const renderEmptyState = () => (
     <View style={styles.emptyState}>
+      <View style={styles.emptyIconCircle}>
+        <Ionicons name="wallet-outline" size={40} color={UI.COLORS.PRIMARY} />
+      </View>
       <Text style={styles.emptyTitle}>No Budgets Yet</Text>
-      <Text style={styles.emptyMessage}>Create budgets to track your spending categories and stay on target</Text>
-      <Button
-        title="Create Your First Budget"
-        onPress={() => navigation.navigate("BudgetForm", {})}
-        style={styles.emptyButton}
-        icon="add-circle"
-        iconPosition="left"
-      />
+      <Text style={styles.emptyMessage}>
+        Create budgets to track your spending categories and stay on target
+      </Text>
+      <TouchableOpacity
+        activeOpacity={0.8}
+        onPress={() => navigation.navigate("BudgetForm", {})}>
+        <LinearGradient
+          colors={[UI.COLORS.PRIMARY, UI.COLORS.PRIMARY_DARK]}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={styles.emptyButton}>
+          <Ionicons name="add-circle" size={18} color="#fff" />
+          <Text style={styles.emptyButtonText}>Create Your First Budget</Text>
+        </LinearGradient>
+      </TouchableOpacity>
     </View>
   );
 
   return (
-    <Screen>
-      <FlatList
-        data={ids}
-        keyExtractor={(item) => item}
-        renderItem={renderBudget}
-        ListHeaderComponent={renderHeader}
-        ListEmptyComponent={!loading ? renderEmptyState : null}
-        contentContainerStyle={styles.container}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={UI.COLORS.PRIMARY} />}
-        showsVerticalScrollIndicator={false}
-      />
+    <LinearGradient
+      colors={["#0a0a2e", "#1a1040", "#0d0d30"]}
+      style={styles.gradient}>
+      <SafeAreaView style={styles.safeArea}>
+        <StatusBar
+          barStyle="light-content"
+          backgroundColor="transparent"
+          translucent
+        />
+        <FlatList
+          data={ids}
+          keyExtractor={(item) => item}
+          renderItem={renderBudget}
+          ListHeaderComponent={renderHeader}
+          ListEmptyComponent={!loading ? renderEmptyState : null}
+          contentContainerStyle={styles.container}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={handleRefresh}
+              tintColor={UI.COLORS.PRIMARY}
+            />
+          }
+          showsVerticalScrollIndicator={false}
+        />
 
-      <AlertComponent />
+        <AlertComponent />
 
-      <FloatingActionButton icon="add" onPress={() => navigation.navigate("BudgetForm", {})} />
-    </Screen>
+        <FloatingActionButton
+          icon="add"
+          onPress={() => navigation.navigate("BudgetForm", {})}
+          style={{ position: "absolute", bottom: 80, right: 20 }}
+        />
+      </SafeAreaView>
+    </LinearGradient>
   );
 };
 
 const styles = StyleSheet.create({
+  gradient: {
+    flex: 1,
+  },
+  safeArea: {
+    flex: 1,
+  },
   container: {
     flexGrow: 1,
-    padding: UI.SPACING.MD,
+    padding: 20,
+    paddingBottom: 120,
   },
+
+  // ── Header ─────────────────────────────────────────
   header: {
-    marginBottom: UI.SPACING.LG,
+    marginBottom: 24,
   },
   title: {
     fontSize: 32,
-    fontWeight: "bold",
+    fontWeight: "800",
     color: UI.COLORS.TEXT_PRIMARY,
-    marginBottom: UI.SPACING.MD,
+    letterSpacing: 0.3,
+    marginBottom: 4,
   },
-  addButton: {
-    marginVertical: UI.SPACING.SM,
+  subtitle: {
+    fontSize: 14,
+    color: UI.COLORS.TEXT_MUTED,
+    fontWeight: "400",
   },
+
+  // ── Budget Card ────────────────────────────────────
   budgetCard: {
-    marginBottom: UI.SPACING.MD,
+    backgroundColor: "rgba(20,20,50,0.65)",
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: "#6c5ce726",
+    padding: 18,
+    marginBottom: 14,
   },
   budgetHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    marginBottom: UI.SPACING.MD,
+    marginBottom: 16,
   },
   budgetNameContainer: {
     flexDirection: "row",
     alignItems: "center",
     flex: 1,
   },
-  budgetIcon: {
-    marginRight: UI.SPACING.SM,
+  iconCircle: {
+    width: 32,
+    height: 32,
+    borderRadius: 10,
+    backgroundColor: "rgba(108,92,231,0.12)",
+    alignItems: "center",
+    justifyContent: "center",
+    marginRight: 10,
   },
   budgetName: {
-    fontSize: 18,
-    fontWeight: "600",
+    fontSize: 17,
+    fontWeight: "700",
     color: UI.COLORS.TEXT_PRIMARY,
+    letterSpacing: 0.2,
   },
   budgetAmount: {
-    fontSize: 18,
-    fontWeight: "bold",
-    color: UI.COLORS.PRIMARY,
+    fontSize: 17,
+    fontWeight: "700",
+    color: UI.COLORS.PRIMARY_LIGHT,
   },
   overBudgetAmount: {
-    color: UI.COLORS.ERROR,
+    color: "#FF6B6B",
   },
+  budgetHeaderRight: {
+    alignItems: "flex-end",
+  },
+  budgetActions: {
+    flexDirection: "row",
+    marginTop: 4,
+  },
+  actionButton: {
+    width: 30,
+    height: 30,
+    borderRadius: 8,
+    backgroundColor: "rgba(255,255,255,0.04)",
+    alignItems: "center",
+    justifyContent: "center",
+    marginLeft: 6,
+  },
+
+  // ── Progress ───────────────────────────────────────
   progressContainer: {
     flexDirection: "row",
     alignItems: "center",
-    marginBottom: UI.SPACING.MD,
+    marginBottom: 16,
   },
   progressBar: {
     flex: 1,
     height: 8,
-    backgroundColor: UI.COLORS.BORDER,
+    backgroundColor: "rgba(108,92,231,0.12)",
     borderRadius: 4,
-    marginRight: UI.SPACING.SM,
+    marginRight: 10,
+    overflow: "hidden",
   },
   progressFill: {
     height: "100%",
-    backgroundColor: UI.COLORS.SUCCESS,
     borderRadius: 4,
   },
-  overBudgetFill: {
-    backgroundColor: UI.COLORS.ERROR,
-  },
   progressText: {
-    fontSize: 12,
-    fontWeight: "600",
+    fontSize: 13,
+    fontWeight: "700",
     color: UI.COLORS.TEXT_SECONDARY,
-    minWidth: 35,
+    minWidth: 38,
+    textAlign: "right",
   },
+
+  // ── Details ────────────────────────────────────────
   budgetDetails: {
     flexDirection: "row",
     justifyContent: "space-between",
@@ -299,71 +562,100 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   detailLabel: {
-    fontSize: 12,
-    color: UI.COLORS.TEXT_SECONDARY,
+    fontSize: 11,
+    fontWeight: "600",
+    color: UI.COLORS.TEXT_MUTED,
     textTransform: "uppercase",
-    marginBottom: UI.SPACING.XS,
+    letterSpacing: 0.5,
+    marginBottom: 4,
   },
   detailValue: {
     fontSize: 16,
-    fontWeight: "600",
+    fontWeight: "700",
     color: UI.COLORS.TEXT_PRIMARY,
   },
   overBudgetText: {
-    color: UI.COLORS.ERROR,
+    color: "#FF6B6B",
   },
+
+  // ── Warning ────────────────────────────────────────
   warningContainer: {
-    marginTop: UI.SPACING.SM,
-    padding: UI.SPACING.SM,
-    backgroundColor: "rgba(239, 68, 68, 0.1)",
-    borderRadius: UI.CARD_RADIUS / 2,
-  },
-  warningContent: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-  },
-  warningIcon: {
-    marginRight: UI.SPACING.XS,
+    marginTop: 12,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    backgroundColor: "rgba(255,107,107,0.08)",
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: "rgba(255,107,107,0.2)",
   },
   warningText: {
-    fontSize: 14,
-    color: UI.COLORS.ERROR,
+    fontSize: 13,
+    color: "#FF6B6B",
     fontWeight: "600",
   },
+
+  // ── Empty State ────────────────────────────────────
   emptyState: {
     flex: 1,
     justifyContent: "center",
     alignItems: "center",
-    paddingTop: 100,
+    paddingTop: 80,
+    paddingHorizontal: 32,
+  },
+  emptyIconCircle: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: "rgba(108,92,231,0.1)",
+    borderWidth: 1,
+    borderColor: "rgba(108,92,231,0.2)",
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 20,
   },
   emptyTitle: {
-    fontSize: 24,
-    fontWeight: "bold",
+    fontSize: 22,
+    fontWeight: "700",
     color: UI.COLORS.TEXT_PRIMARY,
-    marginBottom: UI.SPACING.SM,
+    marginBottom: 8,
   },
   emptyMessage: {
-    fontSize: 16,
-    color: UI.COLORS.TEXT_SECONDARY,
+    fontSize: 15,
+    color: UI.COLORS.TEXT_MUTED,
     textAlign: "center",
-    marginBottom: UI.SPACING.LG,
-    paddingHorizontal: UI.SPACING.LG,
+    marginBottom: 28,
+    lineHeight: 22,
   },
   emptyButton: {
-    minWidth: 200,
-  },
-  budgetHeaderRight: {
-    alignItems: "flex-end",
-  },
-  budgetActions: {
     flexDirection: "row",
-    marginTop: UI.SPACING.XS,
+    alignItems: "center",
+    paddingHorizontal: 24,
+    paddingVertical: 14,
+    borderRadius: 25,
+    gap: 8,
+    shadowColor: UI.COLORS.PRIMARY,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.35,
+    shadowRadius: 10,
+    elevation: 6,
   },
-  actionButton: {
-    padding: UI.SPACING.XS,
-    marginLeft: UI.SPACING.XS,
+  emptyButtonText: {
+    fontSize: 15,
+    fontWeight: "700",
+    color: "#fff",
   },
+
+  // ── Skeleton ───────────────────────────────────────
+  skeletonBox: {
+    height: 16,
+    borderRadius: 6,
+    backgroundColor: "rgba(108,92,231,0.12)",
+  },
+
+  // ── Legacy modal styles (kept for compatibility) ───
   modalOverlay: {
     flex: 1,
     backgroundColor: "rgba(0, 0, 0, 0.5)",
@@ -438,7 +730,15 @@ const styles = StyleSheet.create({
 export const BudgetDetailsScreen: React.FC = () => {
   return (
     <Screen>
-      <Text style={{ color: "white", fontSize: 24, textAlign: "center", marginTop: 50 }}>Budget Details Screen</Text>
+      <Text
+        style={{
+          color: "white",
+          fontSize: 24,
+          textAlign: "center",
+          marginTop: 50,
+        }}>
+        Budget Details Screen
+      </Text>
     </Screen>
   );
 };

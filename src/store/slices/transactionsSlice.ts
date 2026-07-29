@@ -1,30 +1,56 @@
 import { createSlice, createAsyncThunk, PayloadAction } from "@reduxjs/toolkit";
-import { Transaction, TransactionFilters, TransactionFormData } from "../../types";
+import {
+  Transaction,
+  TransactionFilters,
+  TransactionFormData,
+} from "../../types";
 import { db } from "../../database/queries";
+import { fetchWallets } from "./walletsSlice";
 
 // Async thunks for database operations
-export const fetchTransactions = createAsyncThunk("transactions/fetchTransactions", async (filters?: TransactionFilters) => {
-  return await db.transactions.getAllTransactions(filters);
-});
+export const fetchTransactions = createAsyncThunk(
+  "transactions/fetchTransactions",
+  async (filters?: TransactionFilters) => {
+    return await db.transactions.getAllTransactions(filters);
+  },
+);
 
-export const addTransaction = createAsyncThunk("transactions/addTransaction", async (transactionData: TransactionFormData) => {
-  const transaction: Omit<Transaction, "id" | "createdAt"> = {
-    amount: parseFloat(transactionData.amount),
-    type: transactionData.type,
-    categoryId: transactionData.categoryId,
-    budgetId: transactionData.budgetId,
-    description: transactionData.description,
-    date: transactionData.date.toISOString(),
-    note: transactionData.note,
-    updatedAt: Date.now(),
-  };
-  return await db.transactions.createTransaction(transaction);
-});
+export const addTransaction = createAsyncThunk(
+  "transactions/addTransaction",
+  async (transactionData: TransactionFormData, { dispatch }) => {
+    const transaction: Omit<Transaction, "id" | "createdAt"> = {
+      amount: parseFloat(transactionData.amount),
+      type: transactionData.type,
+      categoryId: transactionData.categoryId || (transactionData.type === "transfer" ? "transfer" : ""),
+      budgetId: transactionData.budgetId,
+      walletId: transactionData.walletId,
+      fromWalletId: transactionData.fromWalletId,
+      toWalletId: transactionData.toWalletId,
+      description: transactionData.description,
+      date: transactionData.date.toISOString(),
+      note: transactionData.note,
+      updatedAt: Date.now(),
+    };
+    const res = await db.transactions.createTransaction(transaction);
+    dispatch(fetchWallets());
+    return res;
+  },
+);
 
 export const updateTransaction = createAsyncThunk(
   "transactions/updateTransaction",
-  async ({ id, updates }: { id: string; updates: Partial<TransactionFormData> }) => {
-    const transactionUpdates: Partial<Omit<Transaction, "id" | "createdAt">> = {};
+  async (
+    {
+      id,
+      updates,
+    }: {
+      id: string;
+      updates: Partial<TransactionFormData>;
+    },
+    { dispatch },
+  ) => {
+    const transactionUpdates: Partial<Omit<Transaction, "id" | "createdAt">> =
+      {};
 
     if (updates.amount !== undefined) {
       transactionUpdates.amount = parseFloat(updates.amount);
@@ -38,6 +64,15 @@ export const updateTransaction = createAsyncThunk(
     if (updates.budgetId !== undefined) {
       transactionUpdates.budgetId = updates.budgetId;
     }
+    if (updates.walletId !== undefined) {
+      transactionUpdates.walletId = updates.walletId;
+    }
+    if (updates.fromWalletId !== undefined) {
+      transactionUpdates.fromWalletId = updates.fromWalletId;
+    }
+    if (updates.toWalletId !== undefined) {
+      transactionUpdates.toWalletId = updates.toWalletId;
+    }
     if (updates.description !== undefined) {
       transactionUpdates.description = updates.description;
     }
@@ -49,22 +84,36 @@ export const updateTransaction = createAsyncThunk(
     }
 
     await db.transactions.updateTransaction(id, transactionUpdates);
-    return await db.transactions.getTransactionById(id);
-  }
+    const updated = await db.transactions.getTransactionById(id);
+    dispatch(fetchWallets());
+    return updated;
+  },
 );
 
-export const deleteTransaction = createAsyncThunk("transactions/deleteTransaction", async (id: string) => {
-  await db.transactions.deleteTransaction(id);
-  return id;
-});
+export const deleteTransaction = createAsyncThunk(
+  "transactions/deleteTransaction",
+  async (id: string, { dispatch }) => {
+    await db.transactions.deleteTransaction(id);
+    dispatch(fetchWallets());
+    return id;
+  },
+);
 
-export const duplicateTransaction = createAsyncThunk("transactions/duplicateTransaction", async (id: string) => {
-  return await db.transactions.duplicateTransaction(id);
-});
+export const duplicateTransaction = createAsyncThunk(
+  "transactions/duplicateTransaction",
+  async (id: string, { dispatch }) => {
+    const res = await db.transactions.duplicateTransaction(id);
+    dispatch(fetchWallets());
+    return res;
+  },
+);
 
-export const fetchTransactionStats = createAsyncThunk("transactions/fetchTransactionStats", async () => {
-  return await db.transactions.getTransactionStats();
-});
+export const fetchTransactionStats = createAsyncThunk(
+  "transactions/fetchTransactionStats",
+  async () => {
+    return await db.transactions.getTransactionStats();
+  },
+);
 
 // State interface
 interface TransactionsState {
@@ -101,6 +150,13 @@ const transactionsSlice = createSlice({
     },
     clearError: (state) => {
       state.error = null;
+    },
+    markTransactionSynced: (state, action: PayloadAction<string>) => {
+      const item = state.items[action.payload];
+      if (item) {
+        item.syncStatus = "synced";
+        (item as any).sync_status = "synced";
+      }
     },
   },
   extraReducers: (builder) => {
@@ -199,5 +255,10 @@ const transactionsSlice = createSlice({
   },
 });
 
-export const { setFilters, clearFilters, clearError } = transactionsSlice.actions;
+export const {
+  setFilters,
+  clearFilters,
+  clearError,
+  markTransactionSynced,
+} = transactionsSlice.actions;
 export default transactionsSlice.reducer;

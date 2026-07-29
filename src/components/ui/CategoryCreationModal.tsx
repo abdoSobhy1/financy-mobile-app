@@ -24,10 +24,68 @@ const PREDEFINED_COLORS = [
   "#64748B",
 ];
 
+const PREDEFINED_ICONS = [
+  "cart",
+  "restaurant",
+  "car",
+  "bus",
+  "bolt",
+  "film",
+  "heart",
+  "medkit",
+  "cash",
+  "wallet",
+  "card",
+  "home",
+  "shirt",
+  "bag-handle",
+  "sparkles",
+  "gift",
+  "book",
+  "fitness",
+  "phone-portrait",
+  "wifi",
+  "pricetags",
+  "nutrition",
+  "airplane",
+  "briefcase",
+];
+
+const KEYWORD_ICON_MAP: Array<{ keywords: string[]; icon: string }> = [
+  { keywords: ["food", "groceries", "grocery", "supermarket", "اكل", "طعام", "سوبرماركت", "خضار", "فاكهة", "لحوم", "بهارات", "بقالة"], icon: "cart" },
+  { keywords: ["restaurant", "dining", "eating", "coffee", "cafe", "فطار", "غداء", "عشاء", "قهوة", "مطعم"], icon: "restaurant" },
+  { keywords: ["transport", "commute", "car", "gas", "fuel", "uber", "taxi", "bus", "train", "مواصلات", "بنزين", "عربية", "سيارة", "مواصلات الشغل", "تكاتك"], icon: "car" },
+  { keywords: ["bills", "utility", "utilities", "electricity", "water", "gas", "power", "كهرباء", "مياه", "فاتورة", "فواتير", "غاز"], icon: "bolt" },
+  { keywords: ["internet", "wifi", "net", "telecom", "phone", "mobile", "نت", "اتصالات", "فودافون", "اورنج", "شحن"], icon: "wifi" },
+  { keywords: ["rent", "home", "housing", "mortgage", "ايجار", "سكن", "بيت", "شقة", "عمارة"], icon: "home" },
+  { keywords: ["entertainment", "leisure", "fun", "movies", "cinema", "game", "games", "ترفيه", "رفاهية", "رفاهيات", "سينما", "العاب", "خروجة"], icon: "film" },
+  { keywords: ["health", "doctor", "medicine", "pharmacy", "medical", "hospital", "gym", "fitness", "علاج", "دكتور", "صيدلية", "كشف", "تحليل", "برشام", "مستشفى"], icon: "heart" },
+  { keywords: ["salary", "income", "wage", "paycheck", "freelance", "work", "job", "مرتب", "قبض", "عمل", "شغل", "راتب", "امباور"], icon: "cash" },
+  { keywords: ["clothes", "shopping", "apparel", "fashion", "shoes", "shirt", "ملابس", "هدوم", "شراء", "تسوق"], icon: "shirt" },
+  { keywords: ["cleaning", "detergents", "soap", "maintenance", "منظفات", "نظافة", "غسيل"], icon: "sparkles" },
+  { keywords: ["education", "school", "course", "books", "university", "تعليم", "مدرسة", "كورس", "كتب", "جامعة"], icon: "book" },
+  { keywords: ["gift", "gifts", "donation", "charity", "هدايا", "هدية", "تبرع"], icon: "gift" },
+  { keywords: ["other", "misc", "miscellaneous", "اخرى", "أخرى", "متفرقة", "عام"], icon: "pricetags" },
+];
+
+export function suggestIconForCategory(name: string): string | undefined {
+  if (!name || !name.trim()) return undefined;
+  const lower = name.trim().toLowerCase();
+  for (const item of KEYWORD_ICON_MAP) {
+    for (const kw of item.keywords) {
+      if (lower.includes(kw.toLowerCase())) {
+        return item.icon;
+      }
+    }
+  }
+  return undefined;
+}
+
 export interface CategoryData {
   name: string;
   type: "income" | "expense";
   color?: string;
+  icon?: string;
 }
 
 interface CategoryCreationModalProps {
@@ -47,7 +105,17 @@ export const CategoryCreationModal: React.FC<CategoryCreationModalProps> = ({
 }) => {
   const [categoryName, setCategoryName] = useState("");
   const [categoryColor, setCategoryColor] = useState("");
+  const [categoryIcon, setCategoryIcon] = useState("");
+  const [isManualIcon, setIsManualIcon] = useState(false);
   const [categoryType, setCategoryType] = useState<"income" | "expense">(type || "expense");
+
+  const handleNameChange = (text: string) => {
+    setCategoryName(text);
+    if (!isManualIcon) {
+      const suggested = suggestIconForCategory(text);
+      setCategoryIcon(suggested || "");
+    }
+  };
 
   const handleCreate = () => {
     if (!categoryName.trim()) return;
@@ -56,11 +124,14 @@ export const CategoryCreationModal: React.FC<CategoryCreationModalProps> = ({
       name: categoryName.trim(),
       type: categoryType,
       color: categoryColor || undefined,
+      icon: categoryIcon || undefined,
     });
 
     // Reset form
     setCategoryName("");
     setCategoryColor("");
+    setCategoryIcon("");
+    setIsManualIcon(false);
     setCategoryType(type || "expense");
   };
 
@@ -68,6 +139,8 @@ export const CategoryCreationModal: React.FC<CategoryCreationModalProps> = ({
     // Reset form when closing
     setCategoryName("");
     setCategoryColor("");
+    setCategoryIcon("");
+    setIsManualIcon(false);
     setCategoryType(type || "expense");
     onClose();
   };
@@ -95,7 +168,7 @@ export const CategoryCreationModal: React.FC<CategoryCreationModalProps> = ({
               <TextInput
                 placeholder="Enter category name"
                 value={categoryName}
-                onChangeText={setCategoryName}
+                onChangeText={handleNameChange}
                 style={styles.modalInput}
                 placeholderTextColor={UI.COLORS.TEXT_MUTED}
                 autoFocus={true}
@@ -122,6 +195,44 @@ export const CategoryCreationModal: React.FC<CategoryCreationModalProps> = ({
                 </View>
               </View>
             )}
+
+            <View style={styles.inputGroup}>
+              <View style={styles.labelRow}>
+                <Text style={styles.inputLabel}>Icon (Optional)</Text>
+                {!isManualIcon && categoryIcon ? (
+                  <Text style={styles.suggestedBadge}>Auto-suggested</Text>
+                ) : null}
+              </View>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.colorScroll}>
+                <TouchableOpacity
+                  style={[styles.iconOption, styles.colorOptionClear, !categoryIcon && styles.iconOptionSelected]}
+                  onPress={() => {
+                    setCategoryIcon("");
+                    setIsManualIcon(true);
+                  }}>
+                  <Ionicons name="close" size={16} color={UI.COLORS.TEXT_SECONDARY} />
+                </TouchableOpacity>
+                {PREDEFINED_ICONS.map((iconName) => (
+                  <TouchableOpacity
+                    key={iconName}
+                    style={[
+                      styles.iconOption,
+                      categoryIcon === iconName && styles.iconOptionSelected,
+                      categoryIcon === iconName && { backgroundColor: categoryColor || UI.COLORS.PRIMARY },
+                    ]}
+                    onPress={() => {
+                      setCategoryIcon(iconName);
+                      setIsManualIcon(true);
+                    }}>
+                    <Ionicons
+                      name={iconName as any}
+                      size={20}
+                      color={categoryIcon === iconName ? "#FFFFFF" : UI.COLORS.TEXT_PRIMARY}
+                    />
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+            </View>
 
             <View style={styles.inputGroup}>
               <Text style={styles.inputLabel}>Color (Optional)</Text>
@@ -261,6 +372,36 @@ const styles = StyleSheet.create({
     borderColor: UI.COLORS.BORDER,
   },
   colorOptionSelected: {
+    borderColor: UI.COLORS.TEXT_PRIMARY,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 4,
+  },
+  labelRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: UI.SPACING.SM,
+  },
+  suggestedBadge: {
+    fontSize: 12,
+    color: UI.COLORS.PRIMARY_LIGHT,
+    fontWeight: "500",
+  },
+  iconOption: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    marginHorizontal: UI.SPACING.XS,
+    justifyContent: "center",
+    alignItems: "center",
+    backgroundColor: UI.COLORS.SURFACE,
+    borderWidth: 2,
+    borderColor: "transparent",
+  },
+  iconOptionSelected: {
     borderColor: UI.COLORS.TEXT_PRIMARY,
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 2 },

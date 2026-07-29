@@ -1,4 +1,4 @@
-import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
+import { createSlice, createAsyncThunk, PayloadAction } from "@reduxjs/toolkit";
 import { Debt, DebtPayment, DebtFormData, DebtPaymentFormData } from "../../types";
 import { db } from "../../database/queries";
 
@@ -222,6 +222,20 @@ const debtsSlice = createSlice({
       state.paymentIds = [];
       state.paymentsByDebt = {};
     },
+    markDebtSynced: (state, action: PayloadAction<string>) => {
+      const item = state.items[action.payload];
+      if (item) {
+        item.syncStatus = "synced";
+        (item as any).sync_status = "synced";
+      }
+    },
+    markDebtPaymentSynced: (state, action: PayloadAction<string>) => {
+      const payment = state.payments[action.payload];
+      if (payment) {
+        payment.syncStatus = "synced";
+        (payment as any).sync_status = "synced";
+      }
+    },
   },
   extraReducers: (builder) => {
     // Fetch all debts
@@ -436,5 +450,10 @@ const debtsSlice = createSlice({
   },
 });
 
-export const { clearError, clearPayments } = debtsSlice.actions;
+export const {
+  clearError,
+  clearPayments,
+  markDebtSynced,
+  markDebtPaymentSynced,
+} = debtsSlice.actions;
 export default debtsSlice.reducer;

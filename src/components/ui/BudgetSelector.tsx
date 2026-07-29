@@ -1,7 +1,17 @@
 import React, { useState, useEffect } from "react";
-import { View, Text, ScrollView, TouchableOpacity, StyleSheet } from "react-native";
+import {
+  View,
+  Text,
+  ScrollView,
+  TouchableOpacity,
+  StyleSheet,
+} from "react-native";
+import { LinearGradient } from "expo-linear-gradient";
 import { UI } from "../../constants";
-import { getLastUsedBudgetId, setLastUsedBudgetId } from "../../utils/userPreferences";
+import {
+  getLastUsedBudgetId,
+  setLastUsedBudgetId,
+} from "../../utils/userPreferences";
 
 interface Budget {
   id: string;
@@ -16,7 +26,7 @@ interface BudgetSelectorProps {
   onBudgetSelect: (budgetId: string | undefined) => void;
   label?: string;
   error?: string;
-  rememberLastUsed?: boolean; // New prop to enable last used functionality
+  rememberLastUsed?: boolean;
 }
 
 export const BudgetSelector: React.FC<BudgetSelectorProps> = ({
@@ -27,7 +37,6 @@ export const BudgetSelector: React.FC<BudgetSelectorProps> = ({
   error,
   rememberLastUsed = false,
 }) => {
-  // Load last used budget on component mount if enabled
   useEffect(() => {
     if (rememberLastUsed && !selectedBudgetId && budgets.length > 0) {
       loadLastUsedBudget();
@@ -46,17 +55,12 @@ export const BudgetSelector: React.FC<BudgetSelectorProps> = ({
   };
 
   const handleBudgetSelect = async (budgetId: string) => {
-    // Toggle behavior: if already selected, unselect it
     if (selectedBudgetId === budgetId) {
       onBudgetSelect(undefined);
-      if (rememberLastUsed) {
-        await setLastUsedBudgetId(null);
-      }
+      if (rememberLastUsed) await setLastUsedBudgetId(null);
     } else {
       onBudgetSelect(budgetId);
-      if (rememberLastUsed) {
-        await setLastUsedBudgetId(budgetId);
-      }
+      if (rememberLastUsed) await setLastUsedBudgetId(budgetId);
     }
   };
 
@@ -64,28 +68,57 @@ export const BudgetSelector: React.FC<BudgetSelectorProps> = ({
     <View style={styles.container}>
       {label && <Text style={styles.label}>{label}</Text>}
 
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.budgetScroll}>
-        <View style={styles.budgetContainer}>
-          {/* None option for deselecting */}
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        style={styles.scroll}>
+        <View style={styles.chipRow}>
+          {/* None chip */}
           <TouchableOpacity
-            style={[styles.budgetChip, !selectedBudgetId && styles.budgetChipActive]}
+            activeOpacity={0.7}
             onPress={() => {
               onBudgetSelect(undefined);
-              if (rememberLastUsed) {
-                setLastUsedBudgetId(null);
-              }
+              if (rememberLastUsed) setLastUsedBudgetId(null);
             }}>
-            <Text style={[styles.budgetChipText, !selectedBudgetId && styles.budgetChipTextActive]}>None</Text>
+            {!selectedBudgetId ? (
+              <LinearGradient
+                colors={[UI.COLORS.PRIMARY, UI.COLORS.PRIMARY_DARK]}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={[styles.chip, styles.chipActive]}>
+                <Text style={styles.chipTextActive}>None</Text>
+              </LinearGradient>
+            ) : (
+              <View style={styles.chip}>
+                <Text style={styles.chipText}>None</Text>
+              </View>
+            )}
           </TouchableOpacity>
 
-          {budgets.map((budget) => (
-            <TouchableOpacity
-              key={budget.id}
-              style={[styles.budgetChip, selectedBudgetId === budget.id && styles.budgetChipActive]}
-              onPress={() => handleBudgetSelect(budget.id)}>
-              <Text style={[styles.budgetChipText, selectedBudgetId === budget.id && styles.budgetChipTextActive]}>{budget.name}</Text>
-            </TouchableOpacity>
-          ))}
+          {/* Budget chips */}
+          {budgets.map((budget) => {
+            const isActive = selectedBudgetId === budget.id;
+            return (
+              <TouchableOpacity
+                key={budget.id}
+                activeOpacity={0.7}
+                onPress={() => handleBudgetSelect(budget.id)}>
+                {isActive ? (
+                  <LinearGradient
+                    colors={[UI.COLORS.PRIMARY, UI.COLORS.PRIMARY_DARK]}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 1 }}
+                    style={[styles.chip, styles.chipActive]}>
+                    <Text style={styles.chipTextActive}>{budget.name}</Text>
+                  </LinearGradient>
+                ) : (
+                  <View style={styles.chip}>
+                    <Text style={styles.chipText}>{budget.name}</Text>
+                  </View>
+                )}
+              </TouchableOpacity>
+            );
+          })}
         </View>
       </ScrollView>
 
@@ -99,43 +132,51 @@ const styles = StyleSheet.create({
     marginBottom: UI.SPACING.MD,
   },
   label: {
-    fontSize: 16,
+    fontSize: 13,
     fontWeight: "600",
-    color: UI.COLORS.TEXT_PRIMARY,
-    marginBottom: UI.SPACING.XS,
+    color: UI.COLORS.PRIMARY_LIGHT,
+    marginBottom: 10,
+    letterSpacing: 0.4,
+    textTransform: "uppercase",
   },
-  budgetScroll: {
+  scroll: {
     marginHorizontal: -UI.SPACING.SM,
     paddingHorizontal: UI.SPACING.SM,
   },
-  budgetContainer: {
+  chipRow: {
     flexDirection: "row",
+    gap: 10,
     paddingRight: UI.SPACING.SM,
   },
-  budgetChip: {
-    backgroundColor: UI.COLORS.SURFACE,
-    borderRadius: 20,
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    marginRight: 8,
+  chip: {
+    paddingHorizontal: 18,
+    paddingVertical: 10,
+    borderRadius: 25,
+    backgroundColor: "rgba(20,20,50,0.65)",
     borderWidth: 1,
-    borderColor: UI.COLORS.BORDER,
+    borderColor: "rgba(108,92,231,0.18)",
   },
-  budgetChipActive: {
-    backgroundColor: UI.COLORS.PRIMARY,
-    borderColor: UI.COLORS.PRIMARY,
+  chipActive: {
+    borderWidth: 0,
+    shadowColor: UI.COLORS.PRIMARY,
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.35,
+    shadowRadius: 8,
+    elevation: 5,
   },
-  budgetChipText: {
+  chipText: {
     fontSize: 14,
     fontWeight: "500",
     color: UI.COLORS.TEXT_SECONDARY,
   },
-  budgetChipTextActive: {
-    color: UI.COLORS.TEXT_PRIMARY,
+  chipTextActive: {
+    fontSize: 14,
+    fontWeight: "700",
+    color: "#fff",
   },
   errorText: {
     fontSize: 12,
     color: UI.COLORS.ERROR,
-    marginTop: 4,
+    marginTop: 6,
   },
 });

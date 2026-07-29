@@ -1,4 +1,5 @@
-import { BillPayment, BillPaymentHistory, Bill } from "../types";
+import { BillPayment } from "../types/bills";
+import { Bill } from "../types";
 import { DatabaseManager } from "../database";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
@@ -20,15 +21,34 @@ export class BillPaymentService {
   /**
    * Record a bill payment
    */
-  async recordPayment(payment: Omit<BillPayment, "id" | "createdAt" | "updatedAt" | "syncUpdatedAt">): Promise<BillPayment> {
+  async recordPayment(payment: Omit<BillPayment, "id" | "createdAt"> & { paidDate: string }) {
     const now = new Date().toISOString();
-    const newPayment: BillPayment = {
+    // Calculate billing period for the payment date
+    const paymentDate: string = payment.paidDate;
+    // Use billingPeriod utils to get periodStart/periodEnd
+    const { getBillingPeriodForDate } = require("../utils/billingPeriod");
+    let periodStart = now,
+      periodEnd = now;
+    try {
+      const period = await getBillingPeriodForDate(new Date(paymentDate));
+      periodStart = period.start.toISOString();
+      periodEnd = period.end.toISOString();
+    } catch (e) {
+      // fallback: use paymentDate as both
+      periodStart = paymentDate;
+      periodEnd = paymentDate;
+    }
+
+    const newPayment = {
       id: `bill_payment_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-      ...payment,
+      billId: payment.billId,
+      amount: payment.amount,
+      paidDate: paymentDate,
+      periodStart,
+      periodEnd,
+      paymentMethod: payment.paymentMethod,
+      note: payment.note,
       createdAt: now,
-      updatedAt: now,
-      syncUpdatedAt: Date.now(),
-      syncStatus: "pending",
     };
 
     try {
@@ -37,26 +57,23 @@ export class BillPaymentService {
 
       await database.runAsync(
         `INSERT INTO bill_payments (
-          id, bill_id, amount, payment_date, payment_method, transaction_id, note, 
-          created_at, updated_at, sync_updated_at, sync_status
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          id, bill_id, amount, payment_date, period_start, period_end, payment_method, note, created_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           newPayment.id,
           newPayment.billId,
           newPayment.amount,
-          newPayment.paymentDate,
+          newPayment.paidDate,
+          newPayment.periodStart,
+          newPayment.periodEnd,
           newPayment.paymentMethod || null,
-          newPayment.transactionId || null,
           newPayment.note || null,
           newPayment.createdAt,
-          newPayment.updatedAt,
-          newPayment.syncUpdatedAt,
-          newPayment.syncStatus || "pending",
         ]
       );
 
       // Update bill's last paid date
-      await this.updateBillLastPaidDate(newPayment.billId, newPayment.paymentDate);
+      await this.updateBillLastPaidDate(newPayment.billId, newPayment.paidDate);
 
       return newPayment;
     } catch (error) {
@@ -68,7 +85,7 @@ export class BillPaymentService {
   /**
    * Get payment history for a specific bill
    */
-  async getPaymentHistory(billId: string): Promise<BillPaymentHistory> {
+  async getPaymentHistory(billId: string) {
     try {
       await this.db.ensureInitialized();
       const database = this.db.getDatabase();
@@ -81,19 +98,16 @@ export class BillPaymentService {
         [billId]
       );
 
-      const payments: BillPayment[] = paymentsResult.map((row: any) => ({
+      const payments = paymentsResult.map((row: any) => ({
         id: row.id,
         billId: row.bill_id,
         amount: row.amount,
-        paymentDate: row.payment_date,
+        paidDate: row.payment_date,
+        periodStart: row.period_start,
+        periodEnd: row.period_end,
         paymentMethod: row.payment_method,
-        transactionId: row.transaction_id,
         note: row.note,
         createdAt: row.created_at,
-        updatedAt: row.updated_at,
-        syncUpdatedAt: row.sync_updated_at,
-        deleted: row.deleted,
-        syncStatus: row.sync_status,
       }));
 
       // Calculate total paid
@@ -108,7 +122,7 @@ export class BillPaymentService {
         billId,
         payments,
         totalPaid,
-        lastPaymentDate: payments.length > 0 ? payments[0].paymentDate : undefined,
+        lastPaymentDate: payments.length > 0 ? payments[0].paidDate : undefined,
         upcomingPayments,
       };
     } catch (error) {
@@ -120,7 +134,7 @@ export class BillPaymentService {
   /**
    * Get all bill payments within a date range
    */
-  async getPaymentsInRange(startDate: string, endDate: string): Promise<BillPayment[]> {
+  async getPaymentsInRange(startDate: string, endDate: string) {
     try {
       await this.db.ensureInitialized();
       const database = this.db.getDatabase();
@@ -137,15 +151,12 @@ export class BillPaymentService {
         id: row.id,
         billId: row.bill_id,
         amount: row.amount,
-        paymentDate: row.payment_date,
+        paidDate: row.payment_date,
+        periodStart: row.period_start,
+        periodEnd: row.period_end,
         paymentMethod: row.payment_method,
-        transactionId: row.transaction_id,
         note: row.note,
         createdAt: row.created_at,
-        updatedAt: row.updated_at,
-        syncUpdatedAt: row.sync_updated_at,
-        deleted: row.deleted,
-        syncStatus: row.sync_status,
       }));
     } catch (error) {
       console.error("Error getting payments in range:", error);
@@ -156,7 +167,7 @@ export class BillPaymentService {
   /**
    * Update a bill payment
    */
-  async updatePayment(paymentId: string, updates: Partial<BillPayment>): Promise<BillPayment> {
+  async updatePayment(paymentId: string, updates: any) {
     try {
       await this.db.ensureInitialized();
       const database = this.db.getDatabase();
@@ -201,15 +212,12 @@ export class BillPaymentService {
         id: updated.id,
         billId: updated.bill_id,
         amount: updated.amount,
-        paymentDate: updated.payment_date,
+        paidDate: updated.payment_date,
+        periodStart: updated.period_start,
+        periodEnd: updated.period_end,
         paymentMethod: updated.payment_method,
-        transactionId: updated.transaction_id,
         note: updated.note,
         createdAt: updated.created_at,
-        updatedAt: updated.updated_at,
-        syncUpdatedAt: updated.sync_updated_at,
-        deleted: updated.deleted,
-        syncStatus: updated.sync_status,
       };
     } catch (error) {
       console.error("Error updating bill payment:", error);

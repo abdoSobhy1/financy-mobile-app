@@ -2,7 +2,7 @@
 import { writeAsStringAsync, documentDirectory, EncodingType } from "expo-file-system/legacy";
 import * as Sharing from "expo-sharing";
 import { Alert } from "react-native";
-import { Transaction, Category } from "../types";
+import { Transaction, Category, Budget } from "../types";
 import { formatCurrency, formatDate } from "./index";
 
 export interface ExportData {
@@ -10,6 +10,8 @@ export interface ExportData {
   period: string;
   transactions: Transaction[];
   categories: Record<string, Category>;
+  budgets: Record<string, Budget>;
+
   summary: {
     totalTransactions: number;
     totalIncome: number;
@@ -26,21 +28,132 @@ export const exportToExcel = async (data: ExportData): Promise<void> => {
     });
 
     const workbook = XLSX.utils.book_new();
-    const worksheet = XLSX.utils.json_to_sheet(
-      data.transactions.map((transaction) => ({
+
+    // Add a master Transactions sheet (all transactions)
+    const masterRows = data.transactions.map((transaction) => ({
+      Date: formatDate(transaction.date),
+      Description: transaction.description,
+      Amount: transaction.amount,
+      Type: transaction.type.toUpperCase(),
+      Category: data.categories[transaction.categoryId]?.name || "Unknown",
+      Budget: transaction.budgetId ? data.budgets[transaction.budgetId]?.name || "None" : "None",
+      Note: transaction.note || "",
+    }));
+
+    const masterSheet = XLSX.utils.json_to_sheet(masterRows);
+    XLSX.utils.book_append_sheet(workbook, masterSheet, "Transactions");
+
+    // Create a sheet per budget and one for unbudgeted transactions
+    const seenSheetNames = new Set<string>();
+    const safeSheetName = (name: string, idx: number) => {
+      // Excel sheet name max length 31
+      let base = name || "Sheet";
+      base = base.slice(0, 28);
+      let candidate = base;
+      if (seenSheetNames.has(candidate)) candidate = `${base}_${idx}`.slice(0, 31);
+      seenSheetNames.add(candidate);
+      return candidate;
+    };
+
+    const budgetsArray = Object.entries(data.budgets || {});
+
+    for (let i = 0; i < budgetsArray.length; i++) {
+      const [budgetId, budget] = budgetsArray[i];
+      const txForBudget = data.transactions.filter((t) => t.budgetId === budgetId);
+      const rows = txForBudget.map((transaction) => ({
         Date: formatDate(transaction.date),
         Description: transaction.description,
         Amount: transaction.amount,
         Type: transaction.type.toUpperCase(),
         Category: data.categories[transaction.categoryId]?.name || "Unknown",
-        Budget: transaction.budgetId || "None",
         Note: transaction.note || "",
-      }))
-    );
+      }));
 
-    console.log("Workbook and worksheet created successfully");
+      // Compute totals per category (summing expenses only) directly from transactions
+      const totalsMap: Record<string, number> = {};
+      txForBudget.forEach((t) => {
+        if (t.type !== "expense") return;
+        const catName = data.categories[t.categoryId]?.name || "Unknown";
+        totalsMap[catName] = (totalsMap[catName] || 0) + t.amount;
+      });
 
-    XLSX.utils.book_append_sheet(workbook, worksheet, "Transactions");
+      const totalsRows = Object.entries(totalsMap).map(([categoryName, total]) => ({
+        Date: "",
+        Description: "",
+        Amount: total,
+        Type: "",
+        Category: categoryName,
+        Note: "",
+      }));
+
+      // Grand total of category totals
+      const grandTotal = Object.values(totalsMap).reduce((s, v) => s + v, 0);
+      const grandTotalRow = { Date: "", Description: "", Amount: grandTotal, Type: "", Category: "Total", Note: "" };
+
+      // Combine rows and totals (blank row separator)
+      const combined = [
+        ...rows,
+        { Date: "", Description: "", Amount: "", Type: "", Category: "", Note: "" },
+        { Date: "Category Totals", Description: "", Amount: "", Type: "", Category: "Total" },
+        ...totalsRows,
+        { Date: "", Description: "", Amount: "", Type: "", Category: "", Note: "" },
+        grandTotalRow,
+      ];
+
+      const sheetName = safeSheetName(budget.name || `Budget_${i + 1}`, i + 1);
+      const ws = XLSX.utils.json_to_sheet(combined, { skipHeader: false });
+
+      // Append the budget sheet (no cell styling)
+      XLSX.utils.book_append_sheet(workbook, ws, sheetName);
+    }
+
+    // Unbudgeted transactions
+    const txUnbudgeted = data.transactions.filter((t) => !t.budgetId);
+    const unbudgetedRows = txUnbudgeted.map((transaction) => ({
+      Date: formatDate(transaction.date),
+      Description: transaction.description,
+      Amount: transaction.amount,
+      Type: transaction.type.toUpperCase(),
+      Category: data.categories[transaction.categoryId]?.name || "Unknown",
+      Note: transaction.note || "",
+    }));
+
+    // Totals for unbudgeted (expenses only)
+    const unTotalsMap: Record<string, number> = {};
+    txUnbudgeted.forEach((t) => {
+      if (t.type !== "expense") return;
+      const catName = data.categories[t.categoryId]?.name || "Unknown";
+      unTotalsMap[catName] = (unTotalsMap[catName] || 0) + t.amount;
+    });
+
+    const unTotalsRows = Object.entries(unTotalsMap).map(([categoryName, total]) => ({
+      Date: "",
+      Description: "",
+      Amount: total,
+      Type: "",
+      Category: categoryName,
+      Note: "",
+    }));
+
+    // Grand total for unbudgeted
+    const unGrandTotal = Object.values(unTotalsMap).reduce((s, v) => s + v, 0);
+    const unGrandTotalRow = { Date: "", Description: "", Amount: unGrandTotal, Type: "", Category: "Grand Total", Note: "" };
+
+    const unCombined = [
+      ...unbudgetedRows,
+      { Date: "", Description: "", Amount: "", Type: "", Category: "", Note: "" },
+      { Date: "Category Totals", Description: "", Amount: "", Type: "", Category: "Total" },
+      ...unTotalsRows,
+      { Date: "", Description: "", Amount: "", Type: "", Category: "", Note: "" },
+      unGrandTotalRow,
+    ];
+
+    const unWs = XLSX.utils.json_to_sheet(unCombined);
+
+    // Append unbudgeted sheet (no cell styling)
+    XLSX.utils.book_append_sheet(workbook, unWs, "Unbudgeted");
+
+    console.log("Workbook and worksheets created successfully");
 
     console.log("Generating Excel buffer...");
     const excelBuffer = XLSX.write(workbook, { type: "base64", bookType: "xlsx" });

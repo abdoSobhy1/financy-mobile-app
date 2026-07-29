@@ -10,8 +10,11 @@ import {
   AuthError,
 } from "firebase/auth";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { getFirebaseAuth } from "./firebase";
+import { getFirebaseAuth, getFirestoreInstance } from "./firebase";
+import { doc, setDoc, serverTimestamp } from "firebase/firestore";
 import { User } from "../types";
+
+import { DatabaseManager } from "../database";
 
 interface SessionData {
   user: User;
@@ -24,6 +27,7 @@ export class AuthService {
   private auth: any = null;
   private static readonly SESSION_KEY = "financy_user_session";
   private static readonly SESSION_DURATION = 30 * 24 * 60 * 60 * 1000; // 30 days in milliseconds
+  private static readonly LAST_USER_KEY = "financy_last_user_id";
 
   private constructor() {}
 
@@ -63,8 +67,35 @@ export class AuthService {
         lastActivity: now,
         expiresAt: now + AuthService.SESSION_DURATION, // Always reset to 30 days from now for rolling renewal
       };
-      await AsyncStorage.setItem(AuthService.SESSION_KEY, JSON.stringify(sessionData));
-      console.log(`💾 Session saved for user ${user.uid}, expires at ${new Date(sessionData.expiresAt).toLocaleString()}`);
+      await AsyncStorage.setItem(
+        AuthService.SESSION_KEY,
+        JSON.stringify(sessionData),
+      );
+      console.log(
+        `💾 Session saved for user ${user.uid}, expires at ${new Date(sessionData.expiresAt).toLocaleString()}`,
+      );
+
+      // Check if user changed and reset database if needed
+      const lastUserId = await AsyncStorage.getItem(AuthService.LAST_USER_KEY);
+
+      if (lastUserId && lastUserId !== user.uid) {
+        console.log(
+          `👤 User changed from ${lastUserId} to ${user.uid}. Resetting local database for security.`,
+        );
+        try {
+          // Initialize DB manager if needed (it might not be initialized yet if coming from fresh app start -> login)
+          const dbManager = DatabaseManager.getInstance();
+          await dbManager.ensureInitialized();
+          await dbManager.resetDatabase();
+          console.log("✅ Local database reset successfully");
+        } catch (dbError) {
+          console.error("❌ Failed to reset database on user switch:", dbError);
+          // Non-fatal? Maybe should be fatal. But let's proceed for now.
+        }
+      }
+
+      // Update last user ID
+      await AsyncStorage.setItem(AuthService.LAST_USER_KEY, user.uid);
     } catch (error) {
       console.error("Failed to save session:", error);
     }
@@ -98,9 +129,12 @@ export class AuthService {
         const now = Date.now();
         sessionData.lastActivity = now;
         sessionData.expiresAt = now + AuthService.SESSION_DURATION; // Reset expiration for rolling renewal
-        await AsyncStorage.setItem(AuthService.SESSION_KEY, JSON.stringify(sessionData));
+        await AsyncStorage.setItem(
+          AuthService.SESSION_KEY,
+          JSON.stringify(sessionData),
+        );
         console.log(
-          `🔄 Session activity updated for user ${sessionData.user.uid}, renewed until ${new Date(sessionData.expiresAt).toLocaleString()}`
+          `🔄 Session activity updated for user ${sessionData.user.uid}, renewed until ${new Date(sessionData.expiresAt).toLocaleString()}`,
         );
       }
     } catch (error) {
@@ -117,9 +151,17 @@ export class AuthService {
   }
 
   // Sign up with email and password
-  public async signUp(email: string, password: string, displayName?: string): Promise<User> {
+  public async signUp(
+    email: string,
+    password: string,
+    displayName?: string,
+  ): Promise<User> {
     try {
-      const userCredential = await createUserWithEmailAndPassword(this.getAuth(), email, password);
+      const userCredential = await createUserWithEmailAndPassword(
+        this.getAuth(),
+        email,
+        password,
+      );
 
       // Update profile with display name if provided
       if (displayName) {
@@ -129,6 +171,28 @@ export class AuthService {
       const user = this.mapFirebaseUser(userCredential.user);
       if (!user) {
         throw new Error("Failed to create user");
+      }
+
+      // Create user document in Firestore
+      try {
+        const db = getFirestoreInstance();
+        await setDoc(doc(db, "users", user.uid), {
+          email: user.email,
+          displayName: user.displayName || displayName || "",
+          createdAt: serverTimestamp(),
+          updatedAt: serverTimestamp(),
+          role: "user", // Default role
+          settings: {
+            currency: "USD",
+            theme: "dark",
+            language: "en",
+          },
+        });
+        console.log("✅ Created user document in Firestore");
+      } catch (firestoreError) {
+        console.error("❌ Failed to create user document:", firestoreError);
+        // We don't throw here to ensure the auth account is still returned,
+        // but this should be handled (maybe by a cloud function or subsequent sync)
       }
 
       // Save session to AsyncStorage
@@ -145,7 +209,11 @@ export class AuthService {
   // Sign in with email and password
   public async signIn(email: string, password: string): Promise<User> {
     try {
-      const userCredential = await signInWithEmailAndPassword(this.getAuth(), email, password);
+      const userCredential = await signInWithEmailAndPassword(
+        this.getAuth(),
+        email,
+        password,
+      );
       const user = this.mapFirebaseUser(userCredential.user);
 
       if (!user) {
@@ -155,7 +223,9 @@ export class AuthService {
       // Save session to AsyncStorage (implements rolling 30-day renewal)
       await this.saveSession(user);
 
-      console.log(`✅ User signed in successfully: ${user.uid} - Session renewed for 30 days`);
+      console.log(
+        `✅ User signed in successfully: ${user.uid} - Session renewed for 30 days`,
+      );
       return user;
     } catch (error) {
       console.error("Sign in error:", error);
@@ -173,10 +243,14 @@ export class AuthService {
 
       // Clear user preferences
       try {
-        const { clearUserPreferences } = await import("../utils/userPreferences");
+        const { clearUserPreferences } =
+          await import("../utils/userPreferences");
         await clearUserPreferences();
       } catch (prefError) {
-        console.warn("Failed to clear user preferences on sign out:", prefError);
+        console.warn(
+          "Failed to clear user preferences on sign out:",
+          prefError,
+        );
       }
 
       console.log("User signed out successfully");
@@ -241,7 +315,9 @@ export class AuthService {
     }
 
     // Fallback: throw error with guidance to use async version
-    throw new Error("User not authenticated via Firebase. Use requireUserIdAsync() to check stored session.");
+    throw new Error(
+      "User not authenticated via Firebase. Use requireUserIdAsync() to check stored session.",
+    );
   }
 
   // Async version that checks both Firebase and stored session
@@ -289,7 +365,9 @@ export class AuthService {
       // Check if Firebase user matches stored user
       const firebaseUser = this.getAuth().currentUser;
       if (!firebaseUser || firebaseUser.uid !== storedUser.uid) {
-        console.log("Firebase auth state differs from stored session. This is normal on app startup.");
+        console.log(
+          "Firebase auth state differs from stored session. This is normal on app startup.",
+        );
         // We don't force re-authentication here, just log the difference
         // The sync service will work with stored session until Firebase auth catches up
       }

@@ -14,7 +14,7 @@ const DebtFormScreen: React.FC = () => {
   const navigation = useNavigation<DebtFormScreenNavigationProp>();
   const { debtId } = (route.params as { debtId?: string }) || {};
 
-  const debt = useSelector((state: RootState) => (debtId ? state.debts.items[debtId] : null));
+  const debt = useSelector((state: RootState) => (debtId && state.debts ? state.debts.items[debtId] : null));
 
   const handleSuccess = () => {
     // Navigate back to the debt list

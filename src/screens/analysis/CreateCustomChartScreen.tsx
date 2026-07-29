@@ -34,9 +34,9 @@ export const CreateCustomChartScreen: React.FC = () => {
 
   const existingChart = useSelector((state: RootState) => (chartId ? state.analysis.customCharts[chartId] : null));
 
-  const categories = useSelector((state: RootState) => Object.values(state.categories.items));
-  const budgets = useSelector((state: RootState) => Object.values(state.budgets.items));
-  const debts = useSelector((state: RootState) => Object.values(state.debts.items));
+  const categories = useSelector((state: RootState) => Object.values((state.categories ? state.categories.items : {}) as any) as any[]);
+  const budgets = useSelector((state: RootState) => Object.values((state.budgets ? state.budgets.items : {}) as any) as any[]);
+  const debts = useSelector((state: RootState) => Object.values((state.debts ? state.debts.items : {}) as any) as any[]);
 
   // Form state
   const [chartTitle, setChartTitle] = useState("");

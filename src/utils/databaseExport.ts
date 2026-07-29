@@ -11,7 +11,6 @@ export interface DatabaseExportData {
   transactions: any[];
   categories: any[];
   budgets: any[];
-  bills: any[];
   debts: any[];
   settings: any[];
 }
@@ -212,11 +211,10 @@ const exportSQLiteDatabaseAsSQLDump = async (): Promise<void> => {
 export const exportDatabaseToJSON = async (): Promise<void> => {
   try {
     // Fetch all data from database
-    const [transactions, categories, budgets, bills, debts] = await Promise.all([
+    const [transactions, categories, budgets, debts] = await Promise.all([
       db.transactions.getAllTransactions(),
       db.categories.getAllCategories(),
       db.budgets.getAllBudgets(),
-      db.bills.getAllBills(),
       db.debts.getAllDebts(),
     ]);
 
@@ -227,7 +225,7 @@ export const exportDatabaseToJSON = async (): Promise<void> => {
       transactions,
       categories,
       budgets,
-      bills,
+      // bills removed
       debts,
       settings: [], // Settings can be added if needed
     };
@@ -268,9 +266,9 @@ export const exportDatabaseToJSON = async (): Promise<void> => {
               transactions: transactions.length,
               categories: categories.length,
               budgets: budgets.length,
-              bills: bills.length,
+              bills: 0,
               debts: debts.length,
-              total: transactions.length + categories.length + budgets.length + bills.length + debts.length,
+              total: transactions.length + categories.length + budgets.length + debts.length,
             },
             note: "Full export data is available in the console logs",
             filename: filename,
@@ -304,11 +302,10 @@ export const exportDatabaseToJSON = async (): Promise<void> => {
  */
 export const getDatabaseStats = async () => {
   try {
-    const [transactions, categories, budgets, bills, debts] = await Promise.all([
+    const [transactions, categories, budgets, debts] = await Promise.all([
       db.transactions.getAllTransactions(),
       db.categories.getAllCategories(),
       db.budgets.getAllBudgets(),
-      db.bills.getAllBills(),
       db.debts.getAllDebts(),
     ]);
 
@@ -316,9 +313,9 @@ export const getDatabaseStats = async () => {
       transactions: transactions.length,
       categories: categories.length,
       budgets: budgets.length,
-      bills: bills.length,
+      bills: 0,
       debts: debts.length,
-      totalRecords: transactions.length + categories.length + budgets.length + bills.length + debts.length,
+      totalRecords: transactions.length + categories.length + budgets.length + debts.length,
     };
   } catch (error) {
     console.error("Error getting database stats:", error);

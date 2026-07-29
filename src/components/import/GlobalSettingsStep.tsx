@@ -21,8 +21,8 @@ export const GlobalSettingsStep: React.FC<GlobalSettingsStepProps> = ({ settings
   const [showCategoryPreview, setShowCategoryPreview] = useState(false);
 
   // Get budgets and categories from Redux
-  const budgets = useSelector((state: RootState) => Object.values(state.budgets.items));
-  const categories = useSelector((state: RootState) => Object.values(state.categories.items));
+  const budgets = useSelector((state: RootState) => Object.values((state as any).budgets?.items ?? {}) as any[]);
+  const categories = useSelector((state: RootState) => Object.values((state as any).categories?.items ?? {}) as any[]);
 
   const selectedBudget = budgets.find((b) => b.id === localSettings.globalBudgetId);
   // In this app, categories aren't directly linked to budgets

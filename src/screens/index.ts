@@ -1,6 +1,7 @@
 // Transaction Screens
 export * from "./TransactionScreens";
 export * from "./TransactionListScreen";
+export * from "./DashboardScreen";
 
 // Budget Screens
 export * from "./BudgetScreens";
@@ -15,5 +16,4 @@ export * from "./SettingsScreens";
 export { AnalysisScreen } from "./analysis/AnalysisScreen";
 export { CreateCustomChartScreen } from "./analysis/CreateCustomChartScreen";
 
-// Bill Screens
-export { default as BillPaymentHistoryScreen } from "./BillPaymentHistoryScreen";
+// Bill Screens removed

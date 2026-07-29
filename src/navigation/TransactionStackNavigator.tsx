@@ -1,28 +1,25 @@
-import React from "react";
 import { createStackNavigator } from "@react-navigation/stack";
 import { TransactionStackParamList } from "../types";
 import { TransactionListScreen } from "../screens/TransactionScreens";
+import { DashboardScreen } from "../screens/DashboardScreen";
 import AddTransactionScreen from "../screens/AddTransactionScreen";
 
 const Stack = createStackNavigator<TransactionStackParamList>();
 
-const TransactionStackNavigator: React.FC = () => {
-  return (
-    <Stack.Navigator
-      screenOptions={{
+const TransactionStackNavigator = () => (
+  <Stack.Navigator screenOptions={{ headerShown: false }}>
+    <Stack.Screen name="Dashboard" component={DashboardScreen} />
+    <Stack.Screen name="TransactionList" component={TransactionListScreen} />
+    <Stack.Screen
+      name="AddTransaction"
+      component={AddTransactionScreen}
+      options={{
+        presentation: "modal",
         headerShown: false,
-      }}>
-      <Stack.Screen name="TransactionList" component={TransactionListScreen} />
-      <Stack.Screen
-        name="AddTransaction"
-        component={AddTransactionScreen}
-        options={{
-          presentation: "modal",
-          headerShown: false,
-        }}
-      />
-    </Stack.Navigator>
-  );
-};
+        cardStyle: { backgroundColor: "transparent" },
+      }}
+    />
+  </Stack.Navigator>
+);
 
 export default TransactionStackNavigator;
