@@ -47,7 +47,11 @@
           "microphonePermission": "نحتاج إلى المايكروفون للإدخال الصوتي",
           "speechRecognitionPermission": "نحتاج إلى التعرف على الكلام للإدخال الصوتي"
         }
-      ]
+      ],
+      "expo-build-properties",
+      "expo-sharing",
+      "expo-sqlite",
+      "expo-status-bar"
     ]
   }
 }
