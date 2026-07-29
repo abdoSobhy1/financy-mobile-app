@@ -17,3 +17,4 @@ export { AnalysisScreen } from "./analysis/AnalysisScreen";
 export { CreateCustomChartScreen } from "./analysis/CreateCustomChartScreen";
 
 // Bill Screens removed
+export { WalletsScreen } from "./WalletsScreen";

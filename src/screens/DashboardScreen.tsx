@@ -55,6 +55,12 @@ export const DashboardScreen: React.FC = () => {
   const categoriesMap = useSelector(
     (state: RootState) => state.categories.items
   );
+  const walletsMap = useSelector((state: RootState) => state.wallets.items);
+  const wallets = Object.values(walletsMap);
+  const totalWalletBalance = wallets.reduce(
+    (sum, w) => sum + Number(w.balance || 0),
+    0
+  );
 
   const [periodStart, setPeriodStart] = useState<Date>(new Date());
   const [periodEnd, setPeriodEnd] = useState<Date>(new Date());
@@ -377,6 +383,70 @@ export const DashboardScreen: React.FC = () => {
           </View>
         </View>
 
+        {/* ─── Wallets Balance Row (Prompt 2C / 3F) ──────────────────── */}
+        <TouchableOpacity
+          activeOpacity={0.8}
+          onPress={() => navigation.navigate("Wallets")}
+          style={[
+            styles.walletsRowCard,
+            {
+              backgroundColor: colors.surface,
+              borderRadius: radius.large,
+              borderWidth: StyleSheet.hairlineWidth,
+              borderColor: colors.outline,
+              padding: spacing.s16,
+              marginTop: spacing.s16,
+            },
+          ]}>
+          <View style={styles.walletsRowLeft}>
+            <View
+              style={[
+                styles.walletsRowIconBadge,
+                {
+                  backgroundColor: colors.primaryContainer,
+                  borderRadius: radius.full,
+                },
+              ]}>
+              <Ionicons
+                name="wallet"
+                size={20}
+                color={colors.onPrimaryContainer}
+              />
+            </View>
+            <View>
+              <Text
+                style={[
+                  typography.titleMedium,
+                  { color: colors.onSurface, fontWeight: "600" },
+                ]}>
+                Wallets ({wallets.length})
+              </Text>
+              <Text
+                style={[
+                  typography.bodySmall,
+                  { color: colors.textSecondary },
+                ]}>
+                Total: {formatCurrency(totalWalletBalance)}
+              </Text>
+            </View>
+          </View>
+
+          <View style={styles.walletsRowRight}>
+            <Text
+              style={[
+                typography.labelMedium,
+                { color: colors.primary, fontWeight: "600" },
+              ]}>
+              Manage
+            </Text>
+            <Ionicons
+              name="chevron-forward"
+              size={18}
+              color={colors.primary}
+            />
+          </View>
+        </TouchableOpacity>
+
         {/* ─── Quick Add Row (Requirement 2) ─────────────────────────── */}
         <View style={[styles.section, { marginTop: spacing.s24 }]}>
           <Text
@@ -657,5 +727,26 @@ const styles = StyleSheet.create({
   emptyStateContainer: {
     alignItems: "center",
     justifyContent: "center",
+  },
+  walletsRowCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  walletsRowLeft: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+  },
+  walletsRowIconBadge: {
+    width: 40,
+    height: 40,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  walletsRowRight: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
   },
 });

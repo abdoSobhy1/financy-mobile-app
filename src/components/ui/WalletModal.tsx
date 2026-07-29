@@ -11,6 +11,8 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 import { UI } from "../../constants";
 import { Wallet, WalletFormData } from "../../types";
+import { useAppTheme } from "../../theme";
+import { IconPicker } from "./IconPicker";
 
 const PREDEFINED_COLORS = [
   "#10B981",
@@ -21,15 +23,6 @@ const PREDEFINED_COLORS = [
   "#EC4899",
   "#06B6D4",
   "#64748B",
-];
-
-const PREDEFINED_ICONS = [
-  "wallet",
-  "card",
-  "cash",
-  "business",
-  "logo-usd",
-  "cart",
 ];
 
 interface WalletModalProps {
@@ -77,6 +70,8 @@ export const WalletModal: React.FC<WalletModalProps> = ({
     onClose();
   };
 
+  const { colors, radius, spacing, typography } = useAppTheme();
+
   return (
     <Modal
       visible={visible}
@@ -86,73 +81,94 @@ export const WalletModal: React.FC<WalletModalProps> = ({
       statusBarTranslucent={true}
       presentationStyle="overFullScreen">
       <View style={styles.modalOverlay}>
-        <View style={styles.modal}>
-          <View style={styles.modalHeader}>
-            <Text style={styles.modalTitle}>{title}</Text>
+        <View
+          style={[
+            styles.modal,
+            {
+              backgroundColor: colors.surface,
+              borderRadius: radius.large,
+              borderColor: colors.outline,
+              borderWidth: StyleSheet.hairlineWidth,
+            },
+          ]}>
+          <View
+            style={[
+              styles.modalHeader,
+              { borderBottomColor: colors.outlineVariant },
+            ]}>
+            <Text style={[styles.modalTitle, { color: colors.onSurface }]}>
+              {title}
+            </Text>
             <TouchableOpacity onPress={onClose} style={styles.closeButton}>
               <Ionicons
                 name="close"
                 size={24}
-                color={UI.COLORS.TEXT_SECONDARY}
+                color={colors.textSecondary}
               />
             </TouchableOpacity>
           </View>
 
           <View style={styles.modalContent}>
             <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>Wallet Name</Text>
+              <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>
+                Wallet Name
+              </Text>
               <TextInput
                 placeholder="e.g. Cash, Debit Card"
                 value={name}
                 onChangeText={setName}
-                style={styles.modalInput}
-                placeholderTextColor={UI.COLORS.TEXT_MUTED}
+                style={[
+                  styles.modalInput,
+                  {
+                    backgroundColor: colors.surfaceVariant,
+                    borderColor: colors.outline,
+                    color: colors.onSurface,
+                    borderRadius: radius.medium,
+                  },
+                ]}
+                placeholderTextColor={colors.textMuted}
                 autoFocus={true}
                 maxLength={50}
               />
             </View>
 
             <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>Initial Balance</Text>
+              <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>
+                Initial Balance
+              </Text>
               <TextInput
                 placeholder="0.00"
                 value={balance}
                 onChangeText={setBalance}
-                style={styles.modalInput}
-                placeholderTextColor={UI.COLORS.TEXT_MUTED}
+                style={[
+                  styles.modalInput,
+                  {
+                    backgroundColor: colors.surfaceVariant,
+                    borderColor: colors.outline,
+                    color: colors.onSurface,
+                    borderRadius: radius.medium,
+                  },
+                ]}
+                placeholderTextColor={colors.textMuted}
                 keyboardType="numeric"
               />
             </View>
 
             <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>Icon</Text>
-              <ScrollView
-                horizontal
-                showsHorizontalScrollIndicator={false}
-                style={styles.iconScroll}>
-                {PREDEFINED_ICONS.map((iName) => {
-                  const isActive = icon === iName;
-                  return (
-                    <TouchableOpacity
-                      key={iName}
-                      style={[
-                        styles.iconChip,
-                        isActive && styles.iconChipActive,
-                      ]}
-                      onPress={() => setIcon(iName)}>
-                      <Ionicons
-                        name={iName as any}
-                        size={20}
-                        color={isActive ? "#fff" : UI.COLORS.TEXT_SECONDARY}
-                      />
-                    </TouchableOpacity>
-                  );
-                })}
-              </ScrollView>
+              <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>
+                Icon
+              </Text>
+              <IconPicker
+                selectedIcon={icon}
+                onSelectIcon={setIcon}
+                selectedColor={color}
+              />
             </View>
 
             <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>Color</Text>
+              <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>
+                Color
+              </Text>
               <View style={styles.colorGrid}>
                 {PREDEFINED_COLORS.map((c) => {
                   const isActive = color === c;
@@ -175,18 +191,46 @@ export const WalletModal: React.FC<WalletModalProps> = ({
             </View>
           </View>
 
-          <View style={styles.modalFooter}>
-            <TouchableOpacity style={styles.cancelButton} onPress={onClose}>
-              <Text style={styles.cancelButtonText}>Cancel</Text>
+          <View
+            style={[
+              styles.modalFooter,
+              { borderTopColor: colors.outlineVariant },
+            ]}>
+            <TouchableOpacity
+              style={[
+                styles.cancelButton,
+                {
+                  backgroundColor: colors.surfaceVariant,
+                  borderRadius: radius.medium,
+                },
+              ]}
+              onPress={onClose}>
+              <Text
+                style={[
+                  styles.cancelButtonText,
+                  { color: colors.textSecondary },
+                ]}>
+                Cancel
+              </Text>
             </TouchableOpacity>
             <TouchableOpacity
               style={[
                 styles.createButton,
+                {
+                  backgroundColor: colors.primary,
+                  borderRadius: radius.medium,
+                },
                 !name.trim() && styles.createButtonDisabled,
               ]}
               onPress={handleSave}
               disabled={!name.trim()}>
-              <Text style={styles.createButtonText}>Save</Text>
+              <Text
+                style={[
+                  styles.createButtonText,
+                  { color: colors.onPrimary },
+                ]}>
+                Save
+              </Text>
             </TouchableOpacity>
           </View>
         </View>

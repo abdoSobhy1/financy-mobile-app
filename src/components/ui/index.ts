@@ -22,3 +22,4 @@ export { WalletSelector } from "./WalletSelector";
 export { WalletModal } from "./WalletModal";
 export { TransferModal } from "./TransferModal";
 export * from "./Badge";
+export * from "./IconPicker";

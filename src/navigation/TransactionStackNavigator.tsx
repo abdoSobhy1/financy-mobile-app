@@ -3,6 +3,7 @@ import { TransactionStackParamList } from "../types";
 import { TransactionListScreen } from "../screens/TransactionScreens";
 import { DashboardScreen } from "../screens/DashboardScreen";
 import AddTransactionScreen from "../screens/AddTransactionScreen";
+import { WalletsScreen } from "../screens/WalletsScreen";
 
 const Stack = createStackNavigator<TransactionStackParamList>();
 
@@ -10,6 +11,7 @@ const TransactionStackNavigator = () => (
   <Stack.Navigator screenOptions={{ headerShown: false }}>
     <Stack.Screen name="Dashboard" component={DashboardScreen} />
     <Stack.Screen name="TransactionList" component={TransactionListScreen} />
+    <Stack.Screen name="Wallets" component={WalletsScreen} />
     <Stack.Screen
       name="AddTransaction"
       component={AddTransactionScreen}

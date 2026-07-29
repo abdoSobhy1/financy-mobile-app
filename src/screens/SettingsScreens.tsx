@@ -26,8 +26,6 @@ import {
   CategoryCreationModal,
   FirebaseCleanupModal,
   SyncStatus,
-  WalletModal,
-  TransferModal,
 } from "../components/ui";
 import { runSyncApplyTest, runAllSyncApplyTests } from "../debug/runSyncTest";
 import { UI } from "../constants";
@@ -48,16 +46,10 @@ import {
   deleteCategory,
   updateCategory,
 } from "../store/slices/categoriesSlice";
-import {
-  fetchWallets,
-  addWallet,
-  editWallet,
-  removeWallet,
-  transferBetweenWallets,
-} from "../store/slices/walletsSlice";
+import { fetchWallets } from "../store/slices/walletsSlice";
 import { fetchBudgets } from "../store/slices/budgetsSlice";
 import { fetchTransactions } from "../store/slices/transactionsSlice";
-import { Category, Wallet, WalletFormData } from "../types";
+import { Category, Wallet } from "../types";
 import { exportToExcel, exportToCSV, ExportData } from "../utils/exportUtils";
 import { exportDatabaseToJSON } from "../utils/databaseExport";
 import { db } from "../database/queries";
@@ -71,9 +63,19 @@ type SettingsScreenNavigationProp = StackNavigationProp<SettingsStackParamList>;
 
 // ── Reusable sub-components ──────────────────────────────────────────
 
-const SectionLabel = ({ text }: { text: string }) => (
-  <Text style={styles.sectionLabel}>{text}</Text>
-);
+const SectionLabel = ({ text }: { text: string }) => {
+  const { colors, typography, spacing } = useAppTheme();
+  return (
+    <Text
+      style={[
+        styles.sectionLabel,
+        typography.labelMedium,
+        { color: colors.primary, marginTop: spacing.s12, marginBottom: spacing.s8 },
+      ]}>
+      {text}
+    </Text>
+  );
+};
 
 const SettingRow = ({
   icon,
@@ -91,45 +93,56 @@ const SettingRow = ({
   onPress?: () => void;
   rightElement?: React.ReactNode;
   destructive?: boolean;
-}) => (
-  <TouchableOpacity
-    style={styles.row}
-    onPress={onPress}
-    disabled={!onPress}
-    activeOpacity={0.7}>
-    <LinearGradient
-      colors={
-        iconGradient ||
-        (destructive
-          ? ["#FF6B6B", "#EE5A24"]
-          : [UI.COLORS.PRIMARY, UI.COLORS.PRIMARY_DARK])
-      }
-      style={styles.rowIcon}
-      start={{ x: 0, y: 0 }}
-      end={{ x: 1, y: 1 }}>
-      <Ionicons name={icon as any} size={16} color="#fff" />
-    </LinearGradient>
-    <View style={styles.rowText}>
-      <Text
-        style={[styles.rowTitle, destructive && { color: "#FF6B6B" }]}
-        numberOfLines={1}>
-        {title}
-      </Text>
-      {subtitle ? (
-        <Text style={styles.rowSubtitle} numberOfLines={2}>
-          {subtitle}
+}) => {
+  const { colors, typography, spacing, radius } = useAppTheme();
+  return (
+    <TouchableOpacity
+      style={[styles.row, { paddingVertical: spacing.s12, paddingHorizontal: spacing.s16 }]}
+      onPress={onPress}
+      disabled={!onPress}
+      activeOpacity={0.7}>
+      <LinearGradient
+        colors={
+          iconGradient ||
+          (destructive
+            ? ["#FF6B6B", "#EE5A24"]
+            : [colors.primary, colors.primaryDark])
+        }
+        style={[styles.rowIcon, { borderRadius: radius.medium }]}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}>
+        <Ionicons name={icon as any} size={16} color="#fff" />
+      </LinearGradient>
+      <View style={styles.rowText}>
+        <Text
+          style={[
+            typography.titleMedium,
+            { color: destructive ? colors.error : colors.onSurface },
+          ]}
+          numberOfLines={1}>
+          {title}
         </Text>
-      ) : null}
-    </View>
-    {rightElement || (
-      <Ionicons
-        name="chevron-forward"
-        size={16}
-        color="rgba(255,255,255,0.2)"
-      />
-    )}
-  </TouchableOpacity>
-);
+        {subtitle ? (
+          <Text
+            style={[
+              typography.bodySmall,
+              { color: colors.textSecondary, marginTop: 2 },
+            ]}
+            numberOfLines={2}>
+            {subtitle}
+          </Text>
+        ) : null}
+      </View>
+      {rightElement || (
+        <Ionicons
+          name="chevron-forward"
+          size={16}
+          color={colors.textSecondary}
+        />
+      )}
+    </TouchableOpacity>
+  );
+};
 
 const GlassCard = ({
   children,
@@ -137,7 +150,25 @@ const GlassCard = ({
 }: {
   children: React.ReactNode;
   style?: any;
-}) => <View style={[styles.card, style]}>{children}</View>;
+}) => {
+  const { colors, radius, spacing } = useAppTheme();
+  return (
+    <View
+      style={[
+        styles.card,
+        {
+          backgroundColor: colors.surface,
+          borderRadius: radius.large,
+          borderColor: colors.outline,
+          borderWidth: StyleSheet.hairlineWidth,
+          marginBottom: spacing.s16,
+        },
+        style,
+      ]}>
+      {children}
+    </View>
+  );
+};
 
 // ═══════════════════════════════════════════════════════════════════
 // MAIN SCREEN
@@ -169,10 +200,6 @@ export const SettingsScreen: React.FC = () => {
   const [showFirebaseCleanup, setShowFirebaseCleanup] = useState(false);
   const [showCategoryManagement, setShowCategoryManagement] = useState(false);
   const { items: wallets } = useSelector((state: RootState) => state.wallets);
-  const [showWalletManagement, setShowWalletManagement] = useState(false);
-  const [walletModalVisible, setWalletModalVisible] = useState(false);
-  const [editingWallet, setEditingWallet] = useState<Wallet | null>(null);
-  const [transferModalVisible, setTransferModalVisible] = useState(false);
   const [syncing, setSyncing] = useState(false);
   const [deviceId, setDeviceId] = useState<string>("");
   const [smsEnabled, setSmsEnabled] = useState(false);
@@ -234,39 +261,6 @@ export const SettingsScreen: React.FC = () => {
       showSuccess(`Billing period starts on day ${selectedBillingDay}`);
     } catch {
       showError("Failed to update billing period");
-    }
-  };
-
-  const handleSaveWallet = async (walletData: WalletFormData) => {
-    try {
-      if (editingWallet) {
-        await dispatch(
-          editWallet({ id: editingWallet.id, updates: walletData })
-        ).unwrap();
-        showSuccess("Wallet updated");
-      } else {
-        await dispatch(addWallet(walletData)).unwrap();
-        showSuccess("Wallet created");
-      }
-    } catch (e: any) {
-      showError(e?.message || "Failed to save wallet");
-    } finally {
-      setEditingWallet(null);
-    }
-  };
-
-  const handleTransfer = async (data: {
-    fromWalletId: string;
-    toWalletId: string;
-    amount: string;
-    description?: string;
-    note?: string;
-  }) => {
-    try {
-      await dispatch(transferBetweenWallets(data)).unwrap();
-      showSuccess("Transfer completed");
-    } catch (e: any) {
-      showError(e?.message || "Transfer failed");
     }
   };
 
@@ -771,32 +765,8 @@ export const SettingsScreen: React.FC = () => {
             iconGradient={["#10B981", "#059669"]}
             title="Manage Wallets"
             subtitle={`${Object.keys(wallets).length} wallets`}
-            onPress={() => setShowWalletManagement(!showWalletManagement)}
-            rightElement={
-              <Ionicons
-                name={showWalletManagement ? "chevron-up" : "chevron-down"}
-                size={16}
-                color="rgba(255,255,255,0.2)"
-              />
-            }
+            onPress={() => navigation.navigate("Wallets")}
           />
-
-          {showWalletManagement && (
-            <WalletManagement
-              showAlert={showAlert}
-              showSuccess={showSuccess}
-              showError={showError}
-              onAddWallet={() => {
-                setEditingWallet(null);
-                setWalletModalVisible(true);
-              }}
-              onEditWallet={(w) => {
-                setEditingWallet(w);
-                setWalletModalVisible(true);
-              }}
-              onTransfer={() => setTransferModalVisible(true)}
-            />
-          )}
 
           {/* ══ ABOUT ════════════════════════════════════ */}
           <SectionLabel text="About" />
@@ -1110,26 +1080,8 @@ export const SettingsScreen: React.FC = () => {
           visible={showFirebaseCleanup}
           onClose={() => setShowFirebaseCleanup(false)}
         />
-
-        <WalletModal
-          visible={walletModalVisible}
-          onClose={() => {
-            setWalletModalVisible(false);
-            setEditingWallet(null);
-          }}
-          onSave={handleSaveWallet}
-          initialWallet={editingWallet}
-          title={editingWallet ? "Edit Wallet" : "Add Wallet"}
-        />
-
-        <TransferModal
-          visible={transferModalVisible}
-          onClose={() => setTransferModalVisible(false)}
-          wallets={Object.values(wallets)}
-          onTransfer={handleTransfer}
-        />
       </SafeAreaView>
-    </LinearGradient>
+    </View>
   );
 };
 
@@ -1305,97 +1257,6 @@ const CategoryManagement: React.FC<CategoryManagementProps> = ({
 
 // ═══════════════════════════════════════════════════════════════════
 // Wallet Management (inline expandable)
-// ═══════════════════════════════════════════════════════════════════
-
-interface WalletManagementProps {
-  showAlert: (title: string, message: string, actions?: any[]) => void;
-  showSuccess: (message: string) => void;
-  showError: (message: string) => void;
-  onAddWallet: () => void;
-  onEditWallet: (wallet: Wallet) => void;
-  onTransfer: () => void;
-}
-
-const WalletManagement: React.FC<WalletManagementProps> = ({
-  showAlert,
-  showSuccess,
-  showError,
-  onAddWallet,
-  onEditWallet,
-  onTransfer,
-}) => {
-  const dispatch = useDispatch<AppDispatch>();
-  const { items: wallets } = useSelector((state: RootState) => state.wallets);
-  const [deletingId, setDeletingId] = useState<string | null>(null);
-
-  const walletArr = Object.values(wallets);
-
-  const handleDelete = (wallet: Wallet) => {
-    showAlert("Delete Wallet", `Delete "${wallet.name}"?`, [
-      { text: "Cancel", style: "cancel" },
-      {
-        text: "Delete",
-        style: "destructive",
-        onPress: async () => {
-          setDeletingId(wallet.id);
-          try {
-            await dispatch(removeWallet(wallet.id)).unwrap();
-            showSuccess("Wallet deleted");
-          } catch (e: any) {
-            showError(e?.message || "Failed to delete");
-          } finally {
-            setDeletingId(null);
-          }
-        },
-      },
-    ]);
-  };
-
-  return (
-    <GlassCard style={{ marginTop: -4 }}>
-      <View style={{ marginBottom: 14 }}>
-        <Text style={[styles.catGroupTitle, { color: "#10B981" }]}>
-          Wallets ({walletArr.length})
-        </Text>
-        {walletArr.map((w) => (
-          <View key={w.id} style={styles.catRow}>
-            <TouchableOpacity
-              style={styles.catLeft}
-              onPress={() => onEditWallet(w)}>
-              <View
-                style={[styles.catDot, { backgroundColor: w.color || "#10B981" }]}
-              />
-              <Text style={styles.catName}>
-                {w.name} (${Number(w.balance).toFixed(2)})
-              </Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              onPress={() => handleDelete(w)}
-              disabled={deletingId === w.id}>
-              <Ionicons name="trash-outline" size={17} color="#FF6B6B" />
-            </TouchableOpacity>
-          </View>
-        ))}
-      </View>
-
-      <View style={{ flexDirection: "row", gap: 10 }}>
-        <TouchableOpacity style={[styles.addCatBtn, { flex: 1 }]} onPress={onAddWallet}>
-          <Ionicons name="add-circle" size={20} color={UI.COLORS.PRIMARY_LIGHT} />
-          <Text style={styles.addCatText}>Add Wallet</Text>
-        </TouchableOpacity>
-        {walletArr.length >= 2 && (
-          <TouchableOpacity
-            style={[styles.addCatBtn, { flex: 1, borderColor: "rgba(59, 130, 246, 0.3)" }]}
-            onPress={onTransfer}>
-            <Ionicons name="swap-horizontal" size={20} color="#3B82F6" />
-            <Text style={[styles.addCatText, { color: "#3B82F6" }]}>Transfer</Text>
-          </TouchableOpacity>
-        )}
-      </View>
-    </GlassCard>
-  );
-};
-
 // ═══════════════════════════════════════════════════════════════════
 // STYLES
 // ═══════════════════════════════════════════════════════════════════

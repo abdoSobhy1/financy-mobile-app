@@ -249,6 +249,7 @@ export type TransactionStackParamList = {
     autoFocusAmount?: boolean;
   };
   EditTransaction: { transactionId: string };
+  Wallets: undefined;
 };
 
 export type BudgetStackParamList = {

@@ -4,6 +4,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { UI } from "../../constants";
 import { Category } from "../../types";
 import { useAppTheme } from "../../theme";
+import { IconPicker } from "./IconPicker";
 
 const PREDEFINED_COLORS = [
   "#EF4444",
@@ -234,35 +235,18 @@ export const CategoryCreationModal: React.FC<CategoryCreationModalProps> = ({
                   <Text style={styles.suggestedBadge}>Auto-suggested</Text>
                 ) : null}
               </View>
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.colorScroll}>
-                <TouchableOpacity
-                  style={[styles.iconOption, styles.colorOptionClear, !categoryIcon && styles.iconOptionSelected]}
-                  onPress={() => {
-                    setCategoryIcon("");
-                    setIsManualIcon(true);
-                  }}>
-                  <Ionicons name="close" size={16} color={UI.COLORS.TEXT_SECONDARY} />
-                </TouchableOpacity>
-                {PREDEFINED_ICONS.map((iconName) => (
-                  <TouchableOpacity
-                    key={iconName}
-                    style={[
-                      styles.iconOption,
-                      categoryIcon === iconName && styles.iconOptionSelected,
-                      categoryIcon === iconName && { backgroundColor: categoryColor || UI.COLORS.PRIMARY },
-                    ]}
-                    onPress={() => {
-                      setCategoryIcon(iconName);
-                      setIsManualIcon(true);
-                    }}>
-                    <Ionicons
-                      name={iconName as any}
-                      size={20}
-                      color={categoryIcon === iconName ? "#FFFFFF" : UI.COLORS.TEXT_PRIMARY}
-                    />
-                  </TouchableOpacity>
-                ))}
-              </ScrollView>
+              <IconPicker
+                selectedIcon={categoryIcon}
+                onSelectIcon={(iconName) => {
+                  setCategoryIcon(iconName);
+                  setIsManualIcon(true);
+                }}
+                selectedColor={categoryColor || UI.COLORS.PRIMARY}
+                onClearIcon={() => {
+                  setCategoryIcon("");
+                  setIsManualIcon(true);
+                }}
+              />
             </View>
 
             <View style={styles.inputGroup}>
