@@ -18,6 +18,7 @@ import {
   useSpeechRecognitionEvent,
 } from "@jamsch/expo-speech-recognition";
 import { UI } from "../../constants";
+import { useAppTheme } from "../../theme";
 import { ParsedTransaction } from "../../types";
 import { parseVoiceInput } from "../../services/voiceParser";
 import { LinearGradient } from "expo-linear-gradient";
@@ -48,13 +49,18 @@ interface VoiceInputButtonProps {
   onResult: (parsed: ParsedTransaction[]) => void;
   size?: number;
   style?: any;
+  variant?: "fab" | "prominent";
+  label?: string;
 }
 
 export const VoiceInputButton: React.FC<VoiceInputButtonProps> = ({
   onResult,
   size = 56,
   style,
+  variant = "fab",
+  label = "Voice Entry",
 }) => {
+  const { colors, typography, spacing, radius } = useAppTheme();
   const [isListening, setIsListening] = useState(false);
   const isListeningRef = useRef(false);
   const [transcript, setTranscript] = useState("");
@@ -366,39 +372,82 @@ export const VoiceInputButton: React.FC<VoiceInputButtonProps> = ({
 
   return (
     <>
-      {/* FAB Button */}
-      <Animated.View style={[styles.fabWrapper, style, fabAnimStyle]}>
-        <TouchableOpacity
-          onPress={handlePress}
-          style={[
-            styles.fab,
-            {
-              width: size,
-              height: size,
-              borderRadius: size / 2,
-            },
-          ]}
-          activeOpacity={0.7}>
-          <LinearGradient
-            colors={[
-              UI.COLORS.PRIMARY_LIGHT,
-              UI.COLORS.PRIMARY,
-              UI.COLORS.PRIMARY_DARK,
-            ]}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
+      {/* Trigger Button: Prominent Fast-Path or FAB */}
+      {variant === "prominent" ? (
+        <Animated.View style={[styles.prominentWrapper, style, fabAnimStyle]}>
+          <TouchableOpacity
+            onPress={handlePress}
             style={[
-              styles.gradient,
-              { width: size, height: size, borderRadius: size / 2 },
-            ]}>
-            <Ionicons
-              name="mic"
-              size={size * 0.45}
-              color={UI.COLORS.TEXT_PRIMARY}
-            />
-          </LinearGradient>
-        </TouchableOpacity>
-      </Animated.View>
+              styles.prominentButton,
+              {
+                backgroundColor: colors.primaryContainer,
+                borderColor: colors.primary,
+                borderRadius: radius.large,
+                paddingVertical: spacing.s12,
+                paddingHorizontal: spacing.s16,
+              },
+            ]}
+            activeOpacity={0.7}>
+            <View
+              style={[
+                styles.prominentIconBox,
+                { backgroundColor: colors.primary },
+              ]}>
+              <Ionicons name="mic" size={22} color={colors.onPrimary} />
+            </View>
+            <View style={styles.prominentTextCol}>
+              <Text
+                style={[
+                  typography.titleMedium,
+                  { color: colors.onPrimaryContainer, fontWeight: "700" },
+                ]}>
+                {label || "Voice Entry"}
+              </Text>
+              <Text
+                style={[
+                  typography.caption,
+                  { color: colors.onPrimaryContainer, opacity: 0.8 },
+                ]}>
+                Speak your transaction to auto-fill
+              </Text>
+            </View>
+            <Ionicons name="radio-outline" size={22} color={colors.primary} />
+          </TouchableOpacity>
+        </Animated.View>
+      ) : (
+        <Animated.View style={[styles.fabWrapper, style, fabAnimStyle]}>
+          <TouchableOpacity
+            onPress={handlePress}
+            style={[
+              styles.fab,
+              {
+                width: size,
+                height: size,
+                borderRadius: size / 2,
+              },
+            ]}
+            activeOpacity={0.7}>
+            <LinearGradient
+              colors={[
+                UI.COLORS.PRIMARY_LIGHT,
+                UI.COLORS.PRIMARY,
+                UI.COLORS.PRIMARY_DARK,
+              ]}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={[
+                styles.gradient,
+                { width: size, height: size, borderRadius: size / 2 },
+              ]}>
+              <Ionicons
+                name="mic"
+                size={size * 0.45}
+                color={UI.COLORS.TEXT_PRIMARY}
+              />
+            </LinearGradient>
+          </TouchableOpacity>
+        </Animated.View>
+      )}
 
       {/* Recording Bottom Sheet */}
       <BottomSheetModal
@@ -682,4 +731,26 @@ const styles = StyleSheet.create({
     fontWeight: "700",
     color: "#fff",
   },
+  prominentWrapper: {
+    width: "100%",
+  },
+  prominentButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    borderWidth: 1.5,
+    width: "100%",
+  },
+  prominentIconBox: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: "center",
+    justifyContent: "center",
+    marginRight: 12,
+  },
+  prominentTextCol: {
+    flex: 1,
+    justifyContent: "center",
+  },
 });
+

@@ -6,9 +6,12 @@ import {
   TouchableOpacity,
   StyleSheet,
 } from "react-native";
-import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons } from "@expo/vector-icons";
-import { UI } from "../../constants";
+import { useAppTheme } from "../../theme";
+import {
+  getCategoryColorKey,
+  getCategoryIconName,
+} from "../../utils/categoryDictionary";
 import { CategoryCreationModal, CategoryData } from "./CategoryCreationModal";
 import {
   getLastUsedCategoryId,
@@ -19,6 +22,7 @@ interface Category {
   id: string;
   name: string;
   type: "income" | "expense";
+  icon?: string;
   color?: string;
 }
 
@@ -45,6 +49,8 @@ export const CategorySelector: React.FC<CategorySelectorProps> = ({
   showAddButton = true,
   rememberLastUsed = false,
 }) => {
+  const { colors, isDark, typography, spacing, radius, categoryPalette } =
+    useAppTheme();
   const [showAddModal, setShowAddModal] = useState(false);
 
   const filteredCategories = categories.filter(
@@ -95,13 +101,23 @@ export const CategorySelector: React.FC<CategorySelectorProps> = ({
   };
 
   return (
-    <View style={styles.container}>
-      {label && <Text style={styles.label}>{label}</Text>}
+    <View style={[styles.container, { marginBottom: spacing.s16 }]}>
+      {label && (
+        <Text
+          style={[
+            styles.label,
+            typography.labelMedium,
+            { color: colors.primary },
+          ]}>
+          {label}
+        </Text>
+      )}
 
       <ScrollView
         horizontal
         showsHorizontalScrollIndicator={false}
-        style={styles.categoryScroll}>
+        style={styles.categoryScroll}
+        contentContainerStyle={{ paddingHorizontal: spacing.s16, gap: 10 }}>
         <View style={styles.categoryContainer}>
           {/* None chip */}
           <TouchableOpacity
@@ -109,74 +125,85 @@ export const CategorySelector: React.FC<CategorySelectorProps> = ({
             onPress={() => {
               onCategorySelect(undefined);
               if (rememberLastUsed) setLastUsedCategoryId(null);
-            }}>
-            {!selectedCategoryId ? (
-              <LinearGradient
-                colors={[UI.COLORS.PRIMARY, UI.COLORS.PRIMARY_DARK]}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 1 }}
-                style={[styles.chip, styles.chipActive]}>
-                <Text style={styles.chipTextActive}>None</Text>
-              </LinearGradient>
-            ) : (
-              <View style={styles.chip}>
-                <Text style={styles.chipText}>None</Text>
-              </View>
-            )}
+            }}
+            style={[
+              styles.chip,
+              {
+                backgroundColor: !selectedCategoryId
+                  ? colors.primaryContainer
+                  : colors.surface,
+                borderRadius: radius.medium, // 16px radius matching quick-add
+                borderColor: !selectedCategoryId
+                  ? colors.primary
+                  : colors.outline,
+                borderWidth: 1,
+                paddingHorizontal: spacing.s16,
+                paddingVertical: spacing.s8,
+              },
+            ]}>
+            <Text
+              style={[
+                typography.labelMedium,
+                {
+                  color: !selectedCategoryId
+                    ? colors.onPrimaryContainer
+                    : colors.onSurfaceVariant,
+                },
+              ]}>
+              None
+            </Text>
           </TouchableOpacity>
 
-          {/* Category chips */}
+          {/* Category chips with fixed categoryPalette colors */}
           {filteredCategories.map((category) => {
             const isActive = selectedCategoryId === category.id;
+            const colorKey = getCategoryColorKey(category.name);
+            const colorPair =
+              categoryPalette[colorKey] || categoryPalette.neutral;
+
+            const chipBg = isActive
+              ? colors.primaryContainer
+              : isDark
+                ? colorPair.dark
+                : colorPair.light;
+            const chipText = isActive
+              ? colors.onPrimaryContainer
+              : isDark
+                ? colorPair.textDark
+                : colorPair.textLight;
+            const iconName = getCategoryIconName(category, category.name);
+
             return (
               <TouchableOpacity
                 key={category.id}
                 activeOpacity={0.7}
-                onPress={() => handleCategorySelect(category.id)}>
-                {isActive ? (
-                  <LinearGradient
-                    colors={[UI.COLORS.PRIMARY, UI.COLORS.PRIMARY_DARK]}
-                    start={{ x: 0, y: 0 }}
-                    end={{ x: 1, y: 1 }}
-                    style={[styles.chip, styles.chipActive]}>
-                    {category.icon ? (
-                      <Ionicons
-                        name={category.icon as any}
-                        size={14}
-                        color="#FFFFFF"
-                        style={{ marginRight: 6 }}
-                      />
-                    ) : category.color ? (
-                      <View
-                        style={[
-                          styles.colorDot,
-                          styles.colorDotActive,
-                          { backgroundColor: category.color },
-                        ]}
-                      />
-                    ) : null}
-                    <Text style={styles.chipTextActive}>{category.name}</Text>
-                  </LinearGradient>
-                ) : (
-                  <View style={styles.chip}>
-                    {category.icon ? (
-                      <Ionicons
-                        name={category.icon as any}
-                        size={14}
-                        color={category.color || UI.COLORS.TEXT_PRIMARY}
-                        style={{ marginRight: 6 }}
-                      />
-                    ) : category.color ? (
-                      <View
-                        style={[
-                          styles.colorDot,
-                          { backgroundColor: category.color },
-                        ]}
-                      />
-                    ) : null}
-                    <Text style={styles.chipText}>{category.name}</Text>
-                  </View>
-                )}
+                onPress={() => handleCategorySelect(category.id)}
+                style={[
+                  styles.chip,
+                  {
+                    backgroundColor: chipBg,
+                    borderRadius: radius.medium, // 16px radius matching quick-add
+                    borderColor: isActive ? colors.primary : colors.outline,
+                    borderWidth: isActive ? 1.5 : StyleSheet.hairlineWidth,
+                    paddingHorizontal: spacing.s16,
+                    paddingVertical: spacing.s8,
+                  },
+                ]}>
+                <View
+                  style={[
+                    styles.iconCircle28,
+                    {
+                      backgroundColor: isDark
+                        ? "rgba(255,255,255,0.12)"
+                        : "rgba(0,0,0,0.06)",
+                      marginRight: 6,
+                    },
+                  ]}>
+                  <Ionicons name={iconName} size={14} color={chipText} />
+                </View>
+                <Text style={[typography.labelMedium, { color: chipText }]}>
+                  {category.name}
+                </Text>
               </TouchableOpacity>
             );
           })}
@@ -184,17 +211,41 @@ export const CategorySelector: React.FC<CategorySelectorProps> = ({
           {/* Add button */}
           {showAddButton && onCategoryAdd && (
             <TouchableOpacity
-              style={styles.addButton}
+              style={[
+                styles.addButton,
+                {
+                  backgroundColor: colors.surface,
+                  borderRadius: radius.medium, // 16px radius
+                  borderColor: colors.primary,
+                  paddingHorizontal: spacing.s16,
+                  paddingVertical: spacing.s8,
+                },
+              ]}
               activeOpacity={0.7}
               onPress={() => setShowAddModal(true)}>
-              <Ionicons name="add" size={16} color={UI.COLORS.PRIMARY_LIGHT} />
-              <Text style={styles.addButtonText}>Add</Text>
+              <Ionicons name="add" size={16} color={colors.primary} />
+              <Text
+                style={[
+                  typography.labelMedium,
+                  { color: colors.primary, marginLeft: 4 },
+                ]}>
+                Add
+              </Text>
             </TouchableOpacity>
           )}
         </View>
       </ScrollView>
 
-      {error && <Text style={styles.errorText}>{error}</Text>}
+      {error && (
+        <Text
+          style={[
+            styles.errorText,
+            typography.caption,
+            { color: colors.error, marginTop: spacing.s4 },
+          ]}>
+          {error}
+        </Text>
+      )}
 
       <CategoryCreationModal
         visible={showAddModal}
@@ -209,84 +260,40 @@ export const CategorySelector: React.FC<CategorySelectorProps> = ({
 
 const styles = StyleSheet.create({
   container: {
-    marginBottom: UI.SPACING.MD,
+    width: "100%",
   },
   label: {
-    fontSize: 13,
-    fontWeight: "600",
-    color: UI.COLORS.PRIMARY_LIGHT,
-    marginBottom: 10,
+    marginBottom: 8,
     letterSpacing: 0.4,
     textTransform: "uppercase",
   },
   categoryScroll: {
-    marginHorizontal: -UI.SPACING.MD,
+    width: "100%",
   },
   categoryContainer: {
     flexDirection: "row",
-    paddingHorizontal: UI.SPACING.MD,
+    alignItems: "center",
     gap: 10,
   },
   chip: {
     flexDirection: "row",
     alignItems: "center",
-    paddingVertical: 10,
-    paddingHorizontal: 18,
-    borderRadius: 25,
-    backgroundColor: "rgba(20,20,50,0.65)",
-    borderWidth: 1,
-    borderColor: "rgba(108,92,231,0.18)",
-    gap: 6,
   },
-  chipActive: {
-    borderWidth: 0,
-    shadowColor: UI.COLORS.PRIMARY,
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.35,
-    shadowRadius: 8,
-    elevation: 5,
-  },
-  chipText: {
-    fontSize: 14,
-    fontWeight: "500",
-    color: UI.COLORS.TEXT_SECONDARY,
-  },
-  chipTextActive: {
-    fontSize: 14,
-    fontWeight: "700",
-    color: "#fff",
-  },
-  colorDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-  },
-  colorDotActive: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-    borderWidth: 1.5,
-    borderColor: "rgba(255,255,255,0.4)",
+  iconCircle28: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    alignItems: "center",
+    justifyContent: "center",
   },
   addButton: {
     flexDirection: "row",
     alignItems: "center",
-    paddingVertical: 10,
-    paddingHorizontal: 16,
-    borderRadius: 25,
     borderWidth: 1,
-    borderColor: "rgba(108,92,231,0.35)",
     borderStyle: "dashed",
-    gap: 4,
-  },
-  addButtonText: {
-    fontSize: 13,
-    fontWeight: "600",
-    color: UI.COLORS.PRIMARY_LIGHT,
   },
   errorText: {
-    fontSize: 12,
-    color: UI.COLORS.ERROR,
-    marginTop: 6,
+    marginLeft: 4,
   },
 });
+

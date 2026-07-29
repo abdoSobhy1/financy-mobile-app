@@ -20,6 +20,10 @@ import {
 } from "../types";
 import { getCurrentBillingPeriod } from "../utils/billingPeriod";
 import { formatCurrency, formatDate } from "../utils";
+import {
+  getCategoryColorKey,
+  getCategoryIconName,
+} from "../utils/categoryDictionary";
 import { useAppTheme } from "../theme";
 import { Badge } from "../components/ui";
 import { addCategory } from "../store/slices/categoriesSlice";
@@ -39,32 +43,6 @@ interface QuickAddSlot {
   color?: string;
   isFallback: boolean;
 }
-
-const getCategoryColorKey = (name: string): string => {
-  const n = name.toLowerCase();
-  if (n.includes("food") || n.includes("grocery") || n.includes("dining") || n.includes("اكل") || n.includes("فطار")) return "amber";
-  if (n.includes("transport") || n.includes("car") || n.includes("taxi") || n.includes("مواصلات")) return "blue";
-  if (n.includes("bill") || n.includes("electric") || n.includes("water") || n.includes("كهرباء") || n.includes("فاتورة")) return "pink";
-  if (n.includes("income") || n.includes("salary") || n.includes("saving") || n.includes("راتب")) return "green";
-  if (n.includes("fun") || n.includes("entert") || n.includes("movie") || n.includes("رفاهية")) return "purple";
-  if (n.includes("health") || n.includes("med") || n.includes("doctor") || n.includes("صحة")) return "rose";
-  if (n.includes("util") || n.includes("subscrip") || n.includes("net") || n.includes("انترنت")) return "teal";
-  if (n.includes("shop") || n.includes("buy") || n.includes("store") || n.includes("تسوق")) return "orange";
-  if (n.includes("edu") || n.includes("tech") || n.includes("book") || n.includes("تعليم")) return "indigo";
-  return "neutral";
-};
-
-const getCategoryIconName = (category?: Category | null, fallbackName?: string): keyof typeof Ionicons.glyphMap => {
-  if (category?.icon) return category.icon as keyof typeof Ionicons.glyphMap;
-  const n = (category?.name || fallbackName || "").toLowerCase();
-  if (n.includes("food") || n.includes("grocery") || n.includes("dining") || n.includes("اكل")) return "cart";
-  if (n.includes("transport") || n.includes("car") || n.includes("taxi") || n.includes("مواصلات")) return "car";
-  if (n.includes("bill") || n.includes("electric") || n.includes("water") || n.includes("فاتورة")) return "flash";
-  if (n.includes("shop") || n.includes("buy") || n.includes("store")) return "bag";
-  if (n.includes("fun") || n.includes("entert") || n.includes("movie") || n.includes("رفاهية")) return "film";
-  if (n.includes("health") || n.includes("med")) return "heart";
-  return "pricetag";
-};
 
 export const DashboardScreen: React.FC = () => {
   const navigation = useNavigation<DashboardNavigationProp>();
