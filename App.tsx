@@ -19,6 +19,7 @@ import { SyncProvider } from "./src/contexts/SyncProvider";
 import { offlineFirstSync } from "./src/services/OfflineFirstSync";
 import { useSyncDataRefresh } from "./src/hooks";
 import { ShimmerProvider } from "react-native-fast-shimmer";
+import { ThemeProvider } from "./src/theme";
 
 // Keep the splash screen visible while we fetch resources
 SplashScreen.preventAutoHideAsync();
@@ -179,19 +180,21 @@ export default function App() {
     <GestureHandlerRootView style={{ flex: 1 }}>
       <SafeAreaProvider>
         <ShimmerProvider duration={1000}>
-          <ErrorBoundary>
-            <Provider store={store}>
-              <AuthProvider>
-                <ToastProvider>
-                  <BottomSheetModalProvider>
-                    <SyncProvider>
-                      {!isLoading && !dbError && <AppWithSyncRefresh />}
-                    </SyncProvider>
-                  </BottomSheetModalProvider>
-                </ToastProvider>
-              </AuthProvider>
-            </Provider>
-          </ErrorBoundary>
+          <ThemeProvider>
+            <ErrorBoundary>
+              <Provider store={store}>
+                <AuthProvider>
+                  <ToastProvider>
+                    <BottomSheetModalProvider>
+                      <SyncProvider>
+                        {!isLoading && !dbError && <AppWithSyncRefresh />}
+                      </SyncProvider>
+                    </BottomSheetModalProvider>
+                  </ToastProvider>
+                </AuthProvider>
+              </Provider>
+            </ErrorBoundary>
+          </ThemeProvider>
         </ShimmerProvider>
       </SafeAreaProvider>
     </GestureHandlerRootView>
