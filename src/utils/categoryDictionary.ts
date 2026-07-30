@@ -498,30 +498,3 @@ export function guessCategoryId(
 
   return match?.id;
 }
-
-export function getCategoryColorKey(name: string): string {
-  const n = (name || "").toLowerCase();
-  if (n.includes("food") || n.includes("grocery") || n.includes("dining") || n.includes("اكل") || n.includes("فطار")) return "amber";
-  if (n.includes("transport") || n.includes("car") || n.includes("taxi") || n.includes("مواصلات")) return "blue";
-  if (n.includes("bill") || n.includes("electric") || n.includes("water") || n.includes("كهرباء") || n.includes("فاتورة")) return "pink";
-  if (n.includes("income") || n.includes("salary") || n.includes("saving") || n.includes("راتب")) return "green";
-  if (n.includes("fun") || n.includes("entert") || n.includes("movie") || n.includes("رفاهية")) return "purple";
-  if (n.includes("health") || n.includes("med") || n.includes("doctor") || n.includes("صحة")) return "rose";
-  if (n.includes("util") || n.includes("subscrip") || n.includes("net") || n.includes("انترنت")) return "teal";
-  if (n.includes("shop") || n.includes("buy") || n.includes("store") || n.includes("تسوق")) return "orange";
-  if (n.includes("edu") || n.includes("tech") || n.includes("book") || n.includes("تعليم")) return "indigo";
-  return "neutral";
-}
-
-export function getCategoryIconName(category?: { icon?: string; name?: string } | null, fallbackName?: string): any {
-  if (category?.icon) return category.icon;
-  const n = (category?.name || fallbackName || "").toLowerCase();
-  if (n.includes("food") || n.includes("grocery") || n.includes("dining") || n.includes("اكل")) return "cart";
-  if (n.includes("transport") || n.includes("car") || n.includes("taxi") || n.includes("مواصلات")) return "car";
-  if (n.includes("bill") || n.includes("electric") || n.includes("water") || n.includes("فاتورة")) return "flash";
-  if (n.includes("shop") || n.includes("buy") || n.includes("store")) return "bag";
-  if (n.includes("fun") || n.includes("entert") || n.includes("movie") || n.includes("رفاهية")) return "film";
-  if (n.includes("health") || n.includes("med")) return "heart";
-  return "pricetag";
-}
-

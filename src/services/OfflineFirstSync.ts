@@ -5,6 +5,11 @@ import NetInfo from "@react-native-community/netinfo";
 import { getDeviceId } from "../utils/deviceId";
 import { addDeviceTracking } from "../utils/deviceTracking";
 import NotificationService from "./notificationService";
+import { store } from "../store";
+import { markSynced as markTransactionSynced } from "../store/slices/transactionsSlice";
+import { markSynced as markBudgetSynced } from "../store/slices/budgetsSlice";
+import { markSynced as markCategorySynced } from "../store/slices/categoriesSlice";
+import { markSynced as markDebtSynced } from "../store/slices/debtsSlice";
 
 export interface SyncLogEntry {
   log_id?: number;
@@ -255,7 +260,7 @@ class OfflineFirstSync {
         data,
       );
 
-      // Mark record as synced in its own table
+      // Update the entity row's sync_status to 'synced' in SQLite
       await this.markRecordSynced(logEntry.table_name, logEntry.record_id);
 
       // Mark as processed
@@ -325,22 +330,66 @@ class OfflineFirstSync {
   }
 
   /**
-   * Mark a database record's sync_status column as synced
+   * Update the entity row's sync_status column to 'synced' after a successful
+   * Firebase push. tableName is validated against TABLE_TO_COLLECTION keys to
+   * prevent SQL injection from an arbitrary string.
    */
   private async markRecordSynced(
     tableName: string,
     recordId: string,
   ): Promise<void> {
-    const collectionName = this.TABLE_TO_COLLECTION[tableName];
-    if (!collectionName) {
-      throw new Error(`Invalid table name: ${tableName}`);
+    // Whitelist check — only interpolate known table names
+    if (!this.TABLE_TO_COLLECTION[tableName]) {
+      console.warn(
+        `markRecordSynced: unknown table "${tableName}", skipping SQL update`,
+      );
+      return;
     }
-    const database = this.db.getDatabase();
-    await database.runAsync(
-      `UPDATE ${tableName} SET sync_status = 'synced' WHERE id = ?`,
-      [recordId],
-    );
-    syncService.notifyRecordSynced(collectionName, recordId);
+    try {
+      const database = this.db.getDatabase();
+      await database.runAsync(
+        `UPDATE ${tableName} SET sync_status = 'synced' WHERE id = ?`,
+        [recordId],
+      );
+      console.log(`✅ Marked ${tableName}:${recordId} sync_status = synced`);
+    } catch (error) {
+      // Non-fatal: the sync_log entry is already processed; log and continue
+      console.warn(
+        `⚠️ Could not update sync_status for ${tableName}:${recordId}:`,
+        error,
+      );
+      return;
+    }
+
+    // Dispatch to Redux so in-memory state reflects the change immediately
+    // without requiring a full data re-fetch from SQLite
+    try {
+      switch (tableName) {
+        case "transactions":
+          store.dispatch(markTransactionSynced(recordId));
+          break;
+        case "budgets":
+          store.dispatch(markBudgetSynced(recordId));
+          break;
+        case "categories":
+          store.dispatch(markCategorySynced(recordId));
+          break;
+        case "debts":
+        case "debt_payments":
+          store.dispatch(markDebtSynced(recordId));
+          break;
+        default:
+          // bills and settings don't have dedicated Redux slices with syncStatus —
+          // they will reflect the updated value on the next natural fetch
+          break;
+      }
+    } catch (dispatchError) {
+      // Non-fatal: SQLite is already updated; Redux will catch up on next fetch
+      console.warn(
+        `⚠️ Redux dispatch for markSynced failed (${tableName}:${recordId}):`,
+        dispatchError,
+      );
+    }
   }
 
   /**
@@ -1450,7 +1499,6 @@ class OfflineFirstSync {
               (localDoc as any).id,
               cloudFormatDoc,
             );
-            await this.markRecordSynced(tableName, (localDoc as any).id);
             result.uploaded++;
           } else {
             // Document exists in cloud - check if local is newer
@@ -1467,13 +1515,11 @@ class OfflineFirstSync {
                 (localDoc as any).id,
                 cloudFormatDoc,
               );
-              await this.markRecordSynced(tableName, (localDoc as any).id);
               result.uploaded++;
             } else {
               console.log(
                 `⏭️ Skipping ${tableName}: ${(localDoc as any).id} (cloud is up to date)`,
               );
-              await this.markRecordSynced(tableName, (localDoc as any).id);
               result.skipped++;
             }
           }
@@ -1541,7 +1587,6 @@ class OfflineFirstSync {
             localCategory.id,
             cloudFormatCategory,
           );
-          await this.markRecordSynced("categories", localCategory.id);
           result.uploaded++;
         } else {
           const cloudUpdatedAt =
@@ -1559,10 +1604,7 @@ class OfflineFirstSync {
               localCategory.id,
               cloudFormatCategory,
             );
-            await this.markRecordSynced("categories", localCategory.id);
             result.uploaded++;
-          } else {
-            await this.markRecordSynced("categories", localCategory.id);
           }
         }
       }

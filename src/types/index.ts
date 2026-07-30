@@ -1,6 +1,6 @@
 // Global TypeScript types for the Finance Management App
 
-export type TransactionType = "income" | "expense" | "transfer";
+export type TransactionType = "income" | "expense";
 
 export interface Transaction {
   id: string;
@@ -14,10 +14,6 @@ export interface Transaction {
   // Linking fields for bills and debt payments
   linkedBillId?: string; // ID of associated bill payment
   linkedDebtPaymentId?: string; // ID of associated debt payment
-  // Wallet fields
-  walletId?: string;
-  fromWalletId?: string;
-  toWalletId?: string;
   createdAt: string; // ISO date string
   duplicatedAt?: string; // ISO date string for duplicated transactions
   // Sync fields
@@ -31,7 +27,6 @@ export interface Category {
   name: string;
   type: "income" | "expense";
   color?: string;
-  icon?: string;
   entryCount: number;
   createdAt: string;
   // Sync fields
@@ -51,18 +46,6 @@ export interface Budget {
   updatedAt: string;
   // Sync fields
   syncUpdatedAt: number; // Timestamp in ms for conflict resolution
-  deleted?: boolean; // Soft delete flag
-  syncStatus?: "pending" | "synced" | "error"; // Local sync status
-}
-
-export interface Wallet {
-  id: string;
-  name: string;
-  icon?: string;
-  color?: string;
-  balance: number;
-  createdAt: string;
-  updatedAt: number; // Timestamp in ms for conflict resolution
   deleted?: boolean; // Soft delete flag
   syncStatus?: "pending" | "synced" | "error"; // Local sync status
 }
@@ -172,9 +155,6 @@ export interface TransactionFormData {
   description: string;
   date: Date;
   note?: string;
-  walletId?: string;
-  fromWalletId?: string;
-  toWalletId?: string;
 }
 
 export interface ParsedTransaction {
@@ -197,13 +177,6 @@ export interface BudgetFormData {
   categoryId?: string;
 }
 
-export interface WalletFormData {
-  name: string;
-  icon?: string;
-  color?: string;
-  initialBalance: string;
-}
-
 export interface BillFormData {
   name: string;
   // Simplified bill data is handled as transactions now; keep minimal shape
@@ -215,7 +188,6 @@ export interface CategoryFormData {
   name: string;
   type: "income" | "expense";
   color?: string;
-  icon?: string;
 }
 
 // API response types
@@ -241,15 +213,9 @@ export type RootTabParamList = {
 };
 
 export type TransactionStackParamList = {
-  Dashboard: undefined;
   TransactionList: undefined;
-  AddTransaction: {
-    editTransaction?: Transaction;
-    categoryId?: string;
-    autoFocusAmount?: boolean;
-  };
+  AddTransaction: { editTransaction?: Transaction };
   EditTransaction: { transactionId: string };
-  Wallets: undefined;
 };
 
 export type BudgetStackParamList = {
@@ -271,7 +237,6 @@ export type SettingsStackParamList = {
   ExportData: undefined;
   BillingPeriodSettings: undefined;
   Import: undefined;
-  Wallets: undefined;
 };
 
 export type AnalysisStackParamList = {
@@ -332,7 +297,6 @@ export const COLLECTIONS = {
   DEBTS: "debts",
   DEBT_PAYMENTS: "debt_payments",
   SETTINGS: "settings",
-  WALLETS: "wallets",
 } as const;
 
 export type CollectionName = (typeof COLLECTIONS)[keyof typeof COLLECTIONS];
@@ -344,8 +308,7 @@ export type SyncableEntity =
   | Budget
   | Debt
   | DebtPayment
-  | Settings
-  | Wallet;
+  | Settings;
 
 // Generic sync document type
 export interface SyncDocument {

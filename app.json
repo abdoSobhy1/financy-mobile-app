@@ -5,7 +5,7 @@
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
-    "userInterfaceStyle": "light",
+    "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "splash": {
       "image": "./assets/splash-icon.png",
@@ -47,7 +47,11 @@
           "microphonePermission": "نحتاج إلى المايكروفون للإدخال الصوتي",
           "speechRecognitionPermission": "نحتاج إلى التعرف على الكلام للإدخال الصوتي"
         }
-      ]
+      ],
+      "expo-build-properties",
+      "expo-sharing",
+      "expo-sqlite",
+      "expo-status-bar"
     ]
   }
 }

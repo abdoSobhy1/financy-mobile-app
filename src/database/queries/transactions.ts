@@ -1,4 +1,4 @@
-import { DatabaseManager } from "../index";
+﻿import { DatabaseManager } from "../index";
 import { Transaction, TransactionFilters } from "../../types";
 import {
   TransactionTable,
@@ -17,34 +17,6 @@ import {
 export class TransactionRepository {
   private db = DatabaseManager.getInstance();
 
-  private async applyWalletBalanceDelta(
-    transaction: Partial<Transaction>,
-    multiplier: 1 | -1,
-  ): Promise<void> {
-    const { WalletRepository } = await import("./wallets");
-    const walletRepo = new WalletRepository();
-
-    if (transaction.type === "income" && transaction.walletId) {
-      await walletRepo.updateWalletBalance(
-        transaction.walletId,
-        Number(transaction.amount || 0) * multiplier,
-      );
-    } else if (transaction.type === "expense" && transaction.walletId) {
-      await walletRepo.updateWalletBalance(
-        transaction.walletId,
-        -Number(transaction.amount || 0) * multiplier,
-      );
-    } else if (
-      transaction.type === "transfer" &&
-      transaction.fromWalletId &&
-      transaction.toWalletId
-    ) {
-      const amt = Number(transaction.amount || 0) * multiplier;
-      await walletRepo.updateWalletBalance(transaction.fromWalletId, -amt);
-      await walletRepo.updateWalletBalance(transaction.toWalletId, amt);
-    }
-  }
-
   async createTransaction(
     transaction: Omit<Transaction, "id" | "createdAt">,
     options?: { skipSync?: boolean; useProvidedId?: string },
@@ -59,18 +31,15 @@ export class TransactionRepository {
 
     await database.runAsync(
       `INSERT INTO transactions (
-        id, amount, type, category_id, budget_id, wallet_id, from_wallet_id, to_wallet_id, description, 
+        id, amount, type, category_id, budget_id, description, 
         date, note, linked_bill_id, linked_debt_payment_id, created_at, duplicated_at, sync_updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         id,
         tableData.amount,
         tableData.type,
         tableData.category_id,
         tableData.budget_id || null,
-        tableData.wallet_id || null,
-        tableData.from_wallet_id || null,
-        tableData.to_wallet_id || null,
         tableData.description,
         tableData.date,
         tableData.note || null,
@@ -100,8 +69,6 @@ export class TransactionRepository {
       createdAt,
       updatedAt: Date.now(),
     };
-
-    await this.applyWalletBalanceDelta(newTransaction, 1);
 
     if (!options?.skipSync) {
       await offlineFirstSync.logOperation(
@@ -146,11 +113,6 @@ export class TransactionRepository {
         id,
         row,
       );
-      await db.runAsync(
-        "UPDATE transactions SET sync_status = 'synced' WHERE id = ?",
-        [id],
-      );
-      SyncService.getInstance().notifyRecordSynced("transactions", id);
       console.log(`✅ pushTransactionNow completed for id=${id}`);
     } catch (err) {
       console.error(`❌ pushTransactionNow failed for id=${id}`, err);
@@ -230,8 +192,6 @@ export class TransactionRepository {
       throw new Error("Transaction not found");
     }
 
-    await this.applyWalletBalanceDelta(currentTransaction, -1);
-
     const updateFields: string[] = [];
     const updateValues: any[] = [];
 
@@ -253,21 +213,6 @@ export class TransactionRepository {
     if (cleanedUpdates.budgetId !== undefined) {
       updateFields.push("budget_id = ?");
       updateValues.push(cleanedUpdates.budgetId || null);
-    }
-
-    if (cleanedUpdates.walletId !== undefined) {
-      updateFields.push("wallet_id = ?");
-      updateValues.push(cleanedUpdates.walletId || null);
-    }
-
-    if (cleanedUpdates.fromWalletId !== undefined) {
-      updateFields.push("from_wallet_id = ?");
-      updateValues.push(cleanedUpdates.fromWalletId || null);
-    }
-
-    if (cleanedUpdates.toWalletId !== undefined) {
-      updateFields.push("to_wallet_id = ?");
-      updateValues.push(cleanedUpdates.toWalletId || null);
     }
 
     if (cleanedUpdates.description !== undefined) {
@@ -299,8 +244,6 @@ export class TransactionRepository {
       updatedAt: Date.now(),
     };
 
-    await this.applyWalletBalanceDelta(updatedTransaction, 1);
-
     if (!options?.skipSync) {
       await offlineFirstSync.logOperation(
         "transactions",
@@ -324,8 +267,6 @@ export class TransactionRepository {
     if (!transaction) {
       throw new Error("Transaction not found");
     }
-
-    await this.applyWalletBalanceDelta(transaction, -1);
 
     // If this transaction is linked to a bill, update the bill to unpaid and unlink
     if (transaction.linkedBillId) {

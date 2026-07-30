@@ -1,7 +1,8 @@
 import React from "react";
 import { View, Text, StyleSheet, Pressable } from "react-native";
+import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons } from "@expo/vector-icons";
-import { useAppTheme } from "../../../theme";
+import { UI } from "../../../constants";
 import { TransactionType } from "../../../types";
 
 interface TransactionTypeToggleProps {
@@ -12,82 +13,60 @@ interface TransactionTypeToggleProps {
 const TYPES: { key: TransactionType; label: string; icon: string }[] = [
   { key: "income", label: "Income", icon: "trending-up" },
   { key: "expense", label: "Expense", icon: "trending-down" },
-  { key: "transfer", label: "Transfer", icon: "swap-horizontal" },
 ];
 
 export const TransactionTypeToggle: React.FC<TransactionTypeToggleProps> = ({
   selectedType,
   onTypeChange,
-}) => {
-  const { colors, typography, spacing, radius } = useAppTheme();
-
-  return (
-    <View style={[styles.wrapper, { marginBottom: spacing.s20 }]}>
-      <View
-        style={[
-          styles.track,
-          {
-            backgroundColor: colors.surfaceVariant,
-            borderRadius: radius.full, // Pill shape
-            padding: 4,
-            borderWidth: StyleSheet.hairlineWidth,
-            borderColor: colors.outline,
-          },
-        ]}>
-        {TYPES.map((t) => {
-          const active = selectedType === t.key;
-          const activeBg =
-            t.key === "income"
-              ? colors.success
-              : t.key === "expense"
-                ? colors.error
-                : colors.primary;
-
-          return (
-            <Pressable
-              key={t.key}
-              style={styles.buttonOuter}
-              onPress={() => onTypeChange(t.key)}>
-              <View
-                style={[
-                  styles.button,
-                  {
-                    backgroundColor: active ? activeBg : "transparent",
-                    borderRadius: radius.full,
-                    paddingVertical: spacing.s10,
-                    paddingHorizontal: spacing.s12,
-                  },
-                ]}>
-                <Ionicons
-                  name={t.icon as any}
-                  size={16}
-                  color={active ? "#FFFFFF" : colors.onSurfaceVariant}
-                />
-                <Text
-                  style={[
-                    active ? typography.labelLarge : typography.labelMedium,
-                    {
-                      color: active ? "#FFFFFF" : colors.onSurfaceVariant,
-                    },
-                  ]}>
+}) => (
+  <View style={styles.wrapper}>
+    <View style={styles.track}>
+      {TYPES.map((t) => {
+        const active = selectedType === t.key;
+        return (
+          <Pressable
+            key={t.key}
+            style={styles.buttonOuter}
+            onPress={() => onTypeChange(t.key)}>
+            {active ? (
+              <LinearGradient
+                colors={[UI.COLORS.PRIMARY, UI.COLORS.PRIMARY_DARK]}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={[styles.button, styles.buttonActive]}>
+                <Ionicons name={t.icon as any} size={18} color="#fff" />
+                <Text style={[styles.label, styles.labelActive]}>
                   {t.label}
                 </Text>
+              </LinearGradient>
+            ) : (
+              <View style={styles.button}>
+                <Ionicons
+                  name={t.icon as any}
+                  size={18}
+                  color={UI.COLORS.TEXT_MUTED}
+                />
+                <Text style={styles.label}>{t.label}</Text>
               </View>
-            </Pressable>
-          );
-        })}
-      </View>
+            )}
+          </Pressable>
+        );
+      })}
     </View>
-  );
-};
+  </View>
+);
 
 const styles = StyleSheet.create({
   wrapper: {
-    width: "100%",
+    marginBottom: 24,
   },
   track: {
     flexDirection: "row",
-    alignItems: "center",
+    backgroundColor: "rgba(20,20,50,0.7)",
+    borderRadius: 16,
+    padding: 4,
+    borderWidth: 1,
+    borderColor: "rgba(108,92,231,0.12)",
   },
   buttonOuter: {
     flex: 1,
@@ -96,7 +75,26 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    gap: 6,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    borderRadius: 12,
+    gap: 8,
+  },
+  buttonActive: {
+    // purple glow shadow
+    shadowColor: UI.COLORS.PRIMARY,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.4,
+    shadowRadius: 10,
+    elevation: 6,
+  },
+  label: {
+    fontSize: 15,
+    fontWeight: "600",
+    color: UI.COLORS.TEXT_MUTED,
+  },
+  labelActive: {
+    color: "#fff",
+    fontWeight: "700",
   },
 });
-

@@ -24,7 +24,6 @@ export const addCategory = createAsyncThunk(
       name: categoryData.name,
       type: categoryData.type,
       color: categoryData.color,
-      icon: categoryData.icon,
       entryCount: 0,
       // Sync fields
       updatedAt: Date.now(),
@@ -54,9 +53,6 @@ export const updateCategory = createAsyncThunk(
     }
     if (updates.color !== undefined) {
       categoryUpdates.color = updates.color;
-    }
-    if (updates.icon !== undefined) {
-      categoryUpdates.icon = updates.icon;
     }
 
     await db.categories.updateCategory(id, categoryUpdates);
@@ -131,11 +127,10 @@ const categoriesSlice = createSlice({
     clearError: (state) => {
       state.error = null;
     },
-    markCategorySynced: (state, action: PayloadAction<string>) => {
-      const item = state.items[action.payload];
-      if (item) {
-        item.syncStatus = "synced";
-        (item as any).sync_status = "synced";
+    /** Update in-memory syncStatus after a successful push to Firebase */
+    markSynced: (state, action: PayloadAction<string>) => {
+      if (state.items[action.payload]) {
+        state.items[action.payload].syncStatus = "synced";
       }
     },
   },
@@ -300,7 +295,7 @@ const categoriesSlice = createSlice({
   },
 });
 
-export const { clearError, markCategorySynced } = categoriesSlice.actions;
+export const { clearError, markSynced } = categoriesSlice.actions;
 export default categoriesSlice.reducer;
 
 // Selectors

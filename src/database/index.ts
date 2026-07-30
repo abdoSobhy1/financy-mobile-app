@@ -1,7 +1,5 @@
 import * as SQLite from "expo-sqlite";
 import { DATABASE } from "../constants";
-import { addWalletsTable } from "./migrations/walletsMigration";
-import { addCategoryIconColumn } from "./migrations/categoriesIconMigration";
 
 export class DatabaseManager {
   private static instance: DatabaseManager;
@@ -129,12 +127,9 @@ export class DatabaseManager {
       CREATE TABLE IF NOT EXISTS transactions (
         id TEXT PRIMARY KEY,
         amount REAL NOT NULL CHECK (amount > 0),
-        type TEXT NOT NULL CHECK (type IN ('income', 'expense', 'debt', 'transfer')),
+        type TEXT NOT NULL CHECK (type IN ('income', 'expense', 'debt')),
         category_id TEXT NOT NULL,
         budget_id TEXT,
-        wallet_id TEXT,
-        from_wallet_id TEXT,
-        to_wallet_id TEXT,
         description TEXT NOT NULL,
         date TEXT NOT NULL,
         note TEXT,
@@ -143,22 +138,6 @@ export class DatabaseManager {
         duplicated_at TEXT,
         FOREIGN KEY (category_id) REFERENCES categories (id) ON DELETE RESTRICT,
         FOREIGN KEY (budget_id) REFERENCES budgets (id) ON DELETE SET NULL
-      );
-    `);
-
-    // Wallets table
-    await this.db.execAsync(`
-      CREATE TABLE IF NOT EXISTS wallets (
-        id TEXT PRIMARY KEY,
-        name TEXT NOT NULL,
-        icon TEXT,
-        color TEXT,
-        balance REAL NOT NULL DEFAULT 0,
-        created_at TEXT NOT NULL DEFAULT (datetime('now')),
-        updated_at TEXT NOT NULL DEFAULT (datetime('now')),
-        sync_updated_at INTEGER NOT NULL DEFAULT 0,
-        deleted INTEGER NOT NULL DEFAULT 0 CHECK (deleted IN (0, 1)),
-        sync_status TEXT NOT NULL DEFAULT 'pending' CHECK (sync_status IN ('pending', 'synced', 'error'))
       );
     `);
 
@@ -316,12 +295,6 @@ export class DatabaseManager {
         console.warn("Failed to drop legacy bills tables (non-fatal):", err);
       }
 
-      // Run wallets migration
-      await addWalletsTable(this.db);
-
-      // Run categories icon migration
-      await addCategoryIconColumn(this.db);
-
       // Migrations completed
       console.log("All migrations completed successfully");
     } catch (error) {
@@ -340,7 +313,7 @@ export class DatabaseManager {
       'sync_status TEXT DEFAULT "synced" CHECK (sync_status IN ("pending", "synced", "error"))',
     ];
 
-    const tables = ["transactions", "categories", "budgets", "debts", "debt_payments", "settings", "wallets"];
+    const tables = ["transactions", "categories", "budgets", "debts", "debt_payments", "settings"];
 
     for (const table of tables) {
       for (const field of syncFields) {
@@ -377,14 +350,13 @@ export class DatabaseManager {
 
     // Define missing columns for each table to support cloud data
     const missingColumns = {
-      transactions: ["updated_at TEXT NOT NULL DEFAULT (datetime('now'))", "linked_bill_id TEXT", "linked_debt_payment_id TEXT", "wallet_id TEXT", "from_wallet_id TEXT", "to_wallet_id TEXT"],
+      transactions: ["updated_at TEXT NOT NULL DEFAULT (datetime('now'))", "linked_bill_id TEXT", "linked_debt_payment_id TEXT"],
       categories: ["icon TEXT", "updated_at TEXT NOT NULL DEFAULT (datetime('now'))"],
       budgets: ["period_type TEXT NOT NULL DEFAULT 'monthly'", "period_start INTEGER", "category_id TEXT"],
       // bills removed
       debts: ["amount REAL", "monthly_payment REAL CHECK (monthly_payment >= 0)", "budget_id TEXT"],
       debt_payments: ["date TEXT", "updated_at TEXT NOT NULL DEFAULT (datetime('now'))", "linked_transaction_id TEXT"],
       settings: ["key TEXT", "value TEXT", "updated_at TEXT NOT NULL DEFAULT (datetime('now'))"],
-      wallets: ["icon TEXT", "color TEXT", "updated_at TEXT NOT NULL DEFAULT (datetime('now'))"],
     };
 
     // Add missing columns to each table
@@ -499,7 +471,6 @@ export class DatabaseManager {
       DROP TABLE IF EXISTS budgets;
       DROP TABLE IF EXISTS categories;
       DROP TABLE IF EXISTS settings;
-      DROP TABLE IF EXISTS wallets;
     `);
 
     await this.createTables();
@@ -516,7 +487,6 @@ export class DatabaseManager {
       DELETE FROM debts;
       DELETE FROM transactions;
       DELETE FROM budgets;
-      DELETE FROM wallets;
       UPDATE settings SET 
         billing_period_start_day = 28,
         currency = 'USD',

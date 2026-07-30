@@ -10,7 +10,6 @@ import {
   ActivityIndicator,
   StatusBar,
   Share,
-  Platform,
 } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -29,13 +28,7 @@ import {
 } from "../components/ui";
 import { runSyncApplyTest, runAllSyncApplyTests } from "../debug/runSyncTest";
 import { UI } from "../constants";
-import { useAppTheme, categoryPalette } from "../theme";
-import {
-  getCategoryColorKey,
-  getCategoryIconName,
-} from "../utils/categoryDictionary";
 import NotificationService from "../services/notificationService";
-import { smsService } from "../services/smsService";
 import {
   fetchSettings,
   updateBillingPeriodStartDay,
@@ -44,12 +37,10 @@ import {
   fetchCategories,
   addCategory,
   deleteCategory,
-  updateCategory,
 } from "../store/slices/categoriesSlice";
-import { fetchWallets } from "../store/slices/walletsSlice";
 import { fetchBudgets } from "../store/slices/budgetsSlice";
 import { fetchTransactions } from "../store/slices/transactionsSlice";
-import { Category, Wallet } from "../types";
+import { Category } from "../types";
 import { exportToExcel, exportToCSV, ExportData } from "../utils/exportUtils";
 import { exportDatabaseToJSON } from "../utils/databaseExport";
 import { db } from "../database/queries";
@@ -63,19 +54,9 @@ type SettingsScreenNavigationProp = StackNavigationProp<SettingsStackParamList>;
 
 // ── Reusable sub-components ──────────────────────────────────────────
 
-const SectionLabel = ({ text }: { text: string }) => {
-  const { colors, typography, spacing } = useAppTheme();
-  return (
-    <Text
-      style={[
-        styles.sectionLabel,
-        typography.labelMedium,
-        { color: colors.primary, marginTop: spacing.s12, marginBottom: spacing.s8 },
-      ]}>
-      {text}
-    </Text>
-  );
-};
+const SectionLabel = ({ text }: { text: string }) => (
+  <Text style={styles.sectionLabel}>{text}</Text>
+);
 
 const SettingRow = ({
   icon,
@@ -93,56 +74,45 @@ const SettingRow = ({
   onPress?: () => void;
   rightElement?: React.ReactNode;
   destructive?: boolean;
-}) => {
-  const { colors, typography, spacing, radius } = useAppTheme();
-  return (
-    <TouchableOpacity
-      style={[styles.row, { paddingVertical: spacing.s12, paddingHorizontal: spacing.s16 }]}
-      onPress={onPress}
-      disabled={!onPress}
-      activeOpacity={0.7}>
-      <LinearGradient
-        colors={
-          iconGradient ||
-          (destructive
-            ? ["#FF6B6B", "#EE5A24"]
-            : [colors.primary, colors.primaryDark])
-        }
-        style={[styles.rowIcon, { borderRadius: radius.medium }]}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 1 }}>
-        <Ionicons name={icon as any} size={16} color="#fff" />
-      </LinearGradient>
-      <View style={styles.rowText}>
-        <Text
-          style={[
-            typography.titleMedium,
-            { color: destructive ? colors.error : colors.onSurface },
-          ]}
-          numberOfLines={1}>
-          {title}
+}) => (
+  <TouchableOpacity
+    style={styles.row}
+    onPress={onPress}
+    disabled={!onPress}
+    activeOpacity={0.7}>
+    <LinearGradient
+      colors={
+        iconGradient ||
+        (destructive
+          ? ["#FF6B6B", "#EE5A24"]
+          : [UI.COLORS.PRIMARY, UI.COLORS.PRIMARY_DARK])
+      }
+      style={styles.rowIcon}
+      start={{ x: 0, y: 0 }}
+      end={{ x: 1, y: 1 }}>
+      <Ionicons name={icon as any} size={16} color="#fff" />
+    </LinearGradient>
+    <View style={styles.rowText}>
+      <Text
+        style={[styles.rowTitle, destructive && { color: "#FF6B6B" }]}
+        numberOfLines={1}>
+        {title}
+      </Text>
+      {subtitle ? (
+        <Text style={styles.rowSubtitle} numberOfLines={2}>
+          {subtitle}
         </Text>
-        {subtitle ? (
-          <Text
-            style={[
-              typography.bodySmall,
-              { color: colors.textSecondary, marginTop: 2 },
-            ]}
-            numberOfLines={2}>
-            {subtitle}
-          </Text>
-        ) : null}
-      </View>
-      {rightElement || (
-        <Ionicons
-          name="chevron-forward"
-          size={16}
-          color={colors.textSecondary}
-        />
-      )}
-    </TouchableOpacity>
-  );
-};
+      ) : null}
+    </View>
+    {rightElement || (
+      <Ionicons
+        name="chevron-forward"
+        size={16}
+        color="rgba(255,255,255,0.2)"
+      />
+    )}
+  </TouchableOpacity>
+);
 
 const GlassCard = ({
   children,
@@ -150,25 +120,7 @@ const GlassCard = ({
 }: {
   children: React.ReactNode;
   style?: any;
-}) => {
-  const { colors, radius, spacing } = useAppTheme();
-  return (
-    <View
-      style={[
-        styles.card,
-        {
-          backgroundColor: colors.surface,
-          borderRadius: radius.large,
-          borderColor: colors.outline,
-          borderWidth: StyleSheet.hairlineWidth,
-          marginBottom: spacing.s16,
-        },
-        style,
-      ]}>
-      {children}
-    </View>
-  );
-};
+}) => <View style={[styles.card, style]}>{children}</View>;
 
 // ═══════════════════════════════════════════════════════════════════
 // MAIN SCREEN
@@ -196,13 +148,10 @@ export const SettingsScreen: React.FC = () => {
   const [debugLoggingEnabled, setDebugLoggingEnabled] =
     useState(getDebugMode());
   const [addCategoryModalVisible, setAddCategoryModalVisible] = useState(false);
-  const [editingCategory, setEditingCategory] = useState<Category | null>(null);
   const [showFirebaseCleanup, setShowFirebaseCleanup] = useState(false);
   const [showCategoryManagement, setShowCategoryManagement] = useState(false);
-  const { items: wallets } = useSelector((state: RootState) => state.wallets);
   const [syncing, setSyncing] = useState(false);
   const [deviceId, setDeviceId] = useState<string>("");
-  const [smsEnabled, setSmsEnabled] = useState(false);
   const { showAlert, AlertComponent } = useCustomAlert();
   const { showSuccess, showError } = useToast();
 
@@ -216,43 +165,12 @@ export const SettingsScreen: React.FC = () => {
 
   useEffect(() => {
     dispatch(fetchCategories());
-    dispatch(fetchWallets());
     dispatch(fetchSettings());
     dispatch(fetchTransactions());
     getDeviceId().then(setDeviceId);
   }, [dispatch]);
 
-  useEffect(() => {
-    if (Platform.OS === "android") {
-      smsService.hasPermissions().then((hasPerms) => {
-        setSmsEnabled(hasPerms);
-        if (hasPerms) {
-          smsService.startListening(categories, budgets);
-        }
-      });
-    }
-  }, [categories, budgets]);
-
   // ── Handlers ────────────────────────────────────────────────────
-  const handleSmsToggle = async (value: boolean) => {
-    if (Platform.OS !== "android") return;
-    if (value) {
-      const granted = await smsService.requestPermissions();
-      if (granted) {
-        setSmsEnabled(true);
-        smsService.startListening(categories, budgets);
-        showSuccess("Bank SMS Auto-Detection enabled");
-      } else {
-        setSmsEnabled(false);
-        showError("SMS permissions denied. Could not enable Bank SMS Auto-Detection.");
-      }
-    } else {
-      setSmsEnabled(false);
-      smsService.stopListening();
-      showSuccess("Bank SMS Auto-Detection disabled");
-    }
-  };
-
 
   const saveBillingDay = async () => {
     try {
@@ -486,7 +404,6 @@ export const SettingsScreen: React.FC = () => {
     name: string;
     type: "income" | "expense";
     color?: string;
-    icon?: string;
   }) => {
     const arr = Object.values(categories);
     if (
@@ -505,25 +422,6 @@ export const SettingsScreen: React.FC = () => {
       showSuccess(`Category "${categoryData.name}" added`);
     } catch (e: any) {
       showError(e?.message || "Failed to add category");
-    }
-  };
-
-  const handleCategoryUpdate = async (
-    id: string,
-    categoryData: {
-      name: string;
-      type: "income" | "expense";
-      color?: string;
-      icon?: string;
-    },
-  ) => {
-    try {
-      await dispatch(updateCategory({ id, updates: categoryData })).unwrap();
-      setAddCategoryModalVisible(false);
-      setEditingCategory(null);
-      showSuccess(`Category "${categoryData.name}" updated`);
-    } catch (e: any) {
-      showError(e?.message || "Failed to update category");
     }
   };
 
@@ -566,10 +464,12 @@ export const SettingsScreen: React.FC = () => {
   // RENDER
   // ═══════════════════════════════════════════════════════════════
   return (
-    <View style={{ flex: 1, backgroundColor: colors.background }}>
+    <LinearGradient
+      colors={["#0a0a2e", "#1a1040", "#0d0d30"]}
+      style={{ flex: 1 }}>
       <SafeAreaView style={{ flex: 1 }}>
         <StatusBar
-          barStyle={isDark ? "light-content" : "dark-content"}
+          barStyle="light-content"
           backgroundColor="transparent"
           translucent
         />
@@ -588,7 +488,7 @@ export const SettingsScreen: React.FC = () => {
               <>
                 <View style={styles.accountRow}>
                   <LinearGradient
-                    colors={["#6C5CE7", "#4834D4"]}
+                    colors={[UI.COLORS.PRIMARY, UI.COLORS.PRIMARY_DARK]}
                     style={styles.avatar}>
                     <Ionicons name="person" size={20} color="#fff" />
                   </LinearGradient>
@@ -624,29 +524,6 @@ export const SettingsScreen: React.FC = () => {
               subtitle={`Day ${currentBillingDay} of each month`}
               onPress={() => setShowBillingDayPicker(true)}
             />
-            {Platform.OS === "android" && (
-              <>
-                <View style={styles.separator} />
-                <SettingRow
-                  icon="chatbubble-ellipses"
-                  iconGradient={["#10B981", "#059669"]}
-                  title="Bank SMS Auto-Detection"
-                  subtitle={
-                    smsEnabled
-                      ? "Listening for bank SMS messages"
-                      : "Auto-detect bank transactions from SMS (Android only)"
-                  }
-                  rightElement={
-                    <Switch
-                      value={smsEnabled}
-                      onValueChange={handleSmsToggle}
-                      trackColor={{ false: "#333", true: "#10B981" }}
-                      thumbColor="#fff"
-                    />
-                  }
-                />
-              </>
-            )}
           </GlassCard>
 
           {/* ══ CLOUD SYNC ═══════════════════════════════ */}
@@ -668,7 +545,7 @@ export const SettingsScreen: React.FC = () => {
                     syncing || newSyncState.isSyncing ? (
                       <ActivityIndicator
                         size="small"
-                        color="#A29BFE"
+                        color={UI.COLORS.PRIMARY_LIGHT}
                       />
                     ) : undefined
                   }
@@ -746,25 +623,9 @@ export const SettingsScreen: React.FC = () => {
               showAlert={showAlert}
               showSuccess={showSuccess}
               showError={showError}
-              onAddCategory={() => {
-                setEditingCategory(null);
-                setAddCategoryModalVisible(true);
-              }}
-              onEditCategory={(cat) => {
-                setEditingCategory(cat);
-                setAddCategoryModalVisible(true);
-              }}
+              onAddCategory={() => setAddCategoryModalVisible(true)}
             />
           )}
-
-          <View style={styles.separator} />
-          <SettingRow
-            icon="wallet"
-            iconGradient={["#10B981", "#059669"]}
-            title="Manage Wallets"
-            subtitle={`${Object.keys(wallets).length} wallets`}
-            onPress={() => navigation.navigate("Wallets")}
-          />
 
           {/* ══ ABOUT ════════════════════════════════════ */}
           <SectionLabel text="About" />
@@ -821,12 +682,12 @@ export const SettingsScreen: React.FC = () => {
                       }}
                       trackColor={{
                         false: "rgba(255,255,255,0.08)",
-                        true: "#6C5CE750",
+                        true: UI.COLORS.PRIMARY + "50",
                       }}
                       thumbColor={
                         debugLoggingEnabled
-                          ? "#6C5CE7"
-                          : "#A0A0C8"
+                          ? UI.COLORS.PRIMARY
+                          : UI.COLORS.TEXT_SECONDARY
                       }
                     />
                   }
@@ -1027,7 +888,7 @@ export const SettingsScreen: React.FC = () => {
                       <Ionicons
                         name="checkmark"
                         size={18}
-                        color="#6C5CE7"
+                        color={UI.COLORS.PRIMARY}
                       />
                     )}
                   </TouchableOpacity>
@@ -1048,7 +909,7 @@ export const SettingsScreen: React.FC = () => {
                   onPress={saveBillingDay}
                   disabled={settings.loading}>
                   <LinearGradient
-                    colors={["#6C5CE7", "#4834D4"]}
+                    colors={[UI.COLORS.PRIMARY, UI.COLORS.PRIMARY_DARK]}
                     style={styles.modalSaveBtn}
                     start={{ x: 0, y: 0 }}
                     end={{ x: 1, y: 1 }}>
@@ -1064,14 +925,9 @@ export const SettingsScreen: React.FC = () => {
 
         <CategoryCreationModal
           visible={addCategoryModalVisible}
-          onClose={() => {
-            setAddCategoryModalVisible(false);
-            setEditingCategory(null);
-          }}
-          category={editingCategory}
+          onClose={() => setAddCategoryModalVisible(false)}
           onCreateCategory={handleNewCategoryAdd}
-          onUpdateCategory={handleCategoryUpdate}
-          title={editingCategory ? "Edit Category" : "Add New Category"}
+          title="Add New Category"
         />
 
         <FirebaseCleanupModal
@@ -1079,7 +935,7 @@ export const SettingsScreen: React.FC = () => {
           onClose={() => setShowFirebaseCleanup(false)}
         />
       </SafeAreaView>
-    </View>
+    </LinearGradient>
   );
 };
 
@@ -1092,7 +948,6 @@ interface CategoryManagementProps {
   showSuccess: (message: string) => void;
   showError: (message: string) => void;
   onAddCategory: () => void;
-  onEditCategory: (cat: Category) => void;
 }
 
 const CategoryManagement: React.FC<CategoryManagementProps> = ({
@@ -1100,7 +955,6 @@ const CategoryManagement: React.FC<CategoryManagementProps> = ({
   showSuccess,
   showError,
   onAddCategory,
-  onEditCategory,
 }) => {
   const dispatch = useDispatch<AppDispatch>();
   const { items: categories } = useSelector(
@@ -1141,120 +995,41 @@ const CategoryManagement: React.FC<CategoryManagementProps> = ({
     title: string;
     items: Category[];
     color: string;
-  }) => {
-    const { colors, typography, spacing, radius } = useAppTheme();
-    const isDark = true;
-
-    return (
-      <View style={{ marginBottom: spacing.s16 }}>
-        <Text
-          style={[
-            typography.titleMedium,
-            { color, marginBottom: spacing.s8 },
-          ]}>
-          {title} ({items.length})
-        </Text>
-        {items.map((cat) => {
-          const paletteKey = getCategoryColorKey(cat.name);
-          const colorPair = categoryPalette[paletteKey] || {
-            light: cat.color || color,
-            dark: cat.color || color,
-            textLight: "#FFFFFF",
-            textDark: "#FFFFFF",
-          };
-          const iconBg = isDark ? colorPair.dark : colorPair.light;
-          const iconColor = isDark ? colorPair.textDark : colorPair.textLight;
-          const iconName = getCategoryIconName(cat);
-
-          return (
-            <TouchableOpacity
-              key={cat.id}
-              activeOpacity={0.75}
-              onPress={() => onEditCategory(cat)}
-              style={[
-                styles.catRow,
-                {
-                  backgroundColor: colors.surfaceVariant,
-                  borderRadius: radius.medium,
-                  paddingVertical: spacing.s12,
-                  paddingHorizontal: spacing.s16,
-                  marginBottom: spacing.s8,
-                  borderColor: colors.outline,
-                  borderWidth: 1,
-                },
-              ]}>
-              <View style={styles.catLeft}>
-                <View
-                  style={{
-                    width: 36,
-                    height: 36,
-                    borderRadius: 18,
-                    backgroundColor: iconBg,
-                    alignItems: "center",
-                    justifyContent: "center",
-                    marginRight: spacing.s12,
-                  }}>
-                  <Ionicons
-                    name={iconName as any}
-                    size={18}
-                    color={iconColor}
-                  />
-                </View>
-                <Text
-                  style={[
-                    typography.titleMedium,
-                    { color: colors.onSurface },
-                  ]}>
-                  {cat.name}
-                </Text>
-              </View>
-              <View
-                style={{
-                  flexDirection: "row",
-                  alignItems: "center",
-                  gap: 16,
-                }}>
-                <TouchableOpacity
-                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                  onPress={() => onEditCategory(cat)}>
-                  <Ionicons
-                    name="pencil-outline"
-                    size={18}
-                    color={colors.primary}
-                  />
-                </TouchableOpacity>
-                <TouchableOpacity
-                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                  onPress={() => handleDelete(cat)}
-                  disabled={deletingId === cat.id}>
-                  <Ionicons
-                    name="trash-outline"
-                    size={18}
-                    color={colors.error}
-                  />
-                </TouchableOpacity>
-              </View>
-            </TouchableOpacity>
-          );
-        })}
-      </View>
-    );
-  };
+  }) => (
+    <View style={{ marginBottom: 14 }}>
+      <Text style={[styles.catGroupTitle, { color }]}>
+        {title} ({items.length})
+      </Text>
+      {items.map((cat) => (
+        <View key={cat.id} style={styles.catRow}>
+          <View style={styles.catLeft}>
+            <View
+              style={[styles.catDot, { backgroundColor: cat.color || color }]}
+            />
+            <Text style={styles.catName}>{cat.name}</Text>
+          </View>
+          <TouchableOpacity
+            onPress={() => handleDelete(cat)}
+            disabled={deletingId === cat.id}>
+            <Ionicons name="trash-outline" size={17} color="#FF6B6B" />
+          </TouchableOpacity>
+        </View>
+      ))}
+    </View>
+  );
 
   return (
     <GlassCard style={{ marginTop: -4 }}>
       <CatList title="Income" items={income} color="#2ED573" />
       <CatList title="Expense" items={expense} color="#FF6B6B" />
       <TouchableOpacity style={styles.addCatBtn} onPress={onAddCategory}>
-        <Ionicons name="add-circle" size={20} color="#A29BFE" />
+        <Ionicons name="add-circle" size={20} color={UI.COLORS.PRIMARY_LIGHT} />
         <Text style={styles.addCatText}>Add Category</Text>
       </TouchableOpacity>
     </GlassCard>
   );
 };
 
-// ═══════════════════════════════════════════════════════════════════
-// Wallet Management (inline expandable)
 // ═══════════════════════════════════════════════════════════════════
 // STYLES
 // ═══════════════════════════════════════════════════════════════════
@@ -1267,7 +1042,7 @@ const styles = StyleSheet.create({
   screenTitle: {
     fontSize: 32,
     fontWeight: "800",
-    color: "#F0F0FF",
+    color: UI.COLORS.TEXT_PRIMARY,
     letterSpacing: 0.3,
     marginBottom: 24,
   },
@@ -1276,7 +1051,7 @@ const styles = StyleSheet.create({
   sectionLabel: {
     fontSize: 12,
     fontWeight: "700",
-    color: "#A29BFE",
+    color: UI.COLORS.PRIMARY_LIGHT,
     textTransform: "uppercase",
     letterSpacing: 1,
     marginBottom: 10,
@@ -1319,11 +1094,11 @@ const styles = StyleSheet.create({
   rowTitle: {
     fontSize: 15,
     fontWeight: "600",
-    color: "#F0F0FF",
+    color: UI.COLORS.TEXT_PRIMARY,
   },
   rowSubtitle: {
     fontSize: 12,
-    color: "#5E5E80",
+    color: UI.COLORS.TEXT_MUTED,
     marginTop: 2,
     lineHeight: 16,
   },
@@ -1391,7 +1166,7 @@ const styles = StyleSheet.create({
   },
   catName: {
     fontSize: 14,
-    color: "#F0F0FF",
+    color: UI.COLORS.TEXT_PRIMARY,
   },
   addCatBtn: {
     flexDirection: "row",
@@ -1408,7 +1183,7 @@ const styles = StyleSheet.create({
   addCatText: {
     fontSize: 14,
     fontWeight: "600",
-    color: "#A29BFE",
+    color: UI.COLORS.PRIMARY_LIGHT,
   },
 
   // ── Modal ───────────────────────────────────────────
@@ -1431,13 +1206,13 @@ const styles = StyleSheet.create({
   modalTitle: {
     fontSize: 18,
     fontWeight: "700",
-    color: "#F0F0FF",
+    color: UI.COLORS.TEXT_PRIMARY,
     textAlign: "center",
     marginBottom: 6,
   },
   modalSubtitle: {
     fontSize: 13,
-    color: "#5E5E80",
+    color: UI.COLORS.TEXT_MUTED,
     textAlign: "center",
     marginBottom: 18,
   },
@@ -1458,10 +1233,10 @@ const styles = StyleSheet.create({
   },
   dayText: {
     fontSize: 15,
-    color: "#F0F0FF",
+    color: UI.COLORS.TEXT_PRIMARY,
   },
   dayTextActive: {
-    color: "#A29BFE",
+    color: UI.COLORS.PRIMARY_LIGHT,
     fontWeight: "600",
   },
   modalActions: {
@@ -1481,7 +1256,7 @@ const styles = StyleSheet.create({
   modalCancelText: {
     fontSize: 15,
     fontWeight: "600",
-    color: "#5E5E80",
+    color: UI.COLORS.TEXT_MUTED,
   },
   modalSaveBtn: {
     flex: 1,

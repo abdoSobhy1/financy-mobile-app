@@ -35,10 +35,7 @@ import {
   AdvancedFilters,
 } from "../components/filters/AdvancedFiltersModal";
 import { UI } from "../constants";
-import { useAppTheme } from "../theme";
 import { getCurrentBillingPeriod } from "../utils/billingPeriod";
-import { findMatchingBudgetForCategory } from "../utils";
-import { smsService } from "../services/smsService";
 import {
   Transaction,
   TransactionStackParamList,
@@ -70,7 +67,6 @@ interface DateRange {
 }
 
 export const TransactionListScreen: React.FC = () => {
-  const { colors, typography, spacing, radius } = useAppTheme();
   const dispatch = useDispatch<AppDispatch>();
   const navigation = useNavigation<TransactionListNavigationProp>();
   const { showAlert, AlertComponent } = useCustomAlert();
@@ -108,7 +104,6 @@ export const TransactionListScreen: React.FC = () => {
   const { items: categories } = useSelector(
     (state: RootState) => state.categories,
   );
-  const { items: budgets } = useSelector((state: RootState) => state.budgets);
 
   // ── Voice input state ──────────────────────────────────────────────
   const [voiceResults, setVoiceResults] = useState<ParsedTransaction[]>([]);
@@ -125,17 +120,6 @@ export const TransactionListScreen: React.FC = () => {
       setVoiceResults([]);
       try {
         for (const tx of results) {
-          let targetBudgetId = tx.budgetId;
-          if (tx.categoryId && !targetBudgetId) {
-            const matchedBudget = findMatchingBudgetForCategory(
-              budgets,
-              tx.categoryId,
-            );
-            if (matchedBudget) {
-              targetBudgetId = matchedBudget.id;
-            }
-          }
-
           console.log("🎤 Saving voice transaction:", JSON.stringify(tx));
           await dispatch(
             addTransaction({
@@ -144,7 +128,7 @@ export const TransactionListScreen: React.FC = () => {
               type: tx.type ?? "expense",
               date: tx.date ?? new Date(),
               categoryId: tx.categoryId ?? "",
-              budgetId: targetBudgetId,
+              budgetId: tx.budgetId,
             }),
           ).unwrap();
         }
@@ -156,7 +140,7 @@ export const TransactionListScreen: React.FC = () => {
         showError("Failed to add transactions");
       }
     },
-    [dispatch, showSuccess, showError, budgets],
+    [dispatch, showSuccess, showError],
   );
 
   useEffect(() => {
@@ -166,37 +150,10 @@ export const TransactionListScreen: React.FC = () => {
     return () => clearTimeout(timer);
   }, [dispatch]);
 
-  useEffect(() => {
-    if (Platform.OS === "android") {
-      const removeListener = smsService.addTransactionListener((tx) => {
-        setVoiceResults((prev) => [...prev, tx]);
-        setShowVoiceReview(true);
-      });
-
-      const pending = smsService.consumePendingTransactions();
-      if (pending.length > 0) {
-        setVoiceResults((prev) => [...prev, ...pending]);
-        setShowVoiceReview(true);
-      }
-
-      return () => {
-        removeListener();
-      };
-    }
-  }, []);
-
-
   useFocusEffect(
     React.useCallback(() => {
       loadBillingPeriod();
       loadData();
-      if (Platform.OS === "android") {
-        const pending = smsService.consumePendingTransactions();
-        if (pending.length > 0) {
-          setVoiceResults((prev) => [...prev, ...pending]);
-          setShowVoiceReview(true);
-        }
-      }
     }, []),
   );
 
@@ -468,21 +425,17 @@ export const TransactionListScreen: React.FC = () => {
   );
 
   return (
-    <View style={{ flex: 1, backgroundColor: colors.background }}>
-      <SafeAreaView style={{ flex: 1, paddingHorizontal: spacing.s16 }}>
+    <LinearGradient
+      colors={["#0a0a2e", "#1a1040", "#0d0d30"]}
+      style={{ flex: 1 }}>
+      <SafeAreaView style={{ flex: 1, padding: UI.SPACING.MD }}>
         <StatusBar
           barStyle="light-content"
           backgroundColor="transparent"
           translucent
         />
 
-        <Text
-          style={[
-            typography.displaySmall,
-            { color: colors.onBackground, marginBottom: spacing.s16, fontWeight: "800" },
-          ]}>
-          Transactions
-        </Text>
+        <Text style={styles.screenTitle}>Transactions</Text>
         <>
           {headerComponent}
           <TransactionFilterBar
@@ -513,7 +466,7 @@ export const TransactionListScreen: React.FC = () => {
             <RefreshControl
               refreshing={refreshing}
               onRefresh={handleRefresh}
-              tintColor={colors.primary}
+              tintColor={UI.COLORS.PRIMARY}
             />
           }
           showsVerticalScrollIndicator={false}
@@ -572,7 +525,7 @@ export const TransactionListScreen: React.FC = () => {
           />
         )}
       </SafeAreaView>
-    </View>
+    </LinearGradient>
   );
 };
 

@@ -28,15 +28,14 @@ export class CategoryRepository {
 
     await database.runAsync(
       `
-      INSERT INTO categories (id, name, type, color, icon, entry_count, created_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO categories (id, name, type, color, entry_count, created_at)
+      VALUES (?, ?, ?, ?, ?, ?)
     `,
       [
         id,
         tableData.name,
         tableData.type,
         tableData.color || null,
-        tableData.icon || null,
         tableData.entry_count,
         createdAt,
       ],
@@ -121,11 +120,6 @@ export class CategoryRepository {
     if (updates.color !== undefined) {
       setParts.push("color = ?");
       params.push(updates.color || null);
-    }
-
-    if (updates.icon !== undefined) {
-      setParts.push("icon = ?");
-      params.push(updates.icon || null);
     }
 
     if (setParts.length === 0) {

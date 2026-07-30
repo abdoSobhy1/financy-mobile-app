@@ -222,18 +222,14 @@ const debtsSlice = createSlice({
       state.paymentIds = [];
       state.paymentsByDebt = {};
     },
-    markDebtSynced: (state, action: PayloadAction<string>) => {
-      const item = state.items[action.payload];
-      if (item) {
-        item.syncStatus = "synced";
-        (item as any).sync_status = "synced";
+    /** Update in-memory syncStatus after a successful push to Firebase.
+     *  Covers both debt rows (state.items) and debt_payment rows (state.payments). */
+    markSynced: (state, action: PayloadAction<string>) => {
+      if (state.items[action.payload]) {
+        state.items[action.payload].syncStatus = "synced";
       }
-    },
-    markDebtPaymentSynced: (state, action: PayloadAction<string>) => {
-      const payment = state.payments[action.payload];
-      if (payment) {
-        payment.syncStatus = "synced";
-        (payment as any).sync_status = "synced";
+      if (state.payments[action.payload]) {
+        state.payments[action.payload].syncStatus = "synced";
       }
     },
   },
@@ -450,10 +446,5 @@ const debtsSlice = createSlice({
   },
 });
 
-export const {
-  clearError,
-  clearPayments,
-  markDebtSynced,
-  markDebtPaymentSynced,
-} = debtsSlice.actions;
+export const { clearError, clearPayments, markSynced } = debtsSlice.actions;
 export default debtsSlice.reducer;

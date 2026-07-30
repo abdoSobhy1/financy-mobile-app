@@ -5,7 +5,6 @@ import {
   TransactionFormData,
 } from "../../types";
 import { db } from "../../database/queries";
-import { fetchWallets } from "./walletsSlice";
 
 // Async thunks for database operations
 export const fetchTransactions = createAsyncThunk(
@@ -17,38 +16,30 @@ export const fetchTransactions = createAsyncThunk(
 
 export const addTransaction = createAsyncThunk(
   "transactions/addTransaction",
-  async (transactionData: TransactionFormData, { dispatch }) => {
+  async (transactionData: TransactionFormData) => {
     const transaction: Omit<Transaction, "id" | "createdAt"> = {
       amount: parseFloat(transactionData.amount),
       type: transactionData.type,
-      categoryId: transactionData.categoryId || (transactionData.type === "transfer" ? "transfer" : ""),
+      categoryId: transactionData.categoryId,
       budgetId: transactionData.budgetId,
-      walletId: transactionData.walletId,
-      fromWalletId: transactionData.fromWalletId,
-      toWalletId: transactionData.toWalletId,
       description: transactionData.description,
       date: transactionData.date.toISOString(),
       note: transactionData.note,
       updatedAt: Date.now(),
     };
-    const res = await db.transactions.createTransaction(transaction);
-    dispatch(fetchWallets());
-    return res;
+    return await db.transactions.createTransaction(transaction);
   },
 );
 
 export const updateTransaction = createAsyncThunk(
   "transactions/updateTransaction",
-  async (
-    {
-      id,
-      updates,
-    }: {
-      id: string;
-      updates: Partial<TransactionFormData>;
-    },
-    { dispatch },
-  ) => {
+  async ({
+    id,
+    updates,
+  }: {
+    id: string;
+    updates: Partial<TransactionFormData>;
+  }) => {
     const transactionUpdates: Partial<Omit<Transaction, "id" | "createdAt">> =
       {};
 
@@ -64,15 +55,6 @@ export const updateTransaction = createAsyncThunk(
     if (updates.budgetId !== undefined) {
       transactionUpdates.budgetId = updates.budgetId;
     }
-    if (updates.walletId !== undefined) {
-      transactionUpdates.walletId = updates.walletId;
-    }
-    if (updates.fromWalletId !== undefined) {
-      transactionUpdates.fromWalletId = updates.fromWalletId;
-    }
-    if (updates.toWalletId !== undefined) {
-      transactionUpdates.toWalletId = updates.toWalletId;
-    }
     if (updates.description !== undefined) {
       transactionUpdates.description = updates.description;
     }
@@ -84,27 +66,22 @@ export const updateTransaction = createAsyncThunk(
     }
 
     await db.transactions.updateTransaction(id, transactionUpdates);
-    const updated = await db.transactions.getTransactionById(id);
-    dispatch(fetchWallets());
-    return updated;
+    return await db.transactions.getTransactionById(id);
   },
 );
 
 export const deleteTransaction = createAsyncThunk(
   "transactions/deleteTransaction",
-  async (id: string, { dispatch }) => {
+  async (id: string) => {
     await db.transactions.deleteTransaction(id);
-    dispatch(fetchWallets());
     return id;
   },
 );
 
 export const duplicateTransaction = createAsyncThunk(
   "transactions/duplicateTransaction",
-  async (id: string, { dispatch }) => {
-    const res = await db.transactions.duplicateTransaction(id);
-    dispatch(fetchWallets());
-    return res;
+  async (id: string) => {
+    return await db.transactions.duplicateTransaction(id);
   },
 );
 
@@ -151,11 +128,10 @@ const transactionsSlice = createSlice({
     clearError: (state) => {
       state.error = null;
     },
-    markTransactionSynced: (state, action: PayloadAction<string>) => {
-      const item = state.items[action.payload];
-      if (item) {
-        item.syncStatus = "synced";
-        (item as any).sync_status = "synced";
+    /** Update in-memory syncStatus after a successful push to Firebase */
+    markSynced: (state, action: PayloadAction<string>) => {
+      if (state.items[action.payload]) {
+        state.items[action.payload].syncStatus = "synced";
       }
     },
   },
@@ -255,10 +231,6 @@ const transactionsSlice = createSlice({
   },
 });
 
-export const {
-  setFilters,
-  clearFilters,
-  clearError,
-  markTransactionSynced,
-} = transactionsSlice.actions;
+export const { setFilters, clearFilters, clearError, markSynced } =
+  transactionsSlice.actions;
 export default transactionsSlice.reducer;

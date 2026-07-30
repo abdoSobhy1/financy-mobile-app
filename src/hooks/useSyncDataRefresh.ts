@@ -1,10 +1,10 @@
 import { useEffect } from "react";
 import { useDispatch } from "react-redux";
 import { AppDispatch } from "../store";
-import { fetchBudgets, markBudgetSynced } from "../store/slices/budgetsSlice";
-import { fetchTransactions, markTransactionSynced } from "../store/slices/transactionsSlice";
-import { fetchCategories, markCategorySynced } from "../store/slices/categoriesSlice";
-import { fetchDebts, markDebtSynced, markDebtPaymentSynced } from "../store/slices/debtsSlice";
+import { fetchBudgets } from "../store/slices/budgetsSlice";
+import { fetchTransactions } from "../store/slices/transactionsSlice";
+import { fetchCategories } from "../store/slices/categoriesSlice";
+import { fetchDebts } from "../store/slices/debtsSlice";
 import { syncService } from "../services/syncService";
 import { CollectionName } from "../types";
 
@@ -18,33 +18,11 @@ export const useSyncDataRefresh = () => {
     console.log("🔄 Registering sync data refresh hook with sync service");
 
     let callbackCount = 0;
-    const handleDataChange = async (collectionName: CollectionName, operation: "create" | "update" | "delete" | "synced", docId: string) => {
+    const handleDataChange = async (collectionName: CollectionName, operation: "create" | "update" | "delete", docId: string) => {
       callbackCount++;
       console.log(`🔄 [${callbackCount}] Sync detected ${operation} on ${collectionName}/${docId}, refreshing Redux store`);
 
       try {
-        if (operation === "synced") {
-          console.log(`🔄 [${callbackCount}] Marking ${collectionName}/${docId} as synced in Redux store`);
-          switch (collectionName) {
-            case "transactions":
-              dispatch(markTransactionSynced(docId));
-              break;
-            case "budgets":
-              dispatch(markBudgetSynced(docId));
-              break;
-            case "categories":
-              dispatch(markCategorySynced(docId));
-              break;
-            case "debts":
-              dispatch(markDebtSynced(docId));
-              break;
-            case "debt_payments":
-              dispatch(markDebtPaymentSynced(docId));
-              break;
-          }
-          return;
-        }
-
         // Refresh the appropriate Redux slice based on collection
         switch (collectionName) {
           case "budgets":
@@ -83,4 +61,3 @@ export const useSyncDataRefresh = () => {
     };
   }, [dispatch]);
 };
-

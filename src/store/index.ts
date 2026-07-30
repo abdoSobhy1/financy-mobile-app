@@ -4,7 +4,6 @@ import budgetsReducer from "./slices/budgetsSlice";
 import categoriesReducer from "./slices/categoriesSlice";
 import settingsReducer from "./slices/settingsSlice";
 import debtsReducer from "./slices/debtsSlice";
-import walletsReducer from "./slices/walletsSlice";
 import authReducer from "./slices/authSlice";
 import syncReducer from "./slices/syncSlice";
 import analysisReducer from "./slices/analysisSlice";
@@ -17,7 +16,6 @@ export const store = configureStore({
     categories: categoriesReducer,
     settings: settingsReducer,
     debts: debtsReducer,
-    wallets: walletsReducer,
     auth: authReducer,
     sync: syncReducer,
     analysis: analysisReducer,

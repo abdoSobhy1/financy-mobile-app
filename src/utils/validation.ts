@@ -13,21 +13,12 @@ export const validateTransactionData = (transaction: Partial<Transaction>): void
     throw new Error("Transaction description is required");
   }
 
-  if (transaction.type !== "transfer" && !transaction.categoryId) {
+  if (!transaction.categoryId) {
     throw new Error("Transaction category is required");
   }
 
-  if (!transaction.type || !["income", "expense", "debt", "transfer"].includes(transaction.type)) {
+  if (!transaction.type || !["income", "expense", "debt"].includes(transaction.type)) {
     throw new Error("Valid transaction type is required");
-  }
-
-  if (transaction.type === "transfer") {
-    if (!transaction.fromWalletId || !transaction.toWalletId) {
-      throw new Error("Both source and destination wallets are required for transfers");
-    }
-    if (transaction.fromWalletId === transaction.toWalletId) {
-      throw new Error("Cannot transfer to the same wallet");
-    }
   }
 };
 
@@ -38,10 +29,6 @@ export const cleanTransactionData = (transaction: any): any => {
   const cleaned = {
     ...transaction,
     budgetId: transaction.budgetId || null,
-    walletId: transaction.walletId || null,
-    fromWalletId: transaction.fromWalletId || null,
-    toWalletId: transaction.toWalletId || null,
-    categoryId: transaction.categoryId || (transaction.type === "transfer" ? "transfer" : null),
     note: transaction.note?.trim() || null,
     // Ensure numbers are properly typed
     amount: Number(transaction.amount),
@@ -112,31 +99,6 @@ export const cleanBudgetData = (budget: any): any => {
   }
 
   return cleaned;
-};
-
-/**
- * Validates wallet data
- */
-export const validateWalletData = (wallet: any): void => {
-  if (!wallet.name?.trim()) {
-    throw new Error("Wallet name is required");
-  }
-  if (wallet.balance !== undefined && isNaN(Number(wallet.balance))) {
-    throw new Error("Wallet balance must be a valid number");
-  }
-};
-
-/**
- * Cleans wallet data
- */
-export const cleanWalletData = (wallet: any): any => {
-  return {
-    ...wallet,
-    name: wallet.name?.trim() || "",
-    balance: Number(wallet.balance || 0),
-    icon: wallet.icon || "wallet",
-    color: wallet.color || "#10B981",
-  };
 };
 
 /**

@@ -33,7 +33,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 // Callback type for data change notifications
 type DataChangeCallback = (
   collectionName: CollectionName,
-  operation: "create" | "update" | "delete" | "synced",
+  operation: "create" | "update" | "delete",
   docId: string,
 ) => void;
 
@@ -315,21 +315,11 @@ export class SyncService {
   }
 
   /**
-   * Notify callbacks that a record was synced
-   */
-  public notifyRecordSynced(
-    collectionName: CollectionName,
-    docId: string,
-  ): void {
-    this.notifyDataChange(collectionName, "synced", docId);
-  }
-
-  /**
    * Notify callbacks of data changes
    */
   private notifyDataChange(
     collectionName: CollectionName,
-    operation: "create" | "update" | "delete" | "synced",
+    operation: "create" | "update" | "delete",
     docId: string,
   ): void {
     console.log(

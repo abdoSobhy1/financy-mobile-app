@@ -5,7 +5,6 @@ export { BudgetRepository } from "./budgets";
 export { CategoryRepository } from "./categories";
 export { SettingsRepository } from "./settings";
 export { DebtRepository } from "./debts";
-export { WalletRepository } from "./wallets";
 
 // Create a centralized database service
 import { TransactionRepository } from "./transactions";
@@ -13,7 +12,6 @@ import { BudgetRepository } from "./budgets";
 import { CategoryRepository } from "./categories";
 import { SettingsRepository } from "./settings";
 import { DebtRepository } from "./debts";
-import { WalletRepository } from "./wallets";
 import { DatabaseManager } from "../index";
 
 export class DatabaseService {
@@ -24,7 +22,6 @@ export class DatabaseService {
   public readonly categories: CategoryRepository;
   public readonly settings: SettingsRepository;
   public readonly debts: DebtRepository;
-  public readonly wallets: WalletRepository;
 
   private constructor() {
     this.transactions = new TransactionRepository();
@@ -32,7 +29,6 @@ export class DatabaseService {
     this.categories = new CategoryRepository();
     this.settings = new SettingsRepository();
     this.debts = new DebtRepository();
-    this.wallets = new WalletRepository();
   }
 
   public static getInstance(): DatabaseService {

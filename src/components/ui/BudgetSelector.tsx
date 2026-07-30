@@ -1,4 +1,4 @@
-import React, { useEffect } from "react";
+import React, { useState, useEffect } from "react";
 import {
   View,
   Text,
@@ -6,7 +6,8 @@ import {
   TouchableOpacity,
   StyleSheet,
 } from "react-native";
-import { useAppTheme } from "../../theme";
+import { LinearGradient } from "expo-linear-gradient";
+import { UI } from "../../constants";
 import {
   getLastUsedBudgetId,
   setLastUsedBudgetId,
@@ -36,8 +37,6 @@ export const BudgetSelector: React.FC<BudgetSelectorProps> = ({
   error,
   rememberLastUsed = false,
 }) => {
-  const { colors, typography, spacing, radius } = useAppTheme();
-
   useEffect(() => {
     if (rememberLastUsed && !selectedBudgetId && budgets.length > 0) {
       loadLastUsedBudget();
@@ -66,23 +65,13 @@ export const BudgetSelector: React.FC<BudgetSelectorProps> = ({
   };
 
   return (
-    <View style={[styles.container, { marginBottom: spacing.s16 }]}>
-      {label && (
-        <Text
-          style={[
-            styles.label,
-            typography.labelMedium,
-            { color: colors.primary },
-          ]}>
-          {label}
-        </Text>
-      )}
+    <View style={styles.container}>
+      {label && <Text style={styles.label}>{label}</Text>}
 
       <ScrollView
         horizontal
         showsHorizontalScrollIndicator={false}
-        style={styles.scroll}
-        contentContainerStyle={{ paddingHorizontal: spacing.s16, gap: 10 }}>
+        style={styles.scroll}>
         <View style={styles.chipRow}>
           {/* None chip */}
           <TouchableOpacity
@@ -90,33 +79,20 @@ export const BudgetSelector: React.FC<BudgetSelectorProps> = ({
             onPress={() => {
               onBudgetSelect(undefined);
               if (rememberLastUsed) setLastUsedBudgetId(null);
-            }}
-            style={[
-              styles.chip,
-              {
-                backgroundColor: !selectedBudgetId
-                  ? colors.primaryContainer
-                  : colors.surface,
-                borderRadius: radius.medium, // 16px radius
-                borderColor: !selectedBudgetId
-                  ? colors.primary
-                  : colors.outline,
-                borderWidth: 1,
-                paddingHorizontal: spacing.s16,
-                paddingVertical: spacing.s8,
-              },
-            ]}>
-            <Text
-              style={[
-                typography.labelMedium,
-                {
-                  color: !selectedBudgetId
-                    ? colors.onPrimaryContainer
-                    : colors.onSurfaceVariant,
-                },
-              ]}>
-              None
-            </Text>
+            }}>
+            {!selectedBudgetId ? (
+              <LinearGradient
+                colors={[UI.COLORS.PRIMARY, UI.COLORS.PRIMARY_DARK]}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={[styles.chip, styles.chipActive]}>
+                <Text style={styles.chipTextActive}>None</Text>
+              </LinearGradient>
+            ) : (
+              <View style={styles.chip}>
+                <Text style={styles.chipText}>None</Text>
+              </View>
+            )}
           </TouchableOpacity>
 
           {/* Budget chips */}
@@ -126,74 +102,81 @@ export const BudgetSelector: React.FC<BudgetSelectorProps> = ({
               <TouchableOpacity
                 key={budget.id}
                 activeOpacity={0.7}
-                onPress={() => handleBudgetSelect(budget.id)}
-                style={[
-                  styles.chip,
-                  {
-                    backgroundColor: isActive
-                      ? colors.primaryContainer
-                      : colors.surface,
-                    borderRadius: radius.medium, // 16px radius
-                    borderColor: isActive ? colors.primary : colors.outline,
-                    borderWidth: isActive ? 1.5 : StyleSheet.hairlineWidth,
-                    paddingHorizontal: spacing.s16,
-                    paddingVertical: spacing.s8,
-                  },
-                ]}>
-                <Text
-                  style={[
-                    typography.labelMedium,
-                    {
-                      color: isActive
-                        ? colors.onPrimaryContainer
-                        : colors.onSurfaceVariant,
-                    },
-                  ]}>
-                  {budget.name}
-                </Text>
+                onPress={() => handleBudgetSelect(budget.id)}>
+                {isActive ? (
+                  <LinearGradient
+                    colors={[UI.COLORS.PRIMARY, UI.COLORS.PRIMARY_DARK]}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 1 }}
+                    style={[styles.chip, styles.chipActive]}>
+                    <Text style={styles.chipTextActive}>{budget.name}</Text>
+                  </LinearGradient>
+                ) : (
+                  <View style={styles.chip}>
+                    <Text style={styles.chipText}>{budget.name}</Text>
+                  </View>
+                )}
               </TouchableOpacity>
             );
           })}
         </View>
       </ScrollView>
 
-      {error && (
-        <Text
-          style={[
-            styles.errorText,
-            typography.caption,
-            { color: colors.error, marginTop: spacing.s4 },
-          ]}>
-          {error}
-        </Text>
-      )}
+      {error && <Text style={styles.errorText}>{error}</Text>}
     </View>
   );
 };
 
 const styles = StyleSheet.create({
   container: {
-    width: "100%",
+    marginBottom: UI.SPACING.MD,
   },
   label: {
-    marginBottom: 8,
+    fontSize: 13,
+    fontWeight: "600",
+    color: UI.COLORS.PRIMARY_LIGHT,
+    marginBottom: 10,
     letterSpacing: 0.4,
     textTransform: "uppercase",
   },
   scroll: {
-    width: "100%",
+    marginHorizontal: -UI.SPACING.SM,
+    paddingHorizontal: UI.SPACING.SM,
   },
   chipRow: {
     flexDirection: "row",
-    alignItems: "center",
     gap: 10,
+    paddingRight: UI.SPACING.SM,
   },
   chip: {
-    flexDirection: "row",
-    alignItems: "center",
+    paddingHorizontal: 18,
+    paddingVertical: 10,
+    borderRadius: 25,
+    backgroundColor: "rgba(20,20,50,0.65)",
+    borderWidth: 1,
+    borderColor: "rgba(108,92,231,0.18)",
+  },
+  chipActive: {
+    borderWidth: 0,
+    shadowColor: UI.COLORS.PRIMARY,
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.35,
+    shadowRadius: 8,
+    elevation: 5,
+  },
+  chipText: {
+    fontSize: 14,
+    fontWeight: "500",
+    color: UI.COLORS.TEXT_SECONDARY,
+  },
+  chipTextActive: {
+    fontSize: 14,
+    fontWeight: "700",
+    color: "#fff",
   },
   errorText: {
-    marginLeft: 4,
+    fontSize: 12,
+    color: UI.COLORS.ERROR,
+    marginTop: 6,
   },
 });
-

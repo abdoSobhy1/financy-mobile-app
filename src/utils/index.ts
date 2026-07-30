@@ -3,7 +3,6 @@ import { CURRENCY, DATE_FORMATS } from "../constants";
 
 // Export date utilities
 export * from "./dateUtils";
-export * from "./budgetMatching";
 
 // Currency formatting utilities
 export const formatCurrency = (amount: number, currency: string = CURRENCY.DEFAULT, locale: string = CURRENCY.LOCALE): string => {

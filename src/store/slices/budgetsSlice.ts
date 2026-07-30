@@ -99,13 +99,6 @@ const budgetsSlice = createSlice({
     clearError: (state) => {
       state.error = null;
     },
-    markBudgetSynced: (state, action: PayloadAction<string>) => {
-      const item = state.items[action.payload];
-      if (item) {
-        item.syncStatus = "synced";
-        (item as any).sync_status = "synced";
-      }
-    },
     updateBudgetBalance: (state, action: PayloadAction<{ budgetId: string; amount: number; isIncome: boolean }>) => {
       const { budgetId, amount, isIncome } = action.payload;
       const budget = state.items[budgetId];
@@ -122,6 +115,12 @@ const budgetsSlice = createSlice({
             percentageUsed: budget.amount > 0 ? (spent / budget.amount) * 100 : 0,
           };
         }
+      }
+    },
+    /** Update in-memory syncStatus after a successful push to Firebase */
+    markSynced: (state, action: PayloadAction<string>) => {
+      if (state.items[action.payload]) {
+        state.items[action.payload].syncStatus = "synced";
       }
     },
   },
@@ -251,5 +250,5 @@ const budgetsSlice = createSlice({
   },
 });
 
-export const { clearError, updateBudgetBalance, markBudgetSynced } = budgetsSlice.actions;
+export const { clearError, updateBudgetBalance, markSynced } = budgetsSlice.actions;
 export default budgetsSlice.reducer;

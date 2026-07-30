@@ -9,6 +9,7 @@ import {
   StatusBar,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons } from "@expo/vector-icons";
 import { useDispatch, useSelector } from "react-redux";
 import { useNavigation } from "@react-navigation/native";
@@ -27,9 +28,8 @@ import {
   useCustomAlert,
   useToast,
   FloatingActionButton,
-  Badge,
 } from "../components/ui";
-import { useAppTheme } from "../theme";
+import { UI } from "../constants";
 import { formatCurrency, percentage } from "../utils";
 import { BudgetStackParamList, Budget } from "../types";
 
@@ -45,7 +45,6 @@ export const BudgetListScreen: React.FC = () => {
   const navigation = useNavigation<BudgetListNavigationProp>();
   const { showAlert, AlertComponent } = useCustomAlert();
   const { showSuccess, showError } = useToast();
-  const { colors, typography, spacing, radius, isDark } = useAppTheme();
   const [refreshing, setRefreshing] = useState(false);
 
   const {
@@ -182,24 +181,12 @@ export const BudgetListScreen: React.FC = () => {
 
   // ── Skeleton Card ────────────────────────────────────────────
   const renderSkeletonCard = () => (
-    <View
-      style={[
-        styles.budgetCard,
-        {
-          backgroundColor: colors.surface,
-          borderColor: colors.outline,
-          borderRadius: radius.large,
-        },
-      ]}>
+    <View style={styles.budgetCard}>
       <View style={styles.budgetHeader}>
         <View style={styles.budgetNameContainer}>
           <Shimmer
             style={[styles.skeletonBox, { width: 140, height: 20 }]}
-            linearGradients={[
-              colors.surfaceVariant + "40",
-              colors.surfaceVariant + "80",
-              colors.surfaceVariant + "40",
-            ]}
+            linearGradients={["#6c5ce726", "#6c5ce74d", "#6c5ce726"]}
             gradientStart={{ x: 0, y: 1 }}
           />
         </View>
@@ -209,20 +196,12 @@ export const BudgetListScreen: React.FC = () => {
               styles.skeletonBox,
               { width: 90, height: 20, marginBottom: 4 },
             ]}
-            linearGradients={[
-              colors.surfaceVariant + "40",
-              colors.surfaceVariant + "80",
-              colors.surfaceVariant + "40",
-            ]}
+            linearGradients={["#6c5ce726", "#6c5ce74d", "#6c5ce726"]}
             gradientStart={{ x: 0, y: 1 }}
           />
           <Shimmer
             style={[styles.skeletonBox, { width: 90, height: 20 }]}
-            linearGradients={[
-              colors.surfaceVariant + "40",
-              colors.surfaceVariant + "80",
-              colors.surfaceVariant + "40",
-            ]}
+            linearGradients={["#6c5ce726", "#6c5ce74d", "#6c5ce726"]}
             gradientStart={{ x: 0, y: 1 }}
           />
         </View>
@@ -232,13 +211,9 @@ export const BudgetListScreen: React.FC = () => {
         <Shimmer
           style={[
             styles.progressBar,
-            { backgroundColor: colors.surfaceVariant },
+            { backgroundColor: "rgba(108,92,231,0.12)" },
           ]}
-          linearGradients={[
-            colors.surfaceVariant + "40",
-            colors.surfaceVariant + "80",
-            colors.surfaceVariant + "40",
-          ]}
+          linearGradients={["#6c5ce726", "#6c5ce74d", "#6c5ce726"]}
           gradientStart={{ x: 0, y: 1 }}
         />
       </View>
@@ -247,22 +222,14 @@ export const BudgetListScreen: React.FC = () => {
         <View style={styles.detailItem}>
           <Shimmer
             style={[styles.skeletonBox, { width: 100, height: 20 }]}
-            linearGradients={[
-              colors.surfaceVariant + "40",
-              colors.surfaceVariant + "80",
-              colors.surfaceVariant + "40",
-            ]}
+            linearGradients={["#6c5ce726", "#6c5ce74d", "#6c5ce726"]}
             gradientStart={{ x: 0, y: 1 }}
           />
         </View>
         <View style={styles.detailItem}>
           <Shimmer
             style={[styles.skeletonBox, { width: 100, height: 20 }]}
-            linearGradients={[
-              colors.surfaceVariant + "40",
-              colors.surfaceVariant + "80",
-              colors.surfaceVariant + "40",
-            ]}
+            linearGradients={["#6c5ce726", "#6c5ce74d", "#6c5ce726"]}
             gradientStart={{ x: 0, y: 1 }}
           />
         </View>
@@ -282,79 +249,51 @@ export const BudgetListScreen: React.FC = () => {
     const progressPercentage = percentage(spent, budget.amount);
     const isOverBudget = spent > budget.amount;
 
-    // Progress fill color based on semantic role
-    const progressFillColor = isOverBudget ? colors.error : colors.success;
+    // Choose progress bar gradient based on state
+    const progressColors: [string, string] = isOverBudget
+      ? ["#FF6B6B", "#EE4444"]
+      : [UI.COLORS.PRIMARY, UI.COLORS.PRIMARY_DARK];
 
     return (
-      <View
-        style={[
-          styles.budgetCard,
-          {
-            backgroundColor: colors.surface,
-            borderColor: colors.outline,
-            borderRadius: radius.large,
-          },
-        ]}>
+      <View style={styles.budgetCard}>
         {/* Header row */}
         <View style={styles.budgetHeader}>
           <View style={styles.budgetNameContainer}>
-            <View
-              style={[
-                styles.iconCircle,
-                {
-                  backgroundColor: colors.primaryContainer,
-                  borderRadius: radius.medium,
-                },
-              ]}>
+            <View style={styles.iconCircle}>
               <Ionicons
                 name="wallet"
                 size={16}
-                color={colors.onPrimaryContainer}
+                color={UI.COLORS.PRIMARY_LIGHT}
               />
             </View>
-            <Text
-              style={[
-                styles.budgetName,
-                { ...typography.titleMedium, color: colors.onSurface },
-              ]}>
-              {budget.name}
-            </Text>
+            <Text style={styles.budgetName}>{budget.name}</Text>
           </View>
           <View style={styles.budgetHeaderRight}>
             <Text
               style={[
                 styles.budgetAmount,
-                {
-                  ...typography.titleMedium,
-                  color: isOverBudget ? colors.error : colors.primary,
-                },
+                isOverBudget && styles.overBudgetAmount,
               ]}>
               {formatCurrency(budget.amount)}
             </Text>
             <View style={styles.budgetActions}>
               <TouchableOpacity
-                style={[
-                  styles.actionButton,
-                  { backgroundColor: colors.surfaceVariant },
-                ]}
+                style={styles.actionButton}
                 onPress={() => handleEditBudget(budget)}>
                 <Ionicons
                   name="pencil"
                   size={14}
-                  color={colors.onSurfaceVariant}
+                  color={UI.COLORS.TEXT_MUTED}
                 />
               </TouchableOpacity>
               <TouchableOpacity
-                style={[
-                  styles.actionButton,
-                  {
-                    backgroundColor: isDark
-                      ? "rgba(255,107,107,0.12)"
-                      : "rgba(186,26,26,0.08)",
-                  },
-                ]}
+                style={styles.actionButton}
                 onPress={() => handleDeleteBudget(budget)}>
-                <Ionicons name="trash" size={14} color={colors.error} />
+                <Ionicons
+                  name="trash"
+                  size={14}
+                  color="rgba(255,107,107,0.7)"
+                />
               </TouchableOpacity>
             </View>
           </View>
@@ -362,28 +301,21 @@ export const BudgetListScreen: React.FC = () => {
 
         {/* Progress bar */}
         <View style={styles.progressContainer}>
-          <View
-            style={[
-              styles.progressBar,
-              { backgroundColor: colors.surfaceVariant },
-            ]}>
-            <View
+          <View style={styles.progressBar}>
+            <LinearGradient
+              colors={progressColors}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 0 }}
               style={[
                 styles.progressFill,
-                {
-                  width: `${Math.min(progressPercentage, 100)}%`,
-                  backgroundColor: progressFillColor,
-                },
+                { width: `${Math.min(progressPercentage, 100)}%` },
               ]}
             />
           </View>
           <Text
             style={[
               styles.progressText,
-              {
-                ...typography.labelMedium,
-                color: isOverBudget ? colors.error : colors.onSurfaceVariant,
-              },
+              isOverBudget && styles.overBudgetText,
             ]}>
             {progressPercentage}%
           </Text>
@@ -392,51 +324,39 @@ export const BudgetListScreen: React.FC = () => {
         {/* Details row */}
         <View style={styles.budgetDetails}>
           <View style={styles.detailItem}>
-            <Text
-              style={[
-                styles.detailLabel,
-                { ...typography.labelSmall, color: colors.onSurfaceVariant },
-              ]}>
-              Spent
-            </Text>
+            <Text style={styles.detailLabel}>Spent</Text>
             <Text
               style={[
                 styles.detailValue,
-                {
-                  ...typography.titleSmall,
-                  color: isOverBudget ? colors.error : colors.onSurface,
-                },
+                isOverBudget && styles.overBudgetText,
               ]}>
               {formatCurrency(spent)}
             </Text>
           </View>
           <View style={[styles.detailItem, { alignItems: "flex-end" }]}>
-            <Text
-              style={[
-                styles.detailLabel,
-                { ...typography.labelSmall, color: colors.onSurfaceVariant },
-              ]}>
-              Remaining
-            </Text>
+            <Text style={styles.detailLabel}>Remaining</Text>
             <Text
               style={[
                 styles.detailValue,
-                {
-                  ...typography.titleSmall,
-                  color: remaining < 0 ? colors.error : colors.onSurface,
-                },
+                remaining < 0 && styles.overBudgetText,
               ]}>
               {formatCurrency(remaining)}
             </Text>
           </View>
         </View>
 
-        {/* Over-budget Badge */}
+        {/* Over-budget warning */}
         {isOverBudget && (
-          <View style={{ marginTop: spacing.s12, alignItems: "center" }}>
-            <Badge variant="error">
+          <View style={styles.warningContainer}>
+            <Ionicons
+              name="warning"
+              size={14}
+              color="#FF6B6B"
+              style={{ marginRight: 6 }}
+            />
+            <Text style={styles.warningText}>
               Over budget by {formatCurrency(Math.abs(remaining))}
-            </Badge>
+            </Text>
           </View>
         )}
       </View>
@@ -445,19 +365,9 @@ export const BudgetListScreen: React.FC = () => {
 
   // ── Header ───────────────────────────────────────────────────
   const renderHeader = () => (
-    <View style={[styles.header, { marginBottom: spacing.s24 }]}>
-      <Text
-        style={[
-          styles.title,
-          { ...typography.displaySmall, color: colors.onBackground },
-        ]}>
-        Budgets
-      </Text>
-      <Text
-        style={[
-          styles.subtitle,
-          { ...typography.bodyMedium, color: colors.onSurfaceVariant },
-        ]}>
+    <View style={styles.header}>
+      <Text style={styles.title}>Budgets</Text>
+      <Text style={styles.subtitle}>
         Track your spending and stay on target
       </Text>
     </View>
@@ -466,58 +376,35 @@ export const BudgetListScreen: React.FC = () => {
   // ── Empty State ──────────────────────────────────────────────
   const renderEmptyState = () => (
     <View style={styles.emptyState}>
-      <View
-        style={[
-          styles.emptyIconCircle,
-          {
-            backgroundColor: colors.primaryContainer,
-            borderColor: colors.outline,
-            borderRadius: radius.large,
-          },
-        ]}>
-        <Ionicons name="wallet-outline" size={40} color={colors.primary} />
+      <View style={styles.emptyIconCircle}>
+        <Ionicons name="wallet-outline" size={40} color={UI.COLORS.PRIMARY} />
       </View>
-      <Text
-        style={[
-          styles.emptyTitle,
-          { ...typography.headlineSmall, color: colors.onBackground },
-        ]}>
-        No Budgets Yet
-      </Text>
-      <Text
-        style={[
-          styles.emptyMessage,
-          { ...typography.bodyMedium, color: colors.onSurfaceVariant },
-        ]}>
+      <Text style={styles.emptyTitle}>No Budgets Yet</Text>
+      <Text style={styles.emptyMessage}>
         Create budgets to track your spending categories and stay on target
       </Text>
       <TouchableOpacity
         activeOpacity={0.8}
-        style={[
-          styles.emptyButton,
-          {
-            backgroundColor: colors.primary,
-            borderRadius: radius.pill,
-          },
-        ]}
         onPress={() => navigation.navigate("BudgetForm", {})}>
-        <Ionicons name="add-circle" size={18} color={colors.onPrimary} />
-        <Text
-          style={[
-            styles.emptyButtonText,
-            { ...typography.labelLarge, color: colors.onPrimary },
-          ]}>
-          Create Your First Budget
-        </Text>
+        <LinearGradient
+          colors={[UI.COLORS.PRIMARY, UI.COLORS.PRIMARY_DARK]}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={styles.emptyButton}>
+          <Ionicons name="add-circle" size={18} color="#fff" />
+          <Text style={styles.emptyButtonText}>Create Your First Budget</Text>
+        </LinearGradient>
       </TouchableOpacity>
     </View>
   );
 
   return (
-    <View style={{ flex: 1, backgroundColor: colors.background }}>
+    <LinearGradient
+      colors={["#0a0a2e", "#1a1040", "#0d0d30"]}
+      style={styles.gradient}>
       <SafeAreaView style={styles.safeArea}>
         <StatusBar
-          barStyle={isDark ? "light-content" : "dark-content"}
+          barStyle="light-content"
           backgroundColor="transparent"
           translucent
         />
@@ -527,15 +414,12 @@ export const BudgetListScreen: React.FC = () => {
           renderItem={renderBudget}
           ListHeaderComponent={renderHeader}
           ListEmptyComponent={!loading ? renderEmptyState : null}
-          contentContainerStyle={[
-            styles.container,
-            { paddingHorizontal: spacing.s16, paddingTop: spacing.s16 },
-          ]}
+          contentContainerStyle={styles.container}
           refreshControl={
             <RefreshControl
               refreshing={refreshing}
               onRefresh={handleRefresh}
-              tintColor={colors.primary}
+              tintColor={UI.COLORS.PRIMARY}
             />
           }
           showsVerticalScrollIndicator={false}
@@ -549,30 +433,46 @@ export const BudgetListScreen: React.FC = () => {
           style={{ position: "absolute", bottom: 80, right: 20 }}
         />
       </SafeAreaView>
-    </View>
+    </LinearGradient>
   );
 };
 
 const styles = StyleSheet.create({
+  gradient: {
+    flex: 1,
+  },
   safeArea: {
     flex: 1,
   },
   container: {
     flexGrow: 1,
+    padding: 20,
     paddingBottom: 120,
   },
 
   // ── Header ─────────────────────────────────────────
-  header: {},
+  header: {
+    marginBottom: 24,
+  },
   title: {
+    fontSize: 32,
+    fontWeight: "800",
+    color: UI.COLORS.TEXT_PRIMARY,
     letterSpacing: 0.3,
     marginBottom: 4,
   },
-  subtitle: {},
+  subtitle: {
+    fontSize: 14,
+    color: UI.COLORS.TEXT_MUTED,
+    fontWeight: "400",
+  },
 
   // ── Budget Card ────────────────────────────────────
   budgetCard: {
-    borderWidth: StyleSheet.hairlineWidth,
+    backgroundColor: "rgba(20,20,50,0.65)",
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: "#6c5ce726",
     padding: 18,
     marginBottom: 14,
   },
@@ -590,14 +490,26 @@ const styles = StyleSheet.create({
   iconCircle: {
     width: 32,
     height: 32,
+    borderRadius: 10,
+    backgroundColor: "rgba(108,92,231,0.12)",
     alignItems: "center",
     justifyContent: "center",
     marginRight: 10,
   },
   budgetName: {
+    fontSize: 17,
+    fontWeight: "700",
+    color: UI.COLORS.TEXT_PRIMARY,
     letterSpacing: 0.2,
   },
-  budgetAmount: {},
+  budgetAmount: {
+    fontSize: 17,
+    fontWeight: "700",
+    color: UI.COLORS.PRIMARY_LIGHT,
+  },
+  overBudgetAmount: {
+    color: "#FF6B6B",
+  },
   budgetHeaderRight: {
     alignItems: "flex-end",
   },
@@ -609,6 +521,7 @@ const styles = StyleSheet.create({
     width: 30,
     height: 30,
     borderRadius: 8,
+    backgroundColor: "rgba(255,255,255,0.04)",
     alignItems: "center",
     justifyContent: "center",
     marginLeft: 6,
@@ -623,6 +536,7 @@ const styles = StyleSheet.create({
   progressBar: {
     flex: 1,
     height: 8,
+    backgroundColor: "rgba(108,92,231,0.12)",
     borderRadius: 4,
     marginRight: 10,
     overflow: "hidden",
@@ -632,6 +546,9 @@ const styles = StyleSheet.create({
     borderRadius: 4,
   },
   progressText: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: UI.COLORS.TEXT_SECONDARY,
     minWidth: 38,
     textAlign: "right",
   },
@@ -645,11 +562,40 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   detailLabel: {
+    fontSize: 11,
+    fontWeight: "600",
+    color: UI.COLORS.TEXT_MUTED,
     textTransform: "uppercase",
     letterSpacing: 0.5,
     marginBottom: 4,
   },
-  detailValue: {},
+  detailValue: {
+    fontSize: 16,
+    fontWeight: "700",
+    color: UI.COLORS.TEXT_PRIMARY,
+  },
+  overBudgetText: {
+    color: "#FF6B6B",
+  },
+
+  // ── Warning ────────────────────────────────────────
+  warningContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    marginTop: 12,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    backgroundColor: "rgba(255,107,107,0.08)",
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: "rgba(255,107,107,0.2)",
+  },
+  warningText: {
+    fontSize: 13,
+    color: "#FF6B6B",
+    fontWeight: "600",
+  },
 
   // ── Empty State ────────────────────────────────────
   emptyState: {
@@ -662,15 +608,23 @@ const styles = StyleSheet.create({
   emptyIconCircle: {
     width: 80,
     height: 80,
-    borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: 40,
+    backgroundColor: "rgba(108,92,231,0.1)",
+    borderWidth: 1,
+    borderColor: "rgba(108,92,231,0.2)",
     alignItems: "center",
     justifyContent: "center",
     marginBottom: 20,
   },
   emptyTitle: {
+    fontSize: 22,
+    fontWeight: "700",
+    color: UI.COLORS.TEXT_PRIMARY,
     marginBottom: 8,
   },
   emptyMessage: {
+    fontSize: 15,
+    color: UI.COLORS.TEXT_MUTED,
     textAlign: "center",
     marginBottom: 28,
     lineHeight: 22,
@@ -680,14 +634,96 @@ const styles = StyleSheet.create({
     alignItems: "center",
     paddingHorizontal: 24,
     paddingVertical: 14,
+    borderRadius: 25,
     gap: 8,
+    shadowColor: UI.COLORS.PRIMARY,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.35,
+    shadowRadius: 10,
+    elevation: 6,
   },
-  emptyButtonText: {},
+  emptyButtonText: {
+    fontSize: 15,
+    fontWeight: "700",
+    color: "#fff",
+  },
 
   // ── Skeleton ───────────────────────────────────────
   skeletonBox: {
     height: 16,
     borderRadius: 6,
+    backgroundColor: "rgba(108,92,231,0.12)",
+  },
+
+  // ── Legacy modal styles (kept for compatibility) ───
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0, 0, 0, 0.5)",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  modalContent: {
+    backgroundColor: UI.COLORS.BACKGROUND,
+    borderRadius: UI.CARD_RADIUS * 2,
+    padding: UI.SPACING.LG,
+    width: "90%",
+    maxWidth: 400,
+  },
+  modalHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: UI.SPACING.LG,
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: "600",
+    color: UI.COLORS.TEXT_PRIMARY,
+  },
+  inputContainer: {
+    marginBottom: UI.SPACING.MD,
+  },
+  inputLabel: {
+    fontSize: 14,
+    fontWeight: "500",
+    color: UI.COLORS.TEXT_PRIMARY,
+    marginBottom: UI.SPACING.SM,
+  },
+  input: {
+    borderWidth: 1,
+    borderColor: UI.COLORS.BORDER,
+    borderRadius: UI.CARD_RADIUS,
+    padding: UI.SPACING.MD,
+    fontSize: 16,
+    color: UI.COLORS.TEXT_PRIMARY,
+    backgroundColor: UI.COLORS.SURFACE,
+  },
+  modalActions: {
+    flexDirection: "row",
+    justifyContent: "flex-end",
+    marginTop: UI.SPACING.LG,
+    gap: UI.SPACING.MD,
+  },
+  cancelButton: {
+    paddingHorizontal: UI.SPACING.LG,
+    paddingVertical: UI.SPACING.MD,
+    borderRadius: UI.CARD_RADIUS,
+    backgroundColor: UI.COLORS.SURFACE,
+  },
+  cancelButtonText: {
+    fontSize: 16,
+    color: UI.COLORS.TEXT_SECONDARY,
+  },
+  saveButton: {
+    paddingHorizontal: UI.SPACING.LG,
+    paddingVertical: UI.SPACING.MD,
+    borderRadius: UI.CARD_RADIUS,
+    backgroundColor: UI.COLORS.PRIMARY,
+  },
+  saveButtonText: {
+    fontSize: 16,
+    fontWeight: "600",
+    color: UI.COLORS.TEXT_PRIMARY,
   },
 });
 

@@ -119,11 +119,6 @@ export const useAnalysisData = (
         }
       }
 
-      // Exclude transfers from analysis
-      if (transaction.type === "transfer") {
-        return false;
-      }
-
       // Transaction type filter
       if (transactionType !== "both" && transaction.type !== transactionType) {
         return false;

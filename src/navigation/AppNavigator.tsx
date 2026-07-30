@@ -1,10 +1,6 @@
-import React, { useEffect } from "react";
-import {
-  NavigationContainer,
-  createNavigationContainerRef,
-} from "@react-navigation/native";
+import React from "react";
+import { NavigationContainer } from "@react-navigation/native";
 import { createStackNavigator } from "@react-navigation/stack";
-import * as Notifications from "expo-notifications";
 import { useAuth } from "../contexts/AuthContext";
 import { SignInScreen } from "../screens/SignInScreen";
 import TabNavigator from "./TabNavigator";
@@ -12,46 +8,9 @@ import { Text, View, StyleSheet, ActivityIndicator } from "react-native";
 import { UI } from "../constants";
 
 const Stack = createStackNavigator();
-export const navigationRef = createNavigationContainerRef<any>();
 
 const AppNavigator: React.FC = () => {
   const { isAuthenticated, loading } = useAuth();
-
-  useEffect(() => {
-    // 1) Handle notification click while app is running / in background
-    const sub = Notifications.addNotificationResponseReceivedListener(
-      (response) => {
-        const data = response.notification.request.content.data;
-        if (data && data.type === "sms-transaction") {
-          if (navigationRef.isReady()) {
-            navigationRef.navigate("Main", {
-              screen: "Transactions",
-              params: { screen: "TransactionList" },
-            });
-          }
-        }
-      },
-    );
-
-    // 2) Handle notification click on cold start (app was closed)
-    Notifications.getLastNotificationResponseAsync().then((response) => {
-      if (response) {
-        const data = response.notification.request.content.data;
-        if (data && data.type === "sms-transaction") {
-          setTimeout(() => {
-            if (navigationRef.isReady()) {
-              navigationRef.navigate("Main", {
-                screen: "Transactions",
-                params: { screen: "TransactionList" },
-              });
-            }
-          }, 500);
-        }
-      }
-    });
-
-    return () => sub.remove();
-  }, []);
 
   if (loading) {
     return (
@@ -63,7 +22,7 @@ const AppNavigator: React.FC = () => {
   }
 
   return (
-    <NavigationContainer ref={navigationRef}>
+    <NavigationContainer>
       <Stack.Navigator screenOptions={{ headerShown: false }}>
         {isAuthenticated ? (
           <Stack.Screen name="Main" component={TabNavigator} />
