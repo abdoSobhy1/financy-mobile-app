@@ -9,6 +9,7 @@ import {
   ActivityIndicator,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { useAppTheme } from "../components/ui/ThemeProvider";
 import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons } from "@expo/vector-icons";
 import { useDispatch } from "react-redux";
@@ -34,6 +35,7 @@ type DebtPaymentsScreenRouteProp = RouteProp<
 >;
 
 const DebtPaymentsScreen: React.FC = () => {
+  const { colors, typography, spacing, radius } = useAppTheme();
   const dispatch = useDispatch<AppDispatch>();
   const navigation = useNavigation<DebtPaymentsScreenNavigationProp>();
   const route = useRoute<DebtPaymentsScreenRouteProp>();
@@ -110,39 +112,36 @@ const DebtPaymentsScreen: React.FC = () => {
       {/* Navigation bar */}
       <View style={styles.navBar}>
         <TouchableOpacity
-          style={styles.backButton}
+          style={[styles.backButton, { backgroundColor: colors.surfaceVariant, borderColor: colors.outlineVariant }]}
           onPress={() => navigation.goBack()}>
           <Ionicons
             name="arrow-back"
             size={18}
-            color={UI.COLORS.TEXT_PRIMARY}
+            color={colors.onSurfaceVariant}
           />
         </TouchableOpacity>
         <View style={styles.navContent}>
-          <Text style={styles.navTitle} numberOfLines={1}>
+          <Text style={[styles.navTitle, { color: colors.onBackground }]} numberOfLines={1}>
             {debtName}
           </Text>
-          <Text style={styles.navSubtitle}>Payment History</Text>
+          <Text style={[styles.navSubtitle, { color: colors.onSurfaceVariant }]}>Payment History</Text>
         </View>
         <View style={styles.placeholder} />
       </View>
 
       {/* Hero summary card */}
       {payments.length > 0 && (
-        <LinearGradient
-          colors={["#1B1464", "#6C5CE7", "#A29BFE"]}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-          style={styles.heroCard}>
+        <View
+          style={[styles.heroCard, { backgroundColor: colors.primaryContainer }]}>
           {/* Decorative */}
           <View style={[styles.decorCircle, styles.circle1]} />
           <View style={[styles.decorCircle, styles.circle2]} />
 
           {/* Total paid */}
-          <Text style={styles.heroLabel}>Total Paid</Text>
-          <Text style={styles.heroValue}>{formatCurrency(totalPaid)}</Text>
+          <Text style={[styles.heroLabel, { color: colors.onPrimaryContainer, opacity: 0.8 }]}>Total Paid</Text>
+          <Text style={[styles.heroValue, { color: colors.onPrimaryContainer }]}>{formatCurrency(totalPaid)}</Text>
           {latestPaymentDate && (
-            <Text style={styles.heroSubtext}>
+            <Text style={[styles.heroSubtext, { color: colors.onPrimaryContainer, opacity: 0.7 }]}>
               Last payment: {formatDate(latestPaymentDate)}
             </Text>
           )}
@@ -150,45 +149,46 @@ const DebtPaymentsScreen: React.FC = () => {
           {/* Mini stats row */}
           <View style={styles.statsRow}>
             <View style={styles.statItem}>
-              <View style={[styles.statDot, { backgroundColor: "#2ED573" }]} />
-              <Text style={styles.statLabel}>Principal</Text>
-              <Text style={[styles.statValue, { color: "#2ED573" }]}>
+              <View style={[styles.statDot, { backgroundColor: colors.tertiary }]} />
+              <Text style={[styles.statLabel, { color: colors.onPrimaryContainer, opacity: 0.7 }]}>Principal</Text>
+              <Text style={[styles.statValue, { color: colors.tertiary }]}>
                 {formatCurrency(totalPrincipal)}
               </Text>
             </View>
-            <View style={styles.statDivider} />
+            <View style={[styles.statDivider, { backgroundColor: colors.onPrimaryContainer, opacity: 0.2 }]} />
             <View style={styles.statItem}>
-              <View style={[styles.statDot, { backgroundColor: "#F59E0B" }]} />
-              <Text style={styles.statLabel}>Interest</Text>
-              <Text style={[styles.statValue, { color: "#F59E0B" }]}>
+              <View style={[styles.statDot, { backgroundColor: colors.tertiary }]} />
+              <Text style={[styles.statLabel, { color: colors.onPrimaryContainer, opacity: 0.7 }]}>Interest</Text>
+              <Text style={[styles.statValue, { color: colors.tertiary }]}>
                 {formatCurrency(totalInterest)}
               </Text>
             </View>
           </View>
-        </LinearGradient>
+        </View>
       )}
 
       {/* Quick stats below hero */}
+      {/* Quick stats below hero */}
       {payments.length > 0 && (
         <View style={styles.quickStatsRow}>
-          <View style={styles.quickStatCard}>
-            <Ionicons name="receipt" size={16} color="#3B82F6" />
-            <Text style={styles.quickStatValue}>{payments.length}</Text>
-            <Text style={styles.quickStatLabel}>Payments</Text>
+          <View style={[styles.quickStatCard, { backgroundColor: colors.surfaceVariant, borderColor: colors.outlineVariant }]}>
+            <Ionicons name="receipt" size={16} color={colors.primary} />
+            <Text style={[styles.quickStatValue, { color: colors.onSurface }]}>{payments.length}</Text>
+            <Text style={[styles.quickStatLabel, { color: colors.onSurfaceVariant }]}>Payments</Text>
           </View>
-          <View style={styles.quickStatCard}>
-            <Ionicons name="trending-up" size={16} color="#2ED573" />
-            <Text style={styles.quickStatValue}>
+          <View style={[styles.quickStatCard, { backgroundColor: colors.surfaceVariant, borderColor: colors.outlineVariant }]}>
+            <Ionicons name="trending-up" size={16} color={colors.tertiary} />
+            <Text style={[styles.quickStatValue, { color: colors.onSurface }]}>
               {formatCurrency(avgPayment)}
             </Text>
-            <Text style={styles.quickStatLabel}>Avg. Payment</Text>
+            <Text style={[styles.quickStatLabel, { color: colors.onSurfaceVariant }]}>Avg. Payment</Text>
           </View>
         </View>
       )}
 
       {/* Section label */}
       {payments.length > 0 && (
-        <Text style={styles.sectionLabel}>All Payments</Text>
+        <Text style={[styles.sectionLabel, { color: colors.primary }]}>All Payments</Text>
       )}
     </View>
   );
@@ -196,11 +196,11 @@ const DebtPaymentsScreen: React.FC = () => {
   // ── Empty State ────────────────────────────────────────────
   const renderEmptyState = () => (
     <View style={styles.emptyState}>
-      <View style={styles.emptyIconCircle}>
-        <Ionicons name="receipt-outline" size={40} color={UI.COLORS.PRIMARY} />
+      <View style={[styles.emptyIconCircle, { backgroundColor: colors.primaryContainer }]}>
+        <Ionicons name="receipt-outline" size={40} color={colors.primary} />
       </View>
-      <Text style={styles.emptyTitle}>No Payments Yet</Text>
-      <Text style={styles.emptySubtitle}>
+      <Text style={[styles.emptyTitle, { color: colors.onBackground }]}>No Payments Yet</Text>
+      <Text style={[styles.emptySubtitle, { color: colors.onSurfaceVariant }]}>
         Start making payments to track your progress on this debt.
       </Text>
       <TouchableOpacity
@@ -214,25 +214,17 @@ const DebtPaymentsScreen: React.FC = () => {
             interestRate: 0,
           })
         }>
-        <LinearGradient
-          colors={[UI.COLORS.PRIMARY, UI.COLORS.PRIMARY_DARK]}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-          style={styles.emptyButton}>
-          <Ionicons name="add-circle" size={18} color="#fff" />
-          <Text style={styles.emptyButtonText}>Record a Payment</Text>
-        </LinearGradient>
+        <View style={[styles.emptyButton, { backgroundColor: colors.primary }]}>
+          <Ionicons name="add-circle" size={18} color={colors.onPrimary} />
+          <Text style={[styles.emptyButtonText, { color: colors.onPrimary }]}>Record a Payment</Text>
+        </View>
       </TouchableOpacity>
     </View>
   );
 
   return (
-    <LinearGradient
-      colors={[UI.COLORS.BACKGROUND, "#0F0F2D", UI.COLORS.BACKGROUND]}
-      locations={[0, 0.3, 1]}
-      style={styles.gradient}>
-      <SafeAreaView style={styles.safeArea}>
-        <StatusBar
+    <SafeAreaView style={[styles.safeArea, { backgroundColor: colors.background }]} edges={["top"]}>
+      <StatusBar
           barStyle="light-content"
           backgroundColor="transparent"
           translucent
@@ -240,7 +232,7 @@ const DebtPaymentsScreen: React.FC = () => {
 
         {loading ? (
           <View style={styles.centered}>
-            <ActivityIndicator size="large" color={UI.COLORS.PRIMARY} />
+            <ActivityIndicator size="large" color={colors.primary} />
           </View>
         ) : (
           <FlatList
@@ -267,8 +259,7 @@ const DebtPaymentsScreen: React.FC = () => {
           }
           style={{ position: "absolute", bottom: 30, right: 20 }}
         />
-      </SafeAreaView>
-    </LinearGradient>
+    </SafeAreaView>
   );
 };
 

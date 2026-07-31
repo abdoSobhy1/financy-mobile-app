@@ -141,27 +141,6 @@ const getValidFields = (collectionName: CollectionName): Set<string> => {
         "category_id",
       ]);
 
-    case "bills":
-      return new Set([
-        ...commonFields,
-        // Current schema fields
-        "name",
-        "amount",
-        "dueDate",
-        "paid",
-        "budgetId",
-        "categoryId",
-        "linkedTransactionId",
-        "recurring",
-        "recurringType",
-        // Legacy snake_case fields (will be converted)
-        "due_date",
-        "budget_id",
-        "category_id",
-        "linked_transaction_id",
-        "recurring_type",
-      ]);
-
     case "debts":
       return new Set([
         ...commonFields,

@@ -5,7 +5,7 @@ import { useSelector, useDispatch } from "react-redux";
 import { Ionicons } from "@expo/vector-icons";
 import { RootState, AppDispatch } from "../../store";
 import { refreshSyncStatus } from "../../store/slices/syncSlice";
-import { UI } from "../../constants";
+import { useAppTheme } from "./ThemeProvider";
 
 interface SyncStatusProps {
   style?: any;
@@ -15,6 +15,7 @@ export const SyncStatus: React.FC<SyncStatusProps> = ({ style }) => {
   const dispatch = useDispatch<AppDispatch>();
   const { isOnline, syncInProgress, pendingOperations, lastSync, error } = useSelector((state: RootState) => state.sync);
   const { isAuthenticated } = useSelector((state: RootState) => state.auth);
+  const { colors, typography, spacing, radius } = useAppTheme();
 
   // Auto-refresh sync status every 10 seconds
   useEffect(() => {
@@ -45,11 +46,11 @@ export const SyncStatus: React.FC<SyncStatusProps> = ({ style }) => {
   };
 
   const getStatusColor = () => {
-    if (error) return UI.COLORS.ERROR;
-    if (syncInProgress) return UI.COLORS.WARNING;
-    if (!isOnline) return UI.COLORS.TEXT_MUTED;
-    if (pendingOperations > 0) return UI.COLORS.WARNING;
-    return UI.COLORS.SUCCESS;
+    if (error) return colors.error;
+    if (syncInProgress) return colors.tertiary;
+    if (!isOnline) return colors.onSurfaceVariant;
+    if (pendingOperations > 0) return colors.tertiary;
+    return colors.primary;
   };
 
   const getStatusText = () => {
@@ -75,17 +76,31 @@ export const SyncStatus: React.FC<SyncStatusProps> = ({ style }) => {
   };
 
   return (
-    <TouchableOpacity style={[styles.container, style]} onPress={handleRefresh} activeOpacity={0.7}>
+    <TouchableOpacity 
+      style={[
+        styles.container, 
+        { 
+          backgroundColor: colors.surfaceVariant,
+          borderColor: colors.outlineVariant,
+          borderRadius: radius.md,
+          paddingHorizontal: spacing.sm,
+          paddingVertical: spacing.xs,
+        },
+        style
+      ]} 
+      onPress={handleRefresh} 
+      activeOpacity={0.7}
+    >
       <View style={styles.content}>
         <Ionicons name={getStatusIcon() as any} size={16} color={getStatusColor()} style={syncInProgress ? styles.spinning : undefined} />
-        <View style={styles.textContainer}>
-          <Text style={[styles.statusText, { color: getStatusColor() }]}>{getStatusText()}</Text>
-          {lastSync && !syncInProgress && <Text style={styles.lastSyncText}>{formatLastSync()}</Text>}
+        <View style={[styles.textContainer, { marginLeft: spacing.xs }]}>
+          <Text style={[styles.statusText, typography.label, { color: getStatusColor() }]}>{getStatusText()}</Text>
+          {lastSync && !syncInProgress && <Text style={[styles.lastSyncText, typography.bodySmall, { color: colors.onSurfaceVariant }]}>{formatLastSync()}</Text>}
         </View>
       </View>
 
       {error && (
-        <Text style={styles.errorText} numberOfLines={1}>
+        <Text style={[styles.errorText, typography.bodySmall, { color: colors.error, marginTop: spacing.xs }]} numberOfLines={1}>
           {error}
         </Text>
       )}
@@ -95,12 +110,7 @@ export const SyncStatus: React.FC<SyncStatusProps> = ({ style }) => {
 
 const styles = StyleSheet.create({
   container: {
-    backgroundColor: UI.COLORS.CARD_BLUR,
-    borderRadius: 8,
-    paddingHorizontal: UI.SPACING.SM,
-    paddingVertical: UI.SPACING.XS,
     borderWidth: 1,
-    borderColor: UI.COLORS.BORDER,
   },
   content: {
     flexDirection: "row",
@@ -108,21 +118,13 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   textContainer: {
-    marginLeft: UI.SPACING.XS,
     // flex: 1,
   },
   statusText: {
-    fontSize: 12,
-    fontWeight: "500",
   },
   lastSyncText: {
-    fontSize: 10,
-    color: UI.COLORS.TEXT_MUTED,
   },
   errorText: {
-    fontSize: 10,
-    color: UI.COLORS.ERROR,
-    marginTop: UI.SPACING.XS,
   },
   spinning: {
     // Animation would be handled via Animated API or react-native-reanimated

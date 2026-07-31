@@ -1,390 +1,344 @@
-import React, { useState, useCallback, useMemo, useRef } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import {
   View,
   StyleSheet,
   ScrollView,
   TextInput,
+  Text,
+  TouchableOpacity,
   KeyboardAvoidingView,
   Platform,
-  Text,
-  InteractionManager,
 } from "react-native";
-import { LinearGradient } from "expo-linear-gradient";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useDispatch, useSelector } from "react-redux";
-import {
-  useNavigation,
-  useRoute,
-  RouteProp,
-  useFocusEffect,
-} from "@react-navigation/native";
+import { useNavigation, useRoute, RouteProp } from "@react-navigation/native";
 import { StackNavigationProp } from "@react-navigation/stack";
 import { RootState, AppDispatch } from "../store";
 import {
   addTransaction,
   updateTransaction,
 } from "../store/slices/transactionsSlice";
-import { fetchCategories, addCategory } from "../store/slices/categoriesSlice";
+import { fetchCategories } from "../store/slices/categoriesSlice";
 import { fetchBudgets } from "../store/slices/budgetsSlice";
-import { UI, VALIDATION } from "../constants";
-import { generateId } from "../utils";
-import { evaluateMathExpression, normalizeNumerals } from "../utils/mathUtils";
+import { findMatchingBudgetForCategory } from "../utils/budgetMatching";
 import {
   TransactionFormData,
+  TransactionStackParamList,
   TransactionType,
-  TransactionStackParamList,
-  Category,
-  CategoryFormData,
 } from "../types";
-import {
-  CustomDatePicker,
-  CategorySelector,
-  BudgetSelector,
-} from "../components/ui";
-import {
-  TransactionHeader,
-  TransactionTypeToggle,
-  TransactionFormFields,
-} from "../components/forms/transaction";
+import { useAppTheme } from "../components/ui/ThemeProvider";
+import { Button, Input, Modal, CustomDatePicker } from "../components/ui";
+import { IconChip } from "../components/ui/IconChip";
+import { VoiceInputButton, ParsedTransactionReview } from "../components/input";
 
-type AddTransactionScreenNavigationProp = StackNavigationProp<
-  TransactionStackParamList,
-  "AddTransaction"
->;
-type AddTransactionScreenRouteProp = RouteProp<
-  TransactionStackParamList,
-  "AddTransaction"
->;
+type NavigationProp = StackNavigationProp<TransactionStackParamList, "AddTransaction">;
+type RouteParam = RouteProp<TransactionStackParamList, "AddTransaction">;
 
-const AddTransactionScreen: React.FC = () => {
-  const navigation = useNavigation<AddTransactionScreenNavigationProp>();
-  const route = useRoute<AddTransactionScreenRouteProp>();
-  const editTransaction = route.params?.editTransaction;
+export const AddTransactionScreen: React.FC = () => {
+  const navigation = useNavigation<NavigationProp>();
+  const route = useRoute<RouteParam>();
+  const params = route.params as any;
+  const editTransaction = params?.editTransaction;
+  const initialCategoryId = params?.categoryId;
+  const autoFocusAmount = params?.autoFocusAmount;
+
   const dispatch = useDispatch<AppDispatch>();
-  const { items: categories } = useSelector(
-    (state: RootState) => state.categories,
-  );
+  const { colors, typography, spacing, radius } = useAppTheme();
+
+  const { items: categories } = useSelector((state: RootState) => state.categories);
   const { items: budgets } = useSelector((state: RootState) => state.budgets);
   const { loading } = useSelector((state: RootState) => state.transactions);
 
-  // Form state
-  const [formData, setFormData] = useState<TransactionFormData>({
-    description: "",
-    amount: "",
-    type: "expense",
-    categoryId: "",
-    budgetId: undefined,
-    date: new Date(),
-    note: "",
-  });
-  const [errors, setErrors] = useState<Record<string, string>>({});
+  const amountInputRef = useRef<TextInput>(null);
 
-  // Refs for auto-focus
-  const descriptionRef = useRef<TextInput>(null);
+  const [amount, setAmount] = useState("");
+  const [type, setType] = useState<TransactionType>("expense");
+  const [categoryId, setCategoryId] = useState<string>("");
+  const [budgetId, setBudgetId] = useState<string>("");
+  const [manualBudgetSelected, setManualBudgetSelected] = useState(false);
+  const [showMore, setShowMore] = useState(false);
+  const [description, setDescription] = useState("");
+  const [note, setNote] = useState("");
+  const [date, setDate] = useState<Date>(new Date());
 
-  useFocusEffect(
-    useCallback(() => {
-      const task = InteractionManager.runAfterInteractions(() => {
-        dispatch(fetchCategories());
-        dispatch(fetchBudgets());
+  const [voiceResults, setVoiceResults] = useState<any[]>([]);
+  const [showVoiceReview, setShowVoiceReview] = useState(false);
+  useEffect(() => {
+    dispatch(fetchCategories());
+    dispatch(fetchBudgets());
 
-        if (editTransaction) {
-          setFormData({
-            description: editTransaction.description,
-            amount: editTransaction.amount.toString(),
-            type: editTransaction.type,
-            categoryId: editTransaction.categoryId,
-            budgetId: editTransaction.budgetId,
-            date: new Date(editTransaction.date),
-            note: editTransaction.note || "",
-          });
-        }
-      });
-
-      if (!editTransaction) {
-        // Delay focus slightly to ensure layout is ready
-        const timer = setTimeout(() => {
-          descriptionRef.current?.focus();
-        }, 300);
-        return () => {
-          task.cancel();
-          clearTimeout(timer);
-        };
-      }
-
-      return () => task.cancel();
-    }, [dispatch, editTransaction]),
-  );
-
-  // ── Validation ──────────────────────────────────────────────────────
-  const validateForm = useCallback((): boolean => {
-    const newErrors: Record<string, string> = {};
-
-    if (!formData.description.trim()) {
-      newErrors.description = "Description is required";
-    } else if (
-      formData.description.trim().length <
-      VALIDATION.TRANSACTION.MIN_DESCRIPTION_LENGTH
-    ) {
-      newErrors.description = `At least ${VALIDATION.TRANSACTION.MIN_DESCRIPTION_LENGTH} characters`;
+    if (editTransaction) {
+      setAmount(editTransaction.amount.toString());
+      setType(editTransaction.type);
+      setCategoryId(editTransaction.categoryId || "");
+      setBudgetId(editTransaction.budgetId || "");
+      setDescription(editTransaction.description || "");
+      setNote(editTransaction.note || "");
+      setDate(new Date(editTransaction.date));
+    } else if (initialCategoryId) {
+      setCategoryId(initialCategoryId);
     }
+  }, [editTransaction, initialCategoryId, dispatch]);
 
-    if (!formData.amount.trim()) {
-      newErrors.amount = "Amount is required";
-    } else {
-      const evaluated = evaluateMathExpression(formData.amount);
-      if (evaluated === null || +evaluated <= 0) {
-        newErrors.amount = "Enter a valid positive amount";
+  useEffect(() => {
+    if (autoFocusAmount && amountInputRef.current) {
+      setTimeout(() => {
+        amountInputRef.current?.focus();
+      }, 100);
+    }
+  }, [autoFocusAmount]);
+
+  const handleCategorySelect = (id: string) => {
+    setCategoryId(id);
+    if (!manualBudgetSelected) {
+      const matched = findMatchingBudgetForCategory(budgets, id);
+      if (matched) {
+        setBudgetId(matched.id);
+      } else {
+        setBudgetId("");
       }
     }
+  };
 
-    if (!formData.type) {
-      newErrors.type = "Select a transaction type";
+  const handleBudgetSelect = (id: string) => {
+    setBudgetId(id);
+    setManualBudgetSelected(true);
+  };
+
+  const handleSave = async () => {
+    if (!amount || isNaN(Number(amount))) {
+      alert("Please enter a valid amount");
+      return;
+    }
+    if (!categoryId) {
+      alert("Please select a category");
+      return;
     }
 
-    setErrors(newErrors);
-    return Object.keys(newErrors).length === 0;
-  }, [formData]);
-
-  // ── Submit ──────────────────────────────────────────────────────────
-  const handleSubmit = useCallback(async () => {
-    if (!validateForm()) return;
+    const transactionData: TransactionFormData = {
+      amount: amount,
+      type,
+      categoryId,
+      budgetId: budgetId || undefined,
+      description,
+      note,
+      date,
+    };
 
     try {
-      const normalizedAmount = normalizeNumerals(formData.amount);
-      const evaluatedAmount = evaluateMathExpression(normalizedAmount);
-
-      if (evaluatedAmount === null) {
-        setErrors({ amount: "Invalid math expression" });
-        return;
-      }
-
-      const transactionData = {
-        ...formData,
-        amount: evaluatedAmount.toString(),
-      };
-
       if (editTransaction) {
-        await dispatch(
-          updateTransaction({
-            id: editTransaction.id,
-            updates: transactionData,
-          }),
-        ).unwrap();
+        await dispatch(updateTransaction({ id: editTransaction.id, updates: transactionData })).unwrap();
       } else {
         await dispatch(addTransaction(transactionData)).unwrap();
       }
-
       navigation.goBack();
     } catch (error) {
-      setErrors({
-        submit:
-          error instanceof Error ? error.message : "Failed to save transaction",
-      });
+      console.error(error);
+      alert("Failed to save transaction");
     }
-  }, [validateForm, formData, editTransaction, dispatch, navigation]);
+  };
 
-  const handleCancel = useCallback(() => {
-    navigation.goBack();
-  }, [navigation]);
+  const handleVoiceResult = (results: any[]) => {
+    setVoiceResults(results);
+    setShowVoiceReview(true);
+  };
 
-  const updateFormField = useCallback(
-    <K extends keyof TransactionFormData>(
-      field: K,
-      value: TransactionFormData[K],
-    ) => {
-      setFormData((prev) => ({ ...prev, [field]: value }));
-      setErrors((prev) => {
-        if (prev[field]) {
-          return { ...prev, [field]: "" };
-        }
-        return prev;
-      });
-    },
-    [],
-  );
+  const handleAcceptVoiceResults = async (accepted: any[]) => {
+    try {
+      for (const t of accepted) {
+        await dispatch(addTransaction(t)).unwrap();
+      }
+      setShowVoiceReview(false);
+      setVoiceResults([]);
+      navigation.goBack();
+    } catch (error) {
+      console.error(error);
+      alert("Failed to save voice transactions");
+    }
+  };
 
-  const handleCategoryAdd = useCallback(
-    (newCategory: CategoryFormData) => {
-      const categoryData: Category = {
-        ...newCategory,
-        id: generateId(),
-        entryCount: 0,
-        createdAt: new Date().toISOString(),
-        updatedAt: Date.now(),
-      };
-      dispatch(addCategory(categoryData));
-      updateFormField("categoryId", categoryData.id);
-    },
-    [dispatch, updateFormField],
-  );
-
-  const filteredBudgets = useMemo(
-    () => Object.values(budgets).filter((budget) => budget),
-    [budgets],
-  );
-  const filteredCategories = useMemo(
-    () => Object.values(categories).filter((cat) => cat != null),
-    [categories],
-  );
+  const activeCategories = Object.values(categories).filter(c => c.type === type && !c.deleted);
 
   return (
-    <LinearGradient
-      colors={[UI.COLORS.BACKGROUND, "#0F0F2D", UI.COLORS.BACKGROUND]}
-      locations={[0, 0.4, 1]}
-      style={styles.gradient}>
-      <SafeAreaView style={styles.container}>
-        <KeyboardAvoidingView
-          style={styles.keyboardAvoid}
-          behavior={Platform.OS === "ios" ? "padding" : "height"}>
-          <TransactionHeader
-            isEditing={!!editTransaction}
-            loading={loading}
-            onCancel={handleCancel}
-            onSave={handleSubmit}
-          />
+    <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }} edges={["top", "bottom"]}>
+      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+        <ScrollView contentContainerStyle={{ padding: spacing.lg, paddingBottom: spacing.xxl }}>
 
-          <ScrollView
-            style={styles.form}
-            showsVerticalScrollIndicator={false}
-            contentContainerStyle={styles.formContent}>
-            <TransactionTypeToggle
-              selectedType={formData.type}
-              onTypeChange={(type) => updateFormField("type", type)}
+          {/* Voice Input */}
+          {!editTransaction && (
+            <VoiceInputButton 
+              variant="button" 
+              title="Add with Voice"
+              onResult={handleVoiceResult} 
+              style={{ marginBottom: spacing.md }}
             />
+          )}
 
-            <TransactionFormFields
-              formData={formData}
-              errors={errors}
-              onFieldChange={updateFormField}
-              descriptionRef={descriptionRef}
+          {/* Amount Input */}
+          <View style={{ alignItems: "center", marginBottom: spacing.xl, marginTop: spacing.xs }}>
+            <TextInput
+              ref={amountInputRef}
+              style={[
+                typography.h1,
+                {
+                  fontSize: 64,
+                  lineHeight: 72,
+                  color: colors.onBackground,
+                  textAlign: "center",
+                  minWidth: 150,
+                },
+              ]}
+              placeholder="0.00"
+              placeholderTextColor={colors.onSurfaceVariant}
+              keyboardType="decimal-pad"
+              value={amount}
+              onChangeText={setAmount}
+              autoFocus={autoFocusAmount}
             />
+          </View>
 
-            {/* Category */}
-            <View style={styles.section}>
-              <CategorySelector
-                categories={filteredCategories}
-                selectedCategoryId={formData.categoryId}
-                onCategorySelect={(categoryId) =>
-                  updateFormField("categoryId", categoryId || "")
-                }
-                onCategoryAdd={handleCategoryAdd}
-                type={formData.type}
-                label="Category"
-                error={errors.categoryId}
-                rememberLastUsed={!editTransaction}
-              />
-            </View>
+          {/* Segmented Control */}
+          <View style={{ flexDirection: "row", backgroundColor: colors.surfaceVariant, borderRadius: radius.pill, padding: spacing.xs, marginBottom: spacing.xl }}>
+            {["expense", "income"].map((t) => {
+              const isActive = type === t;
+              return (
+                <TouchableOpacity
+                  key={t}
+                  style={{
+                    flex: 1,
+                    paddingVertical: spacing.sm,
+                    alignItems: "center",
+                    backgroundColor: isActive ? colors.surface : "transparent",
+                    borderRadius: radius.pill,
+                    ... (isActive ? {
+                      shadowColor: "#000",
+                      shadowOffset: { width: 0, height: 2 },
+                      shadowOpacity: 0.1,
+                      shadowRadius: 4,
+                      elevation: 2,
+                    } : {})
+                  }}
+                  onPress={() => setType(t as TransactionType)}>
+                  <Text style={[typography.bodyMedium, { color: isActive ? colors.primary : colors.onSurfaceVariant, fontWeight: isActive ? "600" : "400", textTransform: "capitalize" }]}>
+                    {t}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
 
-            {/* Budget — only for expense/debt */}
-            {filteredBudgets.length > 0 && formData.type !== "income" && (
-              <View style={styles.section}>
-                <BudgetSelector
-                  budgets={filteredBudgets}
-                  selectedBudgetId={formData.budgetId}
-                  onBudgetSelect={(budgetId) =>
-                    updateFormField("budgetId", budgetId)
-                  }
-                  label="Budget (Optional)"
-                  rememberLastUsed={!editTransaction}
-                />
-              </View>
-            )}
-
-            {/* Date */}
-            <View style={styles.section}>
-              <Text style={styles.label}>Date</Text>
-              <CustomDatePicker
-                value={formData.date}
-                onDateChange={(date) => updateFormField("date", date)}
-                label="Transaction Date"
-                showLabel={false}
-                style={[styles.dateCard, errors.date && styles.dateCardError]}
-              />
-              {errors.date && (
-                <Text style={styles.errorText}>{errors.date}</Text>
-              )}
-            </View>
-
-            {/* Submit error */}
-            {errors.submit && (
-              <View style={styles.errorAlert}>
-                <Text style={styles.errorAlertText}>{errors.submit}</Text>
-              </View>
-            )}
-
-            <View style={styles.bottomPadding} />
+          {/* Category Selector */}
+          <Text style={[typography.label, { color: colors.onBackground, marginBottom: spacing.md }]}>Category</Text>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: spacing.md, marginBottom: spacing.xl }}>
+            {activeCategories.map(cat => {
+              const isSelected = cat.id === categoryId;
+              return (
+                <TouchableOpacity key={cat.id} onPress={() => handleCategorySelect(cat.id)} style={{ alignItems: "center", width: 70 }}>
+                  <View style={[
+                    { padding: spacing.xs, borderRadius: radius.pill, borderWidth: 2, borderColor: isSelected ? colors.primary : "transparent" }
+                  ]}>
+                    <IconChip iconName={((cat as any).icon) || "help"} colorName="bluegrey" size={56} />
+                  </View>
+                  <Text style={[typography.bodySmall, { color: colors.onBackground, marginTop: spacing.xs, textAlign: "center" }]} numberOfLines={1}>
+                    {cat.name}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
           </ScrollView>
-        </KeyboardAvoidingView>
-      </SafeAreaView>
-    </LinearGradient>
+
+          {/* Budget Selector */}
+          {Object.values(budgets).length > 0 && (
+            <>
+              <Text style={[typography.label, { color: colors.onBackground, marginBottom: spacing.md }]}>Budget</Text>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: spacing.md, marginBottom: spacing.xl }}>
+                {Object.values(budgets).map(b => {
+                  const isSelected = b.id === budgetId;
+                  return (
+                    <TouchableOpacity key={b.id} onPress={() => handleBudgetSelect(b.id)} style={{ alignItems: "center", width: 70 }}>
+                      <View style={[
+                        { padding: spacing.xs, borderRadius: radius.pill, borderWidth: 2, borderColor: isSelected ? colors.primary : "transparent" }
+                      ]}>
+                        <IconChip iconName="pie-chart" colorName="teal" size={56} />
+                      </View>
+                      <Text style={[typography.bodySmall, { color: colors.onBackground, marginTop: spacing.xs, textAlign: "center" }]} numberOfLines={1}>
+                        {b.name}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </ScrollView>
+            </>
+          )}
+
+          {/* More Options */}
+          {!showMore && (
+            <Button
+              title="More Options"
+              variant="secondary"
+              onPress={() => setShowMore(true)}
+              style={{ marginBottom: spacing.xl }}
+            />
+          )}
+
+          {showMore && (
+            <View style={{ gap: spacing.md, marginBottom: spacing.xl }}>
+              <CustomDatePicker
+                value={date}
+                onDateChange={setDate}
+                label="Transaction Date"
+              />
+              <Input
+                label="Description"
+                placeholder="What was this for?"
+                value={description}
+                onChangeText={setDescription}
+              />
+              <Input
+                label="Note"
+                placeholder="Additional details..."
+                value={note}
+                onChangeText={setNote}
+                multiline
+                numberOfLines={3}
+                inputStyle={{ height: 80 }}
+              />
+            </View>
+          )}
+
+          {/* Action Buttons */}
+          <View style={{ flexDirection: "row", gap: spacing.md, marginTop: "auto" }}>
+            <Button
+              title="Cancel"
+              variant="ghost"
+              onPress={() => navigation.goBack()}
+              style={{ flex: 1 }}
+            />
+            <Button
+              title="Save"
+              variant="primary"
+              onPress={handleSave}
+              loading={loading}
+              style={{ flex: 1 }}
+            />
+          </View>
+        </ScrollView>
+      </KeyboardAvoidingView>
+
+      {/* Voice Review Modal */}
+      {voiceResults.length > 0 && (
+        <ParsedTransactionReview
+          parsed={voiceResults}
+          visible={showVoiceReview}
+          onAccept={handleAcceptVoiceResults}
+          onDismiss={() => {
+            setShowVoiceReview(false);
+            setVoiceResults([]);
+          }}
+        />
+      )}
+    </SafeAreaView>
   );
 };
-
-const styles = StyleSheet.create({
-  gradient: {
-    flex: 1,
-  },
-  container: {
-    flex: 1,
-  },
-  keyboardAvoid: {
-    flex: 1,
-  },
-  form: {
-    flex: 1,
-  },
-  formContent: {
-    paddingHorizontal: 20,
-    paddingTop: 16,
-  },
-  section: {
-    marginBottom: 8,
-  },
-  label: {
-    fontSize: 13,
-    fontWeight: "600",
-    color: UI.COLORS.PRIMARY_LIGHT,
-    marginBottom: 8,
-    letterSpacing: 0.4,
-    textTransform: "uppercase",
-  },
-  dateCard: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: "rgba(20,20,50,0.65)",
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: "#6c5ce726",
-    paddingHorizontal: 14,
-    paddingVertical: 4,
-  },
-  dateCardError: {
-    borderColor: "rgba(255,107,107,0.6)",
-  },
-  errorText: {
-    fontSize: 12,
-    color: UI.COLORS.ERROR,
-    marginTop: 6,
-    marginLeft: 4,
-  },
-  errorAlert: {
-    backgroundColor: "rgba(255,107,107,0.08)",
-    borderWidth: 1,
-    borderColor: "rgba(255,107,107,0.25)",
-    borderRadius: 12,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    marginBottom: 16,
-  },
-  errorAlertText: {
-    fontSize: 13,
-    color: UI.COLORS.ERROR,
-    fontWeight: "500",
-  },
-  bottomPadding: {
-    height: 100,
-  },
-});
 
 export default AddTransactionScreen;

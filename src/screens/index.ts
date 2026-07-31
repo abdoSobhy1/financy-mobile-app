@@ -1,5 +1,4 @@
 // Transaction Screens
-export * from "./TransactionScreens";
 export * from "./TransactionListScreen";
 
 // Budget Screens

@@ -18,3 +18,7 @@ export { CategoryCreationModal } from "./CategoryCreationModal";
 export { BudgetSelector } from "./BudgetSelector";
 export { FirebaseCleanupModal } from "./FirebaseCleanupModal";
 export { ScreenHeroHeader } from "./ScreenHeroHeader";
+export { TabBar, useTabBarHeight } from "./TabBar";
+export { Badge } from "./Badge";
+
+export { ListRow } from "./ListRow";

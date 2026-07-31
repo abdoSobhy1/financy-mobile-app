@@ -13,12 +13,13 @@ import {
   NativeScrollEvent,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { useAppTheme } from "../components/ui/ThemeProvider";
 import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons } from "@expo/vector-icons";
 import { useDispatch, useSelector } from "react-redux";
 import { useNavigation } from "@react-navigation/native";
 import { StackNavigationProp } from "@react-navigation/stack";
-import { FloatingActionButton } from "../components/ui";
+import { FloatingActionButton, useTabBarHeight, Card, Badge } from "../components/ui";
 import { formatCurrency } from "../utils";
 import { Debt } from "../types";
 import { RootState, AppDispatch } from "../store";
@@ -44,6 +45,7 @@ interface HeroPage {
 }
 
 const HeroCarousel = React.memo(({ pages }: { pages: HeroPage[] }) => {
+  const { colors, typography } = useAppTheme();
   const [activePage, setActivePage] = useState(0);
 
   const handleScroll = (e: NativeSyntheticEvent<NativeScrollEvent>) => {
@@ -55,11 +57,8 @@ const HeroCarousel = React.memo(({ pages }: { pages: HeroPage[] }) => {
   };
 
   return (
-    <LinearGradient
-      colors={["#1B1464", "#6C5CE7", "#A29BFE"]}
-      start={{ x: 0, y: 0 }}
-      end={{ x: 1, y: 1 }}
-      style={heroStyles.heroCard}>
+    <View
+      style={[heroStyles.heroCard, { backgroundColor: colors.primaryContainer }]}>
       <View style={[heroStyles.decorCircle, heroStyles.circle1]} />
       <View style={[heroStyles.decorCircle, heroStyles.circle2]} />
 
@@ -78,11 +77,11 @@ const HeroCarousel = React.memo(({ pages }: { pages: HeroPage[] }) => {
               width: PAGE_WIDTH,
               paddingHorizontal: UI.SPACING.LG,
             }}>
-            <Text style={heroStyles.heroLabel}>{page.label}</Text>
-            <Text style={[heroStyles.heroValue, { color: page.valueColor }]}>
+            <Text style={[heroStyles.heroLabel, { color: colors.onPrimaryContainer, opacity: 0.8 }]}>{page.label}</Text>
+            <Text style={[heroStyles.heroValue, { color: page.valueColor === "#fff" ? colors.onPrimaryContainer : page.valueColor }]}>
               {page.value}
             </Text>
-            <Text style={heroStyles.heroSubtitle}>{page.subtitle}</Text>
+            <Text style={[heroStyles.heroSubtitle, { color: colors.onPrimaryContainer, opacity: 0.7 }]}>{page.subtitle}</Text>
           </View>
         ))}
       </ScrollView>
@@ -91,11 +90,11 @@ const HeroCarousel = React.memo(({ pages }: { pages: HeroPage[] }) => {
         {pages.map((_, i) => (
           <View
             key={i}
-            style={[heroStyles.dot, activePage === i && heroStyles.dotActive]}
+            style={[heroStyles.dot, { backgroundColor: colors.onPrimaryContainer, opacity: 0.3 }, activePage === i && [heroStyles.dotActive, { backgroundColor: colors.onPrimaryContainer, opacity: 1 }]]}
           />
         ))}
       </View>
-    </LinearGradient>
+    </View>
   );
 });
 
@@ -146,13 +145,15 @@ const heroStyles = StyleSheet.create({
   dotActive: {
     width: 20,
     borderRadius: 4,
-    backgroundColor: "#fff",
+    backgroundColor: "#000",
   },
 });
 
 // ── Main Screen ──────────────────────────────────────────────
 const DebtsScreen: React.FC = () => {
+  const { colors, typography, spacing, radius } = useAppTheme();
   const dispatch = useDispatch<AppDispatch>();
+  const tabBarHeight = useTabBarHeight();
   const navigation = useNavigation<DebtsScreenNavigationProp>();
   const { items, ids, loading } = useSelector(
     (state: RootState) => state.debts,
@@ -233,29 +234,35 @@ const DebtsScreen: React.FC = () => {
       : [UI.COLORS.PRIMARY, UI.COLORS.PRIMARY_DARK];
 
     return (
-      <View style={styles.debtCard}>
+      <Card variant="outlined" style={{ marginBottom: spacing.md, padding: spacing.lg }}>
         <View style={styles.debtHeader}>
           <View style={styles.debtNameRow}>
-            <View style={styles.iconCircle}>
+            <View style={[styles.iconCircle, { backgroundColor: isPaidOff ? colors.tertiaryContainer : colors.primaryContainer }]}>
               <Ionicons
                 name={isPaidOff ? "checkmark-circle" : "card"}
                 size={16}
-                color={isPaidOff ? "#10B981" : UI.COLORS.PRIMARY_LIGHT}
+                color={isPaidOff ? colors.onTertiaryContainer : colors.onPrimaryContainer}
               />
             </View>
-            <Text style={styles.debtName}>{debt.name}</Text>
+            <Text style={[styles.debtName, { color: colors.onSurface }]}>{debt.name}</Text>
           </View>
-          <Text
-            style={[
-              styles.debtAmount,
-              isPaidOff ? styles.paidColor : styles.debtColor,
-            ]}>
-            {formatCurrency(debt.currentBalance)}
-          </Text>
+          <View style={{ alignItems: "flex-end", gap: 4 }}>
+            <Text
+              style={[
+                styles.debtAmount,
+                { color: isPaidOff ? colors.tertiary : colors.primary },
+              ]}>
+              {formatCurrency(debt.currentBalance)}
+            </Text>
+            <Badge 
+              label={isPaidOff ? "Paid" : "Active"} 
+              role={isPaidOff ? "success" : "primary"} 
+            />
+          </View>
         </View>
 
         <View style={styles.progressContainer}>
-          <View style={styles.progressBar}>
+          <View style={[styles.progressBar, { backgroundColor: colors.surfaceVariant }]}>
             <LinearGradient
               colors={progressColors}
               start={{ x: 0, y: 0 }}
@@ -266,22 +273,22 @@ const DebtsScreen: React.FC = () => {
               ]}
             />
           </View>
-          <Text style={styles.progressText}>
+          <Text style={[styles.progressText, { color: colors.onSurfaceVariant }]}>
             {progressPercentage.toFixed(1)}%
           </Text>
         </View>
 
         <View style={styles.debtDetails}>
           <View>
-            <Text style={styles.detailLabel}>Original</Text>
-            <Text style={styles.detailValue}>
+            <Text style={[styles.detailLabel, { color: colors.onSurfaceVariant }]}>Original</Text>
+            <Text style={[styles.detailValue, { color: colors.onSurface }]}>
               {formatCurrency(debt.totalAmount)}
             </Text>
           </View>
           {!!debt.interestRate && (
             <View style={{ alignItems: "flex-end" }}>
-              <Text style={styles.detailLabel}>Interest</Text>
-              <Text style={[styles.detailValue, { color: "#F59E0B" }]}>
+              <Text style={[styles.detailLabel, { color: colors.onSurfaceVariant }]}>Interest</Text>
+              <Text style={[styles.detailValue, { color: colors.tertiary }]}>
                 {debt.interestRate}%
               </Text>
             </View>
@@ -290,23 +297,23 @@ const DebtsScreen: React.FC = () => {
 
         <View style={styles.debtActions}>
           <TouchableOpacity
-            style={styles.actionBtn}
+            style={[styles.actionBtn, { backgroundColor: colors.surfaceVariant }]}
             onPress={() =>
               navigation.navigate("DebtForm", { debtId: debt.id })
             }>
             <Ionicons
               name="create-outline"
               size={14}
-              color={UI.COLORS.TEXT_MUTED}
+              color={colors.onSurfaceVariant}
             />
             <Text
-              style={[styles.actionBtnText, { color: UI.COLORS.TEXT_MUTED }]}>
+              style={[styles.actionBtnText, { color: colors.onSurfaceVariant }]}>
               Edit
             </Text>
           </TouchableOpacity>
 
           <TouchableOpacity
-            style={styles.actionBtn}
+            style={[styles.actionBtn, { backgroundColor: colors.primaryContainer }]}
             onPress={() =>
               navigation.navigate("DebtPayments", {
                 debtId: debt.id,
@@ -316,30 +323,30 @@ const DebtsScreen: React.FC = () => {
             <Ionicons
               name="receipt-outline"
               size={14}
-              color={UI.COLORS.PRIMARY_LIGHT}
+              color={colors.onPrimaryContainer}
             />
             <Text
               style={[
                 styles.actionBtnText,
-                { color: UI.COLORS.PRIMARY_LIGHT },
+                { color: colors.onPrimaryContainer },
               ]}>
               History
             </Text>
           </TouchableOpacity>
 
           <TouchableOpacity
-            style={[styles.actionBtn, styles.actionBtnHighlight]}
+            style={[styles.actionBtn, styles.actionBtnHighlight, { backgroundColor: colors.tertiaryContainer, borderColor: colors.tertiary }]}
             onPress={() => handleAddPayment(debt)}
             disabled={isPaidOff}>
-            <Ionicons name="card" size={14} color="#10B981" />
-            <Text style={[styles.actionBtnText, { color: "#10B981" }]}>
+            <Ionicons name="card" size={14} color={colors.onTertiaryContainer} />
+            <Text style={[styles.actionBtnText, { color: colors.onTertiaryContainer }]}>
               Pay
             </Text>
           </TouchableOpacity>
 
           {!isPaidOff && (
             <TouchableOpacity
-              style={styles.actionBtn}
+              style={[styles.actionBtn, { backgroundColor: colors.primaryContainer }]}
               onPress={() =>
                 dispatch(
                   makeDebtPayment({
@@ -354,30 +361,30 @@ const DebtsScreen: React.FC = () => {
                   }),
                 )
               }>
-              <Ionicons name="checkmark" size={14} color="#3B82F6" />
-              <Text style={[styles.actionBtnText, { color: "#3B82F6" }]}>
+              <Ionicons name="checkmark" size={14} color={colors.primary} />
+              <Text style={[styles.actionBtnText, { color: colors.primary }]}>
                 Clear
               </Text>
             </TouchableOpacity>
           )}
         </View>
-      </View>
+      </Card>
     );
   };
 
   // ── Header ─────────────────────────────────────────────────
   const renderHeader = () => (
     <View style={styles.headerContainer}>
-      {debts.length > 0 && <Text style={styles.sectionTitle}>Debts</Text>}
+      {debts.length > 0 && <Text style={[styles.sectionTitle, { color: colors.onBackground }]}>Debts</Text>}
       <HeroCarousel pages={heroPages} />
 
       {/* Insight card */}
       {averageInterest > 0 && totalDebt > 0 && (
-        <View style={styles.insightCard}>
-          <View style={styles.insightIconBox}>
-            <Ionicons name="bulb" size={16} color="#F59E0B" />
+        <View style={[styles.insightCard, { backgroundColor: colors.tertiaryContainer, borderColor: colors.tertiary }]}>
+          <View style={[styles.insightIconBox, { backgroundColor: colors.tertiary }]}>
+            <Ionicons name="bulb" size={16} color={colors.onTertiary} />
           </View>
-          <Text style={styles.insightText}>
+          <Text style={[styles.insightText, { color: colors.onTertiaryContainer }]}>
             Focus on highest interest debts first to save money
           </Text>
         </View>
@@ -388,34 +395,27 @@ const DebtsScreen: React.FC = () => {
   // ── Empty State ──────────────────────────────────────────────
   const renderEmptyState = () => (
     <View style={styles.emptyState}>
-      <View style={styles.emptyIconCircle}>
-        <Ionicons name="card-outline" size={40} color={UI.COLORS.PRIMARY} />
+      <View style={[styles.emptyIconCircle, { backgroundColor: colors.primaryContainer }]}>
+        <Ionicons name="card-outline" size={40} color={colors.primary} />
       </View>
-      <Text style={styles.emptyTitle}>No Debts</Text>
-      <Text style={styles.emptyText}>
+      <Text style={[styles.emptyTitle, { color: colors.onBackground }]}>No Debts</Text>
+      <Text style={[styles.emptyText, { color: colors.onSurfaceVariant }]}>
         Tap + to add your first debt and start tracking your payoff journey
       </Text>
       <TouchableOpacity
         activeOpacity={0.8}
         onPress={() => navigation.navigate("DebtForm", {})}>
-        <LinearGradient
-          colors={[UI.COLORS.PRIMARY, UI.COLORS.PRIMARY_DARK]}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-          style={styles.emptyButton}>
-          <Ionicons name="add-circle" size={18} color="#fff" />
-          <Text style={styles.emptyButtonText}>Add Your First Debt</Text>
-        </LinearGradient>
+        <View style={[styles.emptyButton, { backgroundColor: colors.primary }]}>
+          <Ionicons name="add-circle" size={18} color={colors.onPrimary} />
+          <Text style={[styles.emptyButtonText, { color: colors.onPrimary }]}>Add Your First Debt</Text>
+        </View>
       </TouchableOpacity>
     </View>
   );
 
   return (
-    <LinearGradient
-      colors={["#0a0a2e", "#1a1040", "#0d0d30"]}
-      style={styles.gradient}>
-      <SafeAreaView style={{ flex: 1 }}>
-        <StatusBar
+    <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }} edges={["top"]}>
+      <StatusBar
           barStyle="light-content"
           backgroundColor="transparent"
           translucent
@@ -423,7 +423,7 @@ const DebtsScreen: React.FC = () => {
 
         {loading && debts.length === 0 ? (
           <View style={styles.centered}>
-            <ActivityIndicator size="large" color={UI.COLORS.PRIMARY} />
+            <ActivityIndicator size="large" color={colors.primary} />
           </View>
         ) : debts.length === 0 ? (
           <View style={styles.centered}>{renderEmptyState()}</View>
@@ -433,7 +433,7 @@ const DebtsScreen: React.FC = () => {
             renderItem={renderDebtCard}
             keyExtractor={(item) => item.id}
             ListHeaderComponent={renderHeader}
-            contentContainerStyle={styles.list}
+            contentContainerStyle={[styles.list, { paddingBottom: tabBarHeight }]}
             showsVerticalScrollIndicator={false}
           />
         )}
@@ -441,10 +441,9 @@ const DebtsScreen: React.FC = () => {
         <FloatingActionButton
           icon="add"
           onPress={() => navigation.navigate("DebtForm", {})}
-          style={{ position: "absolute", bottom: 80, right: 20 }}
+          style={{ position: "absolute", bottom: tabBarHeight + UI.SPACING.SM, right: 20 }}
         />
-      </SafeAreaView>
-    </LinearGradient>
+    </SafeAreaView>
   );
 };
 
@@ -499,7 +498,6 @@ const styles = StyleSheet.create({
   // ── List ───────────────────────────────────────────
   list: {
     paddingHorizontal: 20,
-    paddingBottom: 120,
   },
 
   // ── Debt Card ──────────────────────────────────────

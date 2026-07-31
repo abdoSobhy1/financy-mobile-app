@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import { View, TextInput, Text, StyleSheet, ViewStyle, TextStyle, TextInputProps, TouchableOpacity } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { UI } from "../../constants";
+import { useAppTheme } from "./ThemeProvider";
 
 interface InputProps extends Omit<TextInputProps, "style"> {
   label?: string;
@@ -36,6 +36,7 @@ const Input: React.FC<InputProps> = ({
   onBlur,
   ...textInputProps
 }) => {
+  const { colors, typography, radius, spacing } = useAppTheme();
   const [isFocused, setIsFocused] = useState(false);
   const [isSecure, setIsSecure] = useState(secureTextEntry);
 
@@ -53,45 +54,67 @@ const Input: React.FC<InputProps> = ({
     setIsSecure(!isSecure);
   };
 
-  const getVariantStyle = (v: string) => {
-    switch (v) {
-      case "outlined":
-        return styles.outlined;
-      case "filled":
-        return styles.filled;
-      default:
-        return styles.default;
-    }
-  };
+  let bgColor = colors.surfaceVariant;
+  let borderColor = colors.outlineVariant;
+  let borderWidth = 1;
 
-  const getSizeStyle = (s: string) => {
-    switch (s) {
-      case "small":
-        return styles.small;
-      case "medium":
-        return styles.medium;
-      case "large":
-        return styles.large;
-      default:
-        return styles.medium;
-    }
-  };
+  if (variant === "outlined") {
+    bgColor = "transparent";
+    borderColor = colors.outline;
+    borderWidth = 2;
+  } else if (variant === "filled") {
+    bgColor = colors.surface;
+    borderColor = "transparent";
+  }
+
+  if (isFocused) {
+    borderColor = colors.primary;
+  }
+  if (error) {
+    borderColor = colors.error;
+  }
+
+  let paddingHorizontal = spacing.md;
+  let paddingVertical = spacing.sm;
+  let minHeight = 44;
+
+  if (size === "small") {
+    paddingHorizontal = spacing.sm;
+    paddingVertical = spacing.xs;
+    minHeight = 36;
+  } else if (size === "large") {
+    paddingHorizontal = spacing.md;
+    paddingVertical = spacing.md;
+    minHeight = 52;
+  }
 
   return (
-    <View style={[styles.container, containerStyle]}>
+    <View style={[{ marginBottom: spacing.md }, containerStyle]}>
       {label && (
-        <Text style={[styles.label, labelStyle]}>
+        <Text style={[typography.label, { color: colors.onSurface, marginBottom: spacing.xs }, labelStyle]}>
           {label}
-          {required && <Text style={styles.required}> *</Text>}
+          {required && <Text style={{ color: colors.error }}> *</Text>}
         </Text>
       )}
 
-      <View style={[styles.inputContainer, getVariantStyle(variant), getSizeStyle(size), isFocused && styles.focused, error && styles.error]}>
-        {leftIcon && <View style={styles.leftIcon}>{leftIcon}</View>}
+      <View
+        style={[
+          styles.inputContainer,
+          {
+            backgroundColor: bgColor,
+            borderColor,
+            borderWidth,
+            borderRadius: radius.sm,
+            paddingHorizontal,
+            paddingVertical,
+            minHeight,
+          },
+        ]}>
+        {leftIcon && <View style={{ marginRight: spacing.sm }}>{leftIcon}</View>}
 
         <TextInput
-          style={[styles.input, inputStyle]}
-          placeholderTextColor={UI.COLORS.TEXT_MUTED}
+          style={[{ flex: 1, fontSize: 16, color: colors.onSurface, padding: 0 }, inputStyle]}
+          placeholderTextColor={colors.onSurfaceVariant}
           secureTextEntry={isSecure}
           onFocus={handleFocus}
           onBlur={handleBlur}
@@ -99,114 +122,24 @@ const Input: React.FC<InputProps> = ({
         />
 
         {secureTextEntry && (
-          <TouchableOpacity style={styles.rightIcon} onPress={toggleSecureEntry}>
-            <Ionicons name={isSecure ? "eye-off" : "eye"} size={20} color="#666" />
+          <TouchableOpacity style={{ marginLeft: spacing.sm, padding: spacing.xs }} onPress={toggleSecureEntry}>
+            <Ionicons name={isSecure ? "eye-off" : "eye"} size={20} color={colors.onSurfaceVariant} />
           </TouchableOpacity>
         )}
 
-        {rightIcon && !secureTextEntry && <View style={styles.rightIcon}>{rightIcon}</View>}
+        {rightIcon && !secureTextEntry && <View style={{ marginLeft: spacing.sm }}>{rightIcon}</View>}
       </View>
 
-      {error && <Text style={[styles.errorText, errorStyle]}>{error}</Text>}
-
-      {hint && !error && <Text style={styles.hint}>{hint}</Text>}
+      {error && <Text style={[typography.bodySmall, { color: colors.error, marginTop: spacing.xs }, errorStyle]}>{error}</Text>}
+      {hint && !error && <Text style={[typography.bodySmall, { color: colors.onSurfaceVariant, marginTop: spacing.xs }]}>{hint}</Text>}
     </View>
   );
 };
 
 const styles = StyleSheet.create({
-  container: {
-    marginBottom: UI.SPACING.MD,
-  },
-
-  label: {
-    fontSize: 14,
-    fontWeight: "600",
-    color: UI.COLORS.TEXT_PRIMARY,
-    marginBottom: UI.SPACING.XS,
-  },
-
-  required: {
-    color: UI.COLORS.ERROR,
-  },
-
   inputContainer: {
     flexDirection: "row",
     alignItems: "center",
-    borderRadius: UI.CARD_RADIUS / 2,
-    borderWidth: 1,
-  },
-
-  // Variants
-  default: {
-    backgroundColor: UI.COLORS.INPUT_BACKGROUND,
-    borderColor: UI.COLORS.BORDER,
-  },
-  outlined: {
-    backgroundColor: "transparent",
-    borderColor: UI.COLORS.BORDER,
-    borderWidth: 2,
-  },
-  filled: {
-    backgroundColor: UI.COLORS.SURFACE,
-    borderColor: "transparent",
-  },
-
-  // Sizes
-  small: {
-    paddingHorizontal: UI.SPACING.SM,
-    paddingVertical: UI.SPACING.XS,
-    minHeight: 36,
-  },
-  medium: {
-    paddingHorizontal: UI.SPACING.MD,
-    paddingVertical: UI.SPACING.SM,
-    minHeight: 44,
-  },
-  large: {
-    paddingHorizontal: UI.SPACING.MD,
-    paddingVertical: UI.SPACING.MD,
-    minHeight: 52,
-  },
-
-  // States
-  focused: {
-    borderColor: UI.COLORS.PRIMARY,
-  },
-  error: {
-    borderColor: UI.COLORS.ERROR,
-  },
-
-  input: {
-    flex: 1,
-    fontSize: 16,
-    color: UI.COLORS.TEXT_PRIMARY,
-    padding: 0,
-  },
-
-  leftIcon: {
-    marginRight: UI.SPACING.SM,
-  },
-
-  rightIcon: {
-    marginLeft: UI.SPACING.SM,
-    padding: UI.SPACING.XS,
-  },
-
-  togglePassword: {
-    fontSize: 16,
-  },
-
-  errorText: {
-    fontSize: 12,
-    color: UI.COLORS.ERROR,
-    marginTop: UI.SPACING.XS,
-  },
-
-  hint: {
-    fontSize: 12,
-    color: UI.COLORS.TEXT_MUTED,
-    marginTop: UI.SPACING.XS,
   },
 });
 

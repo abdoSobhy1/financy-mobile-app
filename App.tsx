@@ -19,7 +19,7 @@ import { SyncProvider } from "./src/contexts/SyncProvider";
 import { offlineFirstSync } from "./src/services/OfflineFirstSync";
 import { useSyncDataRefresh } from "./src/hooks";
 import { ShimmerProvider } from "react-native-fast-shimmer";
-import { ThemeProvider } from "./src/theme";
+import { ThemeProvider } from "./src/components/ui/ThemeProvider";
 
 // Keep the splash screen visible while we fetch resources
 SplashScreen.preventAutoHideAsync();

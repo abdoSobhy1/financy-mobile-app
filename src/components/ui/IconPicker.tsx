@@ -6,7 +6,7 @@ import {
   StyleSheet,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { useAppTheme } from "../../theme";
+import { useAppTheme } from "./ThemeProvider";
 
 export const DEFAULT_ICONS = [
   "wallet",
@@ -64,7 +64,7 @@ export const IconPicker: React.FC<IconPickerProps> = ({
           style={[
             styles.iconOption,
             {
-              borderRadius: radius.medium,
+              borderRadius: radius.md,
               borderColor: colors.outline,
               backgroundColor: !selectedIcon
                 ? colors.surfaceVariant
@@ -72,7 +72,7 @@ export const IconPicker: React.FC<IconPickerProps> = ({
             },
           ]}
           onPress={onClearIcon}>
-          <Ionicons name="close" size={16} color={colors.textSecondary} />
+          <Ionicons name="close" size={16} color={colors.onSurfaceVariant} />
         </TouchableOpacity>
       )}
 
@@ -89,7 +89,7 @@ export const IconPicker: React.FC<IconPickerProps> = ({
             style={[
               styles.iconOption,
               {
-                borderRadius: radius.medium,
+                borderRadius: radius.md,
                 backgroundColor: bgColor,
                 borderColor: isSelected ? "transparent" : colors.outline,
               },

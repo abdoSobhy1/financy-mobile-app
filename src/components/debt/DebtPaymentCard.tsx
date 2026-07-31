@@ -3,7 +3,8 @@ import { View, Text, StyleSheet, TouchableOpacity, Alert } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons } from "@expo/vector-icons";
 import { useDispatch } from "react-redux";
-import { useToast } from "../ui";
+import { useToast, Card, Badge } from "../ui";
+import { useAppTheme } from "../ui/ThemeProvider";
 import { formatCurrency, formatDate } from "../../utils";
 import { DebtPayment } from "../../types";
 import { AppDispatch } from "../../store";
@@ -22,6 +23,7 @@ const DebtPaymentCard: React.FC<DebtPaymentCardProps> = ({
 }) => {
   const dispatch = useDispatch<AppDispatch>();
   const { showSuccess, showError } = useToast();
+  const { colors, spacing } = useAppTheme();
   const [isExpanded, setIsExpanded] = useState(false);
 
   const handleDelete = () => {
@@ -54,7 +56,7 @@ const DebtPaymentCard: React.FC<DebtPaymentCardProps> = ({
     payment.amount > 0 ? (payment.interest || 0) / payment.amount : 0;
 
   return (
-    <View style={styles.card}>
+    <Card variant="outlined" style={{ marginBottom: spacing.md }}>
       {/* Main row — always visible */}
       <TouchableOpacity
         style={styles.mainRow}
@@ -62,19 +64,16 @@ const DebtPaymentCard: React.FC<DebtPaymentCardProps> = ({
         activeOpacity={0.7}>
         {/* Left: icon circle + info */}
         <View style={styles.leftGroup}>
-          <LinearGradient
-            colors={["#6C5CE7", "#A29BFE"]}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-            style={styles.paymentIcon}>
-            <Ionicons name="card" size={14} color="#fff" />
-          </LinearGradient>
+          <View
+            style={[styles.paymentIcon, { backgroundColor: colors.primaryContainer }]}>
+            <Ionicons name="card" size={14} color={colors.primary} />
+          </View>
 
           <View style={styles.paymentInfo}>
-            <Text style={styles.paymentAmount}>
+            <Text style={[styles.paymentAmount, { color: colors.onSurface }]}>
               {formatCurrency(payment.amount)}
             </Text>
-            <Text style={styles.paymentDate}>
+            <Text style={[styles.paymentDate, { color: colors.onSurfaceVariant }]}>
               {formatDate(payment.paymentDate)}
             </Text>
           </View>
@@ -83,17 +82,13 @@ const DebtPaymentCard: React.FC<DebtPaymentCardProps> = ({
         {/* Right: principal badge + chevron */}
         <View style={styles.rightGroup}>
           {payment.principal > 0 && (
-            <View style={styles.principalBadge}>
-              <Text style={styles.principalBadgeText}>
-                {formatCurrency(payment.principal)}
-              </Text>
-            </View>
+            <Badge label={formatCurrency(payment.principal)} role="success" />
           )}
           <View style={styles.chevronCircle}>
             <Ionicons
               name={isExpanded ? "chevron-up" : "chevron-down"}
               size={14}
-              color={UI.COLORS.TEXT_MUTED}
+              color={colors.onSurfaceVariant}
             />
           </View>
         </View>
@@ -103,27 +98,27 @@ const DebtPaymentCard: React.FC<DebtPaymentCardProps> = ({
       {isExpanded && (
         <View style={styles.expandedContent}>
           {/* Breakdown bars */}
-          <View style={styles.breakdownSection}>
-            <Text style={styles.breakdownTitle}>Payment Breakdown</Text>
+          <View style={[styles.breakdownSection, { borderTopColor: colors.surfaceVariant }]}>
+            <Text style={[styles.breakdownTitle, { color: colors.onSurface }]}>Payment Breakdown</Text>
 
             {/* Principal */}
             <View style={styles.breakdownItem}>
               <View style={styles.breakdownLabelRow}>
                 <View
-                  style={[styles.breakdownDot, { backgroundColor: "#2ED573" }]}
+                  style={[styles.breakdownDot, { backgroundColor: colors.tertiary }]}
                 />
-                <Text style={styles.breakdownLabel}>Principal</Text>
-                <Text style={[styles.breakdownValue, { color: "#2ED573" }]}>
+                <Text style={[styles.breakdownLabel, { color: colors.onSurfaceVariant }]}>Principal</Text>
+                <Text style={[styles.breakdownValue, { color: colors.tertiary }]}>
                   {formatCurrency(payment.principal)}
                 </Text>
               </View>
-              <View style={styles.breakdownBarTrack}>
+              <View style={[styles.breakdownBarTrack, { backgroundColor: colors.surfaceVariant }]}>
                 <View
                   style={[
                     styles.breakdownBarFill,
                     {
                       width: `${Math.max(100 - interestRatio * 100, 2)}%`,
-                      backgroundColor: "#2ED573",
+                      backgroundColor: colors.tertiary,
                     },
                   ]}
                 />
@@ -134,20 +129,20 @@ const DebtPaymentCard: React.FC<DebtPaymentCardProps> = ({
             <View style={styles.breakdownItem}>
               <View style={styles.breakdownLabelRow}>
                 <View
-                  style={[styles.breakdownDot, { backgroundColor: "#F59E0B" }]}
+                  style={[styles.breakdownDot, { backgroundColor: colors.tertiary }]}
                 />
-                <Text style={styles.breakdownLabel}>Interest</Text>
-                <Text style={[styles.breakdownValue, { color: "#F59E0B" }]}>
+                <Text style={[styles.breakdownLabel, { color: colors.onSurfaceVariant }]}>Interest</Text>
+                <Text style={[styles.breakdownValue, { color: colors.tertiary }]}>
                   {formatCurrency(payment.interest)}
                 </Text>
               </View>
-              <View style={styles.breakdownBarTrack}>
+              <View style={[styles.breakdownBarTrack, { backgroundColor: colors.surfaceVariant }]}>
                 <View
                   style={[
                     styles.breakdownBarFill,
                     {
                       width: `${Math.max(interestRatio * 100, 2)}%`,
-                      backgroundColor: "#F59E0B",
+                      backgroundColor: colors.tertiary,
                     },
                   ]}
                 />
@@ -157,44 +152,44 @@ const DebtPaymentCard: React.FC<DebtPaymentCardProps> = ({
 
           {/* Note */}
           {payment.note && (
-            <View style={styles.noteBox}>
-              <View style={styles.noteIconBox}>
+            <View style={[styles.noteBox, { backgroundColor: colors.surfaceVariant, borderColor: colors.outlineVariant }]}>
+              <View style={[styles.noteIconBox, { backgroundColor: colors.surface }]}>
                 <Ionicons
                   name="document-text"
                   size={12}
-                  color={UI.COLORS.PRIMARY_LIGHT}
+                  color={colors.primary}
                 />
               </View>
-              <Text style={styles.noteText}>{payment.note}</Text>
+              <Text style={[styles.noteText, { color: colors.onSurfaceVariant }]}>{payment.note}</Text>
             </View>
           )}
 
           {/* Action buttons */}
           <View style={styles.actions}>
-            <TouchableOpacity style={styles.actionBtn} onPress={handleEdit}>
+            <TouchableOpacity style={[styles.actionBtn, { backgroundColor: colors.surfaceVariant }]} onPress={handleEdit}>
               <Ionicons
                 name="pencil"
                 size={14}
-                color={UI.COLORS.PRIMARY_LIGHT}
+                color={colors.primary}
               />
               <Text
-                style={[styles.actionText, { color: UI.COLORS.PRIMARY_LIGHT }]}>
+                style={[styles.actionText, { color: colors.primary }]}>
                 Edit
               </Text>
             </TouchableOpacity>
 
             <TouchableOpacity
-              style={[styles.actionBtn, styles.deleteBtn]}
+              style={[styles.actionBtn, { backgroundColor: colors.errorContainer }]}
               onPress={handleDelete}>
-              <Ionicons name="trash" size={14} color="#FF6B6B" />
-              <Text style={[styles.actionText, { color: "#FF6B6B" }]}>
+              <Ionicons name="trash" size={14} color={colors.error} />
+              <Text style={[styles.actionText, { color: colors.error }]}>
                 Delete
               </Text>
             </TouchableOpacity>
           </View>
         </View>
       )}
-    </View>
+    </Card>
   );
 };
 

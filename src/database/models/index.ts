@@ -168,51 +168,6 @@ export const transformBudget = (row: BudgetTable): Budget => ({
   syncStatus: row.sync_status as "pending" | "synced" | "error",
 });
 
-export const transformBill = (row: BillTable): Bill => {
-  // Use DateUtils for consistent and safe date handling
-  const safeDueDate = DateUtils.toISOString(row.due_date, DateUtils.today());
-
-  // Log any date conversion issues for debugging
-  if (!DateUtils.isValid(row.due_date)) {
-    console.warn("transformBill: Invalid due_date detected, using fallback", {
-      billId: row.id,
-      originalDueDate: row.due_date,
-      convertedDueDate: safeDueDate,
-    });
-  }
-
-  const transformedBill = {
-    id: row.id,
-    name: row.name,
-    amount: row.amount,
-    dueDate: safeDueDate,
-    paid: Boolean(row.paid),
-    budgetId: row.budget_id,
-    categoryId: row.category_id,
-    linkedTransactionId: row.linked_transaction_id,
-    recurring: Boolean(row.recurring),
-    recurringType: row.recurring_type as Bill["recurringType"],
-    createdAt: row.created_at,
-    updatedAt: row.updated_at,
-    // Sync fields
-    syncUpdatedAt: row.sync_updated_at,
-    deleted: Boolean(row.deleted),
-    syncStatus: row.sync_status as "pending" | "synced" | "error",
-  };
-
-  console.log("transformBill: Transformed bill from database row", {
-    billId: row.id,
-    original_due_date: row.due_date,
-    transformed_dueDate: transformedBill.dueDate,
-    original_recurring: row.recurring,
-    transformed_recurring: transformedBill.recurring,
-    original_recurring_type: row.recurring_type,
-    transformed_recurringType: transformedBill.recurringType,
-  });
-
-  return transformedBill;
-};
-
 export const transformSettings = (row: SettingsTable): Settings => ({
   id: row.id,
   billingPeriodStartDay: row.billing_period_start_day,
@@ -268,33 +223,6 @@ export const toBudgetTable = (budget: Omit<Budget, "id" | "createdAt" | "updated
   sync_status: budget.syncStatus || "pending",
 });
 
-export const toBillTable = (bill: Omit<Bill, "id" | "createdAt" | "updatedAt">): Omit<BillTable, "id" | "created_at" | "updated_at"> => {
-  // Ensure dueDate is always stored as ISO string in database
-  const dueDateString = DateUtils.isValid(bill.dueDate) ? DateUtils.toISOString(bill.dueDate) : bill.dueDate;
-
-  console.log("toBillTable: Converting bill for database storage", {
-    originalDueDate: bill.dueDate,
-    originalDueDateType: typeof bill.dueDate,
-    convertedDueDate: dueDateString,
-    isValidOriginal: DateUtils.isValid(bill.dueDate),
-  });
-
-  return {
-    name: bill.name,
-    amount: bill.amount,
-    due_date: dueDateString,
-    paid: bill.paid ? 1 : 0,
-    budget_id: bill.budgetId,
-    category_id: bill.categoryId || undefined,
-    linked_transaction_id: bill.linkedTransactionId,
-    recurring: bill.recurring ? 1 : 0,
-    recurring_type: bill.recurringType,
-    // Sync fields
-    sync_updated_at: bill.syncUpdatedAt || Date.now(),
-    deleted: bill.deleted ? 1 : 0,
-    sync_status: bill.syncStatus || "pending",
-  };
-};
 
 export const toSettingsTable = (
   settings: Omit<Settings, "id" | "createdAt" | "updatedAt">

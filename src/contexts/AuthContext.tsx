@@ -33,7 +33,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     dispatch(initializeAuth());
 
     // Set up auth state listener with stable authentication timing
-    let authTimeout: NodeJS.Timeout | null = null;
+    let authTimeout: ReturnType<typeof setTimeout> | null = null;
     const unsubscribe = authService.onAuthStateChanged(async (user) => {
       // Clear any pending auth timeout
       if (authTimeout) {

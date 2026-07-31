@@ -20,34 +20,32 @@ import {
 } from "../types";
 import { getCurrentBillingPeriod } from "../utils/billingPeriod";
 import { formatCurrency, formatDate } from "../utils";
-import {
-  getCategoryColorKey,
-  getCategoryIconName,
-} from "../utils/categoryDictionary";
-import { useAppTheme } from "../theme";
-import { Badge } from "../components/ui";
+import { useAppTheme } from "../components/ui/ThemeProvider";
+import { Badge } from "../components/ui/Badge";
+import { Card } from "../components/ui";
+import { ListRow } from "../components/ui/ListRow";
+import { useTabBarHeight } from "../components/ui";
+import { IconChip } from "../components/ui/IconChip";
 import { addCategory } from "../store/slices/categoriesSlice";
-import {
-  addTransaction,
-  deleteTransaction,
-} from "../store/slices/transactionsSlice";
 
 type DashboardNavigationProp = StackNavigationProp<
-  TransactionStackParamList,
+  any,
   "Dashboard"
 >;
 
 interface QuickAddSlot {
   id: string;
   name: string;
-  color?: string;
+  colorName?: string;
   isFallback: boolean;
+  iconName: string;
 }
 
 export const DashboardScreen: React.FC = () => {
   const navigation = useNavigation<DashboardNavigationProp>();
   const dispatch = useDispatch<AppDispatch>();
-  const { colors, isDark, typography, spacing, radius, categoryPalette } = useAppTheme();
+  const { colors, typography, spacing, radius, categoryPalette } = useAppTheme();
+  const tabBarHeight = useTabBarHeight();
 
   const transactions = useSelector(
     (state: RootState) => state.transactions.items
@@ -55,24 +53,13 @@ export const DashboardScreen: React.FC = () => {
   const categoriesMap = useSelector(
     (state: RootState) => state.categories.items
   );
-  const walletsMap = useSelector((state: RootState) => state.wallets.items);
-  const wallets = Object.values(walletsMap);
-  const totalWalletBalance = wallets.reduce(
-    (sum, w) => sum + Number(w.balance || 0),
-    0
-  );
 
-  const [periodStart, setPeriodStart] = useState<Date>(new Date());
-  const [periodEnd, setPeriodEnd] = useState<Date>(new Date());
   const [totalIncome, setTotalIncome] = useState<number>(0);
   const [totalExpenses, setTotalExpenses] = useState<number>(0);
   const [balance, setBalance] = useState<number>(0);
   const [quickAddSlots, setQuickAddSlots] = useState<QuickAddSlot[]>([]);
-  const [recentTransactions, setRecentTransactions] = useState<Transaction[]>(
-    []
-  );
+  const [recentTransactions, setRecentTransactions] = useState<Transaction[]>([]);
 
-  // Recalculate dashboard stats and quick add ranking on focus
   useFocusEffect(
     useCallback(() => {
       let isActive = true;
@@ -81,9 +68,6 @@ export const DashboardScreen: React.FC = () => {
         try {
           const { start, end } = await getCurrentBillingPeriod();
           if (!isActive) return;
-
-          setPeriodStart(start);
-          setPeriodEnd(end);
 
           const allTransactions = Object.values(transactions).filter(
             (t) => !t.deleted
@@ -106,7 +90,7 @@ export const DashboardScreen: React.FC = () => {
           setTotalExpenses(expenses);
           setBalance(income - expenses);
 
-          // 2. Recent transactions preview (last 5 across all non-deleted transactions)
+          // 2. Recent transactions preview
           const sortedRecent = [...allTransactions]
             .sort(
               (a, b) =>
@@ -155,20 +139,18 @@ export const DashboardScreen: React.FC = () => {
 
     const periodCategoryIds = new Set(periodTxs.map((t) => t.categoryId));
 
-    // Fall back to trailing 60 days if period has too little data (< 3 unique categories)
     let relevantTxs = periodTxs;
     if (periodCategoryIds.size < 3) {
       const cutoff = new Date(Date.now() - 60 * 24 * 60 * 60 * 1000);
       relevantTxs = allExpenseTxs.filter((t) => new Date(t.date) >= cutoff);
     }
 
-    // Score categories by recency-weighted transaction count
     const scores: Record<string, number> = {};
     const now = Date.now();
     for (const tx of relevantTxs) {
+      if (!tx.categoryId) continue;
       const txTime = new Date(tx.date).getTime();
       const daysAgo = Math.max(0, (now - txTime) / (1000 * 60 * 60 * 24));
-      // Linear decay over 60 days, min weight 0.1
       const weight = Math.max(0.1, 1 - daysAgo / 60);
       scores[tx.categoryId] = (scores[tx.categoryId] || 0) + weight;
     }
@@ -179,9 +161,7 @@ export const DashboardScreen: React.FC = () => {
 
     const slots: QuickAddSlot[] = [];
     const pickedIds = new Set<string>();
-    const pickedNames = new Set<string>();
 
-    // Add top scored expense categories
     for (const catId of sortedCatIds) {
       if (slots.length >= 3) break;
       const cat = catsMap[catId];
@@ -189,15 +169,15 @@ export const DashboardScreen: React.FC = () => {
         slots.push({
           id: cat.id,
           name: cat.name,
-          color: cat.color || UI.COLORS.PRIMARY,
+          colorName: "red", // map properly if needed, fallback to something
           isFallback: false,
+          iconName: (cat as any).icon || "cart",
         });
         pickedIds.add(cat.id);
-        pickedNames.add(cat.name.toLowerCase());
       }
     }
 
-    // Fill remaining slots from existing expense categories if any
+    // Fill remaining slots
     if (slots.length < 3) {
       for (const cat of Object.values(catsMap)) {
         if (slots.length >= 3) break;
@@ -209,52 +189,31 @@ export const DashboardScreen: React.FC = () => {
           slots.push({
             id: cat.id,
             name: cat.name,
-            color: cat.color || UI.COLORS.PRIMARY,
+            colorName: "red",
             isFallback: false,
+            iconName: (cat as any).icon || "cart",
           });
           pickedIds.add(cat.id);
-          pickedNames.add(cat.name.toLowerCase());
         }
       }
     }
 
-    // Fallback hardcoded defaults if still < 3
+    // Fallback defaults
     const DEFAULT_DEFAULTS = [
-      { name: "Food", color: "#FF6B6B" },
-      { name: "Transport", color: "#4ECDC4" },
-      { name: "Bills", color: "#45B7D1" },
+      { name: "Food", iconName: "fast-food", colorName: "orange" },
+      { name: "Transport", iconName: "car", colorName: "teal" },
+      { name: "Bills", iconName: "document-text", colorName: "bluegrey" },
     ];
 
     for (const def of DEFAULT_DEFAULTS) {
       if (slots.length >= 3) break;
-      if (pickedNames.has(def.name.toLowerCase())) continue;
-
-      const existing = Object.values(catsMap).find(
-        (c) =>
-          c.type === "expense" &&
-          !c.deleted &&
-          c.name.toLowerCase() === def.name.toLowerCase() &&
-          !pickedIds.has(c.id)
-      );
-
-      if (existing) {
-        slots.push({
-          id: existing.id,
-          name: existing.name,
-          color: existing.color || def.color,
-          isFallback: false,
-        });
-        pickedIds.add(existing.id);
-        pickedNames.add(existing.name.toLowerCase());
-      } else {
-        slots.push({
-          id: `default-${def.name.toLowerCase()}`,
-          name: def.name,
-          color: def.color,
-          isFallback: true,
-        });
-        pickedNames.add(def.name.toLowerCase());
-      }
+      slots.push({
+        id: `default-${def.name.toLowerCase()}`,
+        name: def.name,
+        colorName: def.colorName,
+        isFallback: true,
+        iconName: def.iconName,
+      });
     }
 
     return slots;
@@ -265,400 +224,142 @@ export const DashboardScreen: React.FC = () => {
       let categoryId = slot.id;
 
       if (slot.isFallback) {
-        const existing = Object.values(categoriesMap).find(
-          (c) =>
-            c.type === "expense" &&
-            !c.deleted &&
-            c.name.toLowerCase() === slot.name.toLowerCase()
-        );
-
-        if (existing) {
-          categoryId = existing.id;
-        } else {
-          const created = await dispatch(
-            addCategory({
-              name: slot.name,
-              type: "expense",
-              color: slot.color || "#FF6B6B",
-            })
-          ).unwrap();
-          categoryId = created.id;
-        }
+        const created = await dispatch(
+          addCategory({
+            name: slot.name,
+            type: "expense",
+            color: "#FF6B6B",
+          })
+        ).unwrap();
+        categoryId = created.id;
       }
 
+      // @ts-ignore
       navigation.navigate("AddTransaction", {
         categoryId,
         autoFocusAmount: true,
       });
     } catch (error) {
       console.error("Failed to quick-add category:", error);
+      // @ts-ignore
       navigation.navigate("AddTransaction", {});
     }
   };
 
   const handleMorePress = () => {
+    // @ts-ignore
     navigation.navigate("AddTransaction", {});
   };
 
-  const handleTransactionPress = (transaction: Transaction) => {
-    navigation.navigate("AddTransaction", { editTransaction: transaction });
-  };
-
-  const handleDuplicateTransaction = async (transaction: Transaction) => {
-    try {
-      await dispatch(
-        addTransaction({
-          description: transaction.description,
-          amount: transaction.amount.toString(),
-          type: transaction.type,
-          categoryId: transaction.categoryId,
-          budgetId: transaction.budgetId,
-          date: new Date(),
-          note: transaction.note || "",
-        })
-      );
-    } catch (error) {
-      console.error("Failed to duplicate transaction:", error);
-    }
-  };
-
-  const handleDeleteTransaction = async (transaction: Transaction) => {
-    try {
-      await dispatch(deleteTransaction(transaction.id));
-    } catch (error) {
-      console.error("Failed to delete transaction:", error);
-    }
-  };
-
   return (
-    <SafeAreaView
-      style={[styles.container, { backgroundColor: colors.background }]}
-      edges={["top", "left", "right"]}>
-      <StatusBar barStyle={isDark ? "light-content" : "dark-content"} />
+    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={["top"]}>
+      <StatusBar barStyle="light-content" />
       <ScrollView
-        style={styles.scrollView}
-        contentContainerStyle={styles.scrollContent}
-        showsVerticalScrollIndicator={false}>
-        {/* ─── Balance Card (Requirement 1) ──────────────────────────── */}
-        <View
-          style={[
-            styles.balanceCard,
-            {
-              backgroundColor: colors.surface,
-              borderRadius: radius.large, // 20px
-              borderWidth: StyleSheet.hairlineWidth,
-              borderColor: colors.outline,
-              padding: spacing.s20,
-              marginTop: spacing.s16,
-            },
-          ]}>
-          <Text
-            style={[
-              typography.labelMedium,
-              { color: colors.onSurfaceVariant, marginBottom: spacing.s4 },
-            ]}>
-            CURRENT PERIOD BALANCE
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={{ padding: spacing.lg, paddingBottom: tabBarHeight }}>
+        
+        {/* Header */}
+        <Text style={[typography.h2, { color: colors.onBackground, marginBottom: spacing.lg }]}>
+          Dashboard
+        </Text>
+
+        {/* Balance Card */}
+        <Card variant="outlined" style={{ padding: spacing.lg, marginBottom: spacing.lg }}>
+          <Text style={[typography.bodyMedium, { color: colors.onSurfaceVariant, marginBottom: spacing.xs }]}>
+            Total Balance
           </Text>
-          <Text style={[typography.displayLarge, { color: colors.onSurface }]}>
+          <Text style={[typography.h1, { color: colors.onSurface, marginBottom: spacing.md }]}>
             {formatCurrency(balance)}
           </Text>
-
-          <View
-            style={[
-              styles.badgeRow,
-              { marginTop: spacing.s16, gap: spacing.s12 },
-            ]}>
-            <Badge
-              label={`Income: ${formatCurrency(totalIncome)}`}
-              variant="success"
-              size="small"
-              icon="arrow-up"
-            />
-            <Badge
-              label={`Expense: ${formatCurrency(totalExpenses)}`}
-              variant="error"
-              size="small"
-              icon="arrow-down"
-            />
+          
+          <View style={{ flexDirection: 'row', gap: spacing.md }}>
+            <Badge label={`Income: ${formatCurrency(totalIncome)}`} role="success" />
+            <Badge label={`Expense: ${formatCurrency(totalExpenses)}`} role="error" />
           </View>
-        </View>
+        </Card>
 
-        {/* ─── Wallets Balance Row (Prompt 2C / 3F) ──────────────────── */}
-        <TouchableOpacity
-          activeOpacity={0.8}
-          onPress={() => navigation.navigate("Wallets")}
-          style={[
-            styles.walletsRowCard,
-            {
-              backgroundColor: colors.surface,
-              borderRadius: radius.large,
-              borderWidth: StyleSheet.hairlineWidth,
-              borderColor: colors.outline,
-              padding: spacing.s16,
-              marginTop: spacing.s16,
-            },
-          ]}>
-          <View style={styles.walletsRowLeft}>
-            <View
-              style={[
-                styles.walletsRowIconBadge,
-                {
-                  backgroundColor: colors.primaryContainer,
-                  borderRadius: radius.full,
-                },
-              ]}>
-              <Ionicons
-                name="wallet"
-                size={20}
-                color={colors.onPrimaryContainer}
-              />
-            </View>
-            <View>
-              <Text
-                style={[
-                  typography.titleMedium,
-                  { color: colors.onSurface, fontWeight: "600" },
-                ]}>
-                Wallets ({wallets.length})
-              </Text>
-              <Text
-                style={[
-                  typography.bodySmall,
-                  { color: colors.textSecondary },
-                ]}>
-                Total: {formatCurrency(totalWalletBalance)}
-              </Text>
-            </View>
-          </View>
-
-          <View style={styles.walletsRowRight}>
-            <Text
-              style={[
-                typography.labelMedium,
-                { color: colors.primary, fontWeight: "600" },
-              ]}>
-              Manage
-            </Text>
-            <Ionicons
-              name="chevron-forward"
-              size={18}
-              color={colors.primary}
-            />
-          </View>
-        </TouchableOpacity>
-
-        {/* ─── Quick Add Row (Requirement 2) ─────────────────────────── */}
-        <View style={[styles.section, { marginTop: spacing.s24 }]}>
-          <Text
-            style={[
-              typography.titleMedium,
-              { color: colors.onSurface, marginBottom: spacing.s12 },
-            ]}>
-            Quick Add Expense
+        {/* Quick Add Row */}
+        <View style={{ marginBottom: spacing.lg }}>
+          <Text style={[typography.h3, { color: colors.onBackground, marginBottom: spacing.md }]}>
+            Quick Add
           </Text>
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={[styles.quickAddRow, { gap: spacing.s12 }]}>
-            {quickAddSlots.map((slot) => {
-              const catObj = categoriesMap[slot.id];
-              const paletteKey = getCategoryColorKey(slot.name);
-              const colorPair =
-                categoryPalette[paletteKey] || categoryPalette.neutral;
-              const chipBg = isDark ? colorPair.dark : colorPair.light;
-              const chipText = isDark ? colorPair.textDark : colorPair.textLight;
-              const iconName = getCategoryIconName(catObj, slot.name);
-
-              return (
-                <TouchableOpacity
-                  key={slot.id}
-                  style={[
-                    styles.quickAddChip,
-                    {
-                      backgroundColor: chipBg,
-                      borderRadius: radius.medium, // 16px
-                      paddingHorizontal: spacing.s16,
-                      paddingVertical: spacing.s8,
-                    },
-                  ]}
-                  onPress={() => handleQuickAddPress(slot)}
-                  activeOpacity={0.7}>
-                  <View
-                    style={[
-                      styles.iconCircle28,
-                      {
-                        backgroundColor: isDark
-                          ? "rgba(255,255,255,0.12)"
-                          : "rgba(0,0,0,0.06)",
-                        marginRight: spacing.s8,
-                      },
-                    ]}>
-                    <Ionicons name={iconName} size={14} color={chipText} />
-                  </View>
-                  <Text style={[typography.labelMedium, { color: chipText }]}>
-                    {slot.name}
-                  </Text>
-                </TouchableOpacity>
-              );
-            })}
-
-            {/* Static "+ more" slot (system dynamic accent) */}
-            <TouchableOpacity
-              style={[
-                styles.quickAddChip,
-                {
-                  backgroundColor: colors.primaryContainer,
-                  borderRadius: radius.medium, // 16px
-                  paddingHorizontal: spacing.s16,
-                  paddingVertical: spacing.s8,
-                },
-              ]}
-              onPress={handleMorePress}
-              activeOpacity={0.7}>
-              <View
-                style={[
-                  styles.iconCircle28,
-                  {
-                    backgroundColor: colors.primary + "25",
-                    marginRight: spacing.s8,
-                  },
-                ]}>
-                <Ionicons
-                  name="add"
-                  size={16}
-                  color={colors.onPrimaryContainer}
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+            {quickAddSlots.map((slot) => (
+              <TouchableOpacity
+                key={slot.id}
+                style={{ alignItems: 'center', width: 70 }}
+                onPress={() => handleQuickAddPress(slot)}>
+                <IconChip 
+                  iconName={slot.iconName as any} 
+                  colorName={slot.colorName as any || 'bluegrey'} 
+                  size={56} 
                 />
+                <Text style={[typography.bodySmall, { color: colors.onBackground, marginTop: spacing.xs, textAlign: 'center' }]} numberOfLines={1}>
+                  {slot.name}
+                </Text>
+              </TouchableOpacity>
+            ))}
+            
+            {/* + More chip */}
+            <TouchableOpacity
+              style={{ alignItems: 'center', width: 70 }}
+              onPress={handleMorePress}>
+              <View style={[styles.moreChip, { backgroundColor: colors.tertiary, borderRadius: radius.pill }]}>
+                <Ionicons name="add" size={32} color={colors.onTertiary} />
               </View>
-              <Text
-                style={[
-                  typography.labelMedium,
-                  { color: colors.onPrimaryContainer },
-                ]}>
-                more
+              <Text style={[typography.bodySmall, { color: colors.onBackground, marginTop: spacing.xs, textAlign: 'center' }]} numberOfLines={1}>
+                More
               </Text>
             </TouchableOpacity>
-          </ScrollView>
+          </View>
         </View>
 
-        {/* ─── Recent Transactions (Requirement 3) ───────────────────── */}
-        <View style={[styles.section, { marginTop: spacing.s24 }]}>
-          <View style={styles.sectionHeaderRow}>
-            <Text style={[typography.titleMedium, { color: colors.onSurface }]}>
+        {/* Recent Transactions Preview */}
+        <View style={{ marginBottom: spacing.lg }}>
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: spacing.md }}>
+            <Text style={[typography.h3, { color: colors.onBackground }]}>
               Recent Transactions
             </Text>
-            <TouchableOpacity
-              onPress={() => navigation.navigate("TransactionList")}
-              activeOpacity={0.7}>
-              <Text style={[typography.labelMedium, { color: colors.primary }]}>
-                View all
-              </Text>
+            <TouchableOpacity onPress={() => navigation.navigate("TransactionList" as any)}>
+              <Text style={[typography.bodyMedium, { color: colors.primary }]}>View All</Text>
             </TouchableOpacity>
           </View>
 
-          <View
-            style={[
-              styles.recentCardContainer,
-              {
-                backgroundColor: colors.surface,
-                borderRadius: radius.large, // 20px
-                borderWidth: StyleSheet.hairlineWidth,
-                borderColor: colors.outline,
-                overflow: "hidden",
-                marginTop: spacing.s8,
-              },
-            ]}>
-            {recentTransactions.length > 0 ? (
-              recentTransactions.map((tx, idx) => {
-                const catObj = categoriesMap[tx.categoryId];
-                const paletteKey = getCategoryColorKey(catObj?.name || "");
-                const colorPair =
-                  categoryPalette[paletteKey] || categoryPalette.neutral;
-                const iconBg = isDark ? colorPair.dark : colorPair.light;
-                const iconColor = isDark
-                  ? colorPair.textDark
-                  : colorPair.textLight;
-                const iconName = getCategoryIconName(catObj);
-                const isIncome = tx.type === "income";
-                const amountColor = isIncome
-                  ? colors.success
-                  : tx.type === "expense"
-                    ? colors.error
-                    : colors.onSurface;
-
-                return (
-                  <TouchableOpacity
-                    key={tx.id}
-                    style={[
-                      styles.recentRow,
-                      {
-                        paddingHorizontal: spacing.s16,
-                        paddingVertical: spacing.s12,
-                        borderTopWidth:
-                          idx > 0 ? StyleSheet.hairlineWidth : 0,
-                        borderTopColor: colors.outline,
-                      },
-                    ]}
-                    onPress={() => handleTransactionPress(tx)}
-                    activeOpacity={0.7}>
-                    <View
-                      style={[
-                        styles.iconCircle36,
-                        {
-                          backgroundColor: iconBg,
-                          marginRight: spacing.s12,
-                        },
-                      ]}>
-                      <Ionicons
-                        name={iconName}
-                        size={18}
-                        color={iconColor}
-                      />
-                    </View>
-
-                    <View style={styles.rowContent}>
-                      <Text
-                        style={[
-                          typography.bodyMedium,
-                          { color: colors.onSurface },
-                        ]}
-                        numberOfLines={1}>
-                        {tx.description}
-                      </Text>
-                      <Text
-                        style={[
-                          typography.caption,
-                          { color: colors.onSurfaceVariant, marginTop: 2 },
-                        ]}>
-                        {catObj ? catObj.name + " • " : ""}
-                        {formatDate(tx.date)}
-                      </Text>
-                    </View>
-
-                    <Text
-                      style={[typography.labelLarge, { color: amountColor }]}>
-                      {isIncome ? "+" : "-"}
-                      {formatCurrency(tx.amount)}
+          <View style={{ gap: spacing.sm }}>
+            {recentTransactions.map((tx) => {
+              const category = tx.categoryId ? categoriesMap[tx.categoryId] : null;
+              const isIncome = tx.type === "income";
+              
+              return (
+                <ListRow
+                  key={tx.id}
+                  title={category?.name || "Uncategorized"}
+                  subtitle={tx.description || formatDate(tx.date)}
+                  leading={
+                    <IconChip
+                      iconName={((category as any)?.icon as any) || "help"}
+                      colorName="bluegrey"
+                      size={40}
+                    />
+                  }
+                  trailing={
+                    <Text style={[typography.label, { color: isIncome ? colors.tertiary : colors.error }]}>
+                      {isIncome ? "+" : "-"}{formatCurrency(tx.amount)}
                     </Text>
-                  </TouchableOpacity>
-                );
-              })
-            ) : (
-              <View
-                style={[
-                  styles.emptyStateContainer,
-                  { padding: spacing.s24 },
-                ]}>
-                <Text
-                  style={[
-                    typography.bodyMedium,
-                    { color: colors.onSurfaceVariant, textAlign: "center" },
-                  ]}>
-                  No recent transactions in this period.
-                </Text>
-              </View>
+                  }
+                  onPress={() => navigation.navigate("AddTransaction" as any, { editTransaction: tx })}
+                />
+              );
+            })}
+            
+            {recentTransactions.length === 0 && (
+              <Text style={[typography.bodyMedium, { color: colors.onSurfaceVariant, textAlign: 'center', marginVertical: spacing.xl }]}>
+                No recent transactions
+              </Text>
             )}
           </View>
         </View>
+
       </ScrollView>
     </SafeAreaView>
   );
@@ -668,85 +369,10 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
-  scrollView: {
-    flex: 1,
-  },
-  scrollContent: {
-    paddingBottom: 100,
-  },
-  balanceCard: {
-    marginHorizontal: 16,
-  },
-  badgeRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    flexWrap: "wrap",
-  },
-  section: {
-    paddingHorizontal: 16,
-  },
-  sectionHeaderRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-  },
-  quickAddRow: {
-    flexDirection: "row",
-    alignItems: "center",
-  },
-  quickAddChip: {
-    flexDirection: "row",
-    alignItems: "center",
-  },
-  iconCircle28: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  recentCardContainer: {
-    width: "100%",
-  },
-  recentRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-  },
-  iconCircle36: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  rowContent: {
-    flex: 1,
-    marginRight: 12,
-  },
-  emptyStateContainer: {
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  walletsRowCard: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-  },
-  walletsRowLeft: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 12,
-  },
-  walletsRowIconBadge: {
-    width: 40,
-    height: 40,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  walletsRowRight: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 4,
+  moreChip: {
+    width: 56,
+    height: 56,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 });

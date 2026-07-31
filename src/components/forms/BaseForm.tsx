@@ -11,7 +11,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { THEME } from '../../constants/theme';
+import { useAppTheme } from '../ui/ThemeProvider';
 
 export interface BaseFormProps {
   // Header configuration
@@ -49,45 +49,47 @@ export const BaseForm: React.FC<BaseFormProps> = ({
   children,
   showDeleteButton = false,
 }) => {
+  const { colors, typography, spacing, radius } = useAppTheme();
+
   return (
-    <SafeAreaView style={styles.container} edges={['left', 'right', 'bottom']}>
+    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['left', 'right', 'bottom']}>
       <KeyboardAvoidingView
         style={styles.keyboardAvoid}
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       >
         {/* Header */}
-        <View style={styles.header}>
+        <View style={[styles.header, { paddingHorizontal: spacing.md, paddingVertical: spacing.sm, borderBottomColor: colors.outlineVariant, backgroundColor: colors.surface }]}>
           {/* Cancel Button */}
-          <TouchableOpacity onPress={onCancel} style={styles.cancelButton}>
+          <TouchableOpacity onPress={onCancel} style={[styles.cancelButton, { padding: spacing.xs, borderRadius: radius.md }]}>
             <Ionicons
               name="close"
               size={24}
-              color={THEME.colors.textSecondary}
+              color={colors.onSurfaceVariant}
             />
           </TouchableOpacity>
           
           {/* Title */}
-          <Text style={styles.title}>{title}</Text>
+          <Text style={[typography.h3, styles.title, { color: colors.onSurface }]}>{title}</Text>
           
           {/* Action Buttons */}
-          <View style={styles.headerActions}>
+          <View style={[styles.headerActions, { gap: spacing.sm }]}>
             {/* Delete Button (Edit Mode Only) */}
             {showDeleteButton && isEditMode && onDelete && (
               <TouchableOpacity
                 onPress={onDelete}
-                style={styles.deleteButton}
+                style={[styles.deleteButton, { padding: spacing.xs, borderRadius: radius.md }]}
                 disabled={isDeleteLoading}
               >
                 {isDeleteLoading ? (
                   <ActivityIndicator
                     size="small"
-                    color={THEME.colors.error}
+                    color={colors.error}
                   />
                 ) : (
                   <Ionicons
                     name="trash-outline"
                     size={20}
-                    color={THEME.colors.error}
+                    color={colors.error}
                   />
                 )}
               </TouchableOpacity>
@@ -98,6 +100,7 @@ export const BaseForm: React.FC<BaseFormProps> = ({
               onPress={onSave}
               style={[
                 styles.saveButton,
+                { backgroundColor: colors.primary, paddingHorizontal: spacing.md, paddingVertical: spacing.sm, borderRadius: radius.md },
                 isLoading && styles.saveButtonDisabled,
               ]}
               disabled={isLoading}
@@ -105,10 +108,10 @@ export const BaseForm: React.FC<BaseFormProps> = ({
               {isLoading ? (
                 <ActivityIndicator
                   size="small"
-                  color={THEME.colors.textInverse}
+                  color={colors.onPrimary}
                 />
               ) : (
-                <Text style={styles.saveButtonText}>
+                <Text style={[typography.bodyLarge, styles.saveButtonText, { color: colors.onPrimary }]}>
                   {isEditMode ? 'Save' : 'Create'}
                 </Text>
               )}
@@ -118,7 +121,7 @@ export const BaseForm: React.FC<BaseFormProps> = ({
         
         {/* Form Content */}
         <ScrollView
-          style={styles.content}
+          style={[styles.content, { padding: spacing.md }]}
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
         >
@@ -132,7 +135,6 @@ export const BaseForm: React.FC<BaseFormProps> = ({
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: THEME.colors.background,
   },
   keyboardAvoid: {
     flex: 1,
@@ -141,37 +143,21 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: THEME.spacing.md,
-    paddingVertical: THEME.spacing.sm,
     borderBottomWidth: 1,
-    borderBottomColor: THEME.colors.border,
-    backgroundColor: THEME.colors.surface,
   },
   cancelButton: {
-    padding: THEME.spacing.xs,
-    borderRadius: THEME.borderRadius.md,
   },
   title: {
-    fontSize: THEME.typography.fontSize.lg,
-    fontWeight: THEME.typography.fontWeight.semibold as any,
-    color: THEME.colors.textPrimary,
     flex: 1,
     textAlign: 'center',
   },
   headerActions: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: THEME.spacing.sm,
   },
   deleteButton: {
-    padding: THEME.spacing.xs,
-    borderRadius: THEME.borderRadius.md,
   },
   saveButton: {
-    backgroundColor: THEME.colors.primary,
-    paddingHorizontal: THEME.spacing.md,
-    paddingVertical: THEME.spacing.sm,
-    borderRadius: THEME.borderRadius.md,
     minWidth: 80,
     alignItems: 'center',
   },
@@ -179,12 +165,8 @@ const styles = StyleSheet.create({
     opacity: 0.6,
   },
   saveButtonText: {
-    color: THEME.colors.textInverse,
-    fontSize: THEME.typography.fontSize.base,
-    fontWeight: THEME.typography.fontWeight.semibold as any,
   },
   content: {
     flex: 1,
-    padding: THEME.spacing.md,
   },
 });

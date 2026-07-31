@@ -17,10 +17,11 @@ import {
 import { useDispatch, useSelector } from "react-redux";
 import { RootState } from "../store";
 import { signIn, signUp, sendPasswordReset } from "../store/slices/authSlice";
-import { UI } from "../constants";
+import { Button } from "../components/ui";
 import { Ionicons } from "@expo/vector-icons";
 import { AppDispatch } from "../store";
-import { LinearGradient } from "expo-linear-gradient";
+
+import { useAppTheme } from "../components/ui/ThemeProvider";
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
@@ -36,6 +37,7 @@ import Animated, {
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get("window");
 
 export const SignInScreen: React.FC = () => {
+  const { colors } = useAppTheme();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -190,22 +192,22 @@ export const SignInScreen: React.FC = () => {
       ).duration(500)}>
       <View
         style={[
-          styles.inputCard,
-          focusedField === fieldId && styles.inputCardFocused,
+          styles(colors).inputCard,
+          focusedField === fieldId && styles(colors).inputCardFocused,
         ]}>
-        <View style={styles.inputIconBox}>
+        <View style={styles(colors).inputIconBox}>
           <Ionicons
             name={icon as any}
             size={18}
             color={
               focusedField === fieldId
-                ? UI.COLORS.PRIMARY
-                : "rgba(255,255,255,0.3)"
+                ? colors.primary
+                : colors.onSurfaceVariant
             }
           />
         </View>
         <TextInput
-          style={styles.input}
+          style={styles(colors).input}
           placeholder={placeholder}
           placeholderTextColor="rgba(255,255,255,0.25)"
           value={value}
@@ -220,7 +222,7 @@ export const SignInScreen: React.FC = () => {
         {options.togglePassword && (
           <TouchableOpacity
             onPress={() => setShowPassword(!showPassword)}
-            style={styles.eyeButton}>
+            style={styles(colors).eyeButton}>
             <Ionicons
               name={showPassword ? "eye-outline" : "eye-off-outline"}
               size={18}
@@ -233,43 +235,35 @@ export const SignInScreen: React.FC = () => {
   );
 
   return (
-    <View style={styles.container}>
-      {/* Background gradient */}
-      <LinearGradient
-        colors={["#0A0A1E", "#12122E", "#1A0A2E", "#0F0F23"]}
-        locations={[0, 0.3, 0.6, 1]}
-        style={StyleSheet.absoluteFillObject}
-      />
+    <View style={[styles(colors).container, { backgroundColor: colors.background }]}>
 
       {/* Floating orbs */}
-      <Animated.View style={[styles.orb, styles.orb1, orb1Style]} />
-      <Animated.View style={[styles.orb, styles.orb2, orb2Style]} />
-      <Animated.View style={[styles.orb, styles.orb3, orb3Style]} />
+      <Animated.View style={[styles(colors).orb, styles(colors).orb1, orb1Style]} />
+      <Animated.View style={[styles(colors).orb, styles(colors).orb2, orb2Style]} />
+      <Animated.View style={[styles(colors).orb, styles(colors).orb3, orb3Style]} />
 
       <KeyboardAvoidingView
-        style={styles.keyboardView}
+        style={styles(colors).keyboardView}
         behavior={Platform.OS === "ios" ? "padding" : "height"}>
         <ScrollView
-          contentContainerStyle={styles.scrollContent}
+          contentContainerStyle={styles(colors).scrollContent}
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}>
           {/* Logo & Header */}
           <Animated.View
             entering={FadeInDown.delay(100).duration(600)}
-            style={styles.header}>
-            <View style={styles.logoContainer}>
-              <LinearGradient
-                colors={["#8B5CF6", "#6D28D9", "#5B21B6"]}
-                style={styles.logoGradient}>
+            style={styles(colors).header}>
+            <View style={styles(colors).logoContainer}>
+              <View style={[styles(colors).logoGradient, { backgroundColor: colors.primaryContainer }]} >
                 <Image
                   source={require("../../assets/splash-icon.png")}
-                  style={styles.logoImage}
+                  style={styles(colors).logoImage}
                   resizeMode="contain"
                 />
-              </LinearGradient>
+              </View>
             </View>
-            <Text style={styles.appName}>Financy</Text>
-            <Text style={styles.tagline}>
+            <Text style={styles(colors).appName}>Financy</Text>
+            <Text style={styles(colors).tagline}>
               {isSignUp
                 ? "Create your account to get started"
                 : "Welcome back! Manage your finances"}
@@ -279,9 +273,9 @@ export const SignInScreen: React.FC = () => {
           {/* Form Card */}
           <Animated.View
             entering={FadeInUp.delay(300).duration(600)}
-            style={styles.formCard}>
+            style={styles(colors).formCard}>
             {/* Title inside card */}
-            <Text style={styles.formTitle}>
+            <Text style={styles(colors).formTitle}>
               {isSignUp ? "Sign Up" : "Sign In"}
             </Text>
 
@@ -325,46 +319,28 @@ export const SignInScreen: React.FC = () => {
 
             {/* Error */}
             {error && (
-              <View style={styles.errorBanner}>
+              <View style={styles(colors).errorBanner}>
                 <Ionicons name="alert-circle" size={16} color="#EF4444" />
-                <Text style={styles.errorText}>{error}</Text>
+                <Text style={styles(colors).errorText}>{error}</Text>
               </View>
             )}
 
             {/* Submit Button */}
-            <TouchableOpacity
-              onPress={isSignUp ? handleSignUp : handleSignIn}
-              disabled={loading}
-              activeOpacity={0.85}
-              style={styles.submitButton}>
-              <LinearGradient
-                colors={
-                  loading
-                    ? ["#4B4B6B", "#3B3B5B"]
-                    : ["#8B5CF6", "#7C3AED", "#6D28D9"]
-                }
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 1 }}
-                style={styles.submitGradient}>
-                {loading ? (
-                  <ActivityIndicator color="#fff" size="small" />
-                ) : (
-                  <>
-                    <Text style={styles.submitText}>
-                      {isSignUp ? "Create Account" : "Sign In"}
-                    </Text>
-                    <Ionicons name="arrow-forward" size={20} color="#fff" />
-                  </>
-                )}
-              </LinearGradient>
-            </TouchableOpacity>
+              <Button
+                title={isSignUp ? "Create Account" : "Sign In"}
+                onPress={isSignUp ? handleSignUp : handleSignIn}
+                loading={loading}
+                icon="arrow-forward"
+                iconPosition="right"
+                style={styles(colors).submitButton}
+              />
 
             {/* Forgot Password */}
             {!isSignUp && (
               <TouchableOpacity
-                style={styles.forgotButton}
+                style={styles(colors).forgotButton}
                 onPress={handleForgotPassword}>
-                <Text style={styles.forgotText}>Forgot Password?</Text>
+                <Text style={styles(colors).forgotText}>Forgot Password?</Text>
               </TouchableOpacity>
             )}
           </Animated.View>
@@ -372,12 +348,12 @@ export const SignInScreen: React.FC = () => {
           {/* Switch Auth Mode */}
           <Animated.View
             entering={FadeInUp.delay(700).duration(500)}
-            style={styles.switchRow}>
-            <Text style={styles.switchText}>
+            style={styles(colors).switchRow}>
+            <Text style={styles(colors).switchText}>
               {isSignUp ? "Already have an account?" : "Don't have an account?"}
             </Text>
             <TouchableOpacity onPress={toggleAuthMode}>
-              <Text style={styles.switchAction}>
+              <Text style={styles(colors).switchAction}>
                 {isSignUp ? "Sign In" : "Sign Up"}
               </Text>
             </TouchableOpacity>
@@ -388,10 +364,9 @@ export const SignInScreen: React.FC = () => {
   );
 };
 
-const styles = StyleSheet.create({
+const styles = (colors: any) => StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#0A0A1E",
   },
   keyboardView: {
     flex: 1,
@@ -460,7 +435,7 @@ const styles = StyleSheet.create({
   appName: {
     fontSize: 34,
     fontWeight: "800",
-    color: "#fff",
+    color: colors.onSurface,
     letterSpacing: -0.5,
   },
   tagline: {
@@ -482,7 +457,7 @@ const styles = StyleSheet.create({
   formTitle: {
     fontSize: 20,
     fontWeight: "700",
-    color: "#fff",
+    color: colors.onSurface,
     marginBottom: 20,
   },
 
@@ -514,7 +489,7 @@ const styles = StyleSheet.create({
   input: {
     flex: 1,
     fontSize: 15,
-    color: "#fff",
+    color: colors.onSurface,
   },
   eyeButton: {
     padding: 6,
@@ -555,7 +530,7 @@ const styles = StyleSheet.create({
   submitText: {
     fontSize: 16,
     fontWeight: "700",
-    color: "#fff",
+    color: colors.onSurface,
     letterSpacing: 0.3,
   },
 
@@ -566,7 +541,7 @@ const styles = StyleSheet.create({
   },
   forgotText: {
     fontSize: 13,
-    color: "rgba(139, 92, 246, 0.8)",
+    color: colors.primary,
     fontWeight: "500",
   },
 
@@ -585,6 +560,6 @@ const styles = StyleSheet.create({
   switchAction: {
     fontSize: 14,
     fontWeight: "700",
-    color: "#8B5CF6",
+    color: colors.primary,
   },
 });

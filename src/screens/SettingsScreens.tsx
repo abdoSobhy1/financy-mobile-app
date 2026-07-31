@@ -11,6 +11,7 @@ import {
   StatusBar,
   Share,
 } from "react-native";
+import { useAppTheme } from "../components/ui/ThemeProvider";
 import { LinearGradient } from "expo-linear-gradient";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
@@ -25,6 +26,9 @@ import {
   CategoryCreationModal,
   FirebaseCleanupModal,
   SyncStatus,
+  useTabBarHeight,
+  ListRow,
+  Card,
 } from "../components/ui";
 import { runSyncApplyTest, runAllSyncApplyTests } from "../debug/runSyncTest";
 import { UI } from "../constants";
@@ -74,45 +78,22 @@ const SettingRow = ({
   onPress?: () => void;
   rightElement?: React.ReactNode;
   destructive?: boolean;
-}) => (
-  <TouchableOpacity
-    style={styles.row}
-    onPress={onPress}
-    disabled={!onPress}
-    activeOpacity={0.7}>
-    <LinearGradient
-      colors={
-        iconGradient ||
-        (destructive
-          ? ["#FF6B6B", "#EE5A24"]
-          : [UI.COLORS.PRIMARY, UI.COLORS.PRIMARY_DARK])
+}) => {
+  const { colors } = useAppTheme();
+  return (
+    <ListRow
+      title={title}
+      subtitle={subtitle}
+      onPress={onPress}
+      leading={
+        <View style={[{ width: 32, height: 32, borderRadius: 16, alignItems: "center", justifyContent: "center" }, { backgroundColor: destructive ? colors.errorContainer : colors.primaryContainer }]}>
+          <Ionicons name={icon as any} size={16} color={destructive ? colors.error : colors.primary} />
+        </View>
       }
-      style={styles.rowIcon}
-      start={{ x: 0, y: 0 }}
-      end={{ x: 1, y: 1 }}>
-      <Ionicons name={icon as any} size={16} color="#fff" />
-    </LinearGradient>
-    <View style={styles.rowText}>
-      <Text
-        style={[styles.rowTitle, destructive && { color: "#FF6B6B" }]}
-        numberOfLines={1}>
-        {title}
-      </Text>
-      {subtitle ? (
-        <Text style={styles.rowSubtitle} numberOfLines={2}>
-          {subtitle}
-        </Text>
-      ) : null}
-    </View>
-    {rightElement || (
-      <Ionicons
-        name="chevron-forward"
-        size={16}
-        color="rgba(255,255,255,0.2)"
-      />
-    )}
-  </TouchableOpacity>
-);
+      trailing={rightElement || <Ionicons name="chevron-forward" size={16} color={colors.onSurfaceVariant} />}
+    />
+  );
+};
 
 const GlassCard = ({
   children,
@@ -120,12 +101,14 @@ const GlassCard = ({
 }: {
   children: React.ReactNode;
   style?: any;
-}) => <View style={[styles.card, style]}>{children}</View>;
+}) => <Card variant="outlined" style={StyleSheet.flatten([{ padding: 0, overflow: "hidden", marginBottom: 16 }, style])}>{children}</Card>;
 
 // ═══════════════════════════════════════════════════════════════════
 // MAIN SCREEN
 // ═══════════════════════════════════════════════════════════════════
 export const SettingsScreen: React.FC = () => {
+  const { colors, typography, spacing, radius } = useAppTheme();
+  const tabBarHeight = useTabBarHeight();
   const dispatch = useDispatch<AppDispatch>();
   const navigation = useNavigation<SettingsScreenNavigationProp>();
   const { items: categories } = useSelector(
@@ -464,11 +447,8 @@ export const SettingsScreen: React.FC = () => {
   // RENDER
   // ═══════════════════════════════════════════════════════════════
   return (
-    <LinearGradient
-      colors={["#0a0a2e", "#1a1040", "#0d0d30"]}
-      style={{ flex: 1 }}>
-      <SafeAreaView style={{ flex: 1 }}>
-        <StatusBar
+    <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }} edges={["top"]}>
+      <StatusBar
           barStyle="light-content"
           backgroundColor="transparent"
           translucent
@@ -476,7 +456,7 @@ export const SettingsScreen: React.FC = () => {
 
         <ScrollView
           style={{ flex: 1 }}
-          contentContainerStyle={styles.scroll}
+          contentContainerStyle={[styles.scroll, { paddingBottom: tabBarHeight }]}
           showsVerticalScrollIndicator={false}>
           {/* ── Header ──────────────────────────────────── */}
           <Text style={styles.screenTitle}>Settings</Text>
@@ -934,8 +914,7 @@ export const SettingsScreen: React.FC = () => {
           visible={showFirebaseCleanup}
           onClose={() => setShowFirebaseCleanup(false)}
         />
-      </SafeAreaView>
-    </LinearGradient>
+    </SafeAreaView>
   );
 };
 

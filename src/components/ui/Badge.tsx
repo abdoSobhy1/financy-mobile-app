@@ -1,101 +1,82 @@
-import React from "react";
-import { View, Text, StyleSheet, ViewStyle, TextStyle } from "react-native";
-import { Ionicons } from "@expo/vector-icons";
-import { useAppTheme } from "../../theme";
+import React from 'react';
+import { View, Text, StyleSheet, ViewStyle, TextStyle } from 'react-native';
+import { useAppTheme } from './ThemeProvider';
 
-export type BadgeVariant =
-  | "primary"
-  | "surfaceVariant"
-  | "error"
-  | "success"
-  | "outline"
-  | "category";
+type ColorRole = 'primary' | 'secondary' | 'tertiary' | 'error' | 'success' | 'warning' | 'surfaceVariant';
 
-export interface BadgeProps {
+interface BadgeProps {
   label: string;
-  variant?: BadgeVariant;
-  categoryKey?: string; // used when variant === "category"
-  size?: "small" | "medium";
-  icon?: keyof typeof Ionicons.glyphMap;
+  role?: ColorRole;
+  size?: 'small' | 'medium' | 'large';
   style?: ViewStyle;
-  textStyle?: TextStyle;
 }
 
-export const Badge: React.FC<BadgeProps> = ({
-  label,
-  variant = "surfaceVariant",
-  categoryKey = "neutral",
-  size = "medium",
-  icon,
-  style,
-  textStyle,
+export const Badge: React.FC<BadgeProps> = ({ 
+  label, 
+  role = 'primary',
+  size = 'small',
+  style 
 }) => {
-  const { colors, isDark, categoryPalette, typography, spacing, radius } =
-    useAppTheme();
+  const { colors, typography, radius, spacing } = useAppTheme();
 
-  let bg = colors.surfaceVariant;
-  let fg = colors.onSurfaceVariant;
+  let bgColor = colors.primary;
+  let textColor = colors.onPrimary;
 
-  switch (variant) {
-    case "primary":
-      bg = colors.primaryContainer;
-      fg = colors.onPrimaryContainer;
+  switch (role) {
+    case 'primary':
+      bgColor = colors.primaryContainer;
+      textColor = colors.onPrimaryContainer;
       break;
-    case "error":
-      bg = isDark ? "#4C0519" : "#FFE4E6";
-      fg = isDark ? "#FDA4AF" : "#BE123C";
+    case 'secondary':
+      bgColor = colors.secondaryContainer;
+      textColor = colors.onSecondaryContainer;
       break;
-    case "success":
-      bg = isDark ? "#064E3B" : "#D1FAE5";
-      fg = isDark ? "#6EE7B7" : "#047857";
+    case 'error':
+      bgColor = colors.errorContainer;
+      textColor = colors.onErrorContainer;
       break;
-    case "outline":
-      bg = "transparent";
-      fg = colors.onSurface;
+    case 'success':
+      // Map success to tertiary since M3 doesn't have a default success role
+      bgColor = colors.tertiaryContainer;
+      textColor = colors.onTertiaryContainer;
       break;
-    case "category": {
-      const pair = categoryPalette[categoryKey] || categoryPalette.neutral;
-      bg = isDark ? pair.dark : pair.light;
-      fg = isDark ? pair.textDark : pair.textLight;
+    case 'surfaceVariant':
+      bgColor = colors.surfaceVariant;
+      textColor = colors.onSurfaceVariant;
       break;
-    }
-    case "surfaceVariant":
     default:
-      bg = colors.surfaceVariant;
-      fg = colors.onSurfaceVariant;
-      break;
+      bgColor = colors.primaryContainer;
+      textColor = colors.onPrimaryContainer;
   }
 
-  const isSmall = size === "small";
+  let textStyle: TextStyle = typography.bodySmall;
+  let paddingHorizontal = spacing.sm;
+  let paddingVertical = 2;
+
+  if (size === 'medium') {
+    textStyle = typography.bodyMedium;
+    paddingHorizontal = spacing.md;
+    paddingVertical = spacing.xs;
+  } else if (size === 'large') {
+    textStyle = typography.bodyLarge;
+    paddingHorizontal = spacing.lg;
+    paddingVertical = spacing.sm;
+  }
 
   return (
-    <View
+    <View 
       style={[
-        styles.container,
-        {
-          backgroundColor: bg,
+        styles.container, 
+        { 
+          backgroundColor: bgColor, 
           borderRadius: radius.pill,
-          paddingHorizontal: isSmall ? spacing.s8 : spacing.s12,
-          paddingVertical: isSmall ? spacing.s4 : spacing.s4,
-          borderWidth: variant === "outline" ? 1 : 0,
-          borderColor: variant === "outline" ? colors.outline : undefined,
+          paddingHorizontal,
+          paddingVertical,
         },
-        style,
-      ]}>
-      {icon && (
-        <Ionicons
-          name={icon}
-          size={isSmall ? 12 : 14}
-          color={fg}
-          style={styles.icon}
-        />
-      )}
-      <Text
-        style={[
-          isSmall ? typography.labelSmall : typography.labelMedium,
-          { color: fg },
-          textStyle,
-        ]}>
+        style
+      ]}
+    >
+      <Text style={[textStyle, { color: textColor }]}>
         {label}
       </Text>
     </View>
@@ -104,11 +85,8 @@ export const Badge: React.FC<BadgeProps> = ({
 
 const styles = StyleSheet.create({
   container: {
-    flexDirection: "row",
-    alignItems: "center",
-    alignSelf: "flex-start",
-  },
-  icon: {
-    marginRight: 4,
+    alignSelf: 'flex-start',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 });

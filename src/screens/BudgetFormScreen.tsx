@@ -2,6 +2,8 @@ import React from "react";
 import { useRoute, useNavigation, RouteProp } from "@react-navigation/native";
 import { StackNavigationProp } from "@react-navigation/stack";
 import { useSelector } from "react-redux";
+import { useAppTheme } from "../components/ui/ThemeProvider";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { RootState } from "../store";
 import { BudgetForm } from "../components/forms/budget/BudgetForm";
 import { BudgetStackParamList } from "../types";
@@ -25,7 +27,13 @@ const BudgetFormScreen: React.FC = () => {
     navigation.goBack();
   };
 
-  return <BudgetForm budget={budget} onSuccess={handleSuccess} onCancel={handleCancel} />;
+  const { colors } = useAppTheme();
+
+  return (
+    <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }} edges={["top"]}>
+      <BudgetForm budget={budget} onSuccess={handleSuccess} onCancel={handleCancel} />
+    </SafeAreaView>
+  );
 };
 
 export default BudgetFormScreen;

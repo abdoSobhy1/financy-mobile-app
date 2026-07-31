@@ -9,6 +9,7 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { UI } from "../../constants";
+import { useAppTheme } from "./ThemeProvider";
 
 interface ScreenProps {
   children: React.ReactNode;
@@ -27,6 +28,8 @@ const Screen: React.FC<ScreenProps> = ({
   showsVerticalScrollIndicator = false,
   keyboardShouldPersistTaps = "handled",
 }) => {
+  const { colors } = useAppTheme();
+
   const content = scrollable ? (
     <ScrollView
       style={[styles.scrollView, style]}
@@ -40,10 +43,10 @@ const Screen: React.FC<ScreenProps> = ({
   );
 
   return (
-    <SafeAreaView style={styles.safeArea}>
+    <SafeAreaView style={[styles.safeArea, { backgroundColor: colors.background }]}>
       <StatusBar
         barStyle="light-content"
-        backgroundColor={UI.COLORS.BACKGROUND}
+        backgroundColor={colors.background}
       />
       {content}
     </SafeAreaView>
@@ -53,7 +56,6 @@ const Screen: React.FC<ScreenProps> = ({
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: UI.COLORS.BACKGROUND,
   },
 
   container: {

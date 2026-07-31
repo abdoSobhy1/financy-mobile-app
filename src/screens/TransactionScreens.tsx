@@ -9,7 +9,7 @@ import {
   Platform,
   StatusBar,
 } from "react-native";
-import { LinearGradient } from "expo-linear-gradient";
+import { useAppTheme } from "../components/ui/ThemeProvider";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { useDispatch, useSelector } from "react-redux";
@@ -67,6 +67,7 @@ interface DateRange {
 }
 
 export const TransactionListScreen: React.FC = () => {
+  const { colors, typography, spacing, radius } = useAppTheme();
   const dispatch = useDispatch<AppDispatch>();
   const navigation = useNavigation<TransactionListNavigationProp>();
   const { showAlert, AlertComponent } = useCustomAlert();
@@ -425,11 +426,8 @@ export const TransactionListScreen: React.FC = () => {
   );
 
   return (
-    <LinearGradient
-      colors={["#0a0a2e", "#1a1040", "#0d0d30"]}
-      style={{ flex: 1 }}>
-      <SafeAreaView style={{ flex: 1, padding: UI.SPACING.MD }}>
-        <StatusBar
+    <SafeAreaView style={{ flex: 1, padding: UI.SPACING.MD, backgroundColor: colors.background }} edges={["top"]}>
+      <StatusBar
           barStyle="light-content"
           backgroundColor="transparent"
           translucent
@@ -524,8 +522,7 @@ export const TransactionListScreen: React.FC = () => {
             }}
           />
         )}
-      </SafeAreaView>
-    </LinearGradient>
+    </SafeAreaView>
   );
 };
 

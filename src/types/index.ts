@@ -216,6 +216,7 @@ export type TransactionStackParamList = {
   TransactionList: undefined;
   AddTransaction: { editTransaction?: Transaction };
   EditTransaction: { transactionId: string };
+  Dashboard: undefined
 };
 
 export type BudgetStackParamList = {

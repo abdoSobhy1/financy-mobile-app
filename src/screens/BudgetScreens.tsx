@@ -9,8 +9,10 @@ import {
   StatusBar,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { useAppTheme } from "../components/ui/ThemeProvider";
 import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons } from "@expo/vector-icons";
+import { useTabBarHeight } from "../components/ui";
 import { useDispatch, useSelector } from "react-redux";
 import { useNavigation } from "@react-navigation/native";
 import { StackNavigationProp } from "@react-navigation/stack";
@@ -28,6 +30,8 @@ import {
   useCustomAlert,
   useToast,
   FloatingActionButton,
+  Card,
+  Badge,
 } from "../components/ui";
 import { UI } from "../constants";
 import { formatCurrency, percentage } from "../utils";
@@ -41,8 +45,10 @@ type BudgetListNavigationProp = StackNavigationProp<
 >;
 
 export const BudgetListScreen: React.FC = () => {
+  const { colors, typography, spacing, radius } = useAppTheme();
   const dispatch = useDispatch<AppDispatch>();
   const navigation = useNavigation<BudgetListNavigationProp>();
+  const tabBarHeight = useTabBarHeight();
   const { showAlert, AlertComponent } = useCustomAlert();
   const { showSuccess, showError } = useToast();
   const [refreshing, setRefreshing] = useState(false);
@@ -181,7 +187,7 @@ export const BudgetListScreen: React.FC = () => {
 
   // ── Skeleton Card ────────────────────────────────────────────
   const renderSkeletonCard = () => (
-    <View style={styles.budgetCard}>
+    <Card variant="outlined" style={{ marginBottom: spacing.md, padding: spacing.lg }}>
       <View style={styles.budgetHeader}>
         <View style={styles.budgetNameContainer}>
           <Shimmer
@@ -234,7 +240,7 @@ export const BudgetListScreen: React.FC = () => {
           />
         </View>
       </View>
-    </View>
+    </Card>
   );
 
   // ── Budget Card ──────────────────────────────────────────────
@@ -251,48 +257,49 @@ export const BudgetListScreen: React.FC = () => {
 
     // Choose progress bar gradient based on state
     const progressColors: [string, string] = isOverBudget
-      ? ["#FF6B6B", "#EE4444"]
-      : [UI.COLORS.PRIMARY, UI.COLORS.PRIMARY_DARK];
+      ? [colors.error, colors.error]
+      : [colors.primary, colors.primary];
 
     return (
-      <View style={styles.budgetCard}>
+      <Card variant="outlined" style={{ marginBottom: spacing.md, padding: spacing.lg }}>
         {/* Header row */}
         <View style={styles.budgetHeader}>
           <View style={styles.budgetNameContainer}>
-            <View style={styles.iconCircle}>
+            <View style={[styles.iconCircle, { backgroundColor: colors.primaryContainer }]}>
               <Ionicons
                 name="wallet"
                 size={16}
-                color={UI.COLORS.PRIMARY_LIGHT}
+                color={colors.onPrimaryContainer}
               />
             </View>
-            <Text style={styles.budgetName}>{budget.name}</Text>
+            <Text style={[styles.budgetName, { color: colors.onSurface }]}>{budget.name}</Text>
           </View>
           <View style={styles.budgetHeaderRight}>
             <Text
               style={[
                 styles.budgetAmount,
-                isOverBudget && styles.overBudgetAmount,
+                { color: colors.primary },
+                isOverBudget && { color: colors.error },
               ]}>
               {formatCurrency(budget.amount)}
             </Text>
             <View style={styles.budgetActions}>
               <TouchableOpacity
-                style={styles.actionButton}
+                style={[styles.actionButton, { backgroundColor: colors.surfaceVariant }]}
                 onPress={() => handleEditBudget(budget)}>
                 <Ionicons
                   name="pencil"
                   size={14}
-                  color={UI.COLORS.TEXT_MUTED}
+                  color={colors.onSurfaceVariant}
                 />
               </TouchableOpacity>
               <TouchableOpacity
-                style={styles.actionButton}
+                style={[styles.actionButton, { backgroundColor: colors.errorContainer }]}
                 onPress={() => handleDeleteBudget(budget)}>
                 <Ionicons
                   name="trash"
                   size={14}
-                  color="rgba(255,107,107,0.7)"
+                  color={colors.onErrorContainer}
                 />
               </TouchableOpacity>
             </View>
@@ -301,7 +308,7 @@ export const BudgetListScreen: React.FC = () => {
 
         {/* Progress bar */}
         <View style={styles.progressContainer}>
-          <View style={styles.progressBar}>
+          <View style={[styles.progressBar, { backgroundColor: colors.surfaceVariant }]}>
             <LinearGradient
               colors={progressColors}
               start={{ x: 0, y: 0 }}
@@ -315,7 +322,8 @@ export const BudgetListScreen: React.FC = () => {
           <Text
             style={[
               styles.progressText,
-              isOverBudget && styles.overBudgetText,
+              { color: colors.onSurfaceVariant },
+              isOverBudget && { color: colors.error },
             ]}>
             {progressPercentage}%
           </Text>
@@ -324,21 +332,23 @@ export const BudgetListScreen: React.FC = () => {
         {/* Details row */}
         <View style={styles.budgetDetails}>
           <View style={styles.detailItem}>
-            <Text style={styles.detailLabel}>Spent</Text>
+            <Text style={[styles.detailLabel, { color: colors.onSurfaceVariant }]}>Spent</Text>
             <Text
               style={[
                 styles.detailValue,
-                isOverBudget && styles.overBudgetText,
+                { color: colors.onSurface },
+                isOverBudget && { color: colors.error },
               ]}>
               {formatCurrency(spent)}
             </Text>
           </View>
           <View style={[styles.detailItem, { alignItems: "flex-end" }]}>
-            <Text style={styles.detailLabel}>Remaining</Text>
+            <Text style={[styles.detailLabel, { color: colors.onSurfaceVariant }]}>Remaining</Text>
             <Text
               style={[
                 styles.detailValue,
-                remaining < 0 && styles.overBudgetText,
+                { color: colors.onSurface },
+                remaining < 0 && { color: colors.error },
               ]}>
               {formatCurrency(remaining)}
             </Text>
@@ -347,27 +357,27 @@ export const BudgetListScreen: React.FC = () => {
 
         {/* Over-budget warning */}
         {isOverBudget && (
-          <View style={styles.warningContainer}>
+          <View style={[styles.warningContainer, { backgroundColor: colors.errorContainer, borderColor: colors.error }]}>
             <Ionicons
               name="warning"
               size={14}
-              color="#FF6B6B"
+              color={colors.onErrorContainer}
               style={{ marginRight: 6 }}
             />
-            <Text style={styles.warningText}>
+            <Text style={[styles.warningText, { color: colors.onErrorContainer }]}>
               Over budget by {formatCurrency(Math.abs(remaining))}
             </Text>
           </View>
         )}
-      </View>
+      </Card>
     );
   };
 
   // ── Header ───────────────────────────────────────────────────
   const renderHeader = () => (
     <View style={styles.header}>
-      <Text style={styles.title}>Budgets</Text>
-      <Text style={styles.subtitle}>
+      <Text style={[styles.title, { color: colors.onBackground }]}>Budgets</Text>
+      <Text style={[styles.subtitle, { color: colors.onSurfaceVariant }]}>
         Track your spending and stay on target
       </Text>
     </View>
@@ -376,34 +386,27 @@ export const BudgetListScreen: React.FC = () => {
   // ── Empty State ──────────────────────────────────────────────
   const renderEmptyState = () => (
     <View style={styles.emptyState}>
-      <View style={styles.emptyIconCircle}>
-        <Ionicons name="wallet-outline" size={40} color={UI.COLORS.PRIMARY} />
+      <View style={[styles.emptyIconCircle, { backgroundColor: colors.primaryContainer }]}>
+        <Ionicons name="wallet-outline" size={40} color={colors.primary} />
       </View>
-      <Text style={styles.emptyTitle}>No Budgets Yet</Text>
-      <Text style={styles.emptyMessage}>
+      <Text style={[styles.emptyTitle, { color: colors.onBackground }]}>No Budgets Yet</Text>
+      <Text style={[styles.emptyMessage, { color: colors.onSurfaceVariant }]}>
         Create budgets to track your spending categories and stay on target
       </Text>
       <TouchableOpacity
         activeOpacity={0.8}
         onPress={() => navigation.navigate("BudgetForm", {})}>
-        <LinearGradient
-          colors={[UI.COLORS.PRIMARY, UI.COLORS.PRIMARY_DARK]}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-          style={styles.emptyButton}>
-          <Ionicons name="add-circle" size={18} color="#fff" />
-          <Text style={styles.emptyButtonText}>Create Your First Budget</Text>
-        </LinearGradient>
+        <View style={[styles.emptyButton, { backgroundColor: colors.primary }]}>
+          <Ionicons name="add-circle" size={18} color={colors.onPrimary} />
+          <Text style={[styles.emptyButtonText, { color: colors.onPrimary }]}>Create Your First Budget</Text>
+        </View>
       </TouchableOpacity>
     </View>
   );
 
   return (
-    <LinearGradient
-      colors={["#0a0a2e", "#1a1040", "#0d0d30"]}
-      style={styles.gradient}>
-      <SafeAreaView style={styles.safeArea}>
-        <StatusBar
+    <SafeAreaView style={[styles.safeArea, { backgroundColor: colors.background }]} edges={["top"]}>
+      <StatusBar
           barStyle="light-content"
           backgroundColor="transparent"
           translucent
@@ -414,7 +417,7 @@ export const BudgetListScreen: React.FC = () => {
           renderItem={renderBudget}
           ListHeaderComponent={renderHeader}
           ListEmptyComponent={!loading ? renderEmptyState : null}
-          contentContainerStyle={styles.container}
+          contentContainerStyle={[styles.container, { paddingBottom: tabBarHeight }]}
           refreshControl={
             <RefreshControl
               refreshing={refreshing}
@@ -430,10 +433,9 @@ export const BudgetListScreen: React.FC = () => {
         <FloatingActionButton
           icon="add"
           onPress={() => navigation.navigate("BudgetForm", {})}
-          style={{ position: "absolute", bottom: 80, right: 20 }}
+          style={{ position: "absolute", bottom: tabBarHeight + spacing.md, right: spacing.lg }}
         />
       </SafeAreaView>
-    </LinearGradient>
   );
 };
 
@@ -447,7 +449,6 @@ const styles = StyleSheet.create({
   container: {
     flexGrow: 1,
     padding: 20,
-    paddingBottom: 120,
   },
 
   // ── Header ─────────────────────────────────────────

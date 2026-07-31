@@ -1,43 +1,57 @@
 import React from "react";
 import { View, StyleSheet, ViewStyle, TouchableOpacity } from "react-native";
-import { UI } from "../../constants";
+import { useAppTheme } from "./ThemeProvider";
 
 interface CardProps {
   children: React.ReactNode;
   style?: ViewStyle;
   onPress?: () => void;
-  variant?: "default" | "blur" | "elevated";
+  variant?: "default" | "elevated" | "outlined";
   padding?: "none" | "small" | "medium" | "large";
 }
 
 const Card: React.FC<CardProps> = ({ children, style, onPress, variant = "default", padding = "medium" }) => {
-  const getVariantStyle = (v: string) => {
-    switch (v) {
-      case "blur":
-        return styles.blur;
-      case "elevated":
-        return styles.elevated;
-      default:
-        return styles.default;
-    }
-  };
+  const { colors, radius, spacing } = useAppTheme();
 
-  const getPaddingStyle = (p: string) => {
-    switch (p) {
-      case "none":
-        return styles.paddingNone;
-      case "small":
-        return styles.paddingSmall;
-      case "medium":
-        return styles.paddingMedium;
-      case "large":
-        return styles.paddingLarge;
-      default:
-        return styles.paddingMedium;
-    }
-  };
+  let bgColor = colors.surface;
+  let borderColor = "transparent";
+  let borderWidth = 0;
+  let shadowStyle = {};
 
-  const cardStyle = [styles.card, getVariantStyle(variant), getPaddingStyle(padding), style];
+  if (variant === "outlined") {
+    borderColor = colors.outlineVariant;
+    borderWidth = 1;
+  } else if (variant === "elevated") {
+    bgColor = colors.surface;
+    shadowStyle = {
+      shadowColor: "#000",
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.1,
+      shadowRadius: 4,
+      elevation: 4,
+    };
+  } else {
+    // default
+    bgColor = colors.surfaceVariant;
+  }
+
+  let paddingValue = spacing.md;
+  if (padding === "none") paddingValue = 0;
+  if (padding === "small") paddingValue = spacing.sm;
+  if (padding === "large") paddingValue = spacing.lg;
+
+  const cardStyle = [
+    styles.card,
+    {
+      backgroundColor: bgColor,
+      borderColor,
+      borderWidth,
+      padding: paddingValue,
+      borderRadius: radius.md,
+    },
+    shadowStyle,
+    style,
+  ];
 
   if (onPress) {
     return (
@@ -52,45 +66,7 @@ const Card: React.FC<CardProps> = ({ children, style, onPress, variant = "defaul
 
 const styles = StyleSheet.create({
   card: {
-    borderRadius: UI.CARD_RADIUS,
     overflow: "hidden",
-  },
-
-  // Variants
-  default: {
-    backgroundColor: UI.COLORS.CARD,
-    borderWidth: 1,
-    borderColor: UI.COLORS.BORDER,
-  },
-  blur: {
-    backgroundColor: UI.COLORS.CARD_BLUR,
-    borderWidth: 1,
-    borderColor: "rgba(255, 255, 255, 0.1)",
-  },
-  elevated: {
-    backgroundColor: UI.COLORS.CARD,
-    shadowColor: "#000",
-    shadowOffset: {
-      width: 0,
-      height: 4,
-    },
-    shadowOpacity: 0.15,
-    shadowRadius: 8,
-    elevation: 8,
-  },
-
-  // Padding variants
-  paddingNone: {
-    padding: 0,
-  },
-  paddingSmall: {
-    padding: UI.SPACING.SM,
-  },
-  paddingMedium: {
-    padding: UI.SPACING.MD,
-  },
-  paddingLarge: {
-    padding: UI.SPACING.LG,
   },
 });
 

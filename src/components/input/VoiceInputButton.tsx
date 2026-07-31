@@ -20,6 +20,8 @@ import {
 import { UI } from "../../constants";
 import { ParsedTransaction } from "../../types";
 import { parseVoiceInput } from "../../services/voiceParser";
+import { Button } from "../ui";
+import { useAppTheme } from "../ui/ThemeProvider";
 import { LinearGradient } from "expo-linear-gradient";
 import NetInfo from "@react-native-community/netinfo";
 import BottomSheet, {
@@ -48,13 +50,18 @@ interface VoiceInputButtonProps {
   onResult: (parsed: ParsedTransaction[]) => void;
   size?: number;
   style?: any;
+  variant?: "fab" | "button";
+  title?: string;
 }
 
 export const VoiceInputButton: React.FC<VoiceInputButtonProps> = ({
   onResult,
   size = 56,
   style,
+  variant = "fab",
+  title = "Voice Input",
 }) => {
+  const { colors } = useAppTheme();
   const [isListening, setIsListening] = useState(false);
   const isListeningRef = useRef(false);
   const [transcript, setTranscript] = useState("");
@@ -366,19 +373,28 @@ export const VoiceInputButton: React.FC<VoiceInputButtonProps> = ({
 
   return (
     <>
-      {/* FAB Button */}
-      <Animated.View style={[styles.fabWrapper, style, fabAnimStyle]}>
-        <TouchableOpacity
+      {variant === "button" ? (
+        <Button
+          title={title}
           onPress={handlePress}
-          style={[
-            styles.fab,
-            {
-              width: size,
-              height: size,
-              borderRadius: size / 2,
-            },
-          ]}
-          activeOpacity={0.7}>
+          icon="mic"
+          iconPosition="left"
+          style={style}
+          variant="primary"
+        />
+      ) : (
+        <Animated.View style={[styles.fabWrapper, style, fabAnimStyle]}>
+          <TouchableOpacity
+            onPress={handlePress}
+            style={[
+              styles.fab,
+              {
+                width: size,
+                height: size,
+                borderRadius: size / 2,
+              },
+            ]}
+            activeOpacity={0.7}>
           <LinearGradient
             colors={[
               UI.COLORS.PRIMARY_LIGHT,
@@ -399,6 +415,7 @@ export const VoiceInputButton: React.FC<VoiceInputButtonProps> = ({
           </LinearGradient>
         </TouchableOpacity>
       </Animated.View>
+      )}
 
       {/* Recording Bottom Sheet */}
       <BottomSheetModal

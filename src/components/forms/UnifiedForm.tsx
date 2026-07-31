@@ -14,6 +14,8 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons } from "@expo/vector-icons";
 import { UI } from "../../constants";
+import { useAppTheme } from "../ui/ThemeProvider";
+import Button from "../ui/Button";
 
 interface UnifiedFormProps {
   title: string;
@@ -40,11 +42,10 @@ export const UnifiedForm: React.FC<UnifiedFormProps> = ({
   isValid = true,
   showDeleteButton = false,
 }) => {
+  const { colors } = useAppTheme();
+
   return (
-    <LinearGradient
-      colors={[UI.COLORS.BACKGROUND, "#0F0F2D", UI.COLORS.BACKGROUND]}
-      locations={[0, 0.3, 1]}
-      style={styles.gradient}>
+    <View style={[styles.gradient, { backgroundColor: colors.background }]}>
       <SafeAreaView style={styles.safeArea}>
         <StatusBar
           barStyle="light-content"
@@ -55,20 +56,20 @@ export const UnifiedForm: React.FC<UnifiedFormProps> = ({
         {/* ── Nav bar ───────────────────────────── */}
         <View style={styles.navBar}>
           <TouchableOpacity
-            style={styles.navBtn}
+            style={[styles.navBtn, { backgroundColor: colors.surfaceVariant, borderColor: colors.surfaceVariant }]}
             onPress={onCancel}
             disabled={loading}>
-            <Ionicons name="close" size={18} color={UI.COLORS.TEXT_PRIMARY} />
+            <Ionicons name="close" size={18} color={colors.onSurfaceVariant} />
           </TouchableOpacity>
 
-          <Text style={styles.navTitle}>{title}</Text>
+          <Text style={[styles.navTitle, { color: colors.onBackground }]}>{title}</Text>
 
           {showDeleteButton && onDelete ? (
             <TouchableOpacity
-              style={[styles.navBtn, styles.deleteBtn]}
+              style={[styles.navBtn, { backgroundColor: colors.errorContainer, borderColor: colors.errorContainer }]}
               onPress={onDelete}
               disabled={loading}>
-              <Ionicons name="trash-outline" size={18} color="#FF6B6B" />
+              <Ionicons name="trash-outline" size={18} color={colors.onErrorContainer} />
             </TouchableOpacity>
           ) : (
             <View style={styles.navPlaceholder} />
@@ -88,40 +89,30 @@ export const UnifiedForm: React.FC<UnifiedFormProps> = ({
         </KeyboardAvoidingView>
 
         {/* ── Bottom action bar ───────────────────── */}
-        <View style={styles.bottomBar}>
-          <TouchableOpacity
-            style={styles.cancelBtn}
-            onPress={onCancel}
-            disabled={loading}>
-            <Text style={styles.cancelBtnText}>{cancelLabel}</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            activeOpacity={0.8}
-            onPress={onSubmit}
-            disabled={loading || !isValid}>
-            <LinearGradient
-              colors={
-                !isValid || loading
-                  ? ["rgba(108,92,231,0.3)", "rgba(108,92,231,0.3)"]
-                  : [UI.COLORS.PRIMARY, UI.COLORS.PRIMARY_DARK]
-              }
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-              style={styles.submitBtn}>
-              {loading ? (
-                <ActivityIndicator size="small" color="#fff" />
-              ) : (
-                <>
-                  <Ionicons name="checkmark-circle" size={18} color="#fff" />
-                  <Text style={styles.submitBtnText}>{submitLabel}</Text>
-                </>
-              )}
-            </LinearGradient>
-          </TouchableOpacity>
+        <View style={[styles.bottomBar, { backgroundColor: colors.surface, borderTopColor: colors.surfaceVariant }]}>
+          <View style={{ flex: 1, paddingRight: 6 }}>
+            <Button
+              title={cancelLabel}
+              onPress={onCancel}
+              variant="secondary"
+              disabled={loading}
+              style={{ flex: 1 }}
+            />
+          </View>
+          <View style={{ flex: 1.5, paddingLeft: 6 }}>
+            <Button
+              title={submitLabel}
+              onPress={onSubmit}
+              variant="primary"
+              disabled={loading || !isValid}
+              loading={loading}
+              icon="checkmark-circle"
+              style={{ flex: 1 }}
+            />
+          </View>
         </View>
       </SafeAreaView>
-    </LinearGradient>
+    </View>
   );
 };
 

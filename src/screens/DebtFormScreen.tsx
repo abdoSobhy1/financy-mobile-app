@@ -2,6 +2,8 @@ import React, { useEffect, useState } from "react";
 import { useRoute, useNavigation, RouteProp } from "@react-navigation/native";
 import { StackNavigationProp } from "@react-navigation/stack";
 import { useSelector } from "react-redux";
+import { useAppTheme } from "../components/ui/ThemeProvider";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { RootState } from "../store";
 import { DebtForm } from "../components/forms/debt/DebtForm";
 import { DebtStackParamList } from "../navigation/DebtStackNavigator";
@@ -25,7 +27,13 @@ const DebtFormScreen: React.FC = () => {
     navigation.goBack();
   };
 
-  return <DebtForm debt={debt} onSuccess={handleSuccess} onCancel={handleCancel} />;
+  const { colors } = useAppTheme();
+
+  return (
+    <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }} edges={["top"]}>
+      <DebtForm debt={debt} onSuccess={handleSuccess} onCancel={handleCancel} />
+    </SafeAreaView>
+  );
 };
 
 export default DebtFormScreen;

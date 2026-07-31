@@ -26,8 +26,8 @@ export interface SyncLogEntry {
 class OfflineFirstSync {
   private db = DatabaseManager.getInstance();
   private isProcessing = false;
-  private retryTimeout: NodeJS.Timeout | null = null;
-  private periodicSyncInterval: NodeJS.Timeout | null = null;
+  private retryTimeout: ReturnType<typeof setTimeout> | null = null;
+  private periodicSyncInterval: ReturnType<typeof setInterval> | null = null;
   private isInitialized = false;
   private deviceId: string;
 
@@ -45,7 +45,6 @@ class OfflineFirstSync {
     transactions: COLLECTIONS.TRANSACTIONS,
     categories: COLLECTIONS.CATEGORIES,
     budgets: COLLECTIONS.BUDGETS,
-    bills: COLLECTIONS.BILLS,
     debts: COLLECTIONS.DEBTS,
     debt_payments: COLLECTIONS.DEBT_PAYMENTS,
     settings: COLLECTIONS.SETTINGS,

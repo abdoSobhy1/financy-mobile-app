@@ -1,10 +1,9 @@
 import React, { useState } from "react";
 import { View, Text, StyleSheet, ScrollView, Alert } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { Card, Button, useToast } from "../ui";
-import { UI } from "../../constants";
+import { Card, Button, useToast, Modal } from "../ui";
 import { firebaseCleanup, CleanupReport, CleanupOptions } from "../../utils/firebaseCleanup";
-import { formatCurrency } from "../../utils";
+import { useAppTheme } from "./ThemeProvider";
 
 interface FirebaseCleanupModalProps {
   visible: boolean;
@@ -16,6 +15,7 @@ export const FirebaseCleanupModal: React.FC<FirebaseCleanupModalProps> = ({ visi
   const [isCleaning, setIsCleaning] = useState(false);
   const [lastReport, setLastReport] = useState<CleanupReport | null>(null);
   const { showSuccess, showError } = useToast();
+  const { colors, typography, spacing, radius } = useAppTheme();
 
   const analyzeFirebaseData = async () => {
     setIsAnalyzing(true);
@@ -93,23 +93,16 @@ export const FirebaseCleanupModal: React.FC<FirebaseCleanupModalProps> = ({ visi
   if (!visible) return null;
 
   return (
-    <View style={styles.overlay}>
-      <Card style={styles.modal}>
-        <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
-          {/* Header */}
-          <View style={styles.header}>
-            <Text style={styles.title}>Firebase Data Cleanup</Text>
-            <Button title="" variant="secondary" onPress={onClose} style={styles.closeButton} icon="close" />
-          </View>
-
+    <Modal visible={visible} onClose={onClose} title="Firebase Data Cleanup">
+        <ScrollView style={{ paddingHorizontal: spacing.lg }} showsVerticalScrollIndicator={false}>
           {/* Description */}
-          <Text style={styles.description}>
+          <Text style={[typography.bodyMedium, { color: colors.onSurfaceVariant, marginBottom: spacing.lg }]}>
             Clean up your Firebase data by removing duplicates, unused fields, and orphaned records. This can help reduce storage costs and improve
             sync performance.
           </Text>
 
           {/* Action Buttons */}
-          <View style={styles.actionSection}>
+          <View style={{ marginBottom: spacing.lg }}>
             <Button
               title="Analyze Data"
               variant="secondary"
@@ -117,12 +110,12 @@ export const FirebaseCleanupModal: React.FC<FirebaseCleanupModalProps> = ({ visi
               disabled={isAnalyzing || isCleaning}
               icon="search"
               iconPosition="left"
-              style={styles.actionButton}
+              style={{ marginBottom: spacing.xs }}
             />
-            <Text style={styles.actionDescription}>Scan your Firebase data to identify cleanup opportunities without making any changes.</Text>
+            <Text style={[typography.label, { color: colors.onSurfaceVariant, marginLeft: spacing.sm }]}>Scan your Firebase data to identify cleanup opportunities without making any changes.</Text>
           </View>
 
-          <View style={styles.actionSection}>
+          <View style={{ marginBottom: spacing.lg }}>
             <Button
               title="Quick Cleanup"
               variant="primary"
@@ -130,12 +123,12 @@ export const FirebaseCleanupModal: React.FC<FirebaseCleanupModalProps> = ({ visi
               disabled={isAnalyzing || isCleaning}
               icon="brush"
               iconPosition="left"
-              style={styles.actionButton}
+              style={{ marginBottom: spacing.xs }}
             />
-            <Text style={styles.actionDescription}>Remove unused fields and optimize field names. Safe and reversible.</Text>
+            <Text style={[typography.label, { color: colors.onSurfaceVariant, marginLeft: spacing.sm }]}>Remove unused fields and optimize field names. Safe and reversible.</Text>
           </View>
 
-          <View style={styles.actionSection}>
+          <View style={{ marginBottom: spacing.lg }}>
             <Button
               title="Full Cleanup"
               variant="danger"
@@ -143,63 +136,63 @@ export const FirebaseCleanupModal: React.FC<FirebaseCleanupModalProps> = ({ visi
               disabled={isAnalyzing || isCleaning}
               icon="trash"
               iconPosition="left"
-              style={styles.actionButton}
+              style={{ marginBottom: spacing.xs }}
             />
-            <Text style={styles.actionDescription}>Remove duplicates, orphaned records, and unused fields. ⚠️ This cannot be undone!</Text>
+            <Text style={[typography.label, { color: colors.onSurfaceVariant, marginLeft: spacing.sm }]}>Remove duplicates, orphaned records, and unused fields. ⚠️ This cannot be undone!</Text>
           </View>
 
           {/* Loading States */}
           {(isAnalyzing || isCleaning) && (
-            <View style={styles.loadingSection}>
-              <Text style={styles.loadingText}>{isAnalyzing ? "Analyzing Firebase data..." : "Cleaning up Firebase data..."}</Text>
+            <View style={{ alignItems: "center", padding: spacing.lg, backgroundColor: colors.surfaceVariant, borderRadius: radius.md, marginBottom: spacing.lg }}>
+              <Text style={[typography.bodyMedium, { color: colors.onSurface }]}>{isAnalyzing ? "Analyzing Firebase data..." : "Cleaning up Firebase data..."}</Text>
             </View>
           )}
 
           {/* Results */}
           {lastReport && (
-            <View style={styles.reportSection}>
-              <Text style={styles.reportTitle}>
+            <View style={{ backgroundColor: colors.surfaceVariant, padding: spacing.md, borderRadius: radius.md, marginTop: spacing.md, marginBottom: spacing.lg * 2 }}>
+              <Text style={[typography.h3, { color: colors.onSurface, marginBottom: spacing.md }]}>
                 {lastReport.duplicatesRemoved === 0 && lastReport.fieldsCleanedUp === 0 ? "Analysis Report" : "Cleanup Report"}
               </Text>
 
-              <View style={styles.reportStats}>
-                <View style={styles.statItem}>
-                  <Ionicons name="document" size={20} color={UI.COLORS.TEXT_SECONDARY} />
-                  <Text style={styles.statLabel}>Total Documents</Text>
-                  <Text style={styles.statValue}>{lastReport.totalDocuments}</Text>
+              <View style={{ gap: spacing.sm }}>
+                <View style={{ flexDirection: "row", alignItems: "center", paddingVertical: spacing.xs }}>
+                  <Ionicons name="document" size={20} color={colors.onSurfaceVariant} />
+                  <Text style={[typography.bodyMedium, { flex: 1, color: colors.onSurfaceVariant, marginLeft: spacing.sm }]}>Total Documents</Text>
+                  <Text style={[typography.bodyMedium, { fontWeight: "600", color: colors.onSurface }]}>{lastReport.totalDocuments}</Text>
                 </View>
 
-                <View style={styles.statItem}>
-                  <Ionicons name="copy" size={20} color={UI.COLORS.WARNING} />
-                  <Text style={styles.statLabel}>Duplicates Removed</Text>
-                  <Text style={styles.statValue}>{lastReport.duplicatesRemoved}</Text>
+                <View style={{ flexDirection: "row", alignItems: "center", paddingVertical: spacing.xs }}>
+                  <Ionicons name="copy" size={20} color={colors.tertiary} />
+                  <Text style={[typography.bodyMedium, { flex: 1, color: colors.onSurfaceVariant, marginLeft: spacing.sm }]}>Duplicates Removed</Text>
+                  <Text style={[typography.bodyMedium, { fontWeight: "600", color: colors.onSurface }]}>{lastReport.duplicatesRemoved}</Text>
                 </View>
 
-                <View style={styles.statItem}>
-                  <Ionicons name="brush" size={20} color={UI.COLORS.SUCCESS} />
-                  <Text style={styles.statLabel}>Fields Cleaned</Text>
-                  <Text style={styles.statValue}>{lastReport.fieldsCleanedUp}</Text>
+                <View style={{ flexDirection: "row", alignItems: "center", paddingVertical: spacing.xs }}>
+                  <Ionicons name="brush" size={20} color={colors.primary} />
+                  <Text style={[typography.bodyMedium, { flex: 1, color: colors.onSurfaceVariant, marginLeft: spacing.sm }]}>Fields Cleaned</Text>
+                  <Text style={[typography.bodyMedium, { fontWeight: "600", color: colors.onSurface }]}>{lastReport.fieldsCleanedUp}</Text>
                 </View>
 
-                <View style={styles.statItem}>
-                  <Ionicons name="unlink" size={20} color={UI.COLORS.ERROR} />
-                  <Text style={styles.statLabel}>Orphaned Records</Text>
-                  <Text style={styles.statValue}>{lastReport.orphanedDocuments}</Text>
+                <View style={{ flexDirection: "row", alignItems: "center", paddingVertical: spacing.xs }}>
+                  <Ionicons name="unlink" size={20} color={colors.error} />
+                  <Text style={[typography.bodyMedium, { flex: 1, color: colors.onSurfaceVariant, marginLeft: spacing.sm }]}>Orphaned Records</Text>
+                  <Text style={[typography.bodyMedium, { fontWeight: "600", color: colors.onSurface }]}>{lastReport.orphanedDocuments}</Text>
                 </View>
               </View>
 
               {/* Collection Details */}
               {Object.keys(lastReport.collectionStats).length > 0 && (
-                <View style={styles.collectionsSection}>
-                  <Text style={styles.collectionsTitle}>Collection Details</Text>
+                <View style={{ marginTop: spacing.lg }}>
+                  <Text style={[typography.bodyMedium, { fontWeight: "600", color: colors.onSurface, marginBottom: spacing.sm }]}>Collection Details</Text>
                   {Object.entries(lastReport.collectionStats).map(([collection, stats]) => (
-                    <View key={collection} style={styles.collectionItem}>
-                      <Text style={styles.collectionName}>{collection}</Text>
-                      <View style={styles.collectionStats}>
-                        <Text style={styles.collectionStat}>{stats.documents} docs</Text>
-                        {stats.duplicates > 0 && <Text style={[styles.collectionStat, styles.warningText]}>{stats.duplicates} dupes</Text>}
-                        {stats.fieldsRemoved > 0 && <Text style={[styles.collectionStat, styles.successText]}>{stats.fieldsRemoved} cleaned</Text>}
-                        {stats.orphaned > 0 && <Text style={[styles.collectionStat, styles.errorText]}>{stats.orphaned} orphaned</Text>}
+                    <View key={collection} style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingVertical: spacing.xs, borderBottomWidth: 1, borderBottomColor: colors.outlineVariant }}>
+                      <Text style={[typography.bodyMedium, { color: colors.onSurface, fontWeight: "500" }]}>{collection}</Text>
+                      <View style={{ flexDirection: "row", gap: spacing.sm }}>
+                        <Text style={[typography.label, { color: colors.onSurfaceVariant }]}>{stats.documents} docs</Text>
+                        {stats.duplicates > 0 && <Text style={[typography.label, { color: colors.tertiary }]}>{stats.duplicates} dupes</Text>}
+                        {stats.fieldsRemoved > 0 && <Text style={[typography.label, { color: colors.primary }]}>{stats.fieldsRemoved} cleaned</Text>}
+                        {stats.orphaned > 0 && <Text style={[typography.label, { color: colors.error }]}>{stats.orphaned} orphaned</Text>}
                       </View>
                     </View>
                   ))}
@@ -208,172 +201,19 @@ export const FirebaseCleanupModal: React.FC<FirebaseCleanupModalProps> = ({ visi
 
               {/* Errors */}
               {lastReport.errors.length > 0 && (
-                <View style={styles.errorsSection}>
-                  <Text style={styles.errorsTitle}>Errors ({lastReport.errors.length})</Text>
+                <View style={{ marginTop: spacing.lg, padding: spacing.sm, backgroundColor: colors.error + "20", borderRadius: radius.md }}>
+                  <Text style={[typography.bodyMedium, { fontWeight: "600", color: colors.error, marginBottom: spacing.xs }]}>Errors ({lastReport.errors.length})</Text>
                   {lastReport.errors.slice(0, 3).map((error, index) => (
-                    <Text key={index} style={styles.errorText}>
+                    <Text key={index} style={[typography.bodySmall, { color: colors.error }]}>
                       • {error}
                     </Text>
                   ))}
-                  {lastReport.errors.length > 3 && <Text style={styles.errorText}>... and {lastReport.errors.length - 3} more</Text>}
+                  {lastReport.errors.length > 3 && <Text style={[typography.bodySmall, { color: colors.error }]}>... and {lastReport.errors.length - 3} more</Text>}
                 </View>
               )}
             </View>
           )}
         </ScrollView>
-      </Card>
-    </View>
+    </Modal>
   );
 };
-
-const styles = StyleSheet.create({
-  overlay: {
-    position: "absolute",
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    backgroundColor: "rgba(0, 0, 0, 0.5)",
-    justifyContent: "center",
-    alignItems: "center",
-    zIndex: 1000,
-  },
-  modal: {
-    width: "90%",
-    maxWidth: 500,
-    maxHeight: "80%",
-    margin: 0,
-  },
-  content: {
-    padding: UI.SPACING.LG,
-  },
-  header: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: UI.SPACING.MD,
-  },
-  title: {
-    fontSize: 20,
-    fontWeight: "bold",
-    color: UI.COLORS.TEXT_PRIMARY,
-    flex: 1,
-  },
-  closeButton: {
-    width: 40,
-    height: 40,
-    padding: 0,
-    marginLeft: UI.SPACING.MD,
-  },
-  description: {
-    fontSize: 14,
-    color: UI.COLORS.TEXT_SECONDARY,
-    marginBottom: UI.SPACING.LG,
-    lineHeight: 20,
-  },
-  actionSection: {
-    marginBottom: UI.SPACING.LG,
-  },
-  actionButton: {
-    marginBottom: UI.SPACING.XS,
-  },
-  actionDescription: {
-    fontSize: 12,
-    color: UI.COLORS.TEXT_SECONDARY,
-    marginLeft: UI.SPACING.SM,
-  },
-  loadingSection: {
-    alignItems: "center",
-    padding: UI.SPACING.LG,
-    backgroundColor: UI.COLORS.SURFACE + "80",
-    borderRadius: UI.CARD_RADIUS,
-    marginBottom: UI.SPACING.LG,
-  },
-  loadingText: {
-    fontSize: 14,
-    color: UI.COLORS.TEXT_PRIMARY,
-    textAlign: "center",
-  },
-  reportSection: {
-    backgroundColor: UI.COLORS.SURFACE,
-    padding: UI.SPACING.MD,
-    borderRadius: UI.CARD_RADIUS,
-    marginTop: UI.SPACING.MD,
-  },
-  reportTitle: {
-    fontSize: 16,
-    fontWeight: "600",
-    color: UI.COLORS.TEXT_PRIMARY,
-    marginBottom: UI.SPACING.MD,
-  },
-  reportStats: {
-    gap: UI.SPACING.SM,
-  },
-  statItem: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingVertical: UI.SPACING.XS,
-  },
-  statLabel: {
-    flex: 1,
-    fontSize: 14,
-    color: UI.COLORS.TEXT_SECONDARY,
-    marginLeft: UI.SPACING.SM,
-  },
-  statValue: {
-    fontSize: 14,
-    fontWeight: "600",
-    color: UI.COLORS.TEXT_PRIMARY,
-  },
-  collectionsSection: {
-    marginTop: UI.SPACING.LG,
-  },
-  collectionsTitle: {
-    fontSize: 14,
-    fontWeight: "600",
-    color: UI.COLORS.TEXT_PRIMARY,
-    marginBottom: UI.SPACING.SM,
-  },
-  collectionItem: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    paddingVertical: UI.SPACING.XS,
-    borderBottomWidth: 1,
-    borderBottomColor: UI.COLORS.BORDER,
-  },
-  collectionName: {
-    fontSize: 14,
-    color: UI.COLORS.TEXT_PRIMARY,
-    fontWeight: "500",
-  },
-  collectionStats: {
-    flexDirection: "row",
-    gap: UI.SPACING.SM,
-  },
-  collectionStat: {
-    fontSize: 12,
-    color: UI.COLORS.TEXT_SECONDARY,
-  },
-  warningText: {
-    color: UI.COLORS.WARNING,
-  },
-  successText: {
-    color: UI.COLORS.SUCCESS,
-  },
-  errorText: {
-    color: UI.COLORS.ERROR,
-  },
-  errorsSection: {
-    marginTop: UI.SPACING.LG,
-    padding: UI.SPACING.SM,
-    backgroundColor: UI.COLORS.ERROR + "20",
-    borderRadius: UI.CARD_RADIUS,
-  },
-  errorsTitle: {
-    fontSize: 14,
-    fontWeight: "600",
-    color: UI.COLORS.ERROR,
-    marginBottom: UI.SPACING.XS,
-  },
-});
