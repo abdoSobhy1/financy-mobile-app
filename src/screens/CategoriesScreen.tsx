@@ -12,6 +12,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { useDispatch, useSelector } from "react-redux";
 import { useAppTheme } from "../components/ui/ThemeProvider";
+import { AppHeader } from "../components/ui/AppHeader";
 import { RootState, AppDispatch } from "../store";
 import { fetchCategories } from "../store/slices/categoriesSlice";
 import { formatCurrency } from "../utils";
@@ -41,26 +42,12 @@ export const CategoriesScreen: React.FC = () => {
     // In a real app we'd dispatch fetchTopSpendingCategories here, but the data is fine.
   }, [dispatch]);
 
-  const renderTopHeader = () => (
-    <View style={styles.topHeader}>
-      <View style={{ flexDirection: "row", alignItems: "center" }}>
-        <View style={[styles.avatarPlaceholder, { backgroundColor: colors.surfaceVariant }]}>
-          <Ionicons name="person" size={16} color={colors.onSurfaceVariant} />
-        </View>
-        <Text style={[typography.h2, { color: colors.onBackground, marginLeft: spacing.md }]}>
-          Categories
-        </Text>
-      </View>
-      <TouchableOpacity>
-        <Ionicons name="notifications-outline" size={24} color={colors.onBackground} />
-      </TouchableOpacity>
-    </View>
-  );
+  // Removed manual top header
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }} edges={["top"]}>
       <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
-      {renderTopHeader()}
+      <AppHeader title="Categories" />
 
       <ScrollView contentContainerStyle={{ padding: spacing.lg, paddingBottom: 100 }}>
         
