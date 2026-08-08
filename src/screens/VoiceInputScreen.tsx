@@ -45,15 +45,43 @@ export const VoiceInputScreen: React.FC = () => {
   const [isOffline, setIsOffline] = useState(false);
 
   const categories = useSelector(selectAllCategories);
+  const transcriptRef = useRef("");
+  const isNavigatingRef = useRef(false);
 
   // Animation values
   const pulseAnim = useSharedValue(1);
   const barHeights = Array(NUM_BARS).fill(0).map(() => useSharedValue(4));
 
+  const processTranscript = async (finalTranscript: string) => {
+    if (isNavigatingRef.current) return;
+    isNavigatingRef.current = true;
+    
+    stopAnimations();
+    
+    if (finalTranscript.trim()) {
+      const categoriesList = categories.map((c) => ({ id: c.id, name: c.name }));
+      const parsed = parseVoiceInput(finalTranscript, categoriesList);
+      
+      if (parsed && parsed.length > 0) {
+        navigation.replace("VoiceVerify", { parsedTransactions: parsed });
+        return;
+      }
+    }
+    
+    navigation.goBack();
+  };
+
   useSpeechRecognitionEvent("start", () => setIsListening(true));
-  useSpeechRecognitionEvent("end", () => setIsListening(false));
+  useSpeechRecognitionEvent("end", () => {
+    setIsListening(false);
+    if (transcriptRef.current) {
+      processTranscript(transcriptRef.current);
+    }
+  });
   useSpeechRecognitionEvent("result", (event) => {
-    setTranscript(event.results[0]?.transcript || "");
+    const text = event.results[0]?.transcript || "";
+    setTranscript(text);
+    transcriptRef.current = text;
   });
   useSpeechRecognitionEvent("error", (event) => {
     console.warn("Speech recognition error:", event.error, event.message);
@@ -108,12 +136,13 @@ export const VoiceInputScreen: React.FC = () => {
       }
 
       setTranscript("");
+      transcriptRef.current = "";
       setIsOffline(false);
       
       startAnimations();
 
       ExpoSpeechRecognitionModule.start({
-        lang: "en-US",
+        lang: "ar-EG",
         interimResults: true,
         maxAlternatives: 1,
         continuous: true,
@@ -136,20 +165,7 @@ export const VoiceInputScreen: React.FC = () => {
 
   const handleStop = async () => {
     ExpoSpeechRecognitionModule.stop();
-    stopAnimations();
-    
-    if (transcript.trim()) {
-      // Parse transcript
-      const categoriesList = categories.map((c) => ({ id: c.id, name: c.name }));
-      const parsed = parseVoiceInput(transcript, categoriesList);
-      
-      if (parsed && parsed.length > 0) {
-        navigation.replace("VoiceVerify", { parsedTransactions: parsed });
-        return;
-      }
-    }
-    
-    navigation.goBack();
+    processTranscript(transcriptRef.current);
   };
 
   const ringAnimStyle = useAnimatedStyle(() => ({

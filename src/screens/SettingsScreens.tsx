@@ -31,6 +31,8 @@ import {
   ListRow,
   Card,
   AppHeader,
+  FirebaseCleanupModal,
+  SyncStatus,
 } from "../components/ui";
 import { runSyncApplyTest, runAllSyncApplyTests } from "../debug/runSyncTest";
 import { UI } from "../constants";
@@ -482,7 +484,7 @@ export const SettingsScreen: React.FC = () => {
           <SettingRow icon="calendar-outline" title="Billing Cycle" subtitle={`Starts on day ${currentBillingDay}`} onPress={() => setShowBillingDayPicker(true)} />
           <SettingRow icon="globe-outline" title="Language" subtitle="English (US)" rightElement={<Ionicons name="chevron-forward" size={16} color={colors.onSurfaceVariant} />} onPress={() => handleComingSoon("Language")} />
           <SettingRow icon="moon-outline" title="Theme" subtitle="Dark mode" rightElement={<Ionicons name="chevron-forward" size={16} color={colors.onSurfaceVariant} />} onPress={() => handleComingSoon("Theme")} />
-          <SettingRow icon="apps-outline" title="Categories" subtitle="Manage transaction categories and icons" onPress={() => setAddCategoryModalVisible(true)} />
+          <SettingRow icon="apps-outline" title="Categories" subtitle="Manage transaction categories and icons" onPress={() => navigation.navigate("CategoryManagement")} />
         </GlassCard>
 
         <SectionLabel text="DATA" />
@@ -508,11 +510,7 @@ export const SettingsScreen: React.FC = () => {
 
       </ScrollView>
 
-      <CategoryCreationModal 
-        visible={addCategoryModalVisible} 
-        onClose={() => setAddCategoryModalVisible(false)}
-        onCreateCategory={handleNewCategoryAdd} 
-      />
+      {/* Category modal removed – navigate to CategoriesScreen instead */}
 
       <Modal visible={showBillingDayPicker} transparent animationType="fade" onRequestClose={() => setShowBillingDayPicker(false)}>
         <View style={styles.modalOverlay}>

@@ -96,6 +96,15 @@ export const RADIUS = {
 // Muted olive/sage fallback seed color
 const FALLBACK_SOURCE_COLOR = "#6B705C";
 
+/** Darken a hex colour by multiplying each channel by `factor` (0–1). */
+function darkenHex(hex: string, factor: number): string {
+  const clean = hex.replace("#", "");
+  const r = Math.round(parseInt(clean.slice(0, 2), 16) * factor);
+  const g = Math.round(parseInt(clean.slice(2, 4), 16) * factor);
+  const b = Math.round(parseInt(clean.slice(4, 6), 16) * factor);
+  return `#${r.toString(16).padStart(2, "0")}${g.toString(16).padStart(2, "0")}${b.toString(16).padStart(2, "0")}`;
+}
+
 type ThemeContextType = {
   colors: {
     primary: string;
@@ -159,12 +168,11 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({
 
   const activeColors = { ...(isDark ? theme.dark : theme.light) };
 
-  console.log({ activeColors });
-
   if (isDark) {
-    activeColors.background = "#050508"; // Almost black shade
-    activeColors.surface = "#0A0A0E"; // Slightly lighter for cards
-    activeColors.surfaceVariant = "#121218"; // Even lighter for secondary elements
+    // Darken the Material3 colours proportionally so the seed hue is preserved.
+    activeColors.background    = darkenHex(activeColors.background, 0.30);
+    activeColors.surface       = darkenHex(activeColors.surface, 0.38);
+    activeColors.surfaceVariant = darkenHex(activeColors.surfaceVariant, 0.45);
   }
 
   const value = useMemo(

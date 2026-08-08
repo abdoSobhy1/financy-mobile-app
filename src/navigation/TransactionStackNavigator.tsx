@@ -3,7 +3,6 @@ import { TransactionStackParamList } from "../types";
 import { DashboardScreen } from "../screens/DashboardScreen";
 import { TransactionListScreen } from "../screens/TransactionListScreen";
 import AddTransactionScreen from "../screens/AddTransactionScreen";
-// import { EditTransactionScreen } from "../screens/EditTransactionScreen";
 import { VoiceInputScreen } from "../screens/VoiceInputScreen";
 import { VoiceVerifyScreen } from "../screens/VoiceVerifyScreen";
 

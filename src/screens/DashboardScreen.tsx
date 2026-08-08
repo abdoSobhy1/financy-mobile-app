@@ -279,34 +279,32 @@ export const DashboardScreen: React.FC = () => {
           style={{ 
             padding: spacing.xl, 
             marginBottom: spacing.xl, 
-            backgroundColor: "#A8DADC", // Light cyan from mockup
+            backgroundColor: colors.primaryContainer,
             borderRadius: 32,
           }}>
           <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: spacing.sm }}>
             <Text
               style={[
                 typography.label,
-                { color: "#455A64", textTransform: "uppercase", letterSpacing: 1 },
+                { color: colors.onPrimaryContainer, textTransform: "uppercase", letterSpacing: 1, opacity: 0.7 },
               ]}>
               TOTAL BALANCE
             </Text>
-            <View style={{ backgroundColor: "rgba(0,0,0,0.1)", paddingHorizontal: 8, paddingVertical: 4, borderRadius: 12 }}>
-              <Text style={{ fontSize: 12, color: "#455A64", fontWeight: "bold" }}>↑ +2.4%</Text>
+            <View style={{ backgroundColor: "rgba(0,0,0,0.15)", paddingHorizontal: 8, paddingVertical: 4, borderRadius: 12 }}>
+              <Text style={{ fontSize: 12, color: colors.onPrimaryContainer, fontWeight: "bold", opacity: 0.8 }}>↑ +2.4%</Text>
             </View>
           </View>
           
           <Text
             style={[
               typography.h1,
-              { color: "#1D3557", fontSize: 48, fontWeight: "900", marginBottom: spacing.xl },
+              { color: colors.onPrimaryContainer, fontSize: 48, fontWeight: "900", marginBottom: spacing.xl },
             ]}>
             {formatCurrency(balance)}
           </Text>
           
-          {/* Mockup chart line abstraction */}
-          <View style={{ height: 40, borderBottomWidth: 2, borderBottomColor: "rgba(0,0,0,0.1)" }}>
-             {/* A stylized path could go here; using a placeholder border for now */}
-          </View>
+          {/* Divider */}
+          <View style={{ height: 1, backgroundColor: colors.onPrimaryContainer, opacity: 0.15 }} />
         </Card>
 
         {/* Quick Add Row */}
@@ -356,11 +354,11 @@ export const DashboardScreen: React.FC = () => {
                 style={[
                   styles.moreChip,
                   {
-                    backgroundColor: "#E0F7FA",
+                    backgroundColor: colors.primaryContainer,
                     borderRadius: 28,
                   },
                 ]}>
-                <Ionicons name="mic-outline" size={28} color="#006064" />
+                <Ionicons name="mic-outline" size={28} color={colors.onPrimaryContainer} />
               </View>
               <Text
                 style={[
