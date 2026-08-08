@@ -9,16 +9,15 @@ const TAB_ICONS: Record<string, { active: string; inactive: string }> = {
   Budgets: { active: "pie-chart", inactive: "pie-chart-outline" },
   Debts: { active: "card", inactive: "card-outline" },
   Analysis: { active: "analytics", inactive: "analytics-outline" },
-  Settings: { active: "settings", inactive: "settings-outline" },
 };
 
 export const useTabBarHeight = () => {
   const insets = useSafeAreaInsets();
   const { spacing } = useAppTheme();
-  
+
   // TabBar base height (64) + bottom offset
   const tabBarHeight = 64 + Math.max(insets.bottom, spacing.md);
-  
+
   // Add spacing.xl (24) for breathing room below content
   return tabBarHeight + spacing.xl;
 };
@@ -30,7 +29,7 @@ export const TabBar = ({ state, descriptors, navigation }: any) => {
   const focusedRoute = state.routes[state.index];
   const focusedDescriptor = descriptors[focusedRoute.key];
   const focusedOptions = focusedDescriptor.options;
-  
+
   if (focusedOptions.tabBarStyle?.display === "none") return null;
 
   return (
@@ -39,13 +38,14 @@ export const TabBar = ({ state, descriptors, navigation }: any) => {
         styles.floatingBarOuter,
         { bottom: Math.max(insets.bottom, spacing.md) },
       ]}>
-      <View style={[
-        styles.floatingBar, 
-        { 
-          backgroundColor: colors.surface, 
-          borderColor: colors.outlineVariant,
-        }
-      ]}>
+      <View
+        style={[
+          styles.floatingBar,
+          {
+            backgroundColor: colors.surface,
+            borderColor: colors.outlineVariant,
+          },
+        ]}>
         <View style={styles.tabItemsContainer}>
           {state.routes.map((route: any, index: number) => {
             const isFocused = state.index === index;
@@ -66,26 +66,63 @@ export const TabBar = ({ state, descriptors, navigation }: any) => {
               }
             };
 
-            return (
+            const tabItem = (
               <TouchableOpacity
                 key={route.key}
                 onPress={onPress}
                 activeOpacity={0.7}
                 style={styles.tabItem}>
-                
-                <View style={[
-                  styles.iconContainer,
-                  { borderRadius: radius.pill },
-                  isFocused ? { backgroundColor: colors.primaryContainer } : { backgroundColor: "transparent" }
-                ]}>
+                <View
+                  style={[
+                    styles.iconContainer,
+                    { borderRadius: radius.pill },
+                    isFocused
+                      ? { backgroundColor: colors.primaryContainer }
+                      : { backgroundColor: "transparent" },
+                  ]}>
                   <Ionicons
                     name={iconName as any}
                     size={24}
-                    color={isFocused ? colors.onPrimaryContainer : colors.onSurfaceVariant}
+                    color={
+                      isFocused
+                        ? colors.onPrimaryContainer
+                        : colors.onSurfaceVariant
+                    }
                   />
                 </View>
               </TouchableOpacity>
             );
+
+            // Add the FAB after the second tab (index 1) for a symmetrical 5-item layout
+            if (index === 1) {
+              return (
+                <React.Fragment key={route.key + "_fragment"}>
+                  {tabItem}
+                  <TouchableOpacity
+                    key="fab"
+                    activeOpacity={0.8}
+                    style={[
+                      styles.fabContainer,
+                      { backgroundColor: colors.primary, borderRadius: radius.full },
+                    ]}
+                    onPress={() => {
+                      const currentRoute = state.routes[state.index].name;
+                      if (currentRoute === "Transactions") {
+                        navigation.navigate("AddTransaction");
+                      } else if (currentRoute === "Budgets") {
+                        navigation.navigate("BudgetForm");
+                      } else if (currentRoute === "Debts") {
+                        navigation.navigate("DebtForm");
+                      } else {
+                        navigation.navigate("AddTransaction");
+                      }
+                    }}>
+                    <Ionicons name="add" size={28} color={colors.onPrimary} />
+                  </TouchableOpacity>
+                </React.Fragment>
+              );
+            }
+            return tabItem;
           })}
         </View>
       </View>
@@ -138,5 +175,23 @@ const styles = StyleSheet.create({
     overflow: "hidden",
     alignItems: "center",
     justifyContent: "center",
+  },
+  fabContainer: {
+    width: 48,
+    height: 48,
+    alignItems: "center",
+    justifyContent: "center",
+    marginHorizontal: 8,
+    ...Platform.select({
+      ios: {
+        shadowColor: "#000",
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.3,
+        shadowRadius: 4,
+      },
+      android: {
+        elevation: 6,
+      },
+    }),
   },
 });

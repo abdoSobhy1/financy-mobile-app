@@ -7,7 +7,6 @@ import { RootTabParamList } from "../types";
 import TransactionStackNavigator from "./TransactionStackNavigator";
 import BudgetStackNavigator from "./BudgetStackNavigator";
 import DebtStackNavigator from "./DebtStackNavigator";
-import SettingsStackNavigator from "./SettingsStackNavigator";
 import AnalysisStackNavigator from "./AnalysisStackNavigator";
 
 // Import new TabBar
@@ -62,11 +61,6 @@ const TabNavigator: React.FC = () => {
         name="Analysis"
         component={AnalysisStackNavigator}
         options={{ tabBarLabel: "Analysis" }}
-      />
-      <Tab.Screen
-        name="Settings"
-        component={SettingsStackNavigator}
-        options={{ tabBarLabel: "Settings" }}
       />
     </Tab.Navigator>
   );

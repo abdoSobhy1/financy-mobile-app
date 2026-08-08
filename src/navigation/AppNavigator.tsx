@@ -4,8 +4,11 @@ import { createStackNavigator } from "@react-navigation/stack";
 import { useAuth } from "../contexts/AuthContext";
 import { SignInScreen } from "../screens/SignInScreen";
 import TabNavigator from "./TabNavigator";
+import SettingsStackNavigator from "./SettingsStackNavigator";
 import { Text, View, StyleSheet, ActivityIndicator } from "react-native";
 import { UI } from "../constants";
+import { useAppTheme } from "../components/ui/ThemeProvider";
+
 
 const Stack = createStackNavigator();
 
@@ -15,7 +18,7 @@ const AppNavigator: React.FC = () => {
   if (loading) {
     return (
       <View style={styles.centerContainer}>
-        <ActivityIndicator size="large" color={UI.COLORS.PRIMARY} />
+        <ActivityIndicator size="large" color={"#6C5CE7"} />
         <Text style={styles.loadingText}>Loading...</Text>
       </View>
     );
@@ -25,7 +28,10 @@ const AppNavigator: React.FC = () => {
     <NavigationContainer>
       <Stack.Navigator screenOptions={{ headerShown: false }}>
         {isAuthenticated ? (
-          <Stack.Screen name="Main" component={TabNavigator} />
+          <>
+            <Stack.Screen name="Main" component={TabNavigator} />
+            <Stack.Screen name="Settings" component={SettingsStackNavigator} />
+          </>
         ) : (
           <Stack.Screen name="SignIn" component={SignInScreen} />
         )}
@@ -39,24 +45,24 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: "center",
     alignItems: "center",
-    backgroundColor: UI.COLORS.BACKGROUND,
+    backgroundColor: "#0B0B1E",
     padding: UI.SPACING.LG,
   },
   loadingText: {
-    color: UI.COLORS.TEXT_SECONDARY,
+    color: "#A0A0B0",
     fontSize: 16,
     marginTop: UI.SPACING.MD,
     textAlign: "center",
   },
   errorTitle: {
-    color: UI.COLORS.ERROR,
+    color: "#FF7675",
     fontSize: 20,
     fontWeight: "600",
     textAlign: "center",
     marginBottom: UI.SPACING.SM,
   },
   errorMessage: {
-    color: UI.COLORS.TEXT_SECONDARY,
+    color: "#A0A0B0",
     fontSize: 14,
     textAlign: "center",
   },
