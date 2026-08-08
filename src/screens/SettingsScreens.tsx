@@ -29,6 +29,7 @@ import {
   useTabBarHeight,
   ListRow,
   Card,
+  AppHeader,
 } from "../components/ui";
 import { runSyncApplyTest, runAllSyncApplyTests } from "../debug/runSyncTest";
 import { UI } from "../constants";
@@ -457,19 +458,7 @@ export const SettingsScreen: React.FC = () => {
       <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
       
       {/* Top Header */}
-      <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 20, paddingTop: 16, paddingBottom: 8 }}>
-        <View style={{ flexDirection: "row", alignItems: "center" }}>
-          <View style={{ width: 32, height: 32, borderRadius: 16, backgroundColor: colors.surfaceVariant, alignItems: "center", justifyContent: "center" }}>
-            <Ionicons name="person" size={16} color={colors.onSurfaceVariant} />
-          </View>
-          <Text style={[typography.h2, { color: colors.onBackground, marginLeft: spacing.md }]}>
-            Financy
-          </Text>
-        </View>
-        <TouchableOpacity>
-          <Ionicons name="notifications-outline" size={24} color={colors.onBackground} />
-        </TouchableOpacity>
-      </View>
+      <AppHeader title="Settings" showSettings={false} />
 
       <ScrollView contentContainerStyle={{ paddingHorizontal: spacing.lg, paddingBottom: tabBarHeight + 100 }} showsVerticalScrollIndicator={false}>
         
