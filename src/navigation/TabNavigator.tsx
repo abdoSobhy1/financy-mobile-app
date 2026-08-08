@@ -22,6 +22,8 @@ const MODAL_SCREENS = [
   "DebtForm",
   "AddPayment",
   "DebtPayments",
+  "VoiceInput",
+  "VoiceVerify",
 ];
 
 // ── Visibility helper ────────────────────────────────────────────────

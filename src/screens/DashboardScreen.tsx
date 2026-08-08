@@ -18,7 +18,6 @@ import { getCurrentBillingPeriod } from "../utils/billingPeriod";
 import { formatCurrency, formatDate } from "../utils";
 import { useAppTheme } from "../components/ui/ThemeProvider";
 import { Badge } from "../components/ui/Badge";
-import { VoiceInputButton } from "../components/input/VoiceInputButton";
 import { ParsedTransaction } from "../types";
 import { Card } from "../components/ui";
 import { AppHeader } from "../components/ui/AppHeader";
@@ -350,10 +349,9 @@ export const DashboardScreen: React.FC = () => {
             ))}
 
             {/* Voice / More chip */}
-            <VoiceInputButton
-              variant="custom"
-              onResult={handleVoiceResult}
-              style={{ alignItems: "center", width: 64 }}>
+            <TouchableOpacity
+              style={{ alignItems: "center", width: 64 }}
+              onPress={() => navigation.navigate("VoiceInput")}>
               <View
                 style={[
                   styles.moreChip,
@@ -377,7 +375,7 @@ export const DashboardScreen: React.FC = () => {
                 numberOfLines={1}>
                 Voice
               </Text>
-            </VoiceInputButton>
+            </TouchableOpacity>
           </View>
         </View>
 

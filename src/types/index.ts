@@ -214,9 +214,11 @@ export type RootTabParamList = {
 
 export type TransactionStackParamList = {
   TransactionList: undefined;
-  AddTransaction: { editTransaction?: Transaction };
+  AddTransaction: { editTransaction?: Transaction, prefilledData?: ParsedTransaction };
   EditTransaction: { transactionId: string };
-  Dashboard: undefined
+  Dashboard: undefined;
+  VoiceInput: undefined;
+  VoiceVerify: { parsedTransactions: ParsedTransaction[] };
 };
 
 export type BudgetStackParamList = {

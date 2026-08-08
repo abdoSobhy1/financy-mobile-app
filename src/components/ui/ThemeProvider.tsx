@@ -1,30 +1,80 @@
-import React, { createContext, useContext, useMemo } from 'react';
-import { useColorScheme } from 'react-native';
-import { useMaterial3Theme } from '@pchmn/expo-material3-theme';
+import React, { createContext, useContext, useMemo } from "react";
+import { useColorScheme } from "react-native";
+import { useMaterial3Theme } from "@pchmn/expo-material3-theme";
 
 // Fixed category-icon color palette
 export const CATEGORY_PALETTE = {
-  red: { light: '#FFCDD2', dark: '#B71C1C', iconLight: '#D32F2F', iconDark: '#FFEBEE' },
-  pink: { light: '#F8BBD0', dark: '#880E4F', iconLight: '#C2185B', iconDark: '#FCE4EC' },
-  purple: { light: '#E1BEE7', dark: '#4A148C', iconLight: '#7B1FA2', iconDark: '#F3E5F5' },
-  indigo: { light: '#C5CAE9', dark: '#1A237E', iconLight: '#303F9F', iconDark: '#E8EAF6' },
-  blue: { light: '#BBDEFB', dark: '#0D47A1', iconLight: '#1976D2', iconDark: '#E3F2FD' },
-  teal: { light: '#B2DFDB', dark: '#004D40', iconLight: '#00796B', iconDark: '#E0F2F1' },
-  green: { light: '#C8E6C9', dark: '#1B5E20', iconLight: '#388E3C', iconDark: '#E8F5E9' },
-  orange: { light: '#FFE0B2', dark: '#E65100', iconLight: '#F57C00', iconDark: '#FFF3E0' },
-  brown: { light: '#D7CCC8', dark: '#3E2723', iconLight: '#5D4037', iconDark: '#EFEBE9' },
-  bluegrey: { light: '#CFD8DC', dark: '#263238', iconLight: '#455A64', iconDark: '#ECEFF1' },
+  red: {
+    light: "#FFCDD2",
+    dark: "#B71C1C",
+    iconLight: "#D32F2F",
+    iconDark: "#FFEBEE",
+  },
+  pink: {
+    light: "#F8BBD0",
+    dark: "#880E4F",
+    iconLight: "#C2185B",
+    iconDark: "#FCE4EC",
+  },
+  purple: {
+    light: "#E1BEE7",
+    dark: "#4A148C",
+    iconLight: "#7B1FA2",
+    iconDark: "#F3E5F5",
+  },
+  indigo: {
+    light: "#C5CAE9",
+    dark: "#1A237E",
+    iconLight: "#303F9F",
+    iconDark: "#E8EAF6",
+  },
+  blue: {
+    light: "#BBDEFB",
+    dark: "#0D47A1",
+    iconLight: "#1976D2",
+    iconDark: "#E3F2FD",
+  },
+  teal: {
+    light: "#B2DFDB",
+    dark: "#004D40",
+    iconLight: "#00796B",
+    iconDark: "#E0F2F1",
+  },
+  green: {
+    light: "#C8E6C9",
+    dark: "#1B5E20",
+    iconLight: "#388E3C",
+    iconDark: "#E8F5E9",
+  },
+  orange: {
+    light: "#FFE0B2",
+    dark: "#E65100",
+    iconLight: "#F57C00",
+    iconDark: "#FFF3E0",
+  },
+  brown: {
+    light: "#D7CCC8",
+    dark: "#3E2723",
+    iconLight: "#5D4037",
+    iconDark: "#EFEBE9",
+  },
+  bluegrey: {
+    light: "#CFD8DC",
+    dark: "#263238",
+    iconLight: "#455A64",
+    iconDark: "#ECEFF1",
+  },
 };
 
 // Design tokens
 export const TYPOGRAPHY = {
-  h1: { fontSize: 32, fontWeight: '700' as const, lineHeight: 40 },
-  h2: { fontSize: 24, fontWeight: '700' as const, lineHeight: 32 },
-  h3: { fontSize: 20, fontWeight: '600' as const, lineHeight: 28 },
-  bodyLarge: { fontSize: 16, fontWeight: '400' as const, lineHeight: 24 },
-  bodyMedium: { fontSize: 14, fontWeight: '400' as const, lineHeight: 20 },
-  bodySmall: { fontSize: 12, fontWeight: '400' as const, lineHeight: 16 },
-  label: { fontSize: 14, fontWeight: '600' as const, lineHeight: 20 },
+  h1: { fontSize: 32, fontWeight: "700" as const, lineHeight: 40 },
+  h2: { fontSize: 24, fontWeight: "700" as const, lineHeight: 32 },
+  h3: { fontSize: 20, fontWeight: "600" as const, lineHeight: 28 },
+  bodyLarge: { fontSize: 16, fontWeight: "400" as const, lineHeight: 24 },
+  bodyMedium: { fontSize: 14, fontWeight: "400" as const, lineHeight: 20 },
+  bodySmall: { fontSize: 12, fontWeight: "400" as const, lineHeight: 16 },
+  label: { fontSize: 14, fontWeight: "600" as const, lineHeight: 20 },
 };
 
 export const SPACING = {
@@ -44,7 +94,7 @@ export const RADIUS = {
 };
 
 // Muted olive/sage fallback seed color
-const FALLBACK_SOURCE_COLOR = '#6B705C';
+const FALLBACK_SOURCE_COLOR = "#6B705C";
 
 type ThemeContextType = {
   colors: {
@@ -98,39 +148,46 @@ type ThemeContextType = {
 
 const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
 
-export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({
+  children,
+}) => {
   const colorScheme = useColorScheme();
-  const isDark = colorScheme === 'dark';
-  const { theme } = useMaterial3Theme({ fallbackSourceColor: FALLBACK_SOURCE_COLOR });
-  
+  const isDark = colorScheme === "dark";
+  const { theme } = useMaterial3Theme({
+    fallbackSourceColor: FALLBACK_SOURCE_COLOR,
+  });
+
   const activeColors = { ...(isDark ? theme.dark : theme.light) };
+
+  console.log({ activeColors });
 
   if (isDark) {
     activeColors.background = "#050508"; // Almost black shade
     activeColors.surface = "#0A0A0E"; // Slightly lighter for cards
     activeColors.surfaceVariant = "#121218"; // Even lighter for secondary elements
   }
-  
-  const value = useMemo(() => ({
-    colors: activeColors,
-    isDark,
-    typography: TYPOGRAPHY,
-    spacing: SPACING,
-    radius: RADIUS,
-    categoryPalette: CATEGORY_PALETTE,
-  }), [activeColors, isDark]);
+
+  const value = useMemo(
+    () => ({
+      colors: activeColors,
+      isDark,
+      typography: TYPOGRAPHY,
+      spacing: SPACING,
+      radius: RADIUS,
+      categoryPalette: CATEGORY_PALETTE,
+    }),
+    [activeColors, isDark],
+  );
 
   return (
-    <ThemeContext.Provider value={value}>
-      {children}
-    </ThemeContext.Provider>
+    <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>
   );
 };
 
 export const useAppTheme = () => {
   const context = useContext(ThemeContext);
   if (!context) {
-    throw new Error('useAppTheme must be used within a ThemeProvider');
+    throw new Error("useAppTheme must be used within a ThemeProvider");
   }
   return context;
 };

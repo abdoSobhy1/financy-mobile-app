@@ -30,7 +30,7 @@ import {
 import { useAppTheme } from "../components/ui/ThemeProvider";
 import { Input, CustomDatePicker } from "../components/ui";
 import { IconChip } from "../components/ui/IconChip";
-import { VoiceInputButton, ParsedTransactionReview } from "../components/input";
+import { ParsedTransactionReview } from "../components/input";
 import { CustomKeypad } from "../components/ui/CustomKeypad";
 
 type NavigationProp = StackNavigationProp<TransactionStackParamList, "AddTransaction">;
@@ -52,8 +52,9 @@ export const AddTransactionScreen: React.FC = () => {
   const route = useRoute<RouteParam>();
   const params = route.params as any;
   const editTransaction = params?.editTransaction;
+  const prefilledData = params?.prefilledData;
   const initialCategoryId = params?.categoryId;
-
+  
   const dispatch = useDispatch<AppDispatch>();
   const { colors, typography, spacing, radius } = useAppTheme();
 
@@ -86,10 +87,17 @@ export const AddTransactionScreen: React.FC = () => {
       setDescription(editTransaction.description || "");
       setNote(editTransaction.note || "");
       setDate(new Date(editTransaction.date));
+    } else if (prefilledData) {
+      if (prefilledData.amount) setAmountStr(prefilledData.amount.toString());
+      if (prefilledData.type) setType(prefilledData.type);
+      if (prefilledData.categoryId) setCategoryId(prefilledData.categoryId);
+      if (prefilledData.description) setDescription(prefilledData.description);
+      if (prefilledData.note) setNote(prefilledData.note);
+      if (prefilledData.date) setDate(new Date(prefilledData.date));
     } else if (initialCategoryId) {
       setCategoryId(initialCategoryId);
     }
-  }, [editTransaction, initialCategoryId, dispatch]);
+  }, [editTransaction, prefilledData, initialCategoryId, dispatch]);
 
   const handleCategorySelect = (id: string) => {
     setCategoryId(id);
@@ -229,15 +237,16 @@ export const AddTransactionScreen: React.FC = () => {
                   {amountStr || "0.00"}
                 </Text>
               </View>
-              {!editTransaction && (
-                <View style={styles.voiceBtnContainer}>
-                  <VoiceInputButton 
-                    variant="fab" 
-                    size={48} 
-                    onResult={handleVoiceResult} 
-                  />
-                </View>
-              )}
+                {!editTransaction && (
+                  <View style={styles.voiceBtnContainer}>
+                    <TouchableOpacity
+                      style={{ alignItems: "center", justifyContent: "center", width: 48, height: 48, borderRadius: 24, backgroundColor: colors.primaryContainer }}
+                      onPress={() => navigation.navigate("VoiceInput")}
+                    >
+                      <Ionicons name="mic" size={24} color={colors.primary} />
+                    </TouchableOpacity>
+                  </View>
+                )}
             </View>
           </View>
 

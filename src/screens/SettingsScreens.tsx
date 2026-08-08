@@ -479,6 +479,7 @@ export const SettingsScreen: React.FC = () => {
         <SectionLabel text="PREFERENCES" />
         <GlassCard>
           <SettingRow icon="cash-outline" title="Currency" subtitle="Base currency for display (USD)" rightElement={<View style={{ flexDirection: "row", alignItems: "center" }}><Text style={[typography.bodyLarge, { color: colors.onSurfaceVariant, marginRight: 8 }]}>USD</Text><Ionicons name="chevron-forward" size={16} color={colors.onSurfaceVariant} /></View>} onPress={() => handleComingSoon("Currency")} />
+          <SettingRow icon="calendar-outline" title="Billing Cycle" subtitle={`Starts on day ${currentBillingDay}`} onPress={() => setShowBillingDayPicker(true)} />
           <SettingRow icon="globe-outline" title="Language" subtitle="English (US)" rightElement={<Ionicons name="chevron-forward" size={16} color={colors.onSurfaceVariant} />} onPress={() => handleComingSoon("Language")} />
           <SettingRow icon="moon-outline" title="Theme" subtitle="Dark mode" rightElement={<Ionicons name="chevron-forward" size={16} color={colors.onSurfaceVariant} />} onPress={() => handleComingSoon("Theme")} />
           <SettingRow icon="apps-outline" title="Categories" subtitle="Manage transaction categories and icons" onPress={() => setAddCategoryModalVisible(true)} />
@@ -488,6 +489,7 @@ export const SettingsScreen: React.FC = () => {
         <GlassCard>
           <SettingRow icon="download-outline" title="Export Data" subtitle="Download your transaction history (CSV/PDF)" onPress={handleExportData} />
           <SettingRow icon="cloud-upload-outline" title="Backup & Sync" subtitle="Last synced: Today, 10:42 AM" onPress={handleSyncNow} />
+          <SettingRow icon="trash-outline" title="Cleanup Database" subtitle="Remove orphaned or invalid records" destructive onPress={() => setShowFirebaseCleanup(true)} />
         </GlassCard>
 
         <SectionLabel text="ABOUT" />
@@ -505,6 +507,49 @@ export const SettingsScreen: React.FC = () => {
         </GlassCard>
 
       </ScrollView>
+
+      <CategoryCreationModal 
+        visible={addCategoryModalVisible} 
+        onClose={() => setAddCategoryModalVisible(false)}
+        onCreateCategory={handleNewCategoryAdd} 
+      />
+
+      <Modal visible={showBillingDayPicker} transparent animationType="fade" onRequestClose={() => setShowBillingDayPicker(false)}>
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalCard, { backgroundColor: colors.surface }]}>
+            <Text style={[styles.modalTitle, { color: colors.onSurface }]}>Billing Cycle Start</Text>
+            <Text style={[styles.modalSubtitle, { color: colors.onSurfaceVariant }]}>Select the day of the month your billing cycle starts.</Text>
+            <ScrollView style={{ maxHeight: 300 }}>
+              {Array.from({ length: 28 }, (_, i) => i + 1).map((day) => (
+                <TouchableOpacity
+                  key={day}
+                  style={[
+                    styles.dayOption,
+                    selectedBillingDay === day && styles.dayOptionActive,
+                  ]}
+                  onPress={() => setSelectedBillingDay(day)}>
+                  <Text style={[styles.dayText, selectedBillingDay === day && styles.dayTextActive]}>Day {day}</Text>
+                  {selectedBillingDay === day && <Ionicons name="checkmark" size={20} color={colors.primaryContainer} />}
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+            <View style={styles.modalActions}>
+              <TouchableOpacity style={styles.modalCancelBtn} onPress={() => setShowBillingDayPicker(false)}>
+                <Text style={styles.modalCancelText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={[styles.modalSaveBtn, { backgroundColor: colors.primaryContainer }]} onPress={saveBillingDay}>
+                <Text style={styles.modalSaveText}>Save</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      <FirebaseCleanupModal 
+        visible={showFirebaseCleanup} 
+        onClose={() => setShowFirebaseCleanup(false)} 
+      />
+
     </SafeAreaView>
   );
 };
