@@ -1,14 +1,12 @@
 /**
- * CustomDatePicker  — redesigned to match the design mockup.
+ * CustomDatePicker — floating centered overlay (not a bottom sheet).
  *
- * Features:
- *  • Horizontal quick-filter chips: Today / This Week / This Month / Last 30d
- *  • Two-month scrollable calendar grid
- *  • Selected day: filled teal circle
- *  • Today (unselected): teal outline circle
- *  • Range-highlighted days (start of week → selected) subtle fill
- *  • Quick Jump section: scrollable year list + month grid
- *  • X close / Save header
+ * Flow:
+ *  • Default view: single-month calendar with </> nav arrows
+ *  • Tap the "August 2024" header → switches to Quick Jump (wheel picker)
+ *  • Quick Jump has a back arrow to return to the calendar
+ *  • Spinning the month wheel to a stop jumps the calendar there and switches back
+ *  • Tapping a day selects it and closes the picker
  */
 
 import React, { useState, useEffect, useRef, useCallback } from "react";
@@ -18,15 +16,15 @@ import {
   TouchableOpacity,
   Modal,
   StyleSheet,
-  ScrollView,
+  Animated,
   FlatList,
-  Dimensions,
+  NativeSyntheticEvent,
+  NativeScrollEvent,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import {
   format,
   startOfMonth,
-  endOfMonth,
   startOfWeek,
   addDays,
   isSameDay,
@@ -35,12 +33,6 @@ import {
   isValid,
   addMonths,
   subMonths,
-  startOfWeek as _sow,
-  endOfWeek,
-  startOfDay,
-  endOfDay,
-  subDays,
-  isWithinInterval,
   getYear,
   getMonth,
   setMonth,
@@ -67,7 +59,20 @@ export interface CustomDatePickerProps {
 // ─── Helpers ───────────────────────────────────────────────────────────────────
 
 const DAYS = ["S", "M", "T", "W", "T", "F", "S"];
-const MONTHS_SHORT = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+const MONTHS_SHORT = [
+  "Jan",
+  "Feb",
+  "Mar",
+  "Apr",
+  "May",
+  "Jun",
+  "Jul",
+  "Aug",
+  "Sep",
+  "Oct",
+  "Nov",
+  "Dec",
+];
 
 function buildCalendarWeeks(month: Date): Date[][] {
   const start = startOfWeek(startOfMonth(month));
@@ -85,79 +90,66 @@ function buildCalendarWeeks(month: Date): Date[][] {
   return weeks;
 }
 
-// ─── Sub-components ────────────────────────────────────────────────────────────
+// ─── Calendar view ─────────────────────────────────────────────────────────────
 
-const Chip: React.FC<{
-  label: string;
-  active: boolean;
-  onPress: () => void;
-  colors: any;
-}> = ({ label, active, onPress, colors }) => (
-  <TouchableOpacity
-    style={[
-      chipStyles.chip,
-      {
-        backgroundColor: active ? colors.primaryContainer : colors.surfaceVariant,
-        borderColor: active ? colors.primary : "transparent",
-      },
-    ]}
-    onPress={onPress}
-    activeOpacity={0.7}>
-    <Text
-      style={[
-        chipStyles.chipText,
-        { color: active ? colors.onPrimaryContainer : colors.onSurfaceVariant },
-      ]}>
-      {label}
-    </Text>
-  </TouchableOpacity>
-);
-
-const chipStyles = StyleSheet.create({
-  chip: {
-    paddingHorizontal: 14,
-    paddingVertical: 7,
-    borderRadius: 999,
-    marginRight: 8,
-    borderWidth: 1,
-  },
-  chipText: {
-    fontSize: 13,
-    fontWeight: "600",
-  },
-});
-
-// ─── Main Calendar Modal Content ───────────────────────────────────────────────
-
-interface CalendarMonthProps {
-  month: Date;
+interface CalendarViewProps {
+  viewMonth: Date;
   selected: Date | undefined;
-  onSelect: (d: Date) => void;
+  onSelectDay: (d: Date) => void;
+  onPrevMonth: () => void;
+  onNextMonth: () => void;
+  onTitlePress: () => void;
   colors: any;
-  typography: any;
 }
 
-const CalendarMonth: React.FC<CalendarMonthProps> = ({
-  month,
+const CalendarView: React.FC<CalendarViewProps> = ({
+  viewMonth,
   selected,
-  onSelect,
+  onSelectDay,
+  onPrevMonth,
+  onNextMonth,
+  onTitlePress,
   colors,
-  typography,
 }) => {
-  const weeks = buildCalendarWeeks(month);
-  const ACCENT = colors.primary;
-  const ACCENT_BG = colors.primaryContainer + "55"; // semi-transparent
+  const weeks = buildCalendarWeeks(viewMonth);
 
   return (
-    <View style={calStyles.monthBlock}>
-      <Text style={[calStyles.monthTitle, { color: colors.onBackground }]}>
-        {format(month, "MMMM yyyy")}
-      </Text>
+    <>
+      <View style={calStyles.headerRow}>
+        <TouchableOpacity onPress={onTitlePress} activeOpacity={0.7}>
+          <Text style={[calStyles.monthTitle, { color: colors.onBackground }]}>
+            {format(viewMonth, "MMMM yyyy")}
+          </Text>
+        </TouchableOpacity>
+        <View style={calStyles.navRow}>
+          <TouchableOpacity
+            onPress={onPrevMonth}
+            style={calStyles.navBtn}
+            activeOpacity={0.6}>
+            <Ionicons
+              name="chevron-back"
+              size={18}
+              color={colors.onSurfaceVariant}
+            />
+          </TouchableOpacity>
+          <TouchableOpacity
+            onPress={onNextMonth}
+            style={calStyles.navBtn}
+            activeOpacity={0.6}>
+            <Ionicons
+              name="chevron-forward"
+              size={18}
+              color={colors.onSurfaceVariant}
+            />
+          </TouchableOpacity>
+        </View>
+      </View>
 
-      {/* Day-of-week header */}
       <View style={calStyles.weekRow}>
         {DAYS.map((d, i) => (
-          <Text key={i} style={[calStyles.dayHeader, { color: colors.onSurfaceVariant }]}>
+          <Text
+            key={i}
+            style={[calStyles.dayHeader, { color: colors.onSurfaceVariant }]}>
             {d}
           </Text>
         ))}
@@ -166,24 +158,33 @@ const CalendarMonth: React.FC<CalendarMonthProps> = ({
       {weeks.map((week, wi) => (
         <View key={wi} style={calStyles.weekRow}>
           {week.map((day, di) => {
-            const inMonth = isSameMonth(day, month);
-            const isSel = selected && isValid(selected) && isSameDay(day, selected);
+            const inMonth = isSameMonth(day, viewMonth);
+            const isSel =
+              selected && isValid(selected) && isSameDay(day, selected);
             const todayDay = isToday(day);
 
             return (
               <TouchableOpacity
                 key={di}
-                style={[calStyles.dayCell]}
-                onPress={() => inMonth && onSelect(day)}
+                style={calStyles.dayCell}
+                onPress={() => inMonth && onSelectDay(day)}
                 activeOpacity={0.7}
                 disabled={!inMonth}>
-                {/* Background circle */}
                 {isSel ? (
-                  <View style={[calStyles.circle, { backgroundColor: ACCENT }]} />
+                  <View
+                    style={[
+                      calStyles.circle,
+                      { backgroundColor: colors.primary },
+                    ]}
+                  />
                 ) : todayDay ? (
-                  <View style={[calStyles.circle, { borderWidth: 1.5, borderColor: ACCENT }]} />
+                  <View
+                    style={[
+                      calStyles.circle,
+                      { borderWidth: 1.5, borderColor: colors.primary },
+                    ]}
+                  />
                 ) : null}
-
                 <Text
                   style={[
                     calStyles.dayText,
@@ -191,10 +192,10 @@ const CalendarMonth: React.FC<CalendarMonthProps> = ({
                       color: !inMonth
                         ? colors.onSurfaceVariant + "44"
                         : isSel
-                        ? colors.onPrimary
-                        : todayDay
-                        ? ACCENT
-                        : colors.onBackground,
+                          ? colors.onPrimary
+                          : todayDay
+                            ? colors.primary
+                            : colors.onBackground,
                       fontWeight: isSel || todayDay ? "700" : "400",
                     },
                   ]}>
@@ -205,31 +206,34 @@ const CalendarMonth: React.FC<CalendarMonthProps> = ({
           })}
         </View>
       ))}
-    </View>
+    </>
   );
 };
 
 const calStyles = StyleSheet.create({
-  monthBlock: {
-    marginBottom: 24,
-    backgroundColor: "rgba(255,255,255,0.04)",
-    borderRadius: 20,
-    padding: 16,
+  headerRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 20,
   },
-  monthTitle: {
-    fontSize: 18,
-    fontWeight: "700",
-    marginBottom: 12,
+  monthTitle: { fontSize: 21, fontWeight: "700" },
+  navRow: { flexDirection: "row", gap: 4 },
+  navBtn: {
+    width: 30,
+    height: 30,
+    alignItems: "center",
+    justifyContent: "center",
   },
   weekRow: {
     flexDirection: "row",
-    justifyContent: "space-around",
-    marginBottom: 2,
+    justifyContent: "space-between",
+    marginBottom: 4,
   },
   dayHeader: {
     width: 36,
     textAlign: "center",
-    fontSize: 12,
+    fontSize: 13,
     fontWeight: "600",
     paddingVertical: 4,
   },
@@ -239,90 +243,256 @@ const calStyles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     position: "relative",
-    marginVertical: 1,
+    marginVertical: 3,
   },
-  circle: {
-    position: "absolute",
-    width: 34,
-    height: 34,
-    borderRadius: 17,
-  },
-  dayText: {
-    fontSize: 14,
-    zIndex: 1,
-  },
+  circle: { position: "absolute", width: 34, height: 34, borderRadius: 17 },
+  dayText: { fontSize: 15, zIndex: 1 },
 });
 
-// ─── Quick Jump ────────────────────────────────────────────────────────────────
+// ─── Wheel column (infinite/scroll picker) ─────────────────────────────────────
 
-interface QuickJumpProps {
-  selectedDate: Date;
-  onJump: (d: Date) => void;
+const WHEEL_ITEM_H = 42;
+const WHEEL_VISIBLE = 5; // must be odd
+const WHEEL_HEIGHT = WHEEL_ITEM_H * WHEEL_VISIBLE;
+const WHEEL_PAD = WHEEL_ITEM_H * Math.floor(WHEEL_VISIBLE / 2);
+
+interface WheelColumnProps {
+  values: (string | number)[];
+  /** index into `values` that should be centered initially / when it changes externally */
+  selectedIndex: number;
+  onSettle: (index: number) => void;
+  loop?: boolean;
   colors: any;
 }
 
-const QuickJump: React.FC<QuickJumpProps> = ({ selectedDate, onJump, colors }) => {
-  const currentYear = getYear(selectedDate);
-  const currentMonth = getMonth(selectedDate);
-  const years = Array.from({ length: 7 }, (_, i) => currentYear - 2 + i);
-  const [jumpYear, setJumpYear] = useState(currentYear);
+const WheelColumn: React.FC<WheelColumnProps> = ({
+  values,
+  selectedIndex,
+  onSettle,
+  loop = false,
+  colors,
+}) => {
+  // For loop mode, triple the data so we can silently recenter near the edges.
+  const data = loop ? [...values, ...values, ...values] : values;
+  const baseOffset = loop ? values.length : 0;
 
-  const handleMonthSelect = (monthIdx: number) => {
-    let newDate = setYear(selectedDate, jumpYear);
-    newDate = setMonth(newDate, monthIdx);
-    onJump(newDate);
+  const listRef = useRef<FlatList<any>>(null);
+  const scrollY = useRef(
+    new Animated.Value((selectedIndex + baseOffset) * WHEEL_ITEM_H),
+  ).current;
+  const didInit = useRef(false);
+
+  useEffect(() => {
+    // Only snap programmatically on first mount / when the picker reopens with a new value.
+    const target = (selectedIndex + baseOffset) * WHEEL_ITEM_H;
+    listRef.current?.scrollToOffset({
+      offset: target,
+      animated: didInit.current,
+    });
+    didInit.current = true;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedIndex, values.length]);
+
+  const handleMomentumEnd = useCallback(
+    (e: NativeSyntheticEvent<NativeScrollEvent>) => {
+      const offsetY = e.nativeEvent.contentOffset.y;
+      let index = Math.round(offsetY / WHEEL_ITEM_H);
+      index = Math.max(0, Math.min(data.length - 1, index));
+
+      if (loop) {
+        const realIndex =
+          ((index % values.length) + values.length) % values.length;
+        // If we've drifted into the first or last copy, silently jump back to the middle copy.
+        if (index < values.length || index >= values.length * 2) {
+          const recentered = realIndex + values.length;
+          requestAnimationFrame(() => {
+            listRef.current?.scrollToOffset({
+              offset: recentered * WHEEL_ITEM_H,
+              animated: false,
+            });
+          });
+        }
+        onSettle(realIndex);
+      } else {
+        onSettle(index);
+      }
+    },
+    [data.length, loop, onSettle, values.length],
+  );
+
+  const handlePressItem = (index: number) => {
+    listRef.current?.scrollToOffset({
+      offset: index * WHEEL_ITEM_H,
+      animated: true,
+    });
   };
 
   return (
-    <View style={[qjStyles.container, { backgroundColor: "rgba(255,255,255,0.04)", borderRadius: 20 }]}>
-      <Text style={[qjStyles.title, { color: colors.onBackground }]}>Quick Jump</Text>
-      <View style={qjStyles.columns}>
-        {/* Year column */}
-        <View style={qjStyles.col}>
-          {years.map((y) => {
-            const isActive = y === jumpYear;
-            return (
-              <TouchableOpacity
-                key={y}
-                style={[qjStyles.item, isActive && { backgroundColor: colors.primaryContainer, borderRadius: 14 }]}
-                onPress={() => setJumpYear(y)}>
-                <Text
-                  style={[
-                    qjStyles.itemText,
-                    {
-                      color: isActive ? colors.onPrimaryContainer : colors.onSurfaceVariant,
-                      fontWeight: isActive ? "700" : "400",
-                    },
-                  ]}>
-                  {y}
-                </Text>
-              </TouchableOpacity>
-            );
-          })}
-        </View>
+    <View style={{ height: WHEEL_HEIGHT, overflow: "hidden" }}>
+      {/* Center highlight pill */}
+      <View
+        pointerEvents="none"
+        style={[
+          wheelStyles.highlight,
+          {
+            top: WHEEL_PAD,
+            height: WHEEL_ITEM_H,
+            backgroundColor: colors.primaryContainer,
+          },
+        ]}
+      />
+      <Animated.FlatList
+        ref={listRef}
+        data={data}
+        keyExtractor={(_, i) => String(i)}
+        showsVerticalScrollIndicator={false}
+        snapToInterval={WHEEL_ITEM_H}
+        decelerationRate="fast"
+        bounces={false}
+        contentContainerStyle={{ paddingVertical: WHEEL_PAD }}
+        onScroll={Animated.event(
+          [{ nativeEvent: { contentOffset: { y: scrollY } } }],
+          { useNativeDriver: true },
+        )}
+        scrollEventThrottle={16}
+        onMomentumScrollEnd={handleMomentumEnd}
+        getItemLayout={(_, index) => ({
+          length: WHEEL_ITEM_H,
+          offset: WHEEL_ITEM_H * index,
+          index,
+        })}
+        renderItem={({ item, index }) => {
+          const inputRange = [
+            (index - 2) * WHEEL_ITEM_H,
+            (index - 1) * WHEEL_ITEM_H,
+            index * WHEEL_ITEM_H,
+            (index + 1) * WHEEL_ITEM_H,
+            (index + 2) * WHEEL_ITEM_H,
+          ];
+          const opacity = scrollY.interpolate({
+            inputRange,
+            outputRange: [0.15, 0.45, 1, 0.45, 0.15],
+            extrapolate: "clamp",
+          });
+          const scale = scrollY.interpolate({
+            inputRange,
+            outputRange: [0.75, 0.88, 1, 0.88, 0.75],
+            extrapolate: "clamp",
+          });
+          return (
+            <TouchableOpacity
+              activeOpacity={0.7}
+              onPress={() => handlePressItem(index)}
+              style={{
+                height: WHEEL_ITEM_H,
+                alignItems: "center",
+                justifyContent: "center",
+              }}>
+              <Animated.Text
+                style={{
+                  fontSize: 17,
+                  fontWeight: "700",
+                  color: colors.onBackground,
+                  opacity,
+                  transform: [{ scale }],
+                }}>
+                {item}
+              </Animated.Text>
+            </TouchableOpacity>
+          );
+        }}
+      />
+    </View>
+  );
+};
 
-        {/* Month column */}
+const wheelStyles = StyleSheet.create({
+  highlight: {
+    position: "absolute",
+    left: 0,
+    right: 0,
+    borderRadius: 14,
+    zIndex: -1,
+  },
+});
+
+// ─── Quick Jump view ───────────────────────────────────────────────────────────
+
+const YEAR_SPAN = 100; // years before/after "now" — wide enough to feel infinite
+
+interface QuickJumpProps {
+  viewMonth: Date;
+  onJump: (d: Date) => void;
+  onBack: () => void;
+  colors: any;
+}
+
+const QuickJump: React.FC<QuickJumpProps> = ({
+  viewMonth,
+  onJump,
+  onBack,
+  colors,
+}) => {
+  const nowYear = getYear(new Date());
+  const years = useRef(
+    Array.from(
+      { length: YEAR_SPAN * 2 + 1 },
+      (_, i) => nowYear - YEAR_SPAN + i,
+    ),
+  ).current;
+
+  const initialYearIndex = years.indexOf(getYear(viewMonth));
+  const initialMonthIndex = getMonth(viewMonth);
+
+  const yearRef = useRef(getYear(viewMonth));
+  const monthRef = useRef(getMonth(viewMonth));
+
+  const commit = () => {
+    let d = setYear(viewMonth, yearRef.current);
+    d = setMonth(d, monthRef.current);
+    onJump(d);
+  };
+
+  return (
+    <View>
+      <View style={qjStyles.headerRow}>
+        <TouchableOpacity
+          onPress={onBack}
+          style={qjStyles.backBtn}
+          activeOpacity={0.7}>
+          <Ionicons
+            name="chevron-back"
+            size={20}
+            color={colors.onSurfaceVariant}
+          />
+        </TouchableOpacity>
+        <Text style={[qjStyles.title, { color: colors.onBackground }]}>
+          Quick Jump
+        </Text>
+      </View>
+      <View style={qjStyles.columns}>
         <View style={qjStyles.col}>
-          {MONTHS_SHORT.map((m, idx) => {
-            const isActive = idx === currentMonth && jumpYear === currentYear;
-            return (
-              <TouchableOpacity
-                key={m}
-                style={[qjStyles.item, isActive && { backgroundColor: colors.primaryContainer, borderRadius: 14 }]}
-                onPress={() => handleMonthSelect(idx)}>
-                <Text
-                  style={[
-                    qjStyles.itemText,
-                    {
-                      color: isActive ? colors.onPrimaryContainer : colors.onSurfaceVariant,
-                      fontWeight: isActive ? "700" : "400",
-                    },
-                  ]}>
-                  {m}
-                </Text>
-              </TouchableOpacity>
-            );
-          })}
+          <WheelColumn
+            values={years}
+            selectedIndex={initialYearIndex}
+            colors={colors}
+            onSettle={(idx) => {
+              yearRef.current = years[idx];
+              commit();
+            }}
+          />
+        </View>
+        <View style={qjStyles.col}>
+          <WheelColumn
+            values={MONTHS_SHORT}
+            selectedIndex={initialMonthIndex}
+            loop
+            colors={colors}
+            onSettle={(idx) => {
+              monthRef.current = idx;
+              commit();
+            }}
+          />
         </View>
       </View>
     </View>
@@ -330,16 +500,21 @@ const QuickJump: React.FC<QuickJumpProps> = ({ selectedDate, onJump, colors }) =
 };
 
 const qjStyles = StyleSheet.create({
-  container: { padding: 16 },
-  title: { fontSize: 18, fontWeight: "700", marginBottom: 14 },
-  columns: { flexDirection: "row", gap: 8 },
-  col: { flex: 1, gap: 2 },
-  item: {
-    paddingVertical: 10,
-    paddingHorizontal: 12,
+  headerRow: {
+    flexDirection: "row",
     alignItems: "center",
+    marginBottom: 18,
+    gap: 8,
   },
-  itemText: { fontSize: 15 },
+  backBtn: {
+    width: 28,
+    height: 28,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  title: { fontSize: 20, fontWeight: "700" },
+  columns: { flexDirection: "row", gap: 8 },
+  col: { flex: 1 },
 });
 
 // ─── Main Picker ───────────────────────────────────────────────────────────────
@@ -352,49 +527,37 @@ export const CustomDatePicker: React.FC<CustomDatePickerProps> = ({
   style,
   label = "Date",
   showLabel = true,
-  minimumDate,
-  maximumDate,
-  mode = "date",
 }) => {
-  const { colors, typography, spacing } = useAppTheme();
+  const { colors, typography } = useAppTheme();
   const [showPicker, setShowPicker] = useState(false);
-  const [tempDate, setTempDate] = useState<Date>(
-    value && isValid(value) ? value : new Date(),
+  const [pickerView, setPickerView] = useState<"calendar" | "quickJump">(
+    "calendar",
   );
-
-  // Quick-filter chip state
-  type QuickFilter = "today" | "week" | "month" | "last30" | "custom";
-  const [quickFilter, setQuickFilter] = useState<QuickFilter>("custom");
+  const [viewMonth, setViewMonth] = useState<Date>(
+    value && isValid(value) ? startOfMonth(value) : startOfMonth(new Date()),
+  );
 
   useEffect(() => {
     if (value && isValid(value)) {
-      setTempDate(DateUtils.toDate(value) ?? new Date());
+      setViewMonth(startOfMonth(DateUtils.toDate(value) ?? new Date()));
     }
   }, [value]);
 
-  const handleChip = (filter: QuickFilter) => {
-    setQuickFilter(filter);
-    const now = new Date();
-    let d = now;
-    if (filter === "today") d = now;
-    else if (filter === "week") d = startOfWeek(now);
-    else if (filter === "month") d = startOfMonth(now);
-    else if (filter === "last30") d = subDays(now, 30);
-    setTempDate(d);
+  const handleOpen = () => {
+    if (disabled) return;
+    setViewMonth(startOfMonth(value && isValid(value) ? value : new Date()));
+    setPickerView("calendar");
+    setShowPicker(true);
   };
 
-  const handleDaySelect = (day: Date) => {
-    setQuickFilter("custom");
-    setTempDate(day);
-  };
-
-  const handleSave = () => {
-    onDateChange(tempDate);
+  const handleSelectDay = (day: Date) => {
+    onDateChange(day);
     setShowPicker(false);
   };
 
   const handleJump = (d: Date) => {
-    setTempDate(d);
+    setViewMonth(startOfMonth(d));
+    setPickerView("calendar");
   };
 
   const formatDisplay = () => {
@@ -406,19 +569,19 @@ export const CustomDatePicker: React.FC<CustomDatePickerProps> = ({
     }
   };
 
-  // Build two months to show
-  const month1 = startOfMonth(tempDate);
-  const month2 = addMonths(month1, 1);
-
   return (
     <>
-      {/* Trigger button */}
       <View style={{ marginBottom: 18 }}>
         {showLabel && (
           <Text
             style={[
               typography.label,
-              { color: colors.primary, letterSpacing: 0.5, textTransform: "uppercase", marginBottom: 8 },
+              {
+                color: colors.primary,
+                letterSpacing: 0.5,
+                textTransform: "uppercase",
+                marginBottom: 8,
+              },
             ]}>
             {label}
           </Text>
@@ -433,16 +596,19 @@ export const CustomDatePicker: React.FC<CustomDatePickerProps> = ({
             disabled && { opacity: 0.5 },
             style,
           ]}
-          onPress={() => {
-            if (!disabled) {
-              setTempDate(value && isValid(value) ? value : new Date());
-              setShowPicker(true);
-            }
-          }}
+          onPress={handleOpen}
           disabled={disabled}
           activeOpacity={0.75}>
-          <View style={[triggerStyles.iconBox, { backgroundColor: colors.primaryContainer + "55" }]}>
-            <Ionicons name="calendar-outline" size={16} color={colors.primary} />
+          <View
+            style={[
+              triggerStyles.iconBox,
+              { backgroundColor: colors.primaryContainer + "55" },
+            ]}>
+            <Ionicons
+              name="calendar-outline"
+              size={16}
+              color={colors.primary}
+            />
           </View>
           <Text
             style={[
@@ -451,65 +617,60 @@ export const CustomDatePicker: React.FC<CustomDatePickerProps> = ({
             ]}>
             {formatDisplay()}
           </Text>
-          <Ionicons name="chevron-forward" size={16} color={colors.onSurfaceVariant} />
+          <Ionicons
+            name="chevron-forward"
+            size={16}
+            color={colors.onSurfaceVariant}
+          />
         </TouchableOpacity>
       </View>
 
-      {/* Modal */}
       <Modal
         visible={showPicker}
         transparent
-        animationType="slide"
+        animationType="fade"
         statusBarTranslucent
         onRequestClose={() => setShowPicker(false)}>
-        <View style={[modalStyles.overlay, { backgroundColor: "rgba(0,0,0,0.6)" }]}>
-          <View
+        <TouchableOpacity
+          style={modalStyles.overlay}
+          activeOpacity={1}
+          onPress={() => setShowPicker(false)}>
+          <TouchableOpacity
+            activeOpacity={1}
+            onPress={(e) => e.stopPropagation()}
             style={[
-              modalStyles.sheet,
-              { backgroundColor: colors.background, borderColor: colors.outlineVariant },
+              modalStyles.card,
+              {
+                backgroundColor: colors.background,
+                borderColor: colors.outlineVariant,
+              },
             ]}>
-            {/* Header */}
-            <View style={[modalStyles.header, { borderBottomColor: colors.outlineVariant }]}>
-              <TouchableOpacity onPress={() => setShowPicker(false)} style={modalStyles.headerBtn}>
-                <Ionicons name="close" size={22} color={colors.onSurfaceVariant} />
-              </TouchableOpacity>
-              <Text style={[modalStyles.headerTitle, { color: colors.onBackground }]}>Select Date</Text>
-              <TouchableOpacity onPress={handleSave} style={modalStyles.headerBtn}>
-                <Text style={[modalStyles.saveText, { color: colors.primary }]}>Save</Text>
-              </TouchableOpacity>
-            </View>
-
-            {/* Chips */}
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              style={modalStyles.chipsScroll}
-              contentContainerStyle={modalStyles.chipsContent}>
-              <Chip label="Today" active={quickFilter === "today"} onPress={() => handleChip("today")} colors={colors} />
-              <Chip label="This Week" active={quickFilter === "week"} onPress={() => handleChip("week")} colors={colors} />
-              <Chip label="This Month" active={quickFilter === "month"} onPress={() => handleChip("month")} colors={colors} />
-              <Chip label="Last 30 Days" active={quickFilter === "last30"} onPress={() => handleChip("last30")} colors={colors} />
-            </ScrollView>
-
-            {/* Scrollable calendars + quick jump */}
-            <ScrollView
-              style={{ flex: 1 }}
-              contentContainerStyle={modalStyles.scrollContent}
-              showsVerticalScrollIndicator={false}>
-              <CalendarMonth month={month1} selected={tempDate} onSelect={handleDaySelect} colors={colors} typography={typography} />
-              <CalendarMonth month={month2} selected={tempDate} onSelect={handleDaySelect} colors={colors} typography={typography} />
-              <QuickJump selectedDate={tempDate} onJump={handleJump} colors={colors} />
-            </ScrollView>
-          </View>
-        </View>
+            {pickerView === "calendar" ? (
+              <CalendarView
+                viewMonth={viewMonth}
+                selected={value}
+                onSelectDay={handleSelectDay}
+                onPrevMonth={() => setViewMonth((m) => subMonths(m, 1))}
+                onNextMonth={() => setViewMonth((m) => addMonths(m, 1))}
+                onTitlePress={() => setPickerView("quickJump")}
+                colors={colors}
+              />
+            ) : (
+              <QuickJump
+                viewMonth={viewMonth}
+                onJump={handleJump}
+                onBack={() => setPickerView("calendar")}
+                colors={colors}
+              />
+            )}
+          </TouchableOpacity>
+        </TouchableOpacity>
       </Modal>
     </>
   );
 };
 
 // ─── Styles ────────────────────────────────────────────────────────────────────
-
-const { height: SCREEN_H } = Dimensions.get("window");
 
 const triggerStyles = StyleSheet.create({
   input: {
@@ -528,58 +689,22 @@ const triggerStyles = StyleSheet.create({
     justifyContent: "center",
     marginRight: 12,
   },
-  inputText: {
-    flex: 1,
-    fontSize: 16,
-    paddingVertical: 16,
-  },
+  inputText: { flex: 1, fontSize: 16, paddingVertical: 16 },
 });
 
 const modalStyles = StyleSheet.create({
   overlay: {
     flex: 1,
-    justifyContent: "flex-end",
-  },
-  sheet: {
-    maxHeight: SCREEN_H * 0.92,
-    borderTopLeftRadius: 28,
-    borderTopRightRadius: 28,
-    borderWidth: 1,
-    borderBottomWidth: 0,
-    overflow: "hidden",
-  },
-  header: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingHorizontal: 20,
-    paddingVertical: 16,
-    borderBottomWidth: 1,
-  },
-  headerBtn: {
-    width: 44,
-    alignItems: "center",
     justifyContent: "center",
-  },
-  headerTitle: {
-    fontSize: 17,
-    fontWeight: "700",
-  },
-  saveText: {
-    fontSize: 16,
-    fontWeight: "700",
-  },
-  chipsScroll: {
-    flexGrow: 0,
-    paddingVertical: 12,
-  },
-  chipsContent: {
-    paddingHorizontal: 16,
-    flexDirection: "row",
     alignItems: "center",
+    backgroundColor: "rgba(0,0,0,0.6)",
+    paddingHorizontal: 24,
   },
-  scrollContent: {
-    padding: 16,
-    paddingBottom: 48,
+  card: {
+    width: "100%",
+    maxWidth: 380,
+    borderRadius: 28,
+    borderWidth: 1,
+    padding: 22,
   },
 });

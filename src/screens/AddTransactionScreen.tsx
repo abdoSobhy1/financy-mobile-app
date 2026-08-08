@@ -33,15 +33,18 @@ import { IconChip } from "../components/ui/IconChip";
 import { ParsedTransactionReview } from "../components/input";
 import { CustomKeypad } from "../components/ui/CustomKeypad";
 
-type NavigationProp = StackNavigationProp<TransactionStackParamList, "AddTransaction">;
+type NavigationProp = StackNavigationProp<
+  TransactionStackParamList,
+  "AddTransaction"
+>;
 type RouteParam = RouteProp<TransactionStackParamList, "AddTransaction">;
 
 const evaluateMath = (expr: string): number => {
   try {
-    const sanitized = expr.replace(/[^-()\d/*+.]/g, '');
+    const sanitized = expr.replace(/[^-()\d/*+.]/g, "");
     if (!sanitized) return 0;
     // eslint-disable-next-line no-new-func
-    return Number(new Function('return ' + sanitized)());
+    return Number(new Function("return " + sanitized)());
   } catch (e) {
     return 0;
   }
@@ -54,11 +57,13 @@ export const AddTransactionScreen: React.FC = () => {
   const editTransaction = params?.editTransaction;
   const prefilledData = params?.prefilledData;
   const initialCategoryId = params?.categoryId;
-  
+
   const dispatch = useDispatch<AppDispatch>();
   const { colors, typography, spacing, radius } = useAppTheme();
 
-  const { items: categories } = useSelector((state: RootState) => state.categories);
+  const { items: categories } = useSelector(
+    (state: RootState) => state.categories,
+  );
   const { items: budgets } = useSelector((state: RootState) => state.budgets);
 
   const [amountStr, setAmountStr] = useState("");
@@ -139,7 +144,12 @@ export const AddTransactionScreen: React.FC = () => {
 
     try {
       if (editTransaction) {
-        await dispatch(updateTransaction({ id: editTransaction.id, updates: transactionData })).unwrap();
+        await dispatch(
+          updateTransaction({
+            id: editTransaction.id,
+            updates: transactionData,
+          }),
+        ).unwrap();
       } else {
         await dispatch(addTransaction(transactionData)).unwrap();
       }
@@ -177,35 +187,60 @@ export const AddTransactionScreen: React.FC = () => {
     }
   };
 
-  const activeCategories = Object.values(categories).filter(c => c && c.type === type && !c.deleted);
+  const activeCategories = Object.values(categories).filter(
+    (c) => c && c.type === type && !c.deleted,
+  );
   const selectedBudget = budgetId ? budgets[budgetId] : null;
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }} edges={["top", "bottom"]}>
-      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+    <SafeAreaView
+      style={{ flex: 1, backgroundColor: colors.background }}
+      edges={["top", "bottom"]}>
+      <KeyboardAvoidingView
+        style={{ flex: 1 }}
+        behavior={Platform.OS === "ios" ? "padding" : undefined}>
         {/* Custom Top Bar */}
         <View style={styles.topBar}>
-          <TouchableOpacity 
-            style={[styles.iconButton, { backgroundColor: colors.surfaceVariant }]} 
-            onPress={() => navigation.goBack()}
-          >
+          <TouchableOpacity
+            style={[
+              styles.iconButton,
+              { backgroundColor: colors.surfaceVariant },
+            ]}
+            onPress={() => navigation.goBack()}>
             <Ionicons name="close" size={24} color={colors.onSurfaceVariant} />
           </TouchableOpacity>
           <Text style={[styles.title, { color: colors.onBackground }]}>
             {editTransaction ? "Edit Transaction" : "New Transaction"}
           </Text>
-          <TouchableOpacity 
-            style={[styles.iconButton, { backgroundColor: colors.primaryContainer }]} 
-            onPress={handleSave}
-          >
-            <Ionicons name="checkmark" size={24} color={colors.onPrimaryContainer} />
+          <TouchableOpacity
+            style={[
+              styles.iconButton,
+              { backgroundColor: colors.primaryContainer },
+            ]}
+            onPress={handleSave}>
+            <Ionicons
+              name="checkmark"
+              size={24}
+              color={colors.onPrimaryContainer}
+            />
           </TouchableOpacity>
         </View>
 
-        <ScrollView contentContainerStyle={{ padding: spacing.lg, paddingBottom: spacing.xxl }}>
-          
+        <ScrollView
+          contentContainerStyle={{
+            padding: spacing.lg,
+            paddingBottom: spacing.xxl,
+          }}>
           {/* Segmented Control */}
-          <View style={[styles.segmentContainer, { backgroundColor: colors.surfaceVariant, borderRadius: radius.pill, marginBottom: spacing.xl }]}>
+          <View
+            style={[
+              styles.segmentContainer,
+              {
+                backgroundColor: colors.surfaceVariant,
+                borderRadius: radius.pill,
+                marginBottom: spacing.xl,
+              },
+            ]}>
             {["income", "expense"].map((t) => {
               const isActive = type === t;
               return (
@@ -213,13 +248,25 @@ export const AddTransactionScreen: React.FC = () => {
                   key={t}
                   style={[
                     styles.segmentButton,
-                    { borderRadius: radius.pill, backgroundColor: isActive ? colors.surface : "transparent" },
+                    {
+                      borderRadius: radius.pill,
+                      backgroundColor: isActive
+                        ? colors.surface
+                        : "transparent",
+                    },
                   ]}
                   onPress={() => setType(t as TransactionType)}>
-                  <Text style={[
-                    typography.bodyMedium,
-                    { color: isActive ? colors.onBackground : colors.onSurfaceVariant, fontWeight: isActive ? "700" : "500", textTransform: "capitalize" }
-                  ]}>
+                  <Text
+                    style={[
+                      typography.bodyMedium,
+                      {
+                        color: isActive
+                          ? colors.onBackground
+                          : colors.onSurfaceVariant,
+                        fontWeight: isActive ? "700" : "500",
+                        textTransform: "capitalize",
+                      },
+                    ]}>
                     {t}
                   </Text>
                 </TouchableOpacity>
@@ -229,39 +276,84 @@ export const AddTransactionScreen: React.FC = () => {
 
           {/* Amount Section */}
           <View style={styles.amountSection}>
-            <Text style={[typography.bodyMedium, { color: colors.onSurfaceVariant, marginBottom: 8 }]}>Amount</Text>
+            <Text
+              style={[
+                typography.bodyMedium,
+                { color: colors.onSurfaceVariant, marginBottom: 8 },
+              ]}>
+              Amount
+            </Text>
             <View style={styles.amountRow}>
               <View style={styles.amountTextContainer}>
-                <Text style={[styles.currencySymbol, { color: colors.onSurfaceVariant }]}>$</Text>
-                <Text style={[styles.amountValue, { color: colors.onPrimaryContainer }]}>
+                <Text
+                  style={[
+                    styles.currencySymbol,
+                    { color: colors.onSurfaceVariant },
+                  ]}>
+                  $
+                </Text>
+                <Text
+                  style={[
+                    styles.amountValue,
+                    { color: colors.onPrimaryContainer },
+                  ]}>
                   {amountStr || "0.00"}
                 </Text>
               </View>
-                {!editTransaction && (
-                  <View style={styles.voiceBtnContainer}>
-                    <TouchableOpacity
-                      style={{ alignItems: "center", justifyContent: "center", width: 48, height: 48, borderRadius: 24, backgroundColor: colors.primaryContainer }}
-                      onPress={() => navigation.navigate("VoiceInput")}
-                    >
-                      <Ionicons name="mic" size={24} color={colors.primary} />
-                    </TouchableOpacity>
-                  </View>
-                )}
+              {!editTransaction && (
+                <View style={styles.voiceBtnContainer}>
+                  <TouchableOpacity
+                    style={{
+                      alignItems: "center",
+                      justifyContent: "center",
+                      width: 48,
+                      height: 48,
+                      borderRadius: 24,
+                      backgroundColor: colors.primaryContainer,
+                    }}
+                    onPress={() => navigation.navigate("VoiceInput")}>
+                    <Ionicons name="mic" size={24} color={colors.primary} />
+                  </TouchableOpacity>
+                </View>
+              )}
             </View>
           </View>
 
           {/* Categories */}
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: spacing.md, marginBottom: spacing.xl }}>
-            {activeCategories.map(cat => {
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={{
+              gap: spacing.md,
+              marginBottom: spacing.xl,
+            }}>
+            {activeCategories.map((cat) => {
               const isSelected = cat.id === categoryId;
               return (
-                <TouchableOpacity 
-                  key={cat.id} 
-                  onPress={() => handleCategorySelect(cat.id)} 
-                  style={[styles.categoryChip, { backgroundColor: colors.surfaceVariant, borderColor: isSelected ? colors.primary : "transparent" }]}
-                >
-                  <Ionicons name={((cat as any).icon) || "pricetag"} size={20} color={colors.onBackground} style={{ marginRight: 6 }} />
-                  <Text style={[typography.bodyMedium, { color: colors.onBackground, fontWeight: isSelected ? "700" : "500" }]}>
+                <TouchableOpacity
+                  key={cat.id}
+                  onPress={() => handleCategorySelect(cat.id)}
+                  style={[
+                    styles.categoryChip,
+                    {
+                      backgroundColor: colors.surfaceVariant,
+                      borderColor: isSelected ? colors.primary : "transparent",
+                    },
+                  ]}>
+                  <Ionicons
+                    name={(cat as any).icon || "pricetag"}
+                    size={20}
+                    color={colors.onBackground}
+                    style={{ marginRight: 6 }}
+                  />
+                  <Text
+                    style={[
+                      typography.bodyMedium,
+                      {
+                        color: colors.onBackground,
+                        fontWeight: isSelected ? "700" : "500",
+                      },
+                    ]}>
                     {cat.name}
                   </Text>
                 </TouchableOpacity>
@@ -270,50 +362,120 @@ export const AddTransactionScreen: React.FC = () => {
           </ScrollView>
 
           {/* Options Grouped Card */}
-          <View style={[styles.optionsCard, { backgroundColor: colors.surfaceVariant }]}>
+          <View
+            style={[
+              styles.optionsCard,
+              { backgroundColor: colors.surfaceVariant },
+            ]}>
             {/* Budget */}
             {Object.values(budgets).length > 0 && (
-              <TouchableOpacity style={[styles.optionRow, { borderBottomColor: colors.outlineVariant, borderBottomWidth: 1 }]} onPress={() => {}}>
-                <View style={[styles.optionIcon, { backgroundColor: "rgba(128, 203, 196, 0.15)" }]}>
-                  <Ionicons name="pie-chart-outline" size={20} color={colors.primary} />
+              <TouchableOpacity
+                style={[
+                  styles.optionRow,
+                  {
+                    borderBottomColor: colors.outlineVariant,
+                    borderBottomWidth: 1,
+                  },
+                ]}
+                onPress={() => {}}>
+                <View
+                  style={[
+                    styles.optionIcon,
+                    { backgroundColor: "rgba(128, 203, 196, 0.15)" },
+                  ]}>
+                  <Ionicons
+                    name="pie-chart-outline"
+                    size={20}
+                    color={colors.primary}
+                  />
                 </View>
                 <View style={styles.optionContent}>
-                  <Text style={[typography.bodyMedium, { color: colors.onBackground, fontWeight: "600" }]}>
+                  <Text
+                    style={[
+                      typography.bodyMedium,
+                      { color: colors.onBackground, fontWeight: "600" },
+                    ]}>
                     {selectedBudget ? selectedBudget.name : "Select Budget"}
                   </Text>
                   {selectedBudget && (
-                    <Text style={[typography.bodySmall, { color: colors.onSurfaceVariant }]}>
+                    <Text
+                      style={[
+                        typography.bodySmall,
+                        { color: colors.onSurfaceVariant },
+                      ]}>
                       Remaining: ${selectedBudget.amount}
                     </Text>
                   )}
                 </View>
-                <Ionicons name="chevron-forward" size={20} color={colors.onSurfaceVariant} />
+                <Ionicons
+                  name="chevron-forward"
+                  size={20}
+                  color={colors.onSurfaceVariant}
+                />
               </TouchableOpacity>
             )}
 
             {/* Date */}
-            <TouchableOpacity 
-              style={[styles.optionRow, { borderBottomColor: colors.outlineVariant, borderBottomWidth: 1 }]} 
-              onPress={() => setShowDatePicker(true)}
-            >
-              <View style={[styles.optionIcon, { backgroundColor: "rgba(255, 255, 255, 0.05)" }]}>
-                <Ionicons name="calendar-outline" size={20} color={colors.onSurfaceVariant} />
+            <TouchableOpacity
+              style={[
+                styles.optionRow,
+                {
+                  borderBottomColor: colors.outlineVariant,
+                  borderBottomWidth: 1,
+                },
+              ]}
+              onPress={() => setShowDatePicker(true)}>
+              <View
+                style={[
+                  styles.optionIcon,
+                  { backgroundColor: "rgba(255, 255, 255, 0.05)" },
+                ]}>
+                <Ionicons
+                  name="calendar-outline"
+                  size={20}
+                  color={colors.onSurfaceVariant}
+                />
               </View>
               <View style={styles.optionContent}>
-                <Text style={[typography.bodyMedium, { color: colors.onBackground, fontWeight: "600" }]}>
-                  {date.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}
+                <Text
+                  style={[
+                    typography.bodyMedium,
+                    { color: colors.onBackground, fontWeight: "600" },
+                  ]}>
+                  {date.toLocaleDateString("en-US", {
+                    weekday: "short",
+                    month: "short",
+                    day: "numeric",
+                    hour: "numeric",
+                    minute: "2-digit",
+                  })}
                 </Text>
               </View>
             </TouchableOpacity>
 
             {/* Description */}
-            <View style={[styles.optionRow, { borderBottomColor: "transparent", borderBottomWidth: 0 }]}>
-              <View style={[styles.optionIcon, { backgroundColor: "rgba(255, 255, 255, 0.05)" }]}>
-                <Ionicons name="pencil-outline" size={20} color={colors.onSurfaceVariant} />
+            <View
+              style={[
+                styles.optionRow,
+                { borderBottomColor: "transparent", borderBottomWidth: 0 },
+              ]}>
+              <View
+                style={[
+                  styles.optionIcon,
+                  { backgroundColor: "rgba(255, 255, 255, 0.05)" },
+                ]}>
+                <Ionicons
+                  name="pencil-outline"
+                  size={20}
+                  color={colors.onSurfaceVariant}
+                />
               </View>
               <View style={styles.optionContent}>
                 <TextInput
-                  style={[typography.bodyMedium, { color: colors.onBackground, padding: 0 }]}
+                  style={[
+                    typography.bodyMedium,
+                    { color: colors.onBackground, padding: 0 },
+                  ]}
                   placeholder="Add a description..."
                   placeholderTextColor={colors.onSurfaceVariant}
                   value={description}
@@ -324,11 +486,25 @@ export const AddTransactionScreen: React.FC = () => {
           </View>
 
           {/* More Options */}
-          <TouchableOpacity style={styles.moreOptionsBtn} onPress={() => setShowMore(!showMore)}>
-            <Text style={[typography.bodyMedium, { color: colors.primaryContainer, fontWeight: "700", marginRight: 4 }]}>
+          <TouchableOpacity
+            style={styles.moreOptionsBtn}
+            onPress={() => setShowMore(!showMore)}>
+            <Text
+              style={[
+                typography.bodyMedium,
+                {
+                  color: colors.primaryContainer,
+                  fontWeight: "700",
+                  marginRight: 4,
+                },
+              ]}>
               More options
             </Text>
-            <Ionicons name={showMore ? "chevron-up" : "chevron-down"} size={16} color={colors.primaryContainer} />
+            <Ionicons
+              name={showMore ? "chevron-up" : "chevron-down"}
+              size={16}
+              color={colors.primaryContainer}
+            />
           </TouchableOpacity>
 
           {showMore && (
@@ -345,18 +521,23 @@ export const AddTransactionScreen: React.FC = () => {
             </View>
           )}
         </ScrollView>
-        
+
         {showDatePicker && (
-           <CustomDatePicker
-             value={date}
-             onDateChange={(d) => { setDate(d); setShowDatePicker(false); }}
-             label="Transaction Date"
-           />
+          <CustomDatePicker
+            value={date}
+            onDateChange={(d) => {
+              setDate(d);
+              setShowDatePicker(false);
+            }}
+            label="Transaction Date"
+          />
         )}
 
         {/* Custom Keypad pinned to bottom */}
-        <CustomKeypad onPress={handleKeypadPress} onBackspace={handleBackspace} />
-
+        <CustomKeypad
+          onPress={handleKeypadPress}
+          onBackspace={handleBackspace}
+        />
       </KeyboardAvoidingView>
 
       {/* Voice Review Modal */}
@@ -465,7 +646,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     marginBottom: 24,
-  }
+  },
 });
 
 export default AddTransactionScreen;
