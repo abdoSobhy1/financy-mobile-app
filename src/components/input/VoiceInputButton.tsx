@@ -263,13 +263,14 @@ export const VoiceInputButton: React.FC<VoiceInputButtonProps> = ({
 
   const startListening = useCallback(async () => {
     try {
+      bottomSheetRef.current?.present();
+
       // Check for internet connection first
       const netInfo = await NetInfo.fetch();
       if (!netInfo.isConnected) {
         setIsOffline(true);
         setIsListening(true);
         isListeningRef.current = true;
-        bottomSheetRef.current?.present();
         return;
       }
 
@@ -277,6 +278,8 @@ export const VoiceInputButton: React.FC<VoiceInputButtonProps> = ({
         await ExpoSpeechRecognitionModule.requestPermissionsAsync();
       if (!result.granted) {
         console.warn("[VoiceInput] Permission denied");
+        setIsListening(false);
+        isListeningRef.current = false;
         return;
       }
 
@@ -286,7 +289,6 @@ export const VoiceInputButton: React.FC<VoiceInputButtonProps> = ({
       setIsOffline(false);
       setIsListening(true);
       isListeningRef.current = true;
-      bottomSheetRef.current?.present();
 
       countdownRef.current = setInterval(() => {
         setTimeLeft((prev) => {
@@ -312,7 +314,7 @@ export const VoiceInputButton: React.FC<VoiceInputButtonProps> = ({
       console.error("[VoiceInput] Start error:", error);
       setIsListening(false);
       isListeningRef.current = false;
-      bottomSheetRef.current?.dismiss();
+      // Don't dismiss, let user see it failed or just keep the modal open with default state
     }
   }, []);
 
