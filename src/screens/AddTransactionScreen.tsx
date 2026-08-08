@@ -13,6 +13,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { useDispatch, useSelector } from "react-redux";
 import { useNavigation, useRoute, RouteProp } from "@react-navigation/native";
 import { StackNavigationProp } from "@react-navigation/stack";
+import { Ionicons } from "@expo/vector-icons";
 import { RootState, AppDispatch } from "../store";
 import {
   addTransaction,
@@ -27,12 +28,24 @@ import {
   TransactionType,
 } from "../types";
 import { useAppTheme } from "../components/ui/ThemeProvider";
-import { Button, Input, Modal, CustomDatePicker } from "../components/ui";
+import { Input, CustomDatePicker } from "../components/ui";
 import { IconChip } from "../components/ui/IconChip";
 import { VoiceInputButton, ParsedTransactionReview } from "../components/input";
+import { CustomKeypad } from "../components/ui/CustomKeypad";
 
 type NavigationProp = StackNavigationProp<TransactionStackParamList, "AddTransaction">;
 type RouteParam = RouteProp<TransactionStackParamList, "AddTransaction">;
+
+const evaluateMath = (expr: string): number => {
+  try {
+    const sanitized = expr.replace(/[^-()\d/*+.]/g, '');
+    if (!sanitized) return 0;
+    // eslint-disable-next-line no-new-func
+    return Number(new Function('return ' + sanitized)());
+  } catch (e) {
+    return 0;
+  }
+};
 
 export const AddTransactionScreen: React.FC = () => {
   const navigation = useNavigation<NavigationProp>();
@@ -40,18 +53,14 @@ export const AddTransactionScreen: React.FC = () => {
   const params = route.params as any;
   const editTransaction = params?.editTransaction;
   const initialCategoryId = params?.categoryId;
-  const autoFocusAmount = params?.autoFocusAmount;
 
   const dispatch = useDispatch<AppDispatch>();
   const { colors, typography, spacing, radius } = useAppTheme();
 
   const { items: categories } = useSelector((state: RootState) => state.categories);
   const { items: budgets } = useSelector((state: RootState) => state.budgets);
-  const { loading } = useSelector((state: RootState) => state.transactions);
 
-  const amountInputRef = useRef<TextInput>(null);
-
-  const [amount, setAmount] = useState("");
+  const [amountStr, setAmountStr] = useState("");
   const [type, setType] = useState<TransactionType>("expense");
   const [categoryId, setCategoryId] = useState<string>("");
   const [budgetId, setBudgetId] = useState<string>("");
@@ -60,15 +69,17 @@ export const AddTransactionScreen: React.FC = () => {
   const [description, setDescription] = useState("");
   const [note, setNote] = useState("");
   const [date, setDate] = useState<Date>(new Date());
+  const [showDatePicker, setShowDatePicker] = useState(false);
 
   const [voiceResults, setVoiceResults] = useState<any[]>([]);
   const [showVoiceReview, setShowVoiceReview] = useState(false);
+
   useEffect(() => {
     dispatch(fetchCategories());
     dispatch(fetchBudgets());
 
     if (editTransaction) {
-      setAmount(editTransaction.amount.toString());
+      setAmountStr(editTransaction.amount.toString());
       setType(editTransaction.type);
       setCategoryId(editTransaction.categoryId || "");
       setBudgetId(editTransaction.budgetId || "");
@@ -79,14 +90,6 @@ export const AddTransactionScreen: React.FC = () => {
       setCategoryId(initialCategoryId);
     }
   }, [editTransaction, initialCategoryId, dispatch]);
-
-  useEffect(() => {
-    if (autoFocusAmount && amountInputRef.current) {
-      setTimeout(() => {
-        amountInputRef.current?.focus();
-      }, 100);
-    }
-  }, [autoFocusAmount]);
 
   const handleCategorySelect = (id: string) => {
     setCategoryId(id);
@@ -106,7 +109,8 @@ export const AddTransactionScreen: React.FC = () => {
   };
 
   const handleSave = async () => {
-    if (!amount || isNaN(Number(amount))) {
+    const finalAmount = evaluateMath(amountStr);
+    if (!finalAmount || isNaN(finalAmount)) {
       alert("Please enter a valid amount");
       return;
     }
@@ -116,7 +120,7 @@ export const AddTransactionScreen: React.FC = () => {
     }
 
     const transactionData: TransactionFormData = {
-      amount: amount,
+      amount: finalAmount.toString(),
       type,
       categoryId,
       budgetId: budgetId || undefined,
@@ -138,6 +142,14 @@ export const AddTransactionScreen: React.FC = () => {
     }
   };
 
+  const handleKeypadPress = (key: string) => {
+    setAmountStr((prev) => prev + key);
+  };
+
+  const handleBackspace = () => {
+    setAmountStr((prev) => prev.slice(0, -1));
+  };
+
   const handleVoiceResult = (results: any[]) => {
     setVoiceResults(results);
     setShowVoiceReview(true);
@@ -157,69 +169,49 @@ export const AddTransactionScreen: React.FC = () => {
     }
   };
 
-  const activeCategories = Object.values(categories).filter(c => c.type === type && !c.deleted);
+  const activeCategories = Object.values(categories).filter(c => c && c.type === type && !c.deleted);
+  const selectedBudget = budgetId ? budgets[budgetId] : null;
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }} edges={["top", "bottom"]}>
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+        {/* Custom Top Bar */}
+        <View style={styles.topBar}>
+          <TouchableOpacity 
+            style={[styles.iconButton, { backgroundColor: colors.surfaceVariant }]} 
+            onPress={() => navigation.goBack()}
+          >
+            <Ionicons name="close" size={24} color={colors.onSurfaceVariant} />
+          </TouchableOpacity>
+          <Text style={[styles.title, { color: colors.onBackground }]}>
+            {editTransaction ? "Edit Transaction" : "New Transaction"}
+          </Text>
+          <TouchableOpacity 
+            style={[styles.iconButton, { backgroundColor: colors.primaryContainer }]} 
+            onPress={handleSave}
+          >
+            <Ionicons name="checkmark" size={24} color={colors.onPrimaryContainer} />
+          </TouchableOpacity>
+        </View>
+
         <ScrollView contentContainerStyle={{ padding: spacing.lg, paddingBottom: spacing.xxl }}>
-
-          {/* Voice Input */}
-          {!editTransaction && (
-            <VoiceInputButton 
-              variant="button" 
-              title="Add with Voice"
-              onResult={handleVoiceResult} 
-              style={{ marginBottom: spacing.md }}
-            />
-          )}
-
-          {/* Amount Input */}
-          <View style={{ alignItems: "center", marginBottom: spacing.xl, marginTop: spacing.xs }}>
-            <TextInput
-              ref={amountInputRef}
-              style={[
-                typography.h1,
-                {
-                  fontSize: 64,
-                  lineHeight: 72,
-                  color: colors.onBackground,
-                  textAlign: "center",
-                  minWidth: 150,
-                },
-              ]}
-              placeholder="0.00"
-              placeholderTextColor={colors.onSurfaceVariant}
-              keyboardType="decimal-pad"
-              value={amount}
-              onChangeText={setAmount}
-              autoFocus={autoFocusAmount}
-            />
-          </View>
-
+          
           {/* Segmented Control */}
-          <View style={{ flexDirection: "row", backgroundColor: colors.surfaceVariant, borderRadius: radius.pill, padding: spacing.xs, marginBottom: spacing.xl }}>
-            {["expense", "income"].map((t) => {
+          <View style={[styles.segmentContainer, { backgroundColor: colors.surfaceVariant, borderRadius: radius.pill, marginBottom: spacing.xl }]}>
+            {["income", "expense"].map((t) => {
               const isActive = type === t;
               return (
                 <TouchableOpacity
                   key={t}
-                  style={{
-                    flex: 1,
-                    paddingVertical: spacing.sm,
-                    alignItems: "center",
-                    backgroundColor: isActive ? colors.surface : "transparent",
-                    borderRadius: radius.pill,
-                    ... (isActive ? {
-                      shadowColor: "#000",
-                      shadowOffset: { width: 0, height: 2 },
-                      shadowOpacity: 0.1,
-                      shadowRadius: 4,
-                      elevation: 2,
-                    } : {})
-                  }}
+                  style={[
+                    styles.segmentButton,
+                    { borderRadius: radius.pill, backgroundColor: isActive ? colors.surface : "transparent" },
+                  ]}
                   onPress={() => setType(t as TransactionType)}>
-                  <Text style={[typography.bodyMedium, { color: isActive ? colors.primary : colors.onSurfaceVariant, fontWeight: isActive ? "600" : "400", textTransform: "capitalize" }]}>
+                  <Text style={[
+                    typography.bodyMedium,
+                    { color: isActive ? colors.onBackground : colors.onSurfaceVariant, fontWeight: isActive ? "700" : "500", textTransform: "capitalize" }
+                  ]}>
                     {t}
                   </Text>
                 </TouchableOpacity>
@@ -227,19 +219,40 @@ export const AddTransactionScreen: React.FC = () => {
             })}
           </View>
 
-          {/* Category Selector */}
-          <Text style={[typography.label, { color: colors.onBackground, marginBottom: spacing.md }]}>Category</Text>
+          {/* Amount Section */}
+          <View style={styles.amountSection}>
+            <Text style={[typography.bodyMedium, { color: colors.onSurfaceVariant, marginBottom: 8 }]}>Amount</Text>
+            <View style={styles.amountRow}>
+              <View style={styles.amountTextContainer}>
+                <Text style={[styles.currencySymbol, { color: colors.onSurfaceVariant }]}>$</Text>
+                <Text style={[styles.amountValue, { color: colors.onPrimaryContainer }]}>
+                  {amountStr || "0.00"}
+                </Text>
+              </View>
+              {!editTransaction && (
+                <View style={styles.voiceBtnContainer}>
+                  <VoiceInputButton 
+                    variant="fab" 
+                    size={48} 
+                    onResult={handleVoiceResult} 
+                  />
+                </View>
+              )}
+            </View>
+          </View>
+
+          {/* Categories */}
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: spacing.md, marginBottom: spacing.xl }}>
             {activeCategories.map(cat => {
               const isSelected = cat.id === categoryId;
               return (
-                <TouchableOpacity key={cat.id} onPress={() => handleCategorySelect(cat.id)} style={{ alignItems: "center", width: 70 }}>
-                  <View style={[
-                    { padding: spacing.xs, borderRadius: radius.pill, borderWidth: 2, borderColor: isSelected ? colors.primary : "transparent" }
-                  ]}>
-                    <IconChip iconName={((cat as any).icon) || "help"} colorName="bluegrey" size={56} />
-                  </View>
-                  <Text style={[typography.bodySmall, { color: colors.onBackground, marginTop: spacing.xs, textAlign: "center" }]} numberOfLines={1}>
+                <TouchableOpacity 
+                  key={cat.id} 
+                  onPress={() => handleCategorySelect(cat.id)} 
+                  style={[styles.categoryChip, { backgroundColor: colors.surfaceVariant, borderColor: isSelected ? colors.primary : "transparent" }]}
+                >
+                  <Ionicons name={((cat as any).icon) || "pricetag"} size={20} color={colors.onBackground} style={{ marginRight: 6 }} />
+                  <Text style={[typography.bodyMedium, { color: colors.onBackground, fontWeight: isSelected ? "700" : "500" }]}>
                     {cat.name}
                   </Text>
                 </TouchableOpacity>
@@ -247,53 +260,70 @@ export const AddTransactionScreen: React.FC = () => {
             })}
           </ScrollView>
 
-          {/* Budget Selector */}
-          {Object.values(budgets).length > 0 && (
-            <>
-              <Text style={[typography.label, { color: colors.onBackground, marginBottom: spacing.md }]}>Budget</Text>
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: spacing.md, marginBottom: spacing.xl }}>
-                {Object.values(budgets).map(b => {
-                  const isSelected = b.id === budgetId;
-                  return (
-                    <TouchableOpacity key={b.id} onPress={() => handleBudgetSelect(b.id)} style={{ alignItems: "center", width: 70 }}>
-                      <View style={[
-                        { padding: spacing.xs, borderRadius: radius.pill, borderWidth: 2, borderColor: isSelected ? colors.primary : "transparent" }
-                      ]}>
-                        <IconChip iconName="pie-chart" colorName="teal" size={56} />
-                      </View>
-                      <Text style={[typography.bodySmall, { color: colors.onBackground, marginTop: spacing.xs, textAlign: "center" }]} numberOfLines={1}>
-                        {b.name}
-                      </Text>
-                    </TouchableOpacity>
-                  );
-                })}
-              </ScrollView>
-            </>
-          )}
+          {/* Options Grouped Card */}
+          <View style={[styles.optionsCard, { backgroundColor: colors.surfaceVariant }]}>
+            {/* Budget */}
+            {Object.values(budgets).length > 0 && (
+              <TouchableOpacity style={[styles.optionRow, { borderBottomColor: colors.outlineVariant, borderBottomWidth: 1 }]} onPress={() => {}}>
+                <View style={[styles.optionIcon, { backgroundColor: "rgba(128, 203, 196, 0.15)" }]}>
+                  <Ionicons name="pie-chart-outline" size={20} color={colors.primary} />
+                </View>
+                <View style={styles.optionContent}>
+                  <Text style={[typography.bodyMedium, { color: colors.onBackground, fontWeight: "600" }]}>
+                    {selectedBudget ? selectedBudget.name : "Select Budget"}
+                  </Text>
+                  {selectedBudget && (
+                    <Text style={[typography.bodySmall, { color: colors.onSurfaceVariant }]}>
+                      Remaining: ${selectedBudget.amount}
+                    </Text>
+                  )}
+                </View>
+                <Ionicons name="chevron-forward" size={20} color={colors.onSurfaceVariant} />
+              </TouchableOpacity>
+            )}
+
+            {/* Date */}
+            <TouchableOpacity 
+              style={[styles.optionRow, { borderBottomColor: colors.outlineVariant, borderBottomWidth: 1 }]} 
+              onPress={() => setShowDatePicker(true)}
+            >
+              <View style={[styles.optionIcon, { backgroundColor: "rgba(255, 255, 255, 0.05)" }]}>
+                <Ionicons name="calendar-outline" size={20} color={colors.onSurfaceVariant} />
+              </View>
+              <View style={styles.optionContent}>
+                <Text style={[typography.bodyMedium, { color: colors.onBackground, fontWeight: "600" }]}>
+                  {date.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}
+                </Text>
+              </View>
+            </TouchableOpacity>
+
+            {/* Description */}
+            <View style={[styles.optionRow, { borderBottomColor: "transparent", borderBottomWidth: 0 }]}>
+              <View style={[styles.optionIcon, { backgroundColor: "rgba(255, 255, 255, 0.05)" }]}>
+                <Ionicons name="pencil-outline" size={20} color={colors.onSurfaceVariant} />
+              </View>
+              <View style={styles.optionContent}>
+                <TextInput
+                  style={[typography.bodyMedium, { color: colors.onBackground, padding: 0 }]}
+                  placeholder="Add a description..."
+                  placeholderTextColor={colors.onSurfaceVariant}
+                  value={description}
+                  onChangeText={setDescription}
+                />
+              </View>
+            </View>
+          </View>
 
           {/* More Options */}
-          {!showMore && (
-            <Button
-              title="More Options"
-              variant="secondary"
-              onPress={() => setShowMore(true)}
-              style={{ marginBottom: spacing.xl }}
-            />
-          )}
+          <TouchableOpacity style={styles.moreOptionsBtn} onPress={() => setShowMore(!showMore)}>
+            <Text style={[typography.bodyMedium, { color: colors.primaryContainer, fontWeight: "700", marginRight: 4 }]}>
+              More options
+            </Text>
+            <Ionicons name={showMore ? "chevron-up" : "chevron-down"} size={16} color={colors.primaryContainer} />
+          </TouchableOpacity>
 
           {showMore && (
             <View style={{ gap: spacing.md, marginBottom: spacing.xl }}>
-              <CustomDatePicker
-                value={date}
-                onDateChange={setDate}
-                label="Transaction Date"
-              />
-              <Input
-                label="Description"
-                placeholder="What was this for?"
-                value={description}
-                onChangeText={setDescription}
-              />
               <Input
                 label="Note"
                 placeholder="Additional details..."
@@ -305,24 +335,19 @@ export const AddTransactionScreen: React.FC = () => {
               />
             </View>
           )}
-
-          {/* Action Buttons */}
-          <View style={{ flexDirection: "row", gap: spacing.md, marginTop: "auto" }}>
-            <Button
-              title="Cancel"
-              variant="ghost"
-              onPress={() => navigation.goBack()}
-              style={{ flex: 1 }}
-            />
-            <Button
-              title="Save"
-              variant="primary"
-              onPress={handleSave}
-              loading={loading}
-              style={{ flex: 1 }}
-            />
-          </View>
         </ScrollView>
+        
+        {showDatePicker && (
+           <CustomDatePicker
+             value={date}
+             onDateChange={(d) => { setDate(d); setShowDatePicker(false); }}
+             label="Transaction Date"
+           />
+        )}
+
+        {/* Custom Keypad pinned to bottom */}
+        <CustomKeypad onPress={handleKeypadPress} onBackspace={handleBackspace} />
+
       </KeyboardAvoidingView>
 
       {/* Voice Review Modal */}
@@ -340,5 +365,98 @@ export const AddTransactionScreen: React.FC = () => {
     </SafeAreaView>
   );
 };
+
+const styles = StyleSheet.create({
+  topBar: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    paddingHorizontal: 20,
+    paddingTop: 10,
+    paddingBottom: 20,
+  },
+  title: {
+    fontSize: 18,
+    fontWeight: "700",
+  },
+  iconButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  segmentContainer: {
+    flexDirection: "row",
+    padding: 4,
+  },
+  segmentButton: {
+    flex: 1,
+    paddingVertical: 10,
+    alignItems: "center",
+  },
+  amountSection: {
+    alignItems: "center",
+    marginBottom: 32,
+  },
+  amountRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  amountTextContainer: {
+    flexDirection: "row",
+    alignItems: "baseline",
+  },
+  currencySymbol: {
+    fontSize: 32,
+    fontWeight: "700",
+    marginRight: 4,
+  },
+  amountValue: {
+    fontSize: 48,
+    fontWeight: "800",
+  },
+  voiceBtnContainer: {
+    marginLeft: 16,
+  },
+  categoryChip: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 24,
+    borderWidth: 1,
+  },
+  optionsCard: {
+    borderRadius: 24,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    marginBottom: 24,
+  },
+  optionRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingVertical: 12,
+  },
+  optionIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    justifyContent: "center",
+    alignItems: "center",
+    marginRight: 16,
+  },
+  optionContent: {
+    flex: 1,
+    justifyContent: "center",
+  },
+  moreOptionsBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 24,
+  }
+});
 
 export default AddTransactionScreen;
