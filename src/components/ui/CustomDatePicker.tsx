@@ -433,7 +433,12 @@ export const CustomDatePicker: React.FC<CustomDatePickerProps> = ({
             disabled && { opacity: 0.5 },
             style,
           ]}
-          onPress={() => !disabled && setShowPicker(true)}
+          onPress={() => {
+            if (!disabled) {
+              setTempDate(value && isValid(value) ? value : new Date());
+              setShowPicker(true);
+            }
+          }}
           disabled={disabled}
           activeOpacity={0.75}>
           <View style={[triggerStyles.iconBox, { backgroundColor: colors.primaryContainer + "55" }]}>
@@ -575,7 +580,6 @@ const modalStyles = StyleSheet.create({
   },
   scrollContent: {
     padding: 16,
-    paddingBottom: 40,
-    gap: 16,
+    paddingBottom: 48,
   },
 });

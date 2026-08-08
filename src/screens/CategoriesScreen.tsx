@@ -71,10 +71,10 @@ export const CategoriesScreen: React.FC = () => {
   );
 
   const handleEdit = useCallback(
-    async (data: { name: string; type: "income" | "expense"; color?: string }) => {
+    async (data: { name: string; type: "income" | "expense"; color?: string; icon?: string }) => {
       if (!editingCategory) return;
       await dispatch(
-        updateCategory({ id: editingCategory.id, updates: { name: data.name, color: data.color, type: data.type } }),
+        updateCategory({ id: editingCategory.id, updates: { name: data.name, color: data.color, type: data.type, icon: data.icon } }),
       ).unwrap();
       setEditingCategory(null);
     },
@@ -272,7 +272,12 @@ export const CategoriesScreen: React.FC = () => {
           visible={!!editingCategory}
           onClose={() => setEditingCategory(null)}
           onCreateCategory={handleEdit}
-          type={editingCategory.type}
+          initialData={{
+            name: editingCategory.name,
+            type: editingCategory.type,
+            color: editingCategory.color,
+            icon: (editingCategory as any).icon,
+          }}
           title={`Edit "${editingCategory.name}"`}
         />
       )}

@@ -1,80 +1,108 @@
-import React, { useState } from "react";
-import { View, Text, Modal, TouchableOpacity, TextInput, ScrollView, StyleSheet } from "react-native";
+import React, { useState, useEffect } from "react";
+import {
+  View,
+  Text,
+  Modal,
+  TouchableOpacity,
+  TextInput,
+  ScrollView,
+  StyleSheet,
+  FlatList,
+} from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { UI } from "../../constants";
 import { useAppTheme } from "../ui/ThemeProvider";
 
+// ─── Data ─────────────────────────────────────────────────────────────────────
+
 const PREDEFINED_COLORS = [
-  "#EF4444",
-  "#F97316",
-  "#F59E0B",
-  "#EAB308",
-  "#84CC16",
-  "#22C55E",
-  "#10B981",
-  "#14B8A6",
-  "#06B6D4",
-  "#0EA5E9",
-  "#3B82F6",
-  "#6366F1",
-  "#8B5CF6",
-  "#A855F7",
-  "#D946EF",
-  "#EC4899",
-  "#F43F5E",
-  "#64748B",
+  "#EF4444", "#F97316", "#F59E0B", "#EAB308",
+  "#84CC16", "#22C55E", "#10B981", "#14B8A6",
+  "#06B6D4", "#0EA5E9", "#3B82F6", "#6366F1",
+  "#8B5CF6", "#A855F7", "#D946EF", "#EC4899",
+  "#F43F5E", "#64748B",
 ];
+
+// Curated subset of Ionicons that make sense for finance categories
+const CATEGORY_ICONS: string[] = [
+  // Food & Shopping
+  "fast-food", "restaurant", "cafe", "wine", "cart", "bag-handle", "basket",
+  // Transport
+  "car", "bus", "train", "airplane", "bicycle", "boat",
+  // Home & Utilities
+  "home", "business", "flash", "water", "wifi", "desktop", "laptop",
+  // Health & Personal
+  "medkit", "fitness", "heart", "body", "glasses", "cut",
+  // Entertainment
+  "game-controller", "musical-notes", "film", "tv", "book", "camera",
+  // Finance
+  "cash", "card", "wallet", "trending-up", "trending-down", "calculator", "stats-chart",
+  // Education
+  "school", "library", "journal", "newspaper",
+  // Other
+  "gift", "star", "pricetag", "people", "person", "briefcase", "build", "leaf", "paw", "planet",
+];
+
+// ─── Types ─────────────────────────────────────────────────────────────────────
 
 export interface CategoryData {
   name: string;
   type: "income" | "expense";
   color?: string;
+  icon?: string;
 }
 
 interface CategoryCreationModalProps {
   visible: boolean;
   onClose: () => void;
   onCreateCategory: (category: CategoryData) => void;
+  /** Pre-fill values for edit mode */
+  initialData?: CategoryData;
   type?: "income" | "expense";
   title?: string;
 }
+
+// ─── Component ─────────────────────────────────────────────────────────────────
 
 export const CategoryCreationModal: React.FC<CategoryCreationModalProps> = ({
   visible,
   onClose,
   onCreateCategory,
+  initialData,
   type,
-  title = "Add New Category",
+  title,
 }) => {
-  const { colors } = useAppTheme();
-  const styles = React.useMemo(() => getStyles(colors), [colors]);
+  const { colors, typography, spacing } = useAppTheme();
 
-  const [categoryName, setCategoryName] = useState("");
-  const [categoryColor, setCategoryColor] = useState("");
-  const [categoryType, setCategoryType] = useState<"income" | "expense">(type || "expense");
+  const [name, setName] = useState("");
+  const [color, setColor] = useState(PREDEFINED_COLORS[0]);
+  const [icon, setIcon] = useState<string>("pricetag");
+  const [catType, setCatType] = useState<"income" | "expense">(type || "expense");
 
-  const handleCreate = () => {
-    if (!categoryName.trim()) return;
+  // Pre-fill when initialData changes (edit mode) or modal opens
+  useEffect(() => {
+    if (visible) {
+      setName(initialData?.name ?? "");
+      setColor(initialData?.color ?? PREDEFINED_COLORS[0]);
+      setIcon((initialData as any)?.icon ?? "pricetag");
+      setCatType(initialData?.type ?? type ?? "expense");
+    }
+  }, [visible, initialData, type]);
 
-    onCreateCategory({
-      name: categoryName.trim(),
-      type: categoryType,
-      color: categoryColor || undefined,
-    });
+  const isEdit = !!initialData;
+  const modalTitle = title ?? (isEdit ? "Edit Category" : "New Category");
 
-    // Reset form
-    setCategoryName("");
-    setCategoryColor("");
-    setCategoryType(type || "expense");
+  const handleSave = () => {
+    if (!name.trim()) return;
+    onCreateCategory({ name: name.trim(), type: catType, color, icon });
+    handleClose();
   };
 
   const handleClose = () => {
-    // Reset form when closing
-    setCategoryName("");
-    setCategoryColor("");
-    setCategoryType(type || "expense");
     onClose();
   };
+
+  const previewBg = color + "25";
 
   return (
     <Modal
@@ -82,229 +110,237 @@ export const CategoryCreationModal: React.FC<CategoryCreationModalProps> = ({
       animationType="slide"
       transparent
       onRequestClose={handleClose}
-      statusBarTranslucent={true}
+      statusBarTranslucent
       presentationStyle="overFullScreen">
-      <View style={styles.modalOverlay}>
-        <View style={styles.modal}>
-          <View style={styles.modalHeader}>
-            <Text style={styles.modalTitle}>{title}</Text>
-            <TouchableOpacity onPress={handleClose} style={styles.closeButton}>
-              <Ionicons name="close" size={24} color={colors.onSurfaceVariant} />
+      <View style={[styles.overlay]}>
+        <View style={[styles.sheet, { backgroundColor: colors.surface, borderColor: colors.outlineVariant }]}>
+
+          {/* ── Header ── */}
+          <View style={[styles.header, { borderBottomColor: colors.outlineVariant }]}>
+            <TouchableOpacity onPress={handleClose} style={styles.headerBtn}>
+              <Ionicons name="close" size={22} color={colors.onSurfaceVariant} />
+            </TouchableOpacity>
+            <Text style={[typography.h3, { color: colors.onBackground }]}>{modalTitle}</Text>
+            <TouchableOpacity
+              onPress={handleSave}
+              disabled={!name.trim()}
+              style={styles.headerBtn}>
+              <Text
+                style={[
+                  styles.saveText,
+                  { color: name.trim() ? colors.primary : colors.onSurfaceVariant },
+                ]}>
+                {isEdit ? "Save" : "Add"}
+              </Text>
             </TouchableOpacity>
           </View>
 
-          <View style={styles.modalContent}>
-            <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>Category Name</Text>
-              <TextInput
-                placeholder="Enter category name"
-                value={categoryName}
-                onChangeText={setCategoryName}
-                style={styles.modalInput}
-                placeholderTextColor={colors.onSurfaceVariant}
-                autoFocus={true}
-                maxLength={50}
-                returnKeyType="done"
-                onSubmitEditing={handleCreate}
-              />
+          <ScrollView
+            style={{ flex: 1 }}
+            contentContainerStyle={{ padding: 20, paddingBottom: 40 }}
+            showsVerticalScrollIndicator={false}
+            keyboardShouldPersistTaps="handled">
+
+            {/* ── Preview ── */}
+            <View style={[styles.preview, { backgroundColor: previewBg, borderColor: color + "55" }]}>
+              <View style={[styles.previewIcon, { backgroundColor: color + "33" }]}>
+                <Ionicons name={icon as any} size={32} color={color} />
+              </View>
+              <Text style={[typography.h3, { color: colors.onBackground, marginTop: 8 }]} numberOfLines={1}>
+                {name || "Category name"}
+              </Text>
+              <Text style={[typography.bodySmall, { color: color, marginTop: 2, fontWeight: "600" }]}>
+                {catType === "expense" ? "Expense" : "Income"}
+              </Text>
             </View>
 
+            {/* ── Name ── */}
+            <Text style={[styles.label, { color: colors.onSurfaceVariant }]}>NAME</Text>
+            <TextInput
+              value={name}
+              onChangeText={setName}
+              placeholder="Category name"
+              placeholderTextColor={colors.onSurfaceVariant + "88"}
+              style={[styles.input, { backgroundColor: colors.surfaceVariant, borderColor: colors.outlineVariant, color: colors.onBackground }]}
+              maxLength={50}
+              autoFocus={!isEdit}
+              returnKeyType="done"
+            />
+
+            {/* ── Type (only when not locked) ── */}
             {!type && (
-              <View style={styles.inputGroup}>
-                <Text style={styles.inputLabel}>Type</Text>
-                <View style={styles.typeContainer}>
-                  <TouchableOpacity
-                    style={[styles.typeChip, categoryType === "expense" && styles.typeChipActive]}
-                    onPress={() => setCategoryType("expense")}>
-                    <Text style={[styles.typeChipText, categoryType === "expense" && styles.typeChipTextActive]}>Expense</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    style={[styles.typeChip, categoryType === "income" && styles.typeChipActive]}
-                    onPress={() => setCategoryType("income")}>
-                    <Text style={[styles.typeChipText, categoryType === "income" && styles.typeChipTextActive]}>Income</Text>
-                  </TouchableOpacity>
+              <>
+                <Text style={[styles.label, { color: colors.onSurfaceVariant }]}>TYPE</Text>
+                <View style={styles.typeRow}>
+                  {(["expense", "income"] as const).map((t) => (
+                    <TouchableOpacity
+                      key={t}
+                      style={[
+                        styles.typePill,
+                        {
+                          backgroundColor: catType === t ? colors.primaryContainer : colors.surfaceVariant,
+                          borderColor: catType === t ? colors.primary : colors.outlineVariant,
+                        },
+                      ]}
+                      onPress={() => setCatType(t)}>
+                      <Text
+                        style={[
+                          typography.label,
+                          { color: catType === t ? colors.onPrimaryContainer : colors.onSurfaceVariant },
+                        ]}>
+                        {t === "expense" ? "Expense" : "Income"}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
                 </View>
-              </View>
+              </>
             )}
 
-            <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>Color (Optional)</Text>
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.colorScroll}>
+            {/* ── Colour ── */}
+            <Text style={[styles.label, { color: colors.onSurfaceVariant }]}>COLOUR</Text>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 24 }}>
+              {PREDEFINED_COLORS.map((c) => (
                 <TouchableOpacity
-                  style={[styles.colorOption, styles.colorOptionClear, !categoryColor && styles.colorOptionSelected]}
-                  onPress={() => setCategoryColor("")}>
-                  <Ionicons name={!categoryColor ? "checkmark" : "close"} size={16} color={colors.onSurfaceVariant} />
+                  key={c}
+                  style={[
+                    styles.colorDot,
+                    { backgroundColor: c },
+                    color === c && styles.colorDotSelected,
+                  ]}
+                  onPress={() => setColor(c)}>
+                  {color === c && <Ionicons name="checkmark" size={14} color="#fff" />}
                 </TouchableOpacity>
-                {PREDEFINED_COLORS.map((color) => (
-                  <TouchableOpacity
-                    key={color}
-                    style={[styles.colorOption, { backgroundColor: color }, categoryColor === color && styles.colorOptionSelected]}
-                    onPress={() => setCategoryColor(color)}>
-                    {categoryColor === color && <Ionicons name="checkmark" size={16} color="#FFFFFF" />}
-                  </TouchableOpacity>
-                ))}
-              </ScrollView>
-            </View>
-          </View>
+              ))}
+            </ScrollView>
 
-          <View style={styles.modalActions}>
-            <TouchableOpacity onPress={handleClose} style={[styles.cancelButton, styles.modalButton]}>
-              <Text style={styles.cancelButtonText}>Cancel</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              onPress={handleCreate}
-              style={[styles.addButton, styles.modalButton, !categoryName.trim() && styles.addButtonDisabled]}
-              disabled={!categoryName.trim()}>
-              <Text style={[styles.addButtonText, !categoryName.trim() && styles.addButtonTextDisabled]}>Add Category</Text>
-            </TouchableOpacity>
-          </View>
+            {/* ── Icon ── */}
+            <Text style={[styles.label, { color: colors.onSurfaceVariant }]}>ICON</Text>
+            <View style={styles.iconGrid}>
+              {CATEGORY_ICONS.map((ic) => {
+                const isSelected = icon === ic;
+                return (
+                  <TouchableOpacity
+                    key={ic}
+                    style={[
+                      styles.iconCell,
+                      {
+                        backgroundColor: isSelected ? color + "33" : colors.surfaceVariant,
+                        borderColor: isSelected ? color : "transparent",
+                      },
+                    ]}
+                    onPress={() => setIcon(ic)}>
+                    <Ionicons
+                      name={ic as any}
+                      size={22}
+                      color={isSelected ? color : colors.onSurfaceVariant}
+                    />
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          </ScrollView>
         </View>
       </View>
     </Modal>
   );
 };
 
-const getStyles = (colors: any) => StyleSheet.create({
-  modalOverlay: {
+// ─── Styles ────────────────────────────────────────────────────────────────────
+
+const styles = StyleSheet.create({
+  overlay: {
     flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-    backgroundColor: "rgba(0,0,0,0.7)",
-    padding: UI.SPACING.LG,
+    justifyContent: "flex-end",
+    backgroundColor: "rgba(0,0,0,0.65)",
   },
-  modal: {
-    backgroundColor: colors.surface,
-    borderRadius: UI.SPACING.LG,
-    padding: UI.SPACING.XL,
-    width: "100%",
-    maxWidth: 400,
-    maxHeight: "85%",
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.4,
-    shadowRadius: 16,
-    elevation: 12,
+  sheet: {
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.1)",
+    borderBottomWidth: 0,
+    maxHeight: "90%",
+    overflow: "hidden",
   },
-  modalHeader: {
+  header: {
     flexDirection: "row",
+    alignItems: "center",
     justifyContent: "space-between",
+    paddingHorizontal: 16,
+    paddingVertical: 16,
+    borderBottomWidth: 1,
+  },
+  headerBtn: {
+    width: 48,
     alignItems: "center",
-    marginBottom: UI.SPACING.LG,
-  },
-  modalTitle: {
-    fontSize: 20,
-    fontWeight: "600",
-    color: colors.onBackground,
-  },
-  closeButton: {
-    padding: UI.SPACING.SM,
-  },
-  modalContent: {
-    marginBottom: UI.SPACING.LG,
-  },
-  inputGroup: {
-    marginBottom: UI.SPACING.LG,
-  },
-  inputLabel: {
-    fontSize: 16,
-    fontWeight: "600",
-    color: colors.onBackground,
-    marginBottom: UI.SPACING.SM,
-  },
-  modalInput: {
-    borderWidth: 1,
-    borderColor: colors.outlineVariant,
-    borderRadius: UI.SPACING.SM,
-    paddingHorizontal: UI.SPACING.MD,
-    paddingVertical: UI.SPACING.SM + 2,
-    fontSize: 16,
-    color: colors.onBackground,
-    backgroundColor: colors.surfaceVariant,
-  },
-  typeContainer: {
-    flexDirection: "row",
-    gap: UI.SPACING.SM,
-  },
-  typeChip: {
-    paddingVertical: UI.SPACING.SM,
-    paddingHorizontal: UI.SPACING.MD,
-    borderRadius: 8,
-    backgroundColor: colors.surfaceVariant,
-    borderWidth: 1,
-    borderColor: colors.outlineVariant,
-  },
-  typeChipActive: {
-    backgroundColor: colors.primaryContainer,
-    borderColor: colors.primaryContainer,
-  },
-  typeChipText: {
-    fontSize: 14,
-    fontWeight: "500",
-    color: colors.onSurfaceVariant,
-  },
-  typeChipTextActive: {
-    color: colors.onPrimaryContainer,
-  },
-  colorScroll: {
-    marginHorizontal: -UI.SPACING.SM,
-  },
-  colorOption: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    marginHorizontal: UI.SPACING.XS,
     justifyContent: "center",
+  },
+  saveText: {
+    fontSize: 16,
+    fontWeight: "700",
+  },
+  preview: {
     alignItems: "center",
-    borderWidth: 2,
-    borderColor: "transparent",
-  },
-  colorOptionClear: {
-    backgroundColor: colors.surfaceVariant,
-    borderColor: colors.outlineVariant,
-  },
-  colorOptionSelected: {
-    borderColor: colors.onBackground,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 4,
-    elevation: 4,
-  },
-  modalActions: {
-    flexDirection: "row",
-    gap: UI.SPACING.MD,
-  },
-  modalButton: {
-    flex: 1,
-    paddingVertical: UI.SPACING.MD,
-    paddingHorizontal: UI.SPACING.LG,
-    borderRadius: UI.SPACING.SM,
-    alignItems: "center",
-  },
-  cancelButton: {
-    backgroundColor: colors.surfaceVariant,
+    borderRadius: 20,
     borderWidth: 1,
-    borderColor: colors.outlineVariant,
+    padding: 20,
+    marginBottom: 24,
   },
-  cancelButtonText: {
+  previewIcon: {
+    width: 64,
+    height: 64,
+    borderRadius: 20,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  label: {
+    fontSize: 11,
+    fontWeight: "700",
+    letterSpacing: 1,
+    marginBottom: 10,
+  },
+  input: {
+    borderRadius: 12,
+    borderWidth: 1,
+    paddingHorizontal: 14,
+    paddingVertical: 14,
     fontSize: 16,
-    fontWeight: "600",
-    color: colors.onSurfaceVariant,
+    marginBottom: 24,
   },
-  addButton: {
-    backgroundColor: colors.primaryContainer,
+  typeRow: {
+    flexDirection: "row",
+    gap: 10,
+    marginBottom: 24,
   },
-  addButtonDisabled: {
-    backgroundColor: colors.surfaceVariant,
+  typePill: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: 12,
+    alignItems: "center",
+    borderWidth: 1,
   },
-  addButtonText: {
-    fontSize: 16,
-    fontWeight: "600",
-    color: colors.onPrimaryContainer,
+  colorDot: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    marginRight: 8,
+    alignItems: "center",
+    justifyContent: "center",
   },
-  addButtonTextDisabled: {
-    color: colors.outline,
+  colorDotSelected: {
+    borderWidth: 3,
+    borderColor: "rgba(255,255,255,0.8)",
+  },
+  iconGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+  },
+  iconCell: {
+    width: 48,
+    height: 48,
+    borderRadius: 14,
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 1.5,
   },
 });

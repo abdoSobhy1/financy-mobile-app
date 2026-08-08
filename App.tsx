@@ -12,6 +12,7 @@ import {
   LoadingOverlay,
   ErrorBoundary,
   ToastProvider,
+  GlobalAlertProvider,
 } from "./src/components/ui";
 import { initializeFirebase } from "./src/services/firebase";
 import { AuthProvider } from "./src/contexts/AuthContext";
@@ -187,7 +188,9 @@ export default function App() {
                   <ToastProvider>
                     <BottomSheetModalProvider>
                       <SyncProvider>
-                        {!isLoading && !dbError && <AppWithSyncRefresh />}
+                        <GlobalAlertProvider>
+                          {!isLoading && !dbError && <AppWithSyncRefresh />}
+                        </GlobalAlertProvider>
                       </SyncProvider>
                     </BottomSheetModalProvider>
                   </ToastProvider>
