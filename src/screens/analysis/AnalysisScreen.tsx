@@ -12,6 +12,8 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { useAppTheme } from "../../components/ui/ThemeProvider";
 import { useAnalysisData } from "./hooks/useAnalysisData";
+import { AppHeader } from "../../components/ui/AppHeader";
+import { startOfMonth, endOfMonth, subMonths } from "date-fns";
 import { useTabBarHeight } from "../../components/ui";
 import { formatCurrency } from "../../utils";
 
@@ -19,7 +21,23 @@ export const AnalysisScreen: React.FC = () => {
   const { colors, typography, spacing, radius } = useAppTheme();
   const [refreshing, setRefreshing] = useState(false);
   const [filter, setFilter] = useState<"This Month" | "Last Month" | "3 Months">("This Month");
-  const { data: analyticsData, isLoading } = useAnalysisData();
+
+  const getDateRange = () => {
+    const now = new Date();
+    if (filter === "This Month") {
+      return { startDate: startOfMonth(now), endDate: endOfMonth(now) };
+    }
+    if (filter === "Last Month") {
+      const lastMonth = subMonths(now, 1);
+      return { startDate: startOfMonth(lastMonth), endDate: endOfMonth(lastMonth) };
+    }
+    if (filter === "3 Months") {
+      return { startDate: startOfMonth(subMonths(now, 2)), endDate: endOfMonth(now) };
+    }
+    return {};
+  };
+
+  const { data: analyticsData, isLoading } = useAnalysisData(getDateRange());
   const tabBarHeight = useTabBarHeight();
 
   const onRefresh = () => {
@@ -29,21 +47,7 @@ export const AnalysisScreen: React.FC = () => {
 
   const { summary, categoryBreakdown, monthlyTrends, budgetUsage } = analyticsData;
 
-  const renderTopHeader = () => (
-    <View style={styles.topHeader}>
-      <View style={{ flexDirection: "row", alignItems: "center" }}>
-        <View style={[styles.avatarPlaceholder, { backgroundColor: colors.surfaceVariant }]}>
-          <Ionicons name="person" size={16} color={colors.onSurfaceVariant} />
-        </View>
-        <Text style={[typography.h2, { color: colors.onBackground, marginLeft: spacing.md }]}>
-          August Overview
-        </Text>
-      </View>
-      <TouchableOpacity>
-        <Ionicons name="notifications-outline" size={24} color={colors.onBackground} />
-      </TouchableOpacity>
-    </View>
-  );
+  // Removed manual top header
 
   const renderFilters = () => (
     <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: spacing.xl, paddingHorizontal: spacing.lg }}>
@@ -223,7 +227,7 @@ export const AnalysisScreen: React.FC = () => {
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }} edges={["top"]}>
       <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
-      {renderTopHeader()}
+      <AppHeader title="Analytics" />
       <View style={{ marginTop: spacing.md }} />
       {renderFilters()}
 
