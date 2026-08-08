@@ -24,6 +24,8 @@ const MODAL_SCREENS = [
   "DebtPayments",
   "VoiceInput",
   "VoiceVerify",
+  "CategoryManagement",
+  "Import",
 ];
 
 // ── Visibility helper ────────────────────────────────────────────────

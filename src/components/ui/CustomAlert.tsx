@@ -1,4 +1,13 @@
-import React from "react";
+/**
+ * CustomAlert  — beautiful in-app alert that replaces the OS system dialog.
+ *
+ * Three exports:
+ *  1. <CustomAlert>          – low-level controlled modal (used internally)
+ *  2. <GlobalAlertProvider>  – mount once near the root; wires AlertService
+ *  3. useCustomAlert()       – hook for local per-screen alert state (legacy)
+ */
+
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   View,
   Text,
@@ -6,15 +15,23 @@ import {
   Modal,
   TouchableOpacity,
   TouchableWithoutFeedback,
+  Animated,
+  Dimensions,
 } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons } from "@expo/vector-icons";
 import { useAppTheme } from "./ThemeProvider";
+import { AlertService, AlertButton } from "../../services/AlertService";
 
-export interface CustomAlertButton {
-  text: string;
-  onPress?: () => void;
-  style?: "default" | "cancel" | "destructive";
+// ─── Types ────────────────────────────────────────────────────────────────────
+
+export interface CustomAlertButton extends AlertButton {}
+
+interface AlertConfig {
+  visible: boolean;
+  title: string;
+  message?: string;
+  buttons: CustomAlertButton[];
 }
 
 interface CustomAlertProps {
@@ -25,6 +42,8 @@ interface CustomAlertProps {
   onRequestClose?: () => void;
 }
 
+// ─── Presentation component ───────────────────────────────────────────────────
+
 export const CustomAlert: React.FC<CustomAlertProps> = ({
   visible,
   title,
@@ -32,18 +51,38 @@ export const CustomAlert: React.FC<CustomAlertProps> = ({
   buttons,
   onRequestClose,
 }) => {
-  const { colors } = useAppTheme();
-  const styles = React.useMemo(() => getStyles(colors), [colors]);
+  const { colors, typography, spacing } = useAppTheme();
+  const scaleAnim = useRef(new Animated.Value(0.85)).current;
+  const opacityAnim = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    if (visible) {
+      Animated.parallel([
+        Animated.spring(scaleAnim, {
+          toValue: 1,
+          useNativeDriver: true,
+          tension: 200,
+          friction: 20,
+        }),
+        Animated.timing(opacityAnim, {
+          toValue: 1,
+          duration: 160,
+          useNativeDriver: true,
+        }),
+      ]).start();
+    } else {
+      scaleAnim.setValue(0.85);
+      opacityAnim.setValue(0);
+    }
+  }, [visible]);
+
   const handleButtonPress = (button: CustomAlertButton) => {
     if (onRequestClose) onRequestClose();
-    if (button.onPress) {
-      setTimeout(() => button.onPress!(), 50);
-    }
+    if (button.onPress) setTimeout(() => button.onPress!(), 60);
   };
 
-  // Decide icon/color based on whether there's a destructive action
   const hasDestructive = buttons.some((b) => b.style === "destructive");
-  const iconName = hasDestructive ? "warning" : "information-circle";
+  const iconName: any = hasDestructive ? "warning" : "information-circle";
   const iconGradient: [string, string] = hasDestructive
     ? ["#FF6B6B", "#EE5A24"]
     : [colors.primary, colors.primaryContainer];
@@ -52,80 +91,98 @@ export const CustomAlert: React.FC<CustomAlertProps> = ({
     <Modal
       visible={visible}
       transparent
-      animationType="fade"
+      animationType="none"
+      statusBarTranslucent
       onRequestClose={onRequestClose}>
       <TouchableWithoutFeedback onPress={onRequestClose}>
         <View style={styles.overlay}>
           <TouchableWithoutFeedback>
-            <View style={styles.card}>
-              {/* Icon circle */}
+            <Animated.View
+              style={[
+                styles.card,
+                {
+                  backgroundColor: colors.surface,
+                  borderColor: colors.outlineVariant,
+                  transform: [{ scale: scaleAnim }],
+                  opacity: opacityAnim,
+                },
+              ]}>
+              {/* Icon badge */}
               <LinearGradient
                 colors={iconGradient}
                 start={{ x: 0, y: 0 }}
                 end={{ x: 1, y: 1 }}
                 style={styles.iconCircle}>
-                <Ionicons name={iconName} size={24} color="#fff" />
+                <Ionicons name={iconName} size={26} color="#fff" />
               </LinearGradient>
 
               {/* Title */}
-              <Text style={styles.title}>{title}</Text>
+              <Text style={[styles.title, { color: colors.onBackground }]}>
+                {title}
+              </Text>
 
               {/* Message */}
-              {message && <Text style={styles.message}>{message}</Text>}
+              {message ? (
+                <Text style={[styles.message, { color: colors.onSurfaceVariant }]}>
+                  {message}
+                </Text>
+              ) : null}
+
+              {/* Divider */}
+              <View style={[styles.divider, { backgroundColor: colors.outlineVariant }]} />
 
               {/* Buttons */}
-              <View style={styles.buttonContainer}>
+              <View style={styles.buttonRow}>
                 {buttons.map((button, index) => {
-                  if (button.style === "destructive") {
+                  const isDestructive = button.style === "destructive";
+                  const isCancel = button.style === "cancel";
+                  const isLast = index === buttons.length - 1;
+
+                  if (isDestructive) {
                     return (
                       <TouchableOpacity
                         key={index}
-                        activeOpacity={0.8}
+                        style={[styles.btn, styles.destructiveBtn]}
+                        activeOpacity={0.75}
                         onPress={() => handleButtonPress(button)}>
-                        <LinearGradient
-                          colors={["#FF6B6B", "#EE5A24"]}
-                          style={styles.gradientBtn}
-                          start={{ x: 0, y: 0 }}
-                          end={{ x: 1, y: 1 }}>
-                          <Text style={styles.gradientBtnText}>
-                            {button.text}
-                          </Text>
-                        </LinearGradient>
+                        <Text style={styles.destructiveBtnText}>{button.text}</Text>
                       </TouchableOpacity>
                     );
                   }
 
-                  if (button.style === "cancel") {
+                  if (isCancel) {
                     return (
                       <TouchableOpacity
                         key={index}
-                        style={styles.cancelBtn}
+                        style={[styles.btn, { borderColor: colors.outlineVariant }]}
+                        activeOpacity={0.7}
                         onPress={() => handleButtonPress(button)}>
-                        <Text style={styles.cancelBtnText}>{button.text}</Text>
+                        <Text style={[styles.cancelBtnText, { color: colors.onSurfaceVariant }]}>
+                          {button.text}
+                        </Text>
                       </TouchableOpacity>
                     );
                   }
 
-                  // default
+                  // default / primary
                   return (
                     <TouchableOpacity
                       key={index}
                       activeOpacity={0.8}
-                      onPress={() => handleButtonPress(button)}>
+                      onPress={() => handleButtonPress(button)}
+                      style={styles.primaryBtnWrapper}>
                       <LinearGradient
                         colors={[colors.primary, colors.primaryContainer]}
-                        style={styles.gradientBtn}
+                        style={styles.primaryBtn}
                         start={{ x: 0, y: 0 }}
                         end={{ x: 1, y: 1 }}>
-                        <Text style={styles.gradientBtnText}>
-                          {button.text}
-                        </Text>
+                        <Text style={styles.primaryBtnText}>{button.text}</Text>
                       </LinearGradient>
                     </TouchableOpacity>
                   );
                 })}
               </View>
-            </View>
+            </Animated.View>
           </TouchableWithoutFeedback>
         </View>
       </TouchableWithoutFeedback>
@@ -133,98 +190,55 @@ export const CustomAlert: React.FC<CustomAlertProps> = ({
   );
 };
 
-const getStyles = (colors: any) =>
-  StyleSheet.create({
-    overlay: {
-      flex: 1,
-      backgroundColor: "rgba(0,0,0,0.65)",
-      justifyContent: "center",
-      alignItems: "center",
-    },
-    card: {
-      width: "85%",
-      maxWidth: 360,
-      backgroundColor: colors.surface,
-      borderRadius: 22,
-      paddingTop: 28,
-      paddingBottom: 22,
-      paddingHorizontal: 24,
-      alignItems: "center",
-      borderWidth: 1,
-      borderColor: colors.outlineVariant,
-      // shadow
-      shadowColor: "#000",
-      shadowOffset: { width: 0, height: 12 },
-      shadowOpacity: 0.5,
-      shadowRadius: 24,
-      elevation: 16,
-    },
-    iconCircle: {
-      width: 52,
-      height: 52,
-      borderRadius: 16,
-      alignItems: "center",
-      justifyContent: "center",
-      marginBottom: 16,
-    },
-    title: {
-      fontSize: 18,
-      fontWeight: "700",
-      color: colors.onBackground,
-      textAlign: "center",
-      marginBottom: 8,
-    },
-    message: {
-      fontSize: 14,
-      color: colors.onSurfaceVariant,
-      lineHeight: 20,
-      textAlign: "center",
-      marginBottom: 6,
-    },
-    buttonContainer: {
-      width: "100%",
-      gap: 10,
-      marginTop: 18,
-    },
-    gradientBtn: {
-      height: 48,
-      borderRadius: 14,
-      alignItems: "center",
-      justifyContent: "center",
-      shadowColor: colors.primary,
-      shadowOffset: { width: 0, height: 4 },
-      shadowOpacity: 0.3,
-      shadowRadius: 8,
-      elevation: 5,
-    },
-    gradientBtnText: {
-      fontSize: 15,
-      fontWeight: "700",
-      color: "#fff",
-    },
-    cancelBtn: {
-      height: 48,
-      borderRadius: 14,
-      alignItems: "center",
-      justifyContent: "center",
-      borderWidth: 1,
-      borderColor: colors.outlineVariant,
-    },
-    cancelBtnText: {
-      fontSize: 15,
-      fontWeight: "600",
-      color: colors.onSurfaceVariant,
-    },
+// ─── GlobalAlertProvider ──────────────────────────────────────────────────────
+// Mount this ONCE near the root (in App.tsx / RootNavigator).
+// It registers itself with AlertService so AlertService.alert() works anywhere.
+
+export const GlobalAlertProvider: React.FC<{ children?: React.ReactNode }> = ({ children }) => {
+  const [config, setConfig] = useState<AlertConfig>({
+    visible: false,
+    title: "",
+    buttons: [],
   });
 
-// ── useCustomAlert Hook ──────────────────────────────────────────────
+  const hide = useCallback(() => {
+    setConfig((c) => ({ ...c, visible: false }));
+  }, []);
+
+  useEffect(() => {
+    AlertService.register((title, message, buttons = [{ text: "OK" }]) => {
+      setConfig((c) => {
+        if (c.visible) {
+          // dismiss current then show next
+          setTimeout(
+            () => setConfig({ visible: true, title, message, buttons }),
+            120,
+          );
+          return { ...c, visible: false };
+        }
+        return { visible: true, title, message, buttons };
+      });
+    });
+  }, []);
+
+  return (
+    <>
+      {children}
+      <CustomAlert
+        visible={config.visible}
+        title={config.title}
+        message={config.message}
+        buttons={config.buttons}
+        onRequestClose={hide}
+      />
+    </>
+  );
+};
+
+// ─── Legacy per-screen hook ───────────────────────────────────────────────────
+
 export const useCustomAlert = () => {
-  const [alertConfig, setAlertConfig] = React.useState<{
-    visible: boolean;
-    title: string;
-    message?: string;
-    buttons: CustomAlertButton[];
-  }>({
+  const [alertConfig, setAlertConfig] = useState<AlertConfig>({
     visible: false,
     title: "",
     buttons: [],
@@ -237,17 +251,13 @@ export const useCustomAlert = () => {
   ) => {
     if (alertConfig.visible) {
       setAlertConfig((prev) => ({ ...prev, visible: false }));
-      setTimeout(() => {
-        setAlertConfig({ visible: true, title, message, buttons });
-      }, 100);
+      setTimeout(() => setAlertConfig({ visible: true, title, message, buttons }), 100);
     } else {
       setAlertConfig({ visible: true, title, message, buttons });
     }
   };
 
-  const hideAlert = () => {
-    setAlertConfig((prev) => ({ ...prev, visible: false }));
-  };
+  const hideAlert = () => setAlertConfig((prev) => ({ ...prev, visible: false }));
 
   const AlertComponent = () => (
     <CustomAlert
@@ -261,3 +271,97 @@ export const useCustomAlert = () => {
 
   return { showAlert, hideAlert, AlertComponent };
 };
+
+// ─── Styles ───────────────────────────────────────────────────────────────────
+
+const { width } = Dimensions.get("window");
+
+const styles = StyleSheet.create({
+  overlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.65)",
+    justifyContent: "center",
+    alignItems: "center",
+    paddingHorizontal: 24,
+  },
+  card: {
+    width: "100%",
+    maxWidth: 360,
+    borderRadius: 24,
+    paddingTop: 30,
+    paddingBottom: 0,
+    paddingHorizontal: 0,
+    alignItems: "center",
+    borderWidth: 1,
+    overflow: "hidden",
+    // shadow
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 16 },
+    shadowOpacity: 0.55,
+    shadowRadius: 32,
+    elevation: 20,
+  },
+  iconCircle: {
+    width: 56,
+    height: 56,
+    borderRadius: 18,
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 18,
+  },
+  title: {
+    fontSize: 19,
+    fontWeight: "700",
+    textAlign: "center",
+    marginBottom: 8,
+    paddingHorizontal: 24,
+  },
+  message: {
+    fontSize: 14,
+    lineHeight: 21,
+    textAlign: "center",
+    marginBottom: 4,
+    paddingHorizontal: 24,
+  },
+  divider: {
+    width: "100%",
+    height: 1,
+    marginTop: 22,
+  },
+  buttonRow: {
+    width: "100%",
+    flexDirection: "column",
+  },
+  btn: {
+    height: 52,
+    alignItems: "center",
+    justifyContent: "center",
+    borderTopWidth: 1,
+    borderColor: "transparent",
+  },
+  destructiveBtn: {
+    borderTopWidth: 0,
+  },
+  destructiveBtnText: {
+    fontSize: 16,
+    fontWeight: "700",
+    color: "#FF6B6B",
+  },
+  cancelBtnText: {
+    fontSize: 16,
+    fontWeight: "500",
+  },
+  primaryBtnWrapper: {
+    width: "100%",
+  },
+  primaryBtn: {
+    height: 52,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  primaryBtnText: {
+    fontSize: 16,
+    fontWeight: "700",
+    color: "#fff",
+  },
+});

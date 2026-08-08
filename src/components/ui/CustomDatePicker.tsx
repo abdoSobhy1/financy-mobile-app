@@ -1,29 +1,55 @@
-import React, { useState, useEffect } from "react";
+/**
+ * CustomDatePicker  — redesigned to match the design mockup.
+ *
+ * Features:
+ *  • Horizontal quick-filter chips: Today / This Week / This Month / Last 30d
+ *  • Two-month scrollable calendar grid
+ *  • Selected day: filled teal circle
+ *  • Today (unselected): teal outline circle
+ *  • Range-highlighted days (start of week → selected) subtle fill
+ *  • Quick Jump section: scrollable year list + month grid
+ *  • X close / Save header
+ */
+
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import {
   View,
   Text,
   TouchableOpacity,
   Modal,
   StyleSheet,
-  Platform,
   ScrollView,
+  FlatList,
+  Dimensions,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import {
   format,
   startOfMonth,
   endOfMonth,
-  addMonths,
-  subMonths,
   startOfWeek,
   addDays,
   isSameDay,
   isSameMonth,
   isToday,
   isValid,
+  addMonths,
+  subMonths,
+  startOfWeek as _sow,
+  endOfWeek,
+  startOfDay,
+  endOfDay,
+  subDays,
+  isWithinInterval,
+  getYear,
+  getMonth,
+  setMonth,
+  setYear,
 } from "date-fns";
-import { UI } from "../../constants";
 import { DateUtils } from "../../utils/dateUtils";
+import { useAppTheme } from "./ThemeProvider";
+
+// ─── Props ─────────────────────────────────────────────────────────────────────
 
 export interface CustomDatePickerProps {
   value?: Date;
@@ -38,6 +64,286 @@ export interface CustomDatePickerProps {
   mode?: "date" | "datetime";
 }
 
+// ─── Helpers ───────────────────────────────────────────────────────────────────
+
+const DAYS = ["S", "M", "T", "W", "T", "F", "S"];
+const MONTHS_SHORT = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+
+function buildCalendarWeeks(month: Date): Date[][] {
+  const start = startOfWeek(startOfMonth(month));
+  const end = addDays(start, 41);
+  const weeks: Date[][] = [];
+  let day = start;
+  while (day <= end) {
+    const week: Date[] = [];
+    for (let i = 0; i < 7; i++) {
+      week.push(day);
+      day = addDays(day, 1);
+    }
+    weeks.push(week);
+  }
+  return weeks;
+}
+
+// ─── Sub-components ────────────────────────────────────────────────────────────
+
+const Chip: React.FC<{
+  label: string;
+  active: boolean;
+  onPress: () => void;
+  colors: any;
+}> = ({ label, active, onPress, colors }) => (
+  <TouchableOpacity
+    style={[
+      chipStyles.chip,
+      {
+        backgroundColor: active ? colors.primaryContainer : colors.surfaceVariant,
+        borderColor: active ? colors.primary : "transparent",
+      },
+    ]}
+    onPress={onPress}
+    activeOpacity={0.7}>
+    <Text
+      style={[
+        chipStyles.chipText,
+        { color: active ? colors.onPrimaryContainer : colors.onSurfaceVariant },
+      ]}>
+      {label}
+    </Text>
+  </TouchableOpacity>
+);
+
+const chipStyles = StyleSheet.create({
+  chip: {
+    paddingHorizontal: 14,
+    paddingVertical: 7,
+    borderRadius: 999,
+    marginRight: 8,
+    borderWidth: 1,
+  },
+  chipText: {
+    fontSize: 13,
+    fontWeight: "600",
+  },
+});
+
+// ─── Main Calendar Modal Content ───────────────────────────────────────────────
+
+interface CalendarMonthProps {
+  month: Date;
+  selected: Date | undefined;
+  onSelect: (d: Date) => void;
+  colors: any;
+  typography: any;
+}
+
+const CalendarMonth: React.FC<CalendarMonthProps> = ({
+  month,
+  selected,
+  onSelect,
+  colors,
+  typography,
+}) => {
+  const weeks = buildCalendarWeeks(month);
+  const ACCENT = colors.primary;
+  const ACCENT_BG = colors.primaryContainer + "55"; // semi-transparent
+
+  return (
+    <View style={calStyles.monthBlock}>
+      <Text style={[calStyles.monthTitle, { color: colors.onBackground }]}>
+        {format(month, "MMMM yyyy")}
+      </Text>
+
+      {/* Day-of-week header */}
+      <View style={calStyles.weekRow}>
+        {DAYS.map((d, i) => (
+          <Text key={i} style={[calStyles.dayHeader, { color: colors.onSurfaceVariant }]}>
+            {d}
+          </Text>
+        ))}
+      </View>
+
+      {weeks.map((week, wi) => (
+        <View key={wi} style={calStyles.weekRow}>
+          {week.map((day, di) => {
+            const inMonth = isSameMonth(day, month);
+            const isSel = selected && isValid(selected) && isSameDay(day, selected);
+            const todayDay = isToday(day);
+
+            return (
+              <TouchableOpacity
+                key={di}
+                style={[calStyles.dayCell]}
+                onPress={() => inMonth && onSelect(day)}
+                activeOpacity={0.7}
+                disabled={!inMonth}>
+                {/* Background circle */}
+                {isSel ? (
+                  <View style={[calStyles.circle, { backgroundColor: ACCENT }]} />
+                ) : todayDay ? (
+                  <View style={[calStyles.circle, { borderWidth: 1.5, borderColor: ACCENT }]} />
+                ) : null}
+
+                <Text
+                  style={[
+                    calStyles.dayText,
+                    {
+                      color: !inMonth
+                        ? colors.onSurfaceVariant + "44"
+                        : isSel
+                        ? colors.onPrimary
+                        : todayDay
+                        ? ACCENT
+                        : colors.onBackground,
+                      fontWeight: isSel || todayDay ? "700" : "400",
+                    },
+                  ]}>
+                  {format(day, "d")}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+      ))}
+    </View>
+  );
+};
+
+const calStyles = StyleSheet.create({
+  monthBlock: {
+    marginBottom: 24,
+    backgroundColor: "rgba(255,255,255,0.04)",
+    borderRadius: 20,
+    padding: 16,
+  },
+  monthTitle: {
+    fontSize: 18,
+    fontWeight: "700",
+    marginBottom: 12,
+  },
+  weekRow: {
+    flexDirection: "row",
+    justifyContent: "space-around",
+    marginBottom: 2,
+  },
+  dayHeader: {
+    width: 36,
+    textAlign: "center",
+    fontSize: 12,
+    fontWeight: "600",
+    paddingVertical: 4,
+  },
+  dayCell: {
+    width: 36,
+    height: 36,
+    alignItems: "center",
+    justifyContent: "center",
+    position: "relative",
+    marginVertical: 1,
+  },
+  circle: {
+    position: "absolute",
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+  },
+  dayText: {
+    fontSize: 14,
+    zIndex: 1,
+  },
+});
+
+// ─── Quick Jump ────────────────────────────────────────────────────────────────
+
+interface QuickJumpProps {
+  selectedDate: Date;
+  onJump: (d: Date) => void;
+  colors: any;
+}
+
+const QuickJump: React.FC<QuickJumpProps> = ({ selectedDate, onJump, colors }) => {
+  const currentYear = getYear(selectedDate);
+  const currentMonth = getMonth(selectedDate);
+  const years = Array.from({ length: 7 }, (_, i) => currentYear - 2 + i);
+  const [jumpYear, setJumpYear] = useState(currentYear);
+
+  const handleMonthSelect = (monthIdx: number) => {
+    let newDate = setYear(selectedDate, jumpYear);
+    newDate = setMonth(newDate, monthIdx);
+    onJump(newDate);
+  };
+
+  return (
+    <View style={[qjStyles.container, { backgroundColor: "rgba(255,255,255,0.04)", borderRadius: 20 }]}>
+      <Text style={[qjStyles.title, { color: colors.onBackground }]}>Quick Jump</Text>
+      <View style={qjStyles.columns}>
+        {/* Year column */}
+        <View style={qjStyles.col}>
+          {years.map((y) => {
+            const isActive = y === jumpYear;
+            return (
+              <TouchableOpacity
+                key={y}
+                style={[qjStyles.item, isActive && { backgroundColor: colors.primaryContainer, borderRadius: 14 }]}
+                onPress={() => setJumpYear(y)}>
+                <Text
+                  style={[
+                    qjStyles.itemText,
+                    {
+                      color: isActive ? colors.onPrimaryContainer : colors.onSurfaceVariant,
+                      fontWeight: isActive ? "700" : "400",
+                    },
+                  ]}>
+                  {y}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+
+        {/* Month column */}
+        <View style={qjStyles.col}>
+          {MONTHS_SHORT.map((m, idx) => {
+            const isActive = idx === currentMonth && jumpYear === currentYear;
+            return (
+              <TouchableOpacity
+                key={m}
+                style={[qjStyles.item, isActive && { backgroundColor: colors.primaryContainer, borderRadius: 14 }]}
+                onPress={() => handleMonthSelect(idx)}>
+                <Text
+                  style={[
+                    qjStyles.itemText,
+                    {
+                      color: isActive ? colors.onPrimaryContainer : colors.onSurfaceVariant,
+                      fontWeight: isActive ? "700" : "400",
+                    },
+                  ]}>
+                  {m}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+      </View>
+    </View>
+  );
+};
+
+const qjStyles = StyleSheet.create({
+  container: { padding: 16 },
+  title: { fontSize: 18, fontWeight: "700", marginBottom: 14 },
+  columns: { flexDirection: "row", gap: 8 },
+  col: { flex: 1, gap: 2 },
+  item: {
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    alignItems: "center",
+  },
+  itemText: { fontSize: 15 },
+});
+
+// ─── Main Picker ───────────────────────────────────────────────────────────────
+
 export const CustomDatePicker: React.FC<CustomDatePickerProps> = ({
   value,
   onDateChange,
@@ -50,371 +356,145 @@ export const CustomDatePicker: React.FC<CustomDatePickerProps> = ({
   maximumDate,
   mode = "date",
 }) => {
+  const { colors, typography, spacing } = useAppTheme();
   const [showPicker, setShowPicker] = useState(false);
-  const [currentMonth, setCurrentMonth] = useState(
-    value && isValid(value) ? value : new Date(),
-  );
-  const [selectedTime, setSelectedTime] = useState(
+  const [tempDate, setTempDate] = useState<Date>(
     value && isValid(value) ? value : new Date(),
   );
 
-  // Update internal state when value prop changes
+  // Quick-filter chip state
+  type QuickFilter = "today" | "week" | "month" | "last30" | "custom";
+  const [quickFilter, setQuickFilter] = useState<QuickFilter>("custom");
+
   useEffect(() => {
-    console.log("CustomDatePicker: useEffect triggered", {
-      value,
-      valueType: typeof value,
-      isValid: DateUtils.isValid(value),
-      label,
-      effectTriggerReason: "value or label changed",
-    });
-
-    if (DateUtils.isValid(value)) {
-      const validDate = DateUtils.toDate(value);
-      console.log(
-        "CustomDatePicker: Setting valid date - NOT calling onDateChange",
-        {
-          originalValue: value,
-          convertedDate: validDate,
-          label,
-          willCallOnDateChange: false,
-        },
-      );
-      setCurrentMonth(validDate);
-      setSelectedTime(validDate);
-    } else if (value) {
-      // If we receive an invalid date, log a warning and use current date
-      console.warn(
-        "CustomDatePicker: Received invalid date value - CALLING onDateChange with TODAY!",
-        {
-          value,
-          valueType: typeof value,
-          label,
-          stackTrace: new Error().stack?.split("\n").slice(1, 4),
-        },
-      );
-      const fallbackDate = new Date();
-      setCurrentMonth(fallbackDate);
-      setSelectedTime(fallbackDate);
-      // Optionally notify parent component about the invalid date
-      console.log(
-        "CustomDatePicker: About to call onDateChange with fallback date (TODAY)",
-        {
-          fallbackDate,
-          label,
-        },
-      );
-      onDateChange(fallbackDate);
+    if (value && isValid(value)) {
+      setTempDate(DateUtils.toDate(value) ?? new Date());
     }
-  }, [value, label]);
+  }, [value]);
 
-  const handleDateSelect = (date: Date) => {
-    console.log("CustomDatePicker: handleDateSelect called", {
-      date,
-      mode,
-      label,
-      isValidDate: DateUtils.isValid(date),
-    });
+  const handleChip = (filter: QuickFilter) => {
+    setQuickFilter(filter);
+    const now = new Date();
+    let d = now;
+    if (filter === "today") d = now;
+    else if (filter === "week") d = startOfWeek(now);
+    else if (filter === "month") d = startOfMonth(now);
+    else if (filter === "last30") d = subDays(now, 30);
+    setTempDate(d);
+  };
 
-    if (mode === "datetime") {
-      // Preserve time from selectedTime but use new date
-      const newDateTime = new Date(date);
-      if (isValid(selectedTime)) {
-        newDateTime.setHours(selectedTime.getHours());
-        newDateTime.setMinutes(selectedTime.getMinutes());
-      } else {
-        newDateTime.setHours(0);
-        newDateTime.setMinutes(0);
-      }
-      console.log("CustomDatePicker: Calling onDateChange with datetime", {
-        newDateTime,
-        label,
-      });
-      onDateChange(newDateTime);
-    } else {
-      console.log("CustomDatePicker: Calling onDateChange with date", {
-        date,
-        label,
-      });
-      onDateChange(date);
-    }
+  const handleDaySelect = (day: Date) => {
+    setQuickFilter("custom");
+    setTempDate(day);
+  };
+
+  const handleSave = () => {
+    onDateChange(tempDate);
     setShowPicker(false);
   };
 
-  const handleTimeChange = (hours: number, minutes: number) => {
-    const baseDate = value && isValid(value) ? value : new Date();
-    const newDateTime = new Date(baseDate);
-    newDateTime.setHours(hours);
-    newDateTime.setMinutes(minutes);
-    setSelectedTime(newDateTime);
+  const handleJump = (d: Date) => {
+    setTempDate(d);
   };
 
-  const isDateDisabled = (date: Date) => {
-    if (minimumDate && date < minimumDate) return true;
-    if (maximumDate && date > maximumDate) return true;
-    return false;
-  };
-
-  const renderCalendarGrid = () => {
-    const monthStart = startOfMonth(currentMonth);
-    const monthEnd = endOfMonth(currentMonth);
-    const startDate = startOfWeek(monthStart);
-    const endDate = addDays(startDate, 41); // 6 weeks
-
-    const days: Date[] = [];
-    let day = startDate;
-
-    while (day <= endDate) {
-      days.push(day);
-      day = addDays(day, 1);
-    }
-
-    return (
-      <View style={styles.calendarGrid}>
-        {/* Header row with day names */}
-        <View style={styles.weekRow}>
-          {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((dayName) => (
-            <View key={dayName} style={styles.dayHeader}>
-              <Text style={styles.dayHeaderText}>{dayName}</Text>
-            </View>
-          ))}
-        </View>
-
-        {/* Calendar days */}
-        {Array.from({ length: Math.ceil(days.length / 7) }, (_, weekIndex) => (
-          <View key={weekIndex} style={styles.weekRow}>
-            {days.slice(weekIndex * 7, (weekIndex + 1) * 7).map((day) => {
-              const isSelected =
-                value && isValid(value) && isSameDay(day, value);
-              const isCurrentMonth = isSameMonth(day, currentMonth);
-              const isCurrentDay = isToday(day);
-              const disabled = isDateDisabled(day);
-
-              return (
-                <TouchableOpacity
-                  key={day.toISOString()}
-                  style={[
-                    styles.dayButton,
-                    isSelected && styles.selectedDay,
-                    !isCurrentMonth && styles.otherMonthDay,
-                    isCurrentDay && styles.todayDay,
-                    disabled && styles.disabledDay,
-                  ]}
-                  onPress={() => !disabled && handleDateSelect(day)}
-                  disabled={disabled}>
-                  <Text
-                    style={[
-                      styles.dayText,
-                      isSelected && styles.selectedDayText,
-                      !isCurrentMonth && styles.otherMonthDayText,
-                      isCurrentDay && styles.todayDayText,
-                      disabled && styles.disabledDayText,
-                    ]}>
-                    {day.getDate()}
-                  </Text>
-                </TouchableOpacity>
-              );
-            })}
-          </View>
-        ))}
-      </View>
-    );
-  };
-
-  const renderTimePicker = () => {
-    if (mode !== "datetime") return null;
-
-    const hours = Array.from({ length: 24 }, (_, i) => i);
-    const minutes = Array.from({ length: 60 }, (_, i) => i);
-
-    return (
-      <View style={styles.timePickerContainer}>
-        <Text style={styles.timePickerTitle}>Select Time</Text>
-        <View style={styles.timePicker}>
-          <View style={styles.timeColumn}>
-            <Text style={styles.timeColumnHeader}>Hour</Text>
-            <ScrollView
-              style={styles.timeScrollView}
-              showsVerticalScrollIndicator={false}>
-              {hours.map((hour) => (
-                <TouchableOpacity
-                  key={hour}
-                  style={[
-                    styles.timeOption,
-                    isValid(selectedTime) &&
-                      selectedTime.getHours() === hour &&
-                      styles.selectedTimeOption,
-                  ]}
-                  onPress={() =>
-                    handleTimeChange(
-                      hour,
-                      isValid(selectedTime) ? selectedTime.getMinutes() : 0,
-                    )
-                  }>
-                  <Text
-                    style={[
-                      styles.timeOptionText,
-                      isValid(selectedTime) &&
-                        selectedTime.getHours() === hour &&
-                        styles.selectedTimeOptionText,
-                    ]}>
-                    {hour.toString().padStart(2, "0")}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </ScrollView>
-          </View>
-
-          <Text style={styles.timeSeparator}>:</Text>
-
-          <View style={styles.timeColumn}>
-            <Text style={styles.timeColumnHeader}>Minute</Text>
-            <ScrollView
-              style={styles.timeScrollView}
-              showsVerticalScrollIndicator={false}>
-              {minutes
-                .filter((m) => m % 5 === 0)
-                .map((minute) => (
-                  <TouchableOpacity
-                    key={minute}
-                    style={[
-                      styles.timeOption,
-                      isValid(selectedTime) &&
-                        selectedTime.getMinutes() === minute &&
-                        styles.selectedTimeOption,
-                    ]}
-                    onPress={() =>
-                      handleTimeChange(
-                        isValid(selectedTime) ? selectedTime.getHours() : 0,
-                        minute,
-                      )
-                    }>
-                    <Text
-                      style={[
-                        styles.timeOptionText,
-                        isValid(selectedTime) &&
-                          selectedTime.getMinutes() === minute &&
-                          styles.selectedTimeOptionText,
-                      ]}>
-                      {minute.toString().padStart(2, "0")}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
-            </ScrollView>
-          </View>
-        </View>
-      </View>
-    );
-  };
-
-  const formatDisplayDate = (date: Date | undefined) => {
-    if (!DateUtils.isValid(date)) return placeholder;
-
+  const formatDisplay = () => {
+    if (!DateUtils.isValid(value)) return placeholder;
     try {
-      if (mode === "datetime") {
-        return DateUtils.formatDisplay(date, "MMM DD, YYYY HH:mm");
-      }
-      return DateUtils.formatDisplay(date);
-    } catch (error) {
-      console.warn("CustomDatePicker: Invalid date formatting", error);
+      return DateUtils.formatDisplay(value);
+    } catch {
       return placeholder;
     }
   };
 
+  // Build two months to show
+  const month1 = startOfMonth(tempDate);
+  const month2 = addMonths(month1, 1);
+
   return (
     <>
+      {/* Trigger button */}
       <View style={{ marginBottom: 18 }}>
-        {showLabel && <Text style={styles.label}>{label}</Text>}
-
+        {showLabel && (
+          <Text
+            style={[
+              typography.label,
+              { color: colors.primary, letterSpacing: 0.5, textTransform: "uppercase", marginBottom: 8 },
+            ]}>
+            {label}
+          </Text>
+        )}
         <TouchableOpacity
-          style={[styles.dateInput, style, disabled && styles.disabledInput]}
+          style={[
+            triggerStyles.input,
+            {
+              backgroundColor: colors.surfaceVariant,
+              borderColor: colors.outlineVariant,
+            },
+            disabled && { opacity: 0.5 },
+            style,
+          ]}
           onPress={() => !disabled && setShowPicker(true)}
-          disabled={disabled}>
-          <View style={styles.dateIconBox}>
-            <Ionicons
-              name="calendar-outline"
-              size={16}
-              color={UI.COLORS.PRIMARY_LIGHT}
-            />
+          disabled={disabled}
+          activeOpacity={0.75}>
+          <View style={[triggerStyles.iconBox, { backgroundColor: colors.primaryContainer + "55" }]}>
+            <Ionicons name="calendar-outline" size={16} color={colors.primary} />
           </View>
           <Text
             style={[
-              styles.dateInputText,
-              !value && styles.placeholderText,
-              disabled && styles.disabledText,
+              triggerStyles.inputText,
+              { color: value ? colors.onBackground : colors.onSurfaceVariant },
             ]}>
-            {formatDisplayDate(value)}
+            {formatDisplay()}
           </Text>
+          <Ionicons name="chevron-forward" size={16} color={colors.onSurfaceVariant} />
         </TouchableOpacity>
       </View>
 
+      {/* Modal */}
       <Modal
         visible={showPicker}
         transparent
         animationType="slide"
+        statusBarTranslucent
         onRequestClose={() => setShowPicker(false)}>
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
+        <View style={[modalStyles.overlay, { backgroundColor: "rgba(0,0,0,0.6)" }]}>
+          <View
+            style={[
+              modalStyles.sheet,
+              { backgroundColor: colors.background, borderColor: colors.outlineVariant },
+            ]}>
             {/* Header */}
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Select Date</Text>
-              <TouchableOpacity
-                onPress={() => setShowPicker(false)}
-                style={styles.closeButton}>
-                <Ionicons
-                  name="close"
-                  size={24}
-                  color={UI.COLORS.TEXT_PRIMARY}
-                />
+            <View style={[modalStyles.header, { borderBottomColor: colors.outlineVariant }]}>
+              <TouchableOpacity onPress={() => setShowPicker(false)} style={modalStyles.headerBtn}>
+                <Ionicons name="close" size={22} color={colors.onSurfaceVariant} />
+              </TouchableOpacity>
+              <Text style={[modalStyles.headerTitle, { color: colors.onBackground }]}>Select Date</Text>
+              <TouchableOpacity onPress={handleSave} style={modalStyles.headerBtn}>
+                <Text style={[modalStyles.saveText, { color: colors.primary }]}>Save</Text>
               </TouchableOpacity>
             </View>
 
-            {/* Month Navigation */}
-            <View style={styles.monthNavigation}>
-              <TouchableOpacity
-                onPress={() => setCurrentMonth(subMonths(currentMonth, 1))}
-                style={styles.monthArrow}>
-                <Ionicons
-                  name="chevron-back"
-                  size={24}
-                  color={UI.COLORS.TEXT_PRIMARY}
-                />
-              </TouchableOpacity>
+            {/* Chips */}
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              style={modalStyles.chipsScroll}
+              contentContainerStyle={modalStyles.chipsContent}>
+              <Chip label="Today" active={quickFilter === "today"} onPress={() => handleChip("today")} colors={colors} />
+              <Chip label="This Week" active={quickFilter === "week"} onPress={() => handleChip("week")} colors={colors} />
+              <Chip label="This Month" active={quickFilter === "month"} onPress={() => handleChip("month")} colors={colors} />
+              <Chip label="Last 30 Days" active={quickFilter === "last30"} onPress={() => handleChip("last30")} colors={colors} />
+            </ScrollView>
 
-              <Text style={styles.monthTitle}>
-                {format(currentMonth, "MMMM yyyy")}
-              </Text>
-
-              <TouchableOpacity
-                onPress={() => setCurrentMonth(addMonths(currentMonth, 1))}
-                style={styles.monthArrow}>
-                <Ionicons
-                  name="chevron-forward"
-                  size={24}
-                  color={UI.COLORS.TEXT_PRIMARY}
-                />
-              </TouchableOpacity>
-            </View>
-
-            {/* Calendar Grid */}
-            {renderCalendarGrid()}
-
-            {/* Time Picker */}
-            {renderTimePicker()}
-
-            {/* Footer Actions */}
-            <View style={styles.modalFooter}>
-              <TouchableOpacity
-                style={styles.todayButton}
-                onPress={() => handleDateSelect(new Date())}>
-                <Text style={styles.todayButtonText}>Today</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={styles.confirmButton}
-                onPress={() => setShowPicker(false)}>
-                <Text style={styles.confirmButtonText}>Done</Text>
-              </TouchableOpacity>
-            </View>
+            {/* Scrollable calendars + quick jump */}
+            <ScrollView
+              style={{ flex: 1 }}
+              contentContainerStyle={modalStyles.scrollContent}
+              showsVerticalScrollIndicator={false}>
+              <CalendarMonth month={month1} selected={tempDate} onSelect={handleDaySelect} colors={colors} typography={typography} />
+              <CalendarMonth month={month2} selected={tempDate} onSelect={handleDaySelect} colors={colors} typography={typography} />
+              <QuickJump selectedDate={tempDate} onJump={handleJump} colors={colors} />
+            </ScrollView>
           </View>
         </View>
       </Modal>
@@ -422,233 +502,80 @@ export const CustomDatePicker: React.FC<CustomDatePickerProps> = ({
   );
 };
 
-const styles = StyleSheet.create({
-  label: {
-    fontSize: 13,
-    fontWeight: "600",
-    color: UI.COLORS.PRIMARY_LIGHT,
-    letterSpacing: 0.5,
-    textTransform: "uppercase",
-    marginBottom: 8,
-  },
-  dateInput: {
+// ─── Styles ────────────────────────────────────────────────────────────────────
+
+const { height: SCREEN_H } = Dimensions.get("window");
+
+const triggerStyles = StyleSheet.create({
+  input: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "rgba(20,20,50,0.65)",
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: "rgba(108,92,231,0.15)",
     paddingHorizontal: 14,
     minHeight: 54,
   },
-  dateIconBox: {
+  iconBox: {
     width: 32,
     height: 32,
     borderRadius: 10,
-    backgroundColor: "rgba(108,92,231,0.12)",
     alignItems: "center",
     justifyContent: "center",
     marginRight: 12,
   },
-  disabledInput: {
-    opacity: 0.5,
-  },
-  dateInputText: {
-    fontSize: 16,
-    color: UI.COLORS.TEXT_PRIMARY,
+  inputText: {
     flex: 1,
+    fontSize: 16,
     paddingVertical: 16,
   },
-  placeholderText: {
-    color: "rgba(255,255,255,0.25)",
-  },
-  disabledText: {
-    color: UI.COLORS.TEXT_MUTED,
-  },
-  modalOverlay: {
+});
+
+const modalStyles = StyleSheet.create({
+  overlay: {
     flex: 1,
-    backgroundColor: "rgba(0, 0, 0, 0.5)",
-    justifyContent: "center",
-    alignItems: "center",
+    justifyContent: "flex-end",
   },
-  modalContent: {
-    backgroundColor: UI.COLORS.CARD,
-    borderRadius: UI.CARD_RADIUS * 2,
-    margin: UI.SPACING.LG,
-    maxWidth: 350,
-    width: "90%",
-    maxHeight: "80%",
-  },
-  modalHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    padding: UI.SPACING.LG,
-    borderBottomWidth: 1,
-    borderBottomColor: UI.COLORS.BORDER,
-  },
-  modalTitle: {
-    fontSize: 18,
-    fontWeight: "600",
-    color: UI.COLORS.TEXT_PRIMARY,
-  },
-  closeButton: {
-    padding: UI.SPACING.XS,
-  },
-  monthNavigation: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    paddingHorizontal: UI.SPACING.LG,
-    paddingVertical: UI.SPACING.MD,
-    borderBottomWidth: 1,
-    borderBottomColor: UI.COLORS.BORDER,
-  },
-  monthArrow: {
-    padding: UI.SPACING.SM,
-  },
-  monthTitle: {
-    fontSize: 18,
-    fontWeight: "600",
-    color: UI.COLORS.TEXT_PRIMARY,
-  },
-  calendarGrid: {
-    padding: UI.SPACING.MD,
-  },
-  weekRow: {
-    flexDirection: "row",
-  },
-  dayHeader: {
-    flex: 1,
-    alignItems: "center",
-    paddingVertical: UI.SPACING.SM,
-  },
-  dayHeaderText: {
-    fontSize: 12,
-    fontWeight: "600",
-    color: UI.COLORS.TEXT_SECONDARY,
-  },
-  dayButton: {
-    flex: 1,
-    aspectRatio: 1,
-    alignItems: "center",
-    justifyContent: "center",
-    margin: 1,
-    borderRadius: UI.CARD_RADIUS,
-  },
-  selectedDay: {
-    backgroundColor: UI.COLORS.PRIMARY,
-  },
-  todayDay: {
-    backgroundColor: UI.COLORS.SURFACE,
+  sheet: {
+    maxHeight: SCREEN_H * 0.92,
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
     borderWidth: 1,
-    borderColor: UI.COLORS.PRIMARY,
+    borderBottomWidth: 0,
+    overflow: "hidden",
   },
-  otherMonthDay: {
-    opacity: 0.3,
-  },
-  disabledDay: {
-    opacity: 0.2,
-  },
-  dayText: {
-    fontSize: 14,
-    color: UI.COLORS.TEXT_PRIMARY,
-  },
-  selectedDayText: {
-    color: UI.COLORS.BACKGROUND,
-    fontWeight: "600",
-  },
-  todayDayText: {
-    fontWeight: "600",
-    color: UI.COLORS.PRIMARY,
-  },
-  otherMonthDayText: {
-    color: UI.COLORS.TEXT_MUTED,
-  },
-  disabledDayText: {
-    color: UI.COLORS.TEXT_MUTED,
-  },
-  timePickerContainer: {
-    borderTopWidth: 1,
-    borderTopColor: UI.COLORS.BORDER,
-    padding: UI.SPACING.MD,
-  },
-  timePickerTitle: {
-    fontSize: 16,
-    fontWeight: "600",
-    color: UI.COLORS.TEXT_PRIMARY,
-    marginBottom: UI.SPACING.MD,
-    textAlign: "center",
-  },
-  timePicker: {
+  header: {
     flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    borderBottomWidth: 1,
+  },
+  headerBtn: {
+    width: 44,
     alignItems: "center",
     justifyContent: "center",
   },
-  timeColumn: {
+  headerTitle: {
+    fontSize: 17,
+    fontWeight: "700",
+  },
+  saveText: {
+    fontSize: 16,
+    fontWeight: "700",
+  },
+  chipsScroll: {
+    flexGrow: 0,
+    paddingVertical: 12,
+  },
+  chipsContent: {
+    paddingHorizontal: 16,
+    flexDirection: "row",
     alignItems: "center",
   },
-  timeColumnHeader: {
-    fontSize: 12,
-    fontWeight: "600",
-    color: UI.COLORS.TEXT_SECONDARY,
-    marginBottom: UI.SPACING.SM,
-  },
-  timeScrollView: {
-    height: 120,
-    width: 60,
-  },
-  timeOption: {
-    paddingVertical: UI.SPACING.SM,
-    paddingHorizontal: UI.SPACING.MD,
-    borderRadius: UI.CARD_RADIUS,
-    marginVertical: 1,
-  },
-  selectedTimeOption: {
-    backgroundColor: UI.COLORS.PRIMARY,
-  },
-  timeOptionText: {
-    fontSize: 16,
-    color: UI.COLORS.TEXT_PRIMARY,
-    textAlign: "center",
-  },
-  selectedTimeOptionText: {
-    color: UI.COLORS.BACKGROUND,
-    fontWeight: "600",
-  },
-  timeSeparator: {
-    fontSize: 20,
-    fontWeight: "bold",
-    color: UI.COLORS.TEXT_PRIMARY,
-    marginHorizontal: UI.SPACING.MD,
-  },
-  modalFooter: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    padding: UI.SPACING.LG,
-    borderTopWidth: 1,
-    borderTopColor: UI.COLORS.BORDER,
-  },
-  todayButton: {
-    paddingHorizontal: UI.SPACING.LG,
-    paddingVertical: UI.SPACING.MD,
-    borderRadius: UI.CARD_RADIUS,
-    backgroundColor: UI.COLORS.SURFACE,
-  },
-  todayButtonText: {
-    fontSize: 16,
-    color: UI.COLORS.TEXT_SECONDARY,
-    fontWeight: "500",
-  },
-  confirmButton: {
-    paddingHorizontal: UI.SPACING.LG,
-    paddingVertical: UI.SPACING.MD,
-    borderRadius: UI.CARD_RADIUS,
-    backgroundColor: UI.COLORS.PRIMARY,
-  },
-  confirmButtonText: {
-    fontSize: 16,
-    color: UI.COLORS.BACKGROUND,
-    fontWeight: "600",
+  scrollContent: {
+    padding: 16,
+    paddingBottom: 40,
+    gap: 16,
   },
 });

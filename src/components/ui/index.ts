@@ -6,7 +6,7 @@ export { default as Modal } from "./Modal";
 export { default as Screen } from "./Screen";
 export { LoadingOverlay } from "./LoadingOverlay";
 export { ErrorBoundary } from "./ErrorBoundary";
-export { CustomAlert, useCustomAlert } from "./CustomAlert";
+export { CustomAlert, useCustomAlert, GlobalAlertProvider } from "./CustomAlert";
 export { Toast, ToastContainer } from "./Toast";
 export { FloatingActionButton } from "./FloatingActionButton";
 export { ToastProvider, useToast } from "./ToastProvider";
