@@ -10,6 +10,7 @@ import {
   ActivityIndicator,
   StatusBar,
   Share,
+  Alert,
 } from "react-native";
 import { useAppTheme } from "../components/ui/ThemeProvider";
 import { LinearGradient } from "expo-linear-gradient";

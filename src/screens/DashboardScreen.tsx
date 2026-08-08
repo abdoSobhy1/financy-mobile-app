@@ -18,7 +18,6 @@ import { getCurrentBillingPeriod } from "../utils/billingPeriod";
 import { formatCurrency, formatDate } from "../utils";
 import { useAppTheme } from "../components/ui/ThemeProvider";
 import { Badge } from "../components/ui/Badge";
-import { GoalCard } from "../components/goals";
 import { VoiceInputButton } from "../components/input/VoiceInputButton";
 import { ParsedTransaction } from "../types";
 import { Card } from "../components/ui";
