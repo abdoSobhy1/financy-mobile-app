@@ -9,9 +9,10 @@ import {
   StatusBar,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { useAppTheme } from "../components/ui/ThemeProvider";
 import { Ionicons } from "@expo/vector-icons";
 import { useDispatch, useSelector } from "react-redux";
+import { useAppTheme } from "../components/ui/ThemeProvider";
+import { AppHeader } from "../components/ui/AppHeader";
 import { useNavigation } from "@react-navigation/native";
 import { StackNavigationProp } from "@react-navigation/stack";
 import { useTabBarHeight } from "../components/ui";
@@ -66,47 +67,35 @@ const DebtsScreen: React.FC = () => {
       <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
       
       {/* Top Header */}
-      <View style={styles.topHeader}>
-        <View style={{ flexDirection: "row", alignItems: "center" }}>
-          <View style={[styles.avatarPlaceholder, { backgroundColor: colors.surfaceVariant }]}>
-            <Ionicons name="person" size={16} color={colors.onSurfaceVariant} />
-          </View>
-          <Text style={[typography.h2, { color: colors.onBackground, marginLeft: spacing.md }]}>
-            August Overview
-          </Text>
-        </View>
-        <TouchableOpacity>
-          <Ionicons name="notifications-outline" size={24} color={colors.onBackground} />
-        </TouchableOpacity>
-      </View>
+      <AppHeader title="Debts" />
 
       <ScrollView contentContainerStyle={{ padding: spacing.lg, paddingBottom: tabBarHeight + spacing.xl }}>
         
         {/* Total Owed To You Card */}
-        <View style={[styles.heroCard, { backgroundColor: colors.surfaceVariant, marginBottom: spacing.md }]}>
+        <View style={[styles.heroCard, { backgroundColor: colors.surface, marginBottom: spacing.md }]}>
           <Text style={[typography.label, { color: colors.onSurfaceVariant, letterSpacing: 1 }]}>
             TOTAL OWED TO YOU
           </Text>
-          <Text style={[styles.heroAmount, { color: colors.primaryContainer }]}>
+          <Text style={[styles.heroAmount, { color: colors.primary }]}>
             {formatCurrency(totalOwedToYou)}
           </Text>
           <View style={{ flexDirection: "row", alignItems: "center" }}>
-            <Ionicons name="arrow-up" size={16} color={colors.primaryContainer} style={{ marginRight: 4 }} />
-            <Text style={[typography.bodySmall, { color: colors.primaryContainer }]}>+0% from last month</Text>
+            <Ionicons name="arrow-up" size={16} color={colors.primary} style={{ marginRight: 4 }} />
+            <Text style={[typography.bodySmall, { color: colors.primary }]}>+0% from last month</Text>
           </View>
         </View>
 
         {/* Total You Owe Card */}
-        <View style={[styles.heroCard, { backgroundColor: colors.surfaceVariant, marginBottom: spacing.xl }]}>
+        <View style={[styles.heroCard, { backgroundColor: colors.surface, marginBottom: spacing.xl }]}>
           <Text style={[typography.label, { color: colors.onSurfaceVariant, letterSpacing: 1 }]}>
             TOTAL YOU OWE
           </Text>
-          <Text style={[styles.heroAmount, { color: colors.errorContainer }]}>
+          <Text style={[styles.heroAmount, { color: colors.error }]}>
             {formatCurrency(totalYouOwe)}
           </Text>
           <View style={{ flexDirection: "row", alignItems: "center" }}>
-            <Ionicons name="arrow-down" size={16} color={colors.errorContainer} style={{ marginRight: 4 }} />
-            <Text style={[typography.bodySmall, { color: colors.errorContainer }]}>+$0 this week</Text>
+            <Ionicons name="arrow-down" size={16} color={colors.error} style={{ marginRight: 4 }} />
+            <Text style={[typography.bodySmall, { color: colors.error }]}>+$0 this week</Text>
           </View>
         </View>
 
@@ -119,13 +108,13 @@ const DebtsScreen: React.FC = () => {
               style={[
                 styles.filterChip,
                 {
-                  borderColor: colors.outlineVariant,
+                  borderColor: filter === f ? colors.primary : colors.outlineVariant,
                   backgroundColor: filter === f ? "rgba(128, 203, 196, 0.15)" : "transparent"
                 }
               ]}
             >
               <Text style={[typography.bodyMedium, { 
-                color: filter === f ? colors.primaryContainer : colors.onSurfaceVariant,
+                color: filter === f ? colors.primary : colors.onSurfaceVariant,
                 fontWeight: filter === f ? "600" : "400"
               }]}>
                 {f}
@@ -178,7 +167,7 @@ const DebtsScreen: React.FC = () => {
                   onPress={() => navigation.navigate("DebtForm", { debtId: debt.id })}
                 >
                   <View style={[styles.debtIconBox, { backgroundColor: isOwedToMe ? "rgba(128,203,196,0.15)" : "rgba(255,107,107,0.15)" }]}>
-                    <Ionicons name="person" size={20} color={isOwedToMe ? colors.primaryContainer : colors.errorContainer} />
+                    <Ionicons name="person" size={20} color={isOwedToMe ? colors.primary : colors.error} />
                   </View>
                   <View style={{ flex: 1, marginRight: 16 }}>
                     <Text style={[typography.bodyLarge, { color: colors.onBackground, fontWeight: "600", marginBottom: 2 }]} numberOfLines={1}>
@@ -192,7 +181,7 @@ const DebtsScreen: React.FC = () => {
                   </View>
                   <View style={{ alignItems: "flex-end" }}>
                     <Text style={[typography.bodyLarge, { 
-                      color: isPaid ? colors.onSurfaceVariant : isOwedToMe ? colors.primaryContainer : colors.errorContainer, 
+                      color: isPaid ? colors.onSurfaceVariant : isOwedToMe ? colors.primary : colors.error, 
                       fontWeight: "600", 
                       marginBottom: 4 
                     }]}>
