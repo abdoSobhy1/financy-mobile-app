@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import { View, Text, Modal, TouchableOpacity, TextInput, ScrollView, StyleSheet } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { UI } from "../../constants";
+import { useAppTheme } from "../ui/ThemeProvider";
 
 const PREDEFINED_COLORS = [
   "#EF4444",
@@ -45,6 +46,9 @@ export const CategoryCreationModal: React.FC<CategoryCreationModalProps> = ({
   type,
   title = "Add New Category",
 }) => {
+  const { colors } = useAppTheme();
+  const styles = React.useMemo(() => getStyles(colors), [colors]);
+
   const [categoryName, setCategoryName] = useState("");
   const [categoryColor, setCategoryColor] = useState("");
   const [categoryType, setCategoryType] = useState<"income" | "expense">(type || "expense");
@@ -85,7 +89,7 @@ export const CategoryCreationModal: React.FC<CategoryCreationModalProps> = ({
           <View style={styles.modalHeader}>
             <Text style={styles.modalTitle}>{title}</Text>
             <TouchableOpacity onPress={handleClose} style={styles.closeButton}>
-              <Ionicons name="close" size={24} color={UI.COLORS.TEXT_SECONDARY} />
+              <Ionicons name="close" size={24} color={colors.onSurfaceVariant} />
             </TouchableOpacity>
           </View>
 
@@ -97,7 +101,7 @@ export const CategoryCreationModal: React.FC<CategoryCreationModalProps> = ({
                 value={categoryName}
                 onChangeText={setCategoryName}
                 style={styles.modalInput}
-                placeholderTextColor={UI.COLORS.TEXT_MUTED}
+                placeholderTextColor={colors.onSurfaceVariant}
                 autoFocus={true}
                 maxLength={50}
                 returnKeyType="done"
@@ -129,7 +133,7 @@ export const CategoryCreationModal: React.FC<CategoryCreationModalProps> = ({
                 <TouchableOpacity
                   style={[styles.colorOption, styles.colorOptionClear, !categoryColor && styles.colorOptionSelected]}
                   onPress={() => setCategoryColor("")}>
-                  <Ionicons name={!categoryColor ? "checkmark" : "close"} size={16} color={UI.COLORS.TEXT_SECONDARY} />
+                  <Ionicons name={!categoryColor ? "checkmark" : "close"} size={16} color={colors.onSurfaceVariant} />
                 </TouchableOpacity>
                 {PREDEFINED_COLORS.map((color) => (
                   <TouchableOpacity
@@ -160,7 +164,7 @@ export const CategoryCreationModal: React.FC<CategoryCreationModalProps> = ({
   );
 };
 
-const styles = StyleSheet.create({
+const getStyles = (colors: any) => StyleSheet.create({
   modalOverlay: {
     flex: 1,
     justifyContent: "center",
@@ -169,7 +173,7 @@ const styles = StyleSheet.create({
     padding: UI.SPACING.LG,
   },
   modal: {
-    backgroundColor: UI.COLORS.CARD,
+    backgroundColor: colors.surface,
     borderRadius: UI.SPACING.LG,
     padding: UI.SPACING.XL,
     width: "100%",
@@ -192,7 +196,7 @@ const styles = StyleSheet.create({
   modalTitle: {
     fontSize: 20,
     fontWeight: "600",
-    color: UI.COLORS.TEXT_PRIMARY,
+    color: colors.onBackground,
   },
   closeButton: {
     padding: UI.SPACING.SM,
@@ -206,18 +210,18 @@ const styles = StyleSheet.create({
   inputLabel: {
     fontSize: 16,
     fontWeight: "600",
-    color: UI.COLORS.TEXT_PRIMARY,
+    color: colors.onBackground,
     marginBottom: UI.SPACING.SM,
   },
   modalInput: {
     borderWidth: 1,
-    borderColor: UI.COLORS.BORDER,
+    borderColor: colors.outlineVariant,
     borderRadius: UI.SPACING.SM,
     paddingHorizontal: UI.SPACING.MD,
     paddingVertical: UI.SPACING.SM + 2,
     fontSize: 16,
-    color: UI.COLORS.TEXT_PRIMARY,
-    backgroundColor: UI.COLORS.SURFACE,
+    color: colors.onBackground,
+    backgroundColor: colors.surfaceVariant,
   },
   typeContainer: {
     flexDirection: "row",
@@ -227,21 +231,21 @@ const styles = StyleSheet.create({
     paddingVertical: UI.SPACING.SM,
     paddingHorizontal: UI.SPACING.MD,
     borderRadius: 8,
-    backgroundColor: UI.COLORS.SURFACE,
+    backgroundColor: colors.surfaceVariant,
     borderWidth: 1,
-    borderColor: UI.COLORS.BORDER,
+    borderColor: colors.outlineVariant,
   },
   typeChipActive: {
-    backgroundColor: UI.COLORS.PRIMARY,
-    borderColor: UI.COLORS.PRIMARY,
+    backgroundColor: colors.primaryContainer,
+    borderColor: colors.primaryContainer,
   },
   typeChipText: {
     fontSize: 14,
     fontWeight: "500",
-    color: UI.COLORS.TEXT_PRIMARY,
+    color: colors.onSurfaceVariant,
   },
   typeChipTextActive: {
-    color: "#FFFFFF",
+    color: colors.onPrimaryContainer,
   },
   colorScroll: {
     marginHorizontal: -UI.SPACING.SM,
@@ -257,11 +261,11 @@ const styles = StyleSheet.create({
     borderColor: "transparent",
   },
   colorOptionClear: {
-    backgroundColor: UI.COLORS.SURFACE,
-    borderColor: UI.COLORS.BORDER,
+    backgroundColor: colors.surfaceVariant,
+    borderColor: colors.outlineVariant,
   },
   colorOptionSelected: {
-    borderColor: UI.COLORS.TEXT_PRIMARY,
+    borderColor: colors.onBackground,
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.2,
@@ -280,27 +284,27 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   cancelButton: {
-    backgroundColor: UI.COLORS.SURFACE,
+    backgroundColor: colors.surfaceVariant,
     borderWidth: 1,
-    borderColor: UI.COLORS.BORDER,
+    borderColor: colors.outlineVariant,
   },
   cancelButtonText: {
     fontSize: 16,
     fontWeight: "600",
-    color: UI.COLORS.TEXT_SECONDARY,
+    color: colors.onSurfaceVariant,
   },
   addButton: {
-    backgroundColor: UI.COLORS.PRIMARY,
+    backgroundColor: colors.primaryContainer,
   },
   addButtonDisabled: {
-    backgroundColor: UI.COLORS.SURFACE,
+    backgroundColor: colors.surfaceVariant,
   },
   addButtonText: {
     fontSize: 16,
     fontWeight: "600",
-    color: "#FFFFFF",
+    color: colors.onPrimaryContainer,
   },
   addButtonTextDisabled: {
-    color: UI.COLORS.TEXT_MUTED,
+    color: colors.outline,
   },
 });

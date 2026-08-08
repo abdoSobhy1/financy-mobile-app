@@ -7,7 +7,6 @@ import {
 } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons } from "@expo/vector-icons";
-import { UI } from "../../constants";
 
 interface FloatingActionButtonProps {
   onPress: () => void;
@@ -30,11 +29,7 @@ export const FloatingActionButton: React.FC<FloatingActionButtonProps> = ({
       onPress={onPress}
       activeOpacity={0.85}>
       <LinearGradient
-        colors={[
-          UI.COLORS.PRIMARY_LIGHT,
-          UI.COLORS.PRIMARY,
-          UI.COLORS.PRIMARY_DARK,
-        ]}
+        colors={["#8B7CF0", "#6C5CE7", "#5244C4"]}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
         style={styles.gradient}>
@@ -52,7 +47,7 @@ const styles = StyleSheet.create({
     zIndex: 1000,
     ...Platform.select({
       ios: {
-        shadowColor: UI.COLORS.PRIMARY,
+        shadowColor: "#6C5CE7",
         shadowOffset: { width: 0, height: 4 },
         shadowOpacity: 0.45,
         shadowRadius: 12,

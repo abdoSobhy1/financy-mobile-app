@@ -9,7 +9,7 @@ import {
 } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons } from "@expo/vector-icons";
-import { UI } from "../../constants";
+import { useAppTheme } from "./ThemeProvider";
 
 export interface CustomAlertButton {
   text: string;
@@ -32,6 +32,8 @@ export const CustomAlert: React.FC<CustomAlertProps> = ({
   buttons,
   onRequestClose,
 }) => {
+  const { colors } = useAppTheme();
+  const styles = React.useMemo(() => getStyles(colors), [colors]);
   const handleButtonPress = (button: CustomAlertButton) => {
     if (onRequestClose) onRequestClose();
     if (button.onPress) {
@@ -44,7 +46,7 @@ export const CustomAlert: React.FC<CustomAlertProps> = ({
   const iconName = hasDestructive ? "warning" : "information-circle";
   const iconGradient: [string, string] = hasDestructive
     ? ["#FF6B6B", "#EE5A24"]
-    : [UI.COLORS.PRIMARY, UI.COLORS.PRIMARY_DARK];
+    : [colors.primary, colors.primaryContainer];
 
   return (
     <Modal
@@ -111,7 +113,7 @@ export const CustomAlert: React.FC<CustomAlertProps> = ({
                       activeOpacity={0.8}
                       onPress={() => handleButtonPress(button)}>
                       <LinearGradient
-                        colors={[UI.COLORS.PRIMARY, UI.COLORS.PRIMARY_DARK]}
+                        colors={[colors.primary, colors.primaryContainer]}
                         style={styles.gradientBtn}
                         start={{ x: 0, y: 0 }}
                         end={{ x: 1, y: 1 }}>
@@ -131,88 +133,89 @@ export const CustomAlert: React.FC<CustomAlertProps> = ({
   );
 };
 
-const styles = StyleSheet.create({
-  overlay: {
-    flex: 1,
-    backgroundColor: "rgba(0,0,0,0.65)",
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  card: {
-    width: "85%",
-    maxWidth: 360,
-    backgroundColor: "#161638",
-    borderRadius: 22,
-    paddingTop: 28,
-    paddingBottom: 22,
-    paddingHorizontal: 24,
-    alignItems: "center",
-    borderWidth: 1,
-    borderColor: "rgba(108,92,231,0.2)",
-    // shadow
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 12 },
-    shadowOpacity: 0.5,
-    shadowRadius: 24,
-    elevation: 16,
-  },
-  iconCircle: {
-    width: 52,
-    height: 52,
-    borderRadius: 16,
-    alignItems: "center",
-    justifyContent: "center",
-    marginBottom: 16,
-  },
-  title: {
-    fontSize: 18,
-    fontWeight: "700",
-    color: UI.COLORS.TEXT_PRIMARY,
-    textAlign: "center",
-    marginBottom: 8,
-  },
-  message: {
-    fontSize: 14,
-    color: UI.COLORS.TEXT_MUTED,
-    lineHeight: 20,
-    textAlign: "center",
-    marginBottom: 6,
-  },
-  buttonContainer: {
-    width: "100%",
-    gap: 10,
-    marginTop: 18,
-  },
-  gradientBtn: {
-    height: 48,
-    borderRadius: 14,
-    alignItems: "center",
-    justifyContent: "center",
-    shadowColor: UI.COLORS.PRIMARY,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 5,
-  },
-  gradientBtnText: {
-    fontSize: 15,
-    fontWeight: "700",
-    color: "#fff",
-  },
-  cancelBtn: {
-    height: 48,
-    borderRadius: 14,
-    alignItems: "center",
-    justifyContent: "center",
-    borderWidth: 1,
-    borderColor: "rgba(108,92,231,0.2)",
-  },
-  cancelBtnText: {
-    fontSize: 15,
-    fontWeight: "600",
-    color: UI.COLORS.TEXT_MUTED,
-  },
-});
+const getStyles = (colors: any) =>
+  StyleSheet.create({
+    overlay: {
+      flex: 1,
+      backgroundColor: "rgba(0,0,0,0.65)",
+      justifyContent: "center",
+      alignItems: "center",
+    },
+    card: {
+      width: "85%",
+      maxWidth: 360,
+      backgroundColor: colors.surface,
+      borderRadius: 22,
+      paddingTop: 28,
+      paddingBottom: 22,
+      paddingHorizontal: 24,
+      alignItems: "center",
+      borderWidth: 1,
+      borderColor: colors.outlineVariant,
+      // shadow
+      shadowColor: "#000",
+      shadowOffset: { width: 0, height: 12 },
+      shadowOpacity: 0.5,
+      shadowRadius: 24,
+      elevation: 16,
+    },
+    iconCircle: {
+      width: 52,
+      height: 52,
+      borderRadius: 16,
+      alignItems: "center",
+      justifyContent: "center",
+      marginBottom: 16,
+    },
+    title: {
+      fontSize: 18,
+      fontWeight: "700",
+      color: colors.onBackground,
+      textAlign: "center",
+      marginBottom: 8,
+    },
+    message: {
+      fontSize: 14,
+      color: colors.onSurfaceVariant,
+      lineHeight: 20,
+      textAlign: "center",
+      marginBottom: 6,
+    },
+    buttonContainer: {
+      width: "100%",
+      gap: 10,
+      marginTop: 18,
+    },
+    gradientBtn: {
+      height: 48,
+      borderRadius: 14,
+      alignItems: "center",
+      justifyContent: "center",
+      shadowColor: colors.primary,
+      shadowOffset: { width: 0, height: 4 },
+      shadowOpacity: 0.3,
+      shadowRadius: 8,
+      elevation: 5,
+    },
+    gradientBtnText: {
+      fontSize: 15,
+      fontWeight: "700",
+      color: "#fff",
+    },
+    cancelBtn: {
+      height: 48,
+      borderRadius: 14,
+      alignItems: "center",
+      justifyContent: "center",
+      borderWidth: 1,
+      borderColor: colors.outlineVariant,
+    },
+    cancelBtnText: {
+      fontSize: 15,
+      fontWeight: "600",
+      color: colors.onSurfaceVariant,
+    },
+  });
 
 // ── useCustomAlert Hook ──────────────────────────────────────────────
 export const useCustomAlert = () => {

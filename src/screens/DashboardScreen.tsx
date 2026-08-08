@@ -18,6 +18,9 @@ import { getCurrentBillingPeriod } from "../utils/billingPeriod";
 import { formatCurrency, formatDate } from "../utils";
 import { useAppTheme } from "../components/ui/ThemeProvider";
 import { Badge } from "../components/ui/Badge";
+import { GoalCard } from "../components/goals";
+import { VoiceInputButton } from "../components/input/VoiceInputButton";
+import { ParsedTransaction } from "../types";
 import { Card } from "../components/ui";
 import { AppHeader } from "../components/ui/AppHeader";
 import { ListRow } from "../components/ui/ListRow";
@@ -216,6 +219,14 @@ export const DashboardScreen: React.FC = () => {
     return slots;
   };
 
+  const handleVoiceResult = (parsed: ParsedTransaction[]) => {
+    // Navigate to AddTransaction with pre-filled data
+    if (parsed && parsed.length > 0) {
+      // @ts-ignore
+      navigation.navigate("AddTransaction", { prefilledData: parsed[0] });
+    }
+  };
+
   const handleQuickAddPress = async (slot: QuickAddSlot) => {
     try {
       let categoryId = slot.id;
@@ -340,9 +351,10 @@ export const DashboardScreen: React.FC = () => {
             ))}
 
             {/* Voice / More chip */}
-            <TouchableOpacity
-              style={{ alignItems: "center", width: 64 }}
-              onPress={handleMorePress}>
+            <VoiceInputButton
+              variant="custom"
+              onResult={handleVoiceResult}
+              style={{ alignItems: "center", width: 64 }}>
               <View
                 style={[
                   styles.moreChip,
@@ -366,7 +378,7 @@ export const DashboardScreen: React.FC = () => {
                 numberOfLines={1}>
                 Voice
               </Text>
-            </TouchableOpacity>
+            </VoiceInputButton>
           </View>
         </View>
 

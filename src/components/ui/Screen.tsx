@@ -60,12 +60,12 @@ const styles = StyleSheet.create({
 
   container: {
     flex: 1,
-    backgroundColor: UI.COLORS.BACKGROUND,
+    backgroundColor: "#0B0B1E",
   },
 
   scrollView: {
     flex: 1,
-    backgroundColor: UI.COLORS.BACKGROUND,
+    backgroundColor: "#0B0B1E",
   },
 
   scrollContent: {

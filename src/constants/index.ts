@@ -17,6 +17,22 @@ export const CATEGORY_TYPES = {
 } as const;
 
 export const UI = {
+  COLORS: {
+    PRIMARY: "#6C5CE7",
+    PRIMARY_LIGHT: "#8B7CF0",
+    PRIMARY_DARK: "#5244C4",
+    SECONDARY: "#00CE9F",
+    BACKGROUND: "#0B0B1E",
+    CARD: "#1A1A2E",
+    SURFACE: "#1A1A2E",
+    ERROR: "#FF7675",
+    SUCCESS: "#00B894",
+    WARNING: "#FDCB6E",
+    TEXT_PRIMARY: "#FFFFFF",
+    TEXT_SECONDARY: "#A0A0B0",
+    TEXT_MUTED: "#666677",
+    BORDER: "rgba(255,255,255,0.1)",
+  },
   CARD_RADIUS: 16,
   SPACING: {
     XS: 4,
@@ -24,34 +40,6 @@ export const UI = {
     MD: 16,
     LG: 24,
     XL: 32,
-  },
-  COLORS: {
-    // Dark premium palette – deep indigo base
-    BACKGROUND: "#0B0B1E",
-    SURFACE: "#141432",
-    SURFACE_BLUR: "rgba(20, 20, 50, 0.85)",
-    CARD: "#1B1B3A",
-    CARD_BLUR: "rgba(27, 27, 58, 0.9)",
-
-    // Brand
-    PRIMARY: "#6C5CE7",
-    PRIMARY_LIGHT: "#A29BFE",
-    PRIMARY_DARK: "#4834D4",
-
-    // Semantic
-    ACCENT: "#00D2D3",
-    ERROR: "#FF6B6B",
-    WARNING: "#FECA57",
-    SUCCESS: "#2ED573",
-
-    // Text
-    TEXT_PRIMARY: "#F0F0FF",
-    TEXT_SECONDARY: "#A0A0C8",
-    TEXT_MUTED: "#5E5E80",
-
-    // Chrome
-    BORDER: "#2A2A4A",
-    INPUT_BACKGROUND: "#1A1A3E",
   },
   FONTS: {
     REGULAR: "System",

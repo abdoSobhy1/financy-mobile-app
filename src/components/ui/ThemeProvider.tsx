@@ -103,7 +103,13 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const isDark = colorScheme === 'dark';
   const { theme } = useMaterial3Theme({ fallbackSourceColor: FALLBACK_SOURCE_COLOR });
   
-  const activeColors = isDark ? theme.dark : theme.light;
+  const activeColors = { ...(isDark ? theme.dark : theme.light) };
+
+  if (isDark) {
+    activeColors.background = "#050508"; // Almost black shade
+    activeColors.surface = "#0A0A0E"; // Slightly lighter for cards
+    activeColors.surfaceVariant = "#121218"; // Even lighter for secondary elements
+  }
   
   const value = useMemo(() => ({
     colors: activeColors,

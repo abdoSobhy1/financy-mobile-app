@@ -172,6 +172,10 @@ export const SettingsScreen: React.FC = () => {
     }
   };
 
+  const handleComingSoon = (feature: string) => {
+    Alert.alert("Coming Soon", `The ${feature} feature is not yet available. Stay tuned!`, [{ text: "OK" }]);
+  };
+
   const handleVersionClick = () => {
     const n = debugClickCount + 1;
     setDebugClickCount(n);
@@ -467,15 +471,15 @@ export const SettingsScreen: React.FC = () => {
 
         <SectionLabel text="ACCOUNT" />
         <GlassCard>
-          <SettingRow icon="person-outline" title="Profile Information" subtitle="Update your name, email, and avatar" />
-          <SettingRow icon="shield-checkmark-outline" title="Security" subtitle="Password, 2FA, and linked devices" />
+          <SettingRow icon="person-outline" title="Profile Information" subtitle="Update your name, email, and avatar" onPress={() => handleComingSoon("Profile")} />
+          <SettingRow icon="shield-checkmark-outline" title="Security" subtitle="Password, 2FA, and linked devices" onPress={() => handleComingSoon("Security")} />
         </GlassCard>
 
         <SectionLabel text="PREFERENCES" />
         <GlassCard>
-          <SettingRow icon="cash-outline" title="Currency" subtitle="Base currency for display (USD)" rightElement={<View style={{ flexDirection: "row", alignItems: "center" }}><Text style={[typography.bodyLarge, { color: colors.onSurfaceVariant, marginRight: 8 }]}>USD</Text><Ionicons name="chevron-forward" size={16} color={colors.onSurfaceVariant} /></View>} />
-          <SettingRow icon="globe-outline" title="Language" subtitle="English (US)" rightElement={<Ionicons name="chevron-forward" size={16} color={colors.onSurfaceVariant} />} />
-          <SettingRow icon="moon-outline" title="Theme" subtitle="Dark mode" rightElement={<Ionicons name="chevron-forward" size={16} color={colors.onSurfaceVariant} />} />
+          <SettingRow icon="cash-outline" title="Currency" subtitle="Base currency for display (USD)" rightElement={<View style={{ flexDirection: "row", alignItems: "center" }}><Text style={[typography.bodyLarge, { color: colors.onSurfaceVariant, marginRight: 8 }]}>USD</Text><Ionicons name="chevron-forward" size={16} color={colors.onSurfaceVariant} /></View>} onPress={() => handleComingSoon("Currency")} />
+          <SettingRow icon="globe-outline" title="Language" subtitle="English (US)" rightElement={<Ionicons name="chevron-forward" size={16} color={colors.onSurfaceVariant} />} onPress={() => handleComingSoon("Language")} />
+          <SettingRow icon="moon-outline" title="Theme" subtitle="Dark mode" rightElement={<Ionicons name="chevron-forward" size={16} color={colors.onSurfaceVariant} />} onPress={() => handleComingSoon("Theme")} />
           <SettingRow icon="apps-outline" title="Categories" subtitle="Manage transaction categories and icons" onPress={() => setAddCategoryModalVisible(true)} />
         </GlassCard>
 

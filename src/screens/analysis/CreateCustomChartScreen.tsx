@@ -1,3 +1,4 @@
+import { useAppTheme } from "../../components/ui/ThemeProvider";
 import React, { useState, useEffect } from "react";
 import { View, StyleSheet, ScrollView, Text, TouchableOpacity, Alert, Modal, FlatList } from "react-native";
 import { useNavigation, useRoute } from "@react-navigation/native";
@@ -25,6 +26,8 @@ interface RouteParams {
 }
 
 export const CreateCustomChartScreen: React.FC = () => {
+  const { colors } = useAppTheme();
+  const styles = React.useMemo(() => getStyles(colors), [colors]);
   const navigation = useNavigation();
   const route = useRoute();
   const dispatch = useDispatch();
@@ -166,7 +169,7 @@ export const CreateCustomChartScreen: React.FC = () => {
     {
       theme: "default",
       label: "Default",
-      colors: [UI.COLORS.PRIMARY, UI.COLORS.SUCCESS, UI.COLORS.WARNING, UI.COLORS.ERROR],
+      colors: [colors.primary, colors.primary, colors.tertiary, colors.error],
     },
     {
       theme: "blue",
@@ -209,13 +212,13 @@ export const CreateCustomChartScreen: React.FC = () => {
                 <Ionicons
                   name={chartType.icon as any}
                   size={24}
-                  color={selectedChartType === chartType.type ? UI.COLORS.PRIMARY : UI.COLORS.TEXT_SECONDARY}
+                  color={selectedChartType === chartType.type ? colors.primary : colors.onSurfaceVariant}
                 />
                 <Text style={[styles.optionTitle, selectedChartType === chartType.type && styles.selectedOptionText]}>{chartType.label}</Text>
               </View>
               <Text style={styles.optionDescription}>{chartType.description}</Text>
             </View>
-            {selectedChartType === chartType.type && <Ionicons name="checkmark-circle" size={20} color={UI.COLORS.PRIMARY} />}
+            {selectedChartType === chartType.type && <Ionicons name="checkmark-circle" size={20} color={colors.primary} />}
           </TouchableOpacity>
         ))}
       </View>
@@ -235,7 +238,7 @@ export const CreateCustomChartScreen: React.FC = () => {
               <Text style={[styles.optionTitle, selectedDataSource === dataSource.source && styles.selectedOptionText]}>{dataSource.label}</Text>
               <Text style={styles.optionDescription}>{dataSource.description}</Text>
             </View>
-            {selectedDataSource === dataSource.source && <Ionicons name="checkmark-circle" size={20} color={UI.COLORS.PRIMARY} />}
+            {selectedDataSource === dataSource.source && <Ionicons name="checkmark-circle" size={20} color={colors.primary} />}
           </TouchableOpacity>
         ))}
       </View>
@@ -259,7 +262,7 @@ export const CreateCustomChartScreen: React.FC = () => {
             <Text style={styles.colorThemeLabel}>{theme.label}</Text>
             {selectedColorTheme === theme.theme && (
               <View style={styles.colorThemeCheck}>
-                <Ionicons name="checkmark" size={16} color={UI.COLORS.TEXT_PRIMARY} />
+                <Ionicons name="checkmark" size={16} color={colors.onBackground} />
               </View>
             )}
           </TouchableOpacity>
@@ -285,7 +288,7 @@ export const CreateCustomChartScreen: React.FC = () => {
                   ? `${new Date(filters.startDate).toLocaleDateString()} - ${new Date(filters.endDate).toLocaleDateString()}`
                   : "All time"}
               </Text>
-              <Ionicons name="chevron-forward" size={16} color={UI.COLORS.TEXT_MUTED} />
+              <Ionicons name="chevron-forward" size={16} color={colors.onSurfaceVariant} />
             </View>
           </TouchableOpacity>
 
@@ -295,7 +298,7 @@ export const CreateCustomChartScreen: React.FC = () => {
               <Text style={styles.filterValueText}>
                 {filters.categoryIds && filters.categoryIds.length > 0 ? `${filters.categoryIds.length} selected` : "All categories"}
               </Text>
-              <Ionicons name="chevron-forward" size={16} color={UI.COLORS.TEXT_MUTED} />
+              <Ionicons name="chevron-forward" size={16} color={colors.onSurfaceVariant} />
             </View>
           </TouchableOpacity>
 
@@ -372,7 +375,7 @@ export const CreateCustomChartScreen: React.FC = () => {
       <View style={styles.header}>
         <View style={styles.headerContent}>
           <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
-            <Ionicons name="arrow-back" size={24} color={UI.COLORS.TEXT_PRIMARY} />
+            <Ionicons name="arrow-back" size={24} color={colors.onBackground} />
           </TouchableOpacity>
           <Text style={styles.title}>{isEditing ? "Edit Chart" : "Create Chart"}</Text>
           <View style={styles.headerSpacer} />
@@ -407,7 +410,7 @@ export const CreateCustomChartScreen: React.FC = () => {
         <View style={styles.modalContainer}>
           <View style={styles.modalHeader}>
             <TouchableOpacity style={styles.modalCloseButton} onPress={() => setShowCategoryModal(false)}>
-              <Ionicons name="close" size={24} color={UI.COLORS.TEXT_PRIMARY} />
+              <Ionicons name="close" size={24} color={colors.onBackground} />
             </TouchableOpacity>
             <Text style={styles.modalTitle}>Select Categories</Text>
             <TouchableOpacity style={styles.modalClearButton} onPress={clearCategories}>
@@ -430,7 +433,7 @@ export const CreateCustomChartScreen: React.FC = () => {
                     <Text style={[styles.categoryName, isSelected && styles.selectedCategoryName]}>{category.name}</Text>
                     <Text style={styles.categoryType}>{category.type === "income" ? "Income" : "Expense"}</Text>
                   </View>
-                  {isSelected && <Ionicons name="checkmark" size={20} color={UI.COLORS.PRIMARY} />}
+                  {isSelected && <Ionicons name="checkmark" size={20} color={colors.primary} />}
                 </TouchableOpacity>
               );
             }}
@@ -447,7 +450,7 @@ export const CreateCustomChartScreen: React.FC = () => {
         <View style={styles.modalContainer}>
           <View style={styles.modalHeader}>
             <TouchableOpacity style={styles.modalCloseButton} onPress={() => setShowDateRangeModal(false)}>
-              <Ionicons name="close" size={24} color={UI.COLORS.TEXT_PRIMARY} />
+              <Ionicons name="close" size={24} color={colors.onBackground} />
             </TouchableOpacity>
             <Text style={styles.modalTitle}>Select Date Range</Text>
             <TouchableOpacity style={styles.modalClearButton} onPress={clearDateRange}>
@@ -498,7 +501,7 @@ export const CreateCustomChartScreen: React.FC = () => {
   );
 };
 
-const styles = StyleSheet.create({
+const getStyles = (colors: any) => StyleSheet.create({
   container: {
     flex: 1,
   },
@@ -518,7 +521,7 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 24,
     fontWeight: "bold",
-    color: UI.COLORS.TEXT_PRIMARY,
+    color: colors.onBackground,
     flex: 1,
     textAlign: "center",
   },
@@ -531,7 +534,7 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: 18,
     fontWeight: "600",
-    color: UI.COLORS.TEXT_PRIMARY,
+    color: colors.onBackground,
     marginBottom: UI.SPACING.MD,
   },
   optionsList: {
@@ -541,14 +544,14 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     padding: UI.SPACING.MD,
-    backgroundColor: UI.COLORS.SURFACE,
+    backgroundColor: colors.surfaceVariant,
     borderRadius: UI.CARD_RADIUS,
     borderWidth: 1,
-    borderColor: UI.COLORS.BORDER,
+    borderColor: colors.outlineVariant,
   },
   selectedOption: {
-    borderColor: UI.COLORS.PRIMARY,
-    backgroundColor: `${UI.COLORS.PRIMARY}10`,
+    borderColor: colors.primary,
+    backgroundColor: `${colors.primary}10`,
   },
   optionContent: {
     flex: 1,
@@ -562,14 +565,14 @@ const styles = StyleSheet.create({
   optionTitle: {
     fontSize: 16,
     fontWeight: "500",
-    color: UI.COLORS.TEXT_PRIMARY,
+    color: colors.onBackground,
   },
   selectedOptionText: {
-    color: UI.COLORS.PRIMARY,
+    color: colors.primary,
   },
   optionDescription: {
     fontSize: 14,
-    color: UI.COLORS.TEXT_MUTED,
+    color: colors.onSurfaceVariant,
   },
   colorThemeGrid: {
     flexDirection: "row",
@@ -581,15 +584,15 @@ const styles = StyleSheet.create({
     minWidth: "45%",
     alignItems: "center",
     padding: UI.SPACING.MD,
-    backgroundColor: UI.COLORS.SURFACE,
+    backgroundColor: colors.surfaceVariant,
     borderRadius: UI.CARD_RADIUS,
     borderWidth: 1,
-    borderColor: UI.COLORS.BORDER,
+    borderColor: colors.outlineVariant,
     position: "relative",
   },
   selectedColorTheme: {
-    borderColor: UI.COLORS.PRIMARY,
-    backgroundColor: `${UI.COLORS.PRIMARY}10`,
+    borderColor: colors.primary,
+    backgroundColor: `${colors.primary}10`,
   },
   colorPreview: {
     flexDirection: "row",
@@ -603,14 +606,14 @@ const styles = StyleSheet.create({
   },
   colorThemeLabel: {
     fontSize: 12,
-    color: UI.COLORS.TEXT_SECONDARY,
+    color: colors.onSurfaceVariant,
     textAlign: "center",
   },
   colorThemeCheck: {
     position: "absolute",
     top: 4,
     right: 4,
-    backgroundColor: UI.COLORS.PRIMARY,
+    backgroundColor: colors.primary,
     borderRadius: 8,
     width: 16,
     height: 16,
@@ -625,14 +628,14 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "space-between",
     padding: UI.SPACING.MD,
-    backgroundColor: UI.COLORS.SURFACE,
+    backgroundColor: colors.surfaceVariant,
     borderRadius: UI.CARD_RADIUS,
     borderWidth: 1,
-    borderColor: UI.COLORS.BORDER,
+    borderColor: colors.outlineVariant,
   },
   filterLabel: {
     fontSize: 16,
-    color: UI.COLORS.TEXT_PRIMARY,
+    color: colors.onBackground,
   },
   filterValue: {
     flexDirection: "row",
@@ -641,14 +644,14 @@ const styles = StyleSheet.create({
   },
   filterValueText: {
     fontSize: 14,
-    color: UI.COLORS.TEXT_SECONDARY,
+    color: colors.onSurfaceVariant,
   },
   actions: {
     margin: UI.SPACING.MD,
     gap: UI.SPACING.MD,
   },
   saveButton: {
-    backgroundColor: UI.COLORS.PRIMARY,
+    backgroundColor: colors.primary,
   },
   deleteButton: {
     marginTop: UI.SPACING.SM,
@@ -663,27 +666,27 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     paddingHorizontal: 12,
     borderRadius: 6,
-    backgroundColor: UI.COLORS.SURFACE,
+    backgroundColor: colors.surfaceVariant,
     borderWidth: 1,
-    borderColor: UI.COLORS.BORDER,
+    borderColor: colors.outlineVariant,
     alignItems: "center" as const,
   },
   typeButtonActive: {
-    backgroundColor: UI.COLORS.PRIMARY,
-    borderColor: UI.COLORS.PRIMARY,
+    backgroundColor: colors.primary,
+    borderColor: colors.primary,
   },
   typeButtonText: {
     fontSize: 14,
-    color: UI.COLORS.TEXT_PRIMARY,
+    color: colors.onBackground,
     fontWeight: "500" as const,
   },
   typeButtonTextActive: {
-    color: UI.COLORS.BACKGROUND,
+    color: colors.background,
   },
   // Modal styles
   modalContainer: {
     flex: 1,
-    backgroundColor: UI.COLORS.BACKGROUND,
+    backgroundColor: colors.background,
   },
   modalHeader: {
     flexDirection: "row" as const,
@@ -691,7 +694,7 @@ const styles = StyleSheet.create({
     justifyContent: "space-between" as const,
     padding: 16,
     borderBottomWidth: 1,
-    borderBottomColor: UI.COLORS.BORDER,
+    borderBottomColor: colors.outlineVariant,
   },
   modalCloseButton: {
     padding: 8,
@@ -699,14 +702,14 @@ const styles = StyleSheet.create({
   modalTitle: {
     fontSize: 18,
     fontWeight: "600" as const,
-    color: UI.COLORS.TEXT_PRIMARY,
+    color: colors.onBackground,
   },
   modalClearButton: {
     padding: 8,
   },
   modalClearText: {
     fontSize: 16,
-    color: UI.COLORS.PRIMARY,
+    color: colors.primary,
   },
   modalList: {
     flex: 1,
@@ -717,10 +720,10 @@ const styles = StyleSheet.create({
     alignItems: "center" as const,
     justifyContent: "space-between" as const,
     borderBottomWidth: 1,
-    borderBottomColor: UI.COLORS.BORDER,
+    borderBottomColor: colors.outlineVariant,
   },
   selectedCategoryItem: {
-    backgroundColor: UI.COLORS.SURFACE,
+    backgroundColor: colors.surfaceVariant,
   },
   categoryInfo: {
     flexDirection: "row" as const,
@@ -735,7 +738,7 @@ const styles = StyleSheet.create({
   },
   categoryName: {
     fontSize: 16,
-    color: UI.COLORS.TEXT_PRIMARY,
+    color: colors.onBackground,
     flex: 1,
   },
   selectedCategoryName: {
@@ -743,16 +746,16 @@ const styles = StyleSheet.create({
   },
   categoryType: {
     fontSize: 14,
-    color: UI.COLORS.TEXT_SECONDARY,
+    color: colors.onSurfaceVariant,
     marginLeft: 8,
   },
   modalFooter: {
     padding: 16,
     borderTopWidth: 1,
-    borderTopColor: UI.COLORS.BORDER,
+    borderTopColor: colors.outlineVariant,
   },
   modalDoneButton: {
-    backgroundColor: UI.COLORS.PRIMARY,
+    backgroundColor: colors.primary,
   },
   modalContent: {
     flex: 1,
@@ -761,7 +764,7 @@ const styles = StyleSheet.create({
   dateRangeLabel: {
     fontSize: 16,
     fontWeight: "600" as const,
-    color: UI.COLORS.TEXT_PRIMARY,
+    color: colors.onBackground,
     marginBottom: 8,
     marginTop: 16,
   },
@@ -770,26 +773,26 @@ const styles = StyleSheet.create({
   },
   quickDateOption: {
     padding: 12,
-    backgroundColor: UI.COLORS.SURFACE,
+    backgroundColor: colors.surfaceVariant,
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: UI.COLORS.BORDER,
+    borderColor: colors.outlineVariant,
   },
   quickDateOptionText: {
     fontSize: 16,
-    color: UI.COLORS.TEXT_PRIMARY,
+    color: colors.onBackground,
     textAlign: "center" as const,
   },
   currentDateRange: {
     padding: 12,
-    backgroundColor: UI.COLORS.CARD,
+    backgroundColor: colors.surface,
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: UI.COLORS.BORDER,
+    borderColor: colors.outlineVariant,
   },
   currentDateText: {
     fontSize: 16,
-    color: UI.COLORS.TEXT_PRIMARY,
+    color: colors.onBackground,
     textAlign: "center" as const,
   },
 });

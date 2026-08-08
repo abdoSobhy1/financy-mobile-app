@@ -50,8 +50,9 @@ interface VoiceInputButtonProps {
   onResult: (parsed: ParsedTransaction[]) => void;
   size?: number;
   style?: any;
-  variant?: "fab" | "button";
+  variant?: "fab" | "button" | "custom";
   title?: string;
+  children?: React.ReactNode;
 }
 
 export const VoiceInputButton: React.FC<VoiceInputButtonProps> = ({
@@ -60,6 +61,7 @@ export const VoiceInputButton: React.FC<VoiceInputButtonProps> = ({
   style,
   variant = "fab",
   title = "Voice Input",
+  children,
 }) => {
   const { colors } = useAppTheme();
   const [isListening, setIsListening] = useState(false);
@@ -375,7 +377,11 @@ export const VoiceInputButton: React.FC<VoiceInputButtonProps> = ({
 
   return (
     <>
-      {variant === "button" ? (
+      {variant === "custom" && children ? (
+        <TouchableOpacity onPress={handlePress} style={style} activeOpacity={0.7}>
+          {children}
+        </TouchableOpacity>
+      ) : variant === "button" ? (
         <Button
           title={title}
           onPress={handlePress}

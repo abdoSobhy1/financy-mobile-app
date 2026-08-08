@@ -23,7 +23,6 @@ import { getCurrentBillingPeriod } from "../utils/billingPeriod";
 import { getDateRangeForBillingPeriod } from "../utils";
 import {
   Screen,
-  FloatingActionButton,
   AppHeader,
 } from "../components/ui";
 import { UI } from "../constants";
@@ -207,7 +206,7 @@ export const BudgetListScreen: React.FC = () => {
         style={[styles.budgetCard, { backgroundColor: colors.surface, borderColor: isOverBudget ? "rgba(255,0,0,0.2)" : "transparent", borderWidth: 1 }]}
         activeOpacity={0.8}
         onPress={() => {
-          // Mock navigation to details or edit form
+          navigation.navigate("BudgetForm", { budgetId: id });
         }}
       >
         <View style={styles.budgetRow}>
@@ -282,12 +281,6 @@ export const BudgetListScreen: React.FC = () => {
           <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={colors.primary} />
         }
         showsVerticalScrollIndicator={false}
-      />
-
-      <FloatingActionButton
-        icon="add"
-        onPress={() => navigation.navigate("BudgetForm", {})}
-        style={{ position: "absolute", bottom: tabBarHeight + spacing.md, right: spacing.lg }}
       />
     </SafeAreaView>
   );

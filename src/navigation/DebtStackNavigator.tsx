@@ -5,6 +5,8 @@ import DebtFormScreen from "../screens/DebtFormScreen";
 import AddPaymentScreen from "../screens/AddPaymentScreen";
 import DebtPaymentsScreen from "../screens/DebtPaymentsScreen";
 import { UI } from "../constants";
+import { useAppTheme } from "../components/ui/ThemeProvider";
+
 
 export type DebtStackParamList = {
   DebtsList: undefined;
@@ -28,11 +30,11 @@ const DebtStackNavigator: React.FC = () => {
     <Stack.Navigator
       screenOptions={{
         headerStyle: {
-          backgroundColor: UI.COLORS.SURFACE,
-          borderBottomColor: UI.COLORS.BORDER,
+          backgroundColor: "#1A1A2E",
+          borderBottomColor: "rgba(255,255,255,0.1)",
           borderBottomWidth: 1,
         },
-        headerTintColor: UI.COLORS.TEXT_PRIMARY,
+        headerTintColor: "#FFFFFF",
         headerTitleStyle: {
           fontWeight: "600",
           fontSize: 18,

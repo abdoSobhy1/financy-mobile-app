@@ -9,7 +9,7 @@ import {
 } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons } from "@expo/vector-icons";
-import { UI } from "../../constants";
+import { useAppTheme } from "./ThemeProvider";
 
 export interface ToastConfig {
   id: string;
@@ -69,6 +69,9 @@ const TOAST_THEME: Record<
 };
 
 export const Toast: React.FC<ToastProps> = ({ toast, onDismiss, index }) => {
+  const { colors } = useAppTheme();
+  const styles = React.useMemo(() => getStyles(colors), [colors]);
+
   const translateY = useRef(new Animated.Value(80)).current;
   const opacity = useRef(new Animated.Value(0)).current;
   const scale = useRef(new Animated.Value(0.9)).current;
@@ -131,7 +134,7 @@ export const Toast: React.FC<ToastProps> = ({ toast, onDismiss, index }) => {
       style={[
         styles.container,
         {
-          backgroundColor: UI.COLORS.SURFACE,
+          backgroundColor: colors.surfaceVariant,
           borderColor: theme.border,
           transform: [{ translateY }, { scale }],
           opacity,
@@ -165,7 +168,7 @@ export const Toast: React.FC<ToastProps> = ({ toast, onDismiss, index }) => {
   );
 };
 
-const styles = StyleSheet.create({
+const getStyles = (colors: any) => StyleSheet.create({
   container: {
     position: "absolute",
     left: 16,
@@ -200,7 +203,7 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 14,
     fontWeight: "600",
-    color: UI.COLORS.TEXT_PRIMARY,
+    color: colors.onBackground,
     lineHeight: 20,
   },
   dismissBtn: {

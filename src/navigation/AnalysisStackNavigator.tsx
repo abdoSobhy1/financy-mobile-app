@@ -3,6 +3,8 @@ import { createStackNavigator } from "@react-navigation/stack";
 import { AnalysisScreen } from "../screens/analysis/AnalysisScreen";
 import { CreateCustomChartScreen } from "../screens/analysis/CreateCustomChartScreen";
 import { UI } from "../constants";
+import { useAppTheme } from "../components/ui/ThemeProvider";
+
 import { AnalysisStackParamList } from "../types";
 
 const Stack = createStackNavigator<AnalysisStackParamList>();
@@ -27,9 +29,9 @@ const AnalysisStackNavigator: React.FC = () => {
           title: route.params?.isEditing ? "Edit Chart" : "Create Chart",
           presentation: "modal",
           headerStyle: {
-            backgroundColor: UI.COLORS.BACKGROUND,
+            backgroundColor: "#0B0B1E",
           },
-          headerTintColor: UI.COLORS.TEXT_PRIMARY,
+          headerTintColor: "#FFFFFF",
           headerTitleStyle: {
             fontWeight: "600",
           },

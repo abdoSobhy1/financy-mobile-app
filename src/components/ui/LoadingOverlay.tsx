@@ -1,19 +1,21 @@
 import React from "react";
 import { View, Text, ActivityIndicator, StyleSheet } from "react-native";
 import { UI } from "../../constants";
-
 interface LoadingOverlayProps {
   visible: boolean;
   message?: string;
 }
 
-export const LoadingOverlay: React.FC<LoadingOverlayProps> = ({ visible, message = "Loading..." }) => {
+export const LoadingOverlay: React.FC<LoadingOverlayProps> = ({
+  visible,
+  message = "Loading...",
+}) => {
   if (!visible) return null;
 
   return (
     <View style={styles.overlay}>
       <View style={styles.container}>
-        <ActivityIndicator size="large" color={UI.COLORS.PRIMARY} />
+        <ActivityIndicator size="large" color={"#6C5CE7"} />
         <Text style={styles.message}>{message}</Text>
       </View>
     </View>
@@ -33,18 +35,18 @@ const styles = StyleSheet.create({
     zIndex: 1000,
   },
   container: {
-    backgroundColor: UI.COLORS.SURFACE,
+    backgroundColor: "#1A1A2E",
     borderRadius: UI.CARD_RADIUS,
     padding: UI.SPACING.LG,
     alignItems: "center",
     minWidth: 150,
     borderWidth: 1,
-    borderColor: UI.COLORS.BORDER,
+    borderColor: "rgba(255,255,255,0.1)",
   },
   message: {
     marginTop: UI.SPACING.MD,
     fontSize: 16,
-    color: UI.COLORS.TEXT_PRIMARY,
+    color: "#FFFFFF",
     textAlign: "center",
   },
 });

@@ -2,6 +2,7 @@ import React from "react";
 import { View, Text, StyleSheet, ViewStyle } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { UI } from "../../constants";
+import { useAppTheme } from "./ThemeProvider";
 
 interface ScreenHeroHeaderProps {
   /** Small uppercase label above the hero value (e.g. "Total Remaining") */
@@ -24,11 +25,15 @@ export const ScreenHeroHeader: React.FC<ScreenHeroHeaderProps> = ({
   heroValueColor = "#fff",
   children,
   style,
-  gradientColors = ["#1B1464", "#6C5CE7", "#A29BFE"],
-}) => (
+  gradientColors,
+}) => {
+  const { colors } = useAppTheme();
+  const actualGradientColors = gradientColors || [colors.primary, colors.tertiary, colors.primaryContainer];
+  
+  return (
   <View style={style}>
     <LinearGradient
-      colors={gradientColors}
+      colors={actualGradientColors}
       start={{ x: 0, y: 0 }}
       end={{ x: 1, y: 1 }}
       style={styles.heroCard}>
@@ -45,6 +50,7 @@ export const ScreenHeroHeader: React.FC<ScreenHeroHeaderProps> = ({
     </LinearGradient>
   </View>
 );
+};
 
 const styles = StyleSheet.create({
   heroCard: {

@@ -103,18 +103,18 @@ export const TabBar = ({ state, descriptors, navigation }: any) => {
                     activeOpacity={0.8}
                     style={[
                       styles.fabContainer,
-                      { backgroundColor: colors.primary, borderRadius: radius.full },
+                      { backgroundColor: colors.primary, borderRadius: radius.pill },
                     ]}
                     onPress={() => {
                       const currentRoute = state.routes[state.index].name;
                       if (currentRoute === "Transactions") {
-                        navigation.navigate("AddTransaction");
+                        navigation.navigate("Transactions", { screen: "AddTransaction" });
                       } else if (currentRoute === "Budgets") {
-                        navigation.navigate("BudgetForm");
+                        navigation.navigate("Budgets", { screen: "BudgetForm" });
                       } else if (currentRoute === "Debts") {
-                        navigation.navigate("DebtForm");
+                        navigation.navigate("Debts", { screen: "DebtForm" });
                       } else {
-                        navigation.navigate("AddTransaction");
+                        navigation.navigate("Transactions", { screen: "AddTransaction" });
                       }
                     }}>
                     <Ionicons name="add" size={28} color={colors.onPrimary} />
