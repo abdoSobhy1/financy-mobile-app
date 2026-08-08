@@ -28,6 +28,7 @@ export const UI = {
     ERROR: "#FF7675",
     SUCCESS: "#00B894",
     WARNING: "#FDCB6E",
+    ACCENT: "#6C5CE7",
     TEXT_PRIMARY: "#FFFFFF",
     TEXT_SECONDARY: "#A0A0B0",
     TEXT_MUTED: "#666677",

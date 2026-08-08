@@ -31,8 +31,6 @@ import {
   ListRow,
   Card,
   AppHeader,
-  FirebaseCleanupModal,
-  SyncStatus,
 } from "../components/ui";
 import { runSyncApplyTest, runAllSyncApplyTests } from "../debug/runSyncTest";
 import { UI } from "../constants";
