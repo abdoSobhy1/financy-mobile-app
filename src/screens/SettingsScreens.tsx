@@ -58,9 +58,11 @@ type SettingsScreenNavigationProp = StackNavigationProp<SettingsStackParamList>;
 
 // ── Reusable sub-components ──────────────────────────────────────────
 
-const SectionLabel = ({ text }: { text: string }) => (
-  <Text style={styles.sectionLabel}>{text}</Text>
-);
+const SectionLabel = ({ text }: { text: string }) => {
+  const { colors } = useAppTheme();
+  const styles = React.useMemo(() => getStyles(colors), [colors]);
+  return <Text style={styles.sectionLabel}>{text}</Text>;
+};
 
 const SettingRow = ({
   icon,
@@ -101,13 +103,17 @@ const GlassCard = ({
 }: {
   children: React.ReactNode;
   style?: any;
-}) => <Card variant="outlined" style={StyleSheet.flatten([{ padding: 0, overflow: "hidden", marginBottom: 16 }, style])}>{children}</Card>;
+}) => {
+  const { colors } = useAppTheme();
+  return <Card variant="outlined" style={StyleSheet.flatten([{ padding: 0, overflow: "hidden", marginBottom: 16 }, style])}>{children}</Card>;
+};
 
 // ═══════════════════════════════════════════════════════════════════
 // MAIN SCREEN
 // ═══════════════════════════════════════════════════════════════════
 export const SettingsScreen: React.FC = () => {
   const { colors, typography, spacing, radius } = useAppTheme();
+  const styles = React.useMemo(() => getStyles(colors), [colors]);
   const tabBarHeight = useTabBarHeight();
   const dispatch = useDispatch<AppDispatch>();
   const navigation = useNavigation<SettingsScreenNavigationProp>();
@@ -448,572 +454,68 @@ export const SettingsScreen: React.FC = () => {
   // ═══════════════════════════════════════════════════════════════
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }} edges={["top"]}>
-      <StatusBar
-          barStyle="light-content"
-          backgroundColor="transparent"
-          translucent
-        />
-
-        <ScrollView
-          style={{ flex: 1 }}
-          contentContainerStyle={[styles.scroll, { paddingBottom: tabBarHeight }]}
-          showsVerticalScrollIndicator={false}>
-          {/* ── Header ──────────────────────────────────── */}
-          <Text style={styles.screenTitle}>Settings</Text>
-
-          {/* ══ ACCOUNT ══════════════════════════════════ */}
-          <SectionLabel text="Account" />
-          <GlassCard>
-            {isAuthenticated ? (
-              <>
-                <View style={styles.accountRow}>
-                  <LinearGradient
-                    colors={[UI.COLORS.PRIMARY, UI.COLORS.PRIMARY_DARK]}
-                    style={styles.avatar}>
-                    <Ionicons name="person" size={20} color="#fff" />
-                  </LinearGradient>
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.rowTitle}>
-                      {user?.email || "Unknown"}
-                    </Text>
-                    <Text style={styles.rowSubtitle}>Signed in</Text>
-                  </View>
-                  <TouchableOpacity
-                    style={styles.signOutPill}
-                    onPress={() => dispatch(signOut())}>
-                    <Text style={styles.signOutText}>Sign Out</Text>
-                  </TouchableOpacity>
-                </View>
-              </>
-            ) : (
-              <SettingRow
-                icon="log-in"
-                title="Sign In"
-                subtitle="Sign in to sync your data across devices"
-              />
-            )}
-          </GlassCard>
-
-          {/* ══ PREFERENCES ══════════════════════════════ */}
-          <SectionLabel text="Preferences" />
-          <GlassCard>
-            <SettingRow
-              icon="calendar"
-              iconGradient={["#F59E0B", "#D97706"]}
-              title="Billing Start Day"
-              subtitle={`Day ${currentBillingDay} of each month`}
-              onPress={() => setShowBillingDayPicker(true)}
-            />
-          </GlassCard>
-
-          {/* ══ CLOUD SYNC ═══════════════════════════════ */}
-          {isAuthenticated && (
-            <>
-              <SectionLabel text="Cloud Sync" />
-              <GlassCard>
-                <SettingRow
-                  icon="sync"
-                  iconGradient={["#2ED573", "#1B9C4F"]}
-                  title="Sync Now"
-                  subtitle={
-                    syncing || newSyncState.isSyncing
-                      ? "Syncing…"
-                      : "Push local changes & pull from cloud"
-                  }
-                  onPress={handleSyncNow}
-                  rightElement={
-                    syncing || newSyncState.isSyncing ? (
-                      <ActivityIndicator
-                        size="small"
-                        color={UI.COLORS.PRIMARY_LIGHT}
-                      />
-                    ) : undefined
-                  }
-                />
-                <View style={styles.separator} />
-                <SettingRow
-                  icon="cloud-download"
-                  iconGradient={["#6C5CE7", "#A29BFE"]}
-                  title="Restore from Cloud"
-                  subtitle="Download all cloud data (useful after reinstall)"
-                  onPress={handleRestore}
-                />
-                <View style={styles.separator} />
-                <SettingRow
-                  icon="brush"
-                  iconGradient={["#F59E0B", "#D97706"]}
-                  title="Firebase Cleanup"
-                  subtitle="Remove duplicates & optimize storage"
-                  onPress={() => setShowFirebaseCleanup(true)}
-                />
-                <View style={styles.separator} />
-                <SettingRow
-                  icon="time"
-                  title="Sync Status"
-                  subtitle={
-                    newSyncState.lastSyncTime
-                      ? `Last synced: ${newSyncState.lastSyncTime.toLocaleString()}`
-                      : settings.data?.syncUpdatedAt
-                        ? `Last: ${new Date(settings.data.syncUpdatedAt).toLocaleString()}`
-                        : "No sync record"
-                  }
-                  rightElement={<SyncStatus />}
-                />
-              </GlassCard>
-            </>
-          )}
-
-          {/* ══ DATA ═════════════════════════════════════ */}
-          <SectionLabel text="Data" />
-          <GlassCard>
-            <SettingRow
-              icon="download"
-              iconGradient={["#3B82F6", "#2563EB"]}
-              title="Export Data"
-              subtitle="Export transactions as Excel, CSV, or JSON"
-              onPress={handleExportData}
-            />
-            <View style={styles.separator} />
-            <SettingRow
-              icon="cloud-upload"
-              iconGradient={["#8B5CF6", "#6D28D9"]}
-              title="Import from Excel"
-              subtitle="Import transactions from an Excel file"
-              onPress={() => navigation.navigate("Import")}
-            />
-            <View style={styles.separator} />
-            <SettingRow
-              icon="pricetags"
-              iconGradient={["#EC4899", "#DB2777"]}
-              title="Manage Categories"
-              subtitle={`${Object.keys(categories).length} categories`}
-              onPress={() => setShowCategoryManagement(!showCategoryManagement)}
-              rightElement={
-                <Ionicons
-                  name={showCategoryManagement ? "chevron-up" : "chevron-down"}
-                  size={16}
-                  color="rgba(255,255,255,0.2)"
-                />
-              }
-            />
-          </GlassCard>
-
-          {showCategoryManagement && (
-            <CategoryManagement
-              showAlert={showAlert}
-              showSuccess={showSuccess}
-              showError={showError}
-              onAddCategory={() => setAddCategoryModalVisible(true)}
-            />
-          )}
-
-          {/* ══ ABOUT ════════════════════════════════════ */}
-          <SectionLabel text="About" />
-          <GlassCard>
-            <SettingRow
-              icon="information-circle"
-              title="App Version"
-              subtitle="1.0.0"
-              onPress={handleVersionClick}
-              rightElement={null}
-            />
-            <View style={styles.separator} />
-            <SettingRow
-              icon="person"
-              title="Copyright"
-              subtitle={`© ${new Date().getFullYear()} Abdelrahman Sobhy`}
-              rightElement={null}
-            />
-            <View style={styles.separator} />
-            <SettingRow
-              icon="shield-checkmark"
-              iconGradient={["#2ED573", "#1B9C4F"]}
-              title="Privacy Policy"
-              subtitle="Your data stays on your device"
-              rightElement={null}
-            />
-          </GlassCard>
-
-          {/* ══ DEBUG (hidden) ════════════════════════════ */}
-          {showDebugSection && (
-            <>
-              <SectionLabel text="Debug" />
-              <GlassCard>
-                <SettingRow
-                  icon="bug"
-                  iconGradient={["#FF6B6B", "#EE5A24"]}
-                  title="Debug Logging"
-                  subtitle={
-                    debugLoggingEnabled
-                      ? "Console logging on"
-                      : "Console logging off"
-                  }
-                  rightElement={
-                    <Switch
-                      value={debugLoggingEnabled}
-                      onValueChange={(v) => {
-                        setDebugLoggingEnabled(v);
-                        setDebugMode(v);
-                        showSuccess(
-                          v
-                            ? "Debug logging enabled"
-                            : "Debug logging disabled",
-                        );
-                      }}
-                      trackColor={{
-                        false: "rgba(255,255,255,0.08)",
-                        true: UI.COLORS.PRIMARY + "50",
-                      }}
-                      thumbColor={
-                        debugLoggingEnabled
-                          ? UI.COLORS.PRIMARY
-                          : UI.COLORS.TEXT_SECONDARY
-                      }
-                    />
-                  }
-                />
-                <View style={styles.separator} />
-                <SettingRow
-                  icon="phone-portrait"
-                  title="Device ID"
-                  subtitle={deviceId || "Loading…"}
-                  onPress={() => {
-                    if (deviceId) {
-                      showSuccess("Device ID logged to console");
-                      console.log("Device ID:", deviceId);
-                    }
-                  }}
-                />
-                <View style={styles.separator} />
-                <SettingRow
-                  icon="construct"
-                  title="Run DB Migrations"
-                  subtitle="Update schema for cloud compatibility"
-                  onPress={async () => {
-                    try {
-                      showSuccess("Running migrations…");
-                      const { databaseMigration } =
-                        await import("../utils/databaseMigration");
-                      await databaseMigration.runCloudCompatibilityMigrations();
-                      showSuccess("Migrations completed!");
-                    } catch (e: any) {
-                      showError(`Migration failed: ${e?.message}`);
-                    }
-                  }}
-                />
-                <View style={styles.separator} />
-                <SettingRow
-                  icon="play"
-                  title="Run Sync Apply Test"
-                  subtitle="Apply a fake remote debt (dev only)"
-                  onPress={async () => {
-                    try {
-                      showSuccess("Running sync apply test…");
-                      const res = await runSyncApplyTest();
-                      if (res?.newLogCount === 0)
-                        showSuccess("PASS: No new sync_log entries");
-                      else showError(`FAIL: ${res?.newLogCount} new entries`);
-                    } catch (e: any) {
-                      showError(`Test failed: ${e?.message}`);
-                    }
-                  }}
-                />
-                <View style={styles.separator} />
-                <SettingRow
-                  icon="layers"
-                  title="Run All Apply Tests"
-                  subtitle="Run apply tests for all collections"
-                  onPress={async () => {
-                    try {
-                      showSuccess("Running all apply tests…");
-                      const res = await runAllSyncApplyTests();
-                      const failures = Object.entries(res).filter(
-                        ([_, v]) => v.newLogCount !== 0,
-                      );
-                      if (failures.length === 0)
-                        showSuccess("All tests passed!");
-                      else
-                        showError(
-                          `Failed: ${failures.map((f) => f[0]).join(", ")}`,
-                        );
-                    } catch (e: any) {
-                      showError(`Tests failed: ${e?.message}`);
-                    }
-                  }}
-                />
-                <View style={styles.separator} />
-                <SettingRow
-                  icon="notifications"
-                  title="Send Test Notification"
-                  subtitle="Test notification system"
-                  onPress={async () => {
-                    try {
-                      const ns = NotificationService.getInstance();
-                      await ns.initialize();
-                      await ns.sendTransactionReminder();
-                      showSuccess("Test notification sent!");
-                    } catch (e: any) {
-                      showError(`Failed: ${e?.message}`);
-                    }
-                  }}
-                />
-                <View style={styles.separator} />
-                <SettingRow
-                  icon="timer"
-                  title="Scheduled Notification (10s)"
-                  subtitle="Schedule a test notification"
-                  onPress={async () => {
-                    try {
-                      const ns = NotificationService.getInstance();
-                      const id = await ns.scheduleTestNotification();
-                      if (id) showSuccess("Notification in 10s!");
-                      else showError("Failed to schedule");
-                    } catch (e: any) {
-                      showError(`Failed: ${e?.message}`);
-                    }
-                  }}
-                />
-                <View style={styles.separator} />
-                <SettingRow
-                  icon="medical"
-                  title="Notification Diagnostics"
-                  subtitle="Check permissions & scheduled notifications"
-                  onPress={async () => {
-                    try {
-                      const ns = NotificationService.getInstance();
-                      await ns.runNotificationDiagnostics();
-                      showSuccess("Diagnostics done — see console");
-                    } catch (e: any) {
-                      showError(`Failed: ${e?.message}`);
-                    }
-                  }}
-                />
-                <View style={styles.separator} />
-                <SettingRow
-                  icon="refresh-circle"
-                  title="Force Reschedule Notifications"
-                  subtitle="Cancel all & reschedule"
-                  onPress={async () => {
-                    try {
-                      const ns = NotificationService.getInstance();
-                      await ns.forceRescheduleNotifications();
-                      showSuccess("Rescheduled — see console");
-                    } catch (e: any) {
-                      showError(`Failed: ${e?.message}`);
-                    }
-                  }}
-                />
-                <View style={styles.separator} />
-                <SettingRow
-                  icon="map"
-                  iconGradient={["#10B981", "#059669"]}
-                  title="Export Category Map"
-                  subtitle="Export category→descriptions JSON"
-                  onPress={handleExportCategoryMap}
-                />
-              </GlassCard>
-            </>
-          )}
-
-          {/* ══ DANGER ZONE ══════════════════════════════ */}
-          <SectionLabel text="Danger Zone" />
-          <GlassCard style={styles.dangerCard}>
-            <SettingRow
-              icon="trash"
-              destructive
-              title="Clear All Data"
-              subtitle="Delete everything except categories"
-              onPress={handleClearAllData}
-            />
-          </GlassCard>
-
-          <View style={{ height: 40 }} />
-        </ScrollView>
-
-        {/* ── Modals ─────────────────────────────────────── */}
-        <AlertComponent />
-
-        {/* Billing Day Picker */}
-        <Modal
-          visible={showBillingDayPicker}
-          animationType="fade"
-          transparent
-          onRequestClose={() => setShowBillingDayPicker(false)}>
-          <View style={styles.modalOverlay}>
-            <View style={styles.modalCard}>
-              <Text style={styles.modalTitle}>Billing Start Day</Text>
-              <Text style={styles.modalSubtitle}>
-                Choose the day your billing period starts
-              </Text>
-
-              <ScrollView
-                style={{ maxHeight: 300 }}
-                showsVerticalScrollIndicator={false}>
-                {Array.from({ length: 28 }, (_, i) => i + 1).map((day) => (
-                  <TouchableOpacity
-                    key={day}
-                    style={[
-                      styles.dayOption,
-                      selectedBillingDay === day && styles.dayOptionActive,
-                    ]}
-                    onPress={() => setSelectedBillingDay(day)}>
-                    <Text
-                      style={[
-                        styles.dayText,
-                        selectedBillingDay === day && styles.dayTextActive,
-                      ]}>
-                      Day {day}
-                    </Text>
-                    {selectedBillingDay === day && (
-                      <Ionicons
-                        name="checkmark"
-                        size={18}
-                        color={UI.COLORS.PRIMARY}
-                      />
-                    )}
-                  </TouchableOpacity>
-                ))}
-              </ScrollView>
-
-              <View style={styles.modalActions}>
-                <TouchableOpacity
-                  style={styles.modalCancelBtn}
-                  onPress={() => {
-                    setSelectedBillingDay(currentBillingDay);
-                    setShowBillingDayPicker(false);
-                  }}>
-                  <Text style={styles.modalCancelText}>Cancel</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  activeOpacity={0.8}
-                  onPress={saveBillingDay}
-                  disabled={settings.loading}>
-                  <LinearGradient
-                    colors={[UI.COLORS.PRIMARY, UI.COLORS.PRIMARY_DARK]}
-                    style={styles.modalSaveBtn}
-                    start={{ x: 0, y: 0 }}
-                    end={{ x: 1, y: 1 }}>
-                    <Text style={styles.modalSaveText}>
-                      {settings.loading ? "Saving…" : "Save"}
-                    </Text>
-                  </LinearGradient>
-                </TouchableOpacity>
-              </View>
-            </View>
+      <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
+      
+      {/* Top Header */}
+      <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 20, paddingTop: 16, paddingBottom: 8 }}>
+        <View style={{ flexDirection: "row", alignItems: "center" }}>
+          <View style={{ width: 32, height: 32, borderRadius: 16, backgroundColor: colors.surfaceVariant, alignItems: "center", justifyContent: "center" }}>
+            <Ionicons name="person" size={16} color={colors.onSurfaceVariant} />
           </View>
-        </Modal>
+          <Text style={[typography.h2, { color: colors.onBackground, marginLeft: spacing.md }]}>
+            Financy
+          </Text>
+        </View>
+        <TouchableOpacity>
+          <Ionicons name="notifications-outline" size={24} color={colors.onBackground} />
+        </TouchableOpacity>
+      </View>
 
-        <CategoryCreationModal
-          visible={addCategoryModalVisible}
-          onClose={() => setAddCategoryModalVisible(false)}
-          onCreateCategory={handleNewCategoryAdd}
-          title="Add New Category"
-        />
+      <ScrollView contentContainerStyle={{ paddingHorizontal: spacing.lg, paddingBottom: tabBarHeight + 100 }} showsVerticalScrollIndicator={false}>
+        
+        <Text style={[typography.h1, { color: colors.onBackground, marginTop: spacing.md, marginBottom: 4 }]}>Settings</Text>
+        <Text style={[typography.bodyMedium, { color: colors.onSurfaceVariant, marginBottom: spacing.xl }]}>Manage your account and preferences.</Text>
 
-        <FirebaseCleanupModal
-          visible={showFirebaseCleanup}
-          onClose={() => setShowFirebaseCleanup(false)}
-        />
+        <SectionLabel text="ACCOUNT" />
+        <GlassCard>
+          <SettingRow icon="person-outline" title="Profile Information" subtitle="Update your name, email, and avatar" />
+          <SettingRow icon="shield-checkmark-outline" title="Security" subtitle="Password, 2FA, and linked devices" />
+        </GlassCard>
+
+        <SectionLabel text="PREFERENCES" />
+        <GlassCard>
+          <SettingRow icon="cash-outline" title="Currency" subtitle="Base currency for display (USD)" rightElement={<View style={{ flexDirection: "row", alignItems: "center" }}><Text style={[typography.bodyLarge, { color: colors.onSurfaceVariant, marginRight: 8 }]}>USD</Text><Ionicons name="chevron-forward" size={16} color={colors.onSurfaceVariant} /></View>} />
+          <SettingRow icon="globe-outline" title="Language" subtitle="English (US)" rightElement={<Ionicons name="chevron-forward" size={16} color={colors.onSurfaceVariant} />} />
+          <SettingRow icon="moon-outline" title="Theme" subtitle="Dark mode" rightElement={<Ionicons name="chevron-forward" size={16} color={colors.onSurfaceVariant} />} />
+          <SettingRow icon="apps-outline" title="Categories" subtitle="Manage transaction categories and icons" onPress={() => setAddCategoryModalVisible(true)} />
+        </GlassCard>
+
+        <SectionLabel text="DATA" />
+        <GlassCard>
+          <SettingRow icon="download-outline" title="Export Data" subtitle="Download your transaction history (CSV/PDF)" onPress={handleExportData} />
+          <SettingRow icon="cloud-upload-outline" title="Backup & Sync" subtitle="Last synced: Today, 10:42 AM" onPress={handleSyncNow} />
+        </GlassCard>
+
+        <SectionLabel text="ABOUT" />
+        <GlassCard>
+          <SettingRow icon="information-circle-outline" title="About Financy" subtitle="Version 2.4.1 (Build 492)" onPress={handleVersionClick} />
+          <TouchableOpacity
+            style={{ flexDirection: "row", alignItems: "center", paddingVertical: 12, paddingHorizontal: 16 }}
+            onPress={() => dispatch(signOut())}
+          >
+            <View style={{ width: 32, height: 32, borderRadius: 16, alignItems: "center", justifyContent: "center", backgroundColor: "rgba(255,107,107,0.1)", marginRight: 16 }}>
+              <Ionicons name="log-out-outline" size={16} color="#FF6B6B" />
+            </View>
+            <Text style={[typography.bodyLarge, { color: "#FF6B6B", fontWeight: "600" }]}>Sign Out</Text>
+          </TouchableOpacity>
+        </GlassCard>
+
+      </ScrollView>
     </SafeAreaView>
   );
 };
 
-// ═══════════════════════════════════════════════════════════════════
-// Category Management (inline expandable)
-// ═══════════════════════════════════════════════════════════════════
-
-interface CategoryManagementProps {
-  showAlert: (title: string, message: string, actions?: any[]) => void;
-  showSuccess: (message: string) => void;
-  showError: (message: string) => void;
-  onAddCategory: () => void;
-}
-
-const CategoryManagement: React.FC<CategoryManagementProps> = ({
-  showAlert,
-  showSuccess,
-  showError,
-  onAddCategory,
-}) => {
-  const dispatch = useDispatch<AppDispatch>();
-  const { items: categories } = useSelector(
-    (state: RootState) => state.categories,
-  );
-  const [deletingId, setDeletingId] = useState<string | null>(null);
-
-  const catArr = Object.values(categories);
-  const income = catArr.filter((c) => c.type === "income");
-  const expense = catArr.filter((c) => c.type === "expense");
-
-  const handleDelete = (cat: Category) => {
-    showAlert("Delete Category", `Delete "${cat.name}"?`, [
-      { text: "Cancel", style: "cancel" },
-      {
-        text: "Delete",
-        style: "destructive",
-        onPress: async () => {
-          setDeletingId(cat.id);
-          try {
-            await dispatch(deleteCategory(cat.id)).unwrap();
-            showSuccess("Category deleted");
-          } catch (e: any) {
-            showError(e?.message || "Failed to delete");
-          } finally {
-            setDeletingId(null);
-          }
-        },
-      },
-    ]);
-  };
-
-  const CatList = ({
-    title,
-    items,
-    color,
-  }: {
-    title: string;
-    items: Category[];
-    color: string;
-  }) => (
-    <View style={{ marginBottom: 14 }}>
-      <Text style={[styles.catGroupTitle, { color }]}>
-        {title} ({items.length})
-      </Text>
-      {items.map((cat) => (
-        <View key={cat.id} style={styles.catRow}>
-          <View style={styles.catLeft}>
-            <View
-              style={[styles.catDot, { backgroundColor: cat.color || color }]}
-            />
-            <Text style={styles.catName}>{cat.name}</Text>
-          </View>
-          <TouchableOpacity
-            onPress={() => handleDelete(cat)}
-            disabled={deletingId === cat.id}>
-            <Ionicons name="trash-outline" size={17} color="#FF6B6B" />
-          </TouchableOpacity>
-        </View>
-      ))}
-    </View>
-  );
-
-  return (
-    <GlassCard style={{ marginTop: -4 }}>
-      <CatList title="Income" items={income} color="#2ED573" />
-      <CatList title="Expense" items={expense} color="#FF6B6B" />
-      <TouchableOpacity style={styles.addCatBtn} onPress={onAddCategory}>
-        <Ionicons name="add-circle" size={20} color={UI.COLORS.PRIMARY_LIGHT} />
-        <Text style={styles.addCatText}>Add Category</Text>
-      </TouchableOpacity>
-    </GlassCard>
-  );
-};
-
-// ═══════════════════════════════════════════════════════════════════
-// STYLES
-// ═══════════════════════════════════════════════════════════════════
-
-const styles = StyleSheet.create({
+const getStyles = (colors: any) => StyleSheet.create({
   scroll: {
     paddingHorizontal: 20,
     paddingTop: 16,
@@ -1021,7 +523,7 @@ const styles = StyleSheet.create({
   screenTitle: {
     fontSize: 32,
     fontWeight: "800",
-    color: UI.COLORS.TEXT_PRIMARY,
+    color: colors.onBackground,
     letterSpacing: 0.3,
     marginBottom: 24,
   },
@@ -1030,7 +532,7 @@ const styles = StyleSheet.create({
   sectionLabel: {
     fontSize: 12,
     fontWeight: "700",
-    color: UI.COLORS.PRIMARY_LIGHT,
+    color: colors.primaryContainer,
     textTransform: "uppercase",
     letterSpacing: 1,
     marginBottom: 10,
@@ -1073,11 +575,11 @@ const styles = StyleSheet.create({
   rowTitle: {
     fontSize: 15,
     fontWeight: "600",
-    color: UI.COLORS.TEXT_PRIMARY,
+    color: colors.onBackground,
   },
   rowSubtitle: {
     fontSize: 12,
-    color: UI.COLORS.TEXT_MUTED,
+    color: colors.onSurfaceVariant,
     marginTop: 2,
     lineHeight: 16,
   },
@@ -1145,7 +647,7 @@ const styles = StyleSheet.create({
   },
   catName: {
     fontSize: 14,
-    color: UI.COLORS.TEXT_PRIMARY,
+    color: colors.onBackground,
   },
   addCatBtn: {
     flexDirection: "row",
@@ -1162,7 +664,7 @@ const styles = StyleSheet.create({
   addCatText: {
     fontSize: 14,
     fontWeight: "600",
-    color: UI.COLORS.PRIMARY_LIGHT,
+    color: colors.primaryContainer,
   },
 
   // ── Modal ───────────────────────────────────────────
@@ -1185,13 +687,13 @@ const styles = StyleSheet.create({
   modalTitle: {
     fontSize: 18,
     fontWeight: "700",
-    color: UI.COLORS.TEXT_PRIMARY,
+    color: colors.onBackground,
     textAlign: "center",
     marginBottom: 6,
   },
   modalSubtitle: {
     fontSize: 13,
-    color: UI.COLORS.TEXT_MUTED,
+    color: colors.onSurfaceVariant,
     textAlign: "center",
     marginBottom: 18,
   },
@@ -1212,10 +714,10 @@ const styles = StyleSheet.create({
   },
   dayText: {
     fontSize: 15,
-    color: UI.COLORS.TEXT_PRIMARY,
+    color: colors.onBackground,
   },
   dayTextActive: {
-    color: UI.COLORS.PRIMARY_LIGHT,
+    color: colors.primaryContainer,
     fontWeight: "600",
   },
   modalActions: {
@@ -1235,7 +737,7 @@ const styles = StyleSheet.create({
   modalCancelText: {
     fontSize: 15,
     fontWeight: "600",
-    color: UI.COLORS.TEXT_MUTED,
+    color: colors.onSurfaceVariant,
   },
   modalSaveBtn: {
     flex: 1,
