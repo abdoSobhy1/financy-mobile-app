@@ -3,161 +3,33 @@ import {
   View,
   Text,
   StyleSheet,
-  FlatList,
+  ScrollView,
   TouchableOpacity,
   ActivityIndicator,
   StatusBar,
-  ScrollView,
-  Dimensions,
-  NativeSyntheticEvent,
-  NativeScrollEvent,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useAppTheme } from "../components/ui/ThemeProvider";
-import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons } from "@expo/vector-icons";
 import { useDispatch, useSelector } from "react-redux";
 import { useNavigation } from "@react-navigation/native";
 import { StackNavigationProp } from "@react-navigation/stack";
-import { FloatingActionButton, useTabBarHeight, Card, Badge } from "../components/ui";
+import { useTabBarHeight } from "../components/ui";
 import { formatCurrency } from "../utils";
 import { Debt } from "../types";
 import { RootState, AppDispatch } from "../store";
-import { fetchDebts, makeDebtPayment } from "../store/slices/debtsSlice";
+import { fetchDebts } from "../store/slices/debtsSlice";
 import { DebtStackParamList } from "../navigation/DebtStackNavigator";
-import { UI } from "../constants";
 
-const { width: SCREEN_WIDTH } = Dimensions.get("window");
-const HERO_PADDING = 20;
-const PAGE_WIDTH = SCREEN_WIDTH - HERO_PADDING * 2; // matches the hero card inner width
+type DebtsScreenNavigationProp = StackNavigationProp<DebtStackParamList, "DebtsList">;
 
-type DebtsScreenNavigationProp = StackNavigationProp<
-  DebtStackParamList,
-  "DebtsList"
->;
-
-// ── Isolated Hero Carousel (manages its own page state) ──────
-interface HeroPage {
-  label: string;
-  value: string;
-  valueColor: string;
-  subtitle: string;
-}
-
-const HeroCarousel = React.memo(({ pages }: { pages: HeroPage[] }) => {
-  const { colors, typography } = useAppTheme();
-  const [activePage, setActivePage] = useState(0);
-
-  const handleScroll = (e: NativeSyntheticEvent<NativeScrollEvent>) => {
-    const x = e.nativeEvent.contentOffset.x;
-    const idx = Math.round(x / PAGE_WIDTH);
-    if (idx >= 0 && idx < pages.length) {
-      setActivePage(idx);
-    }
-  };
-
-  return (
-    <View
-      style={[heroStyles.heroCard, { backgroundColor: colors.primaryContainer }]}>
-      <View style={[heroStyles.decorCircle, heroStyles.circle1]} />
-      <View style={[heroStyles.decorCircle, heroStyles.circle2]} />
-
-      <ScrollView
-        horizontal
-        pagingEnabled
-        nestedScrollEnabled
-        showsHorizontalScrollIndicator={false}
-        onScroll={handleScroll}
-        scrollEventThrottle={16}
-        style={{ marginHorizontal: -UI.SPACING.LG }}>
-        {pages.map((page, i) => (
-          <View
-            key={i}
-            style={{
-              width: PAGE_WIDTH,
-              paddingHorizontal: UI.SPACING.LG,
-            }}>
-            <Text style={[heroStyles.heroLabel, { color: colors.onPrimaryContainer, opacity: 0.8 }]}>{page.label}</Text>
-            <Text style={[heroStyles.heroValue, { color: page.valueColor === "#fff" ? colors.onPrimaryContainer : page.valueColor }]}>
-              {page.value}
-            </Text>
-            <Text style={[heroStyles.heroSubtitle, { color: colors.onPrimaryContainer, opacity: 0.7 }]}>{page.subtitle}</Text>
-          </View>
-        ))}
-      </ScrollView>
-
-      <View style={heroStyles.dotRow}>
-        {pages.map((_, i) => (
-          <View
-            key={i}
-            style={[heroStyles.dot, { backgroundColor: colors.onPrimaryContainer, opacity: 0.3 }, activePage === i && [heroStyles.dotActive, { backgroundColor: colors.onPrimaryContainer, opacity: 1 }]]}
-          />
-        ))}
-      </View>
-    </View>
-  );
-});
-
-const heroStyles = StyleSheet.create({
-  heroCard: {
-    borderRadius: 20,
-    padding: UI.SPACING.LG,
-    paddingBottom: 20,
-    overflow: "hidden",
-    position: "relative",
-  },
-  decorCircle: {
-    position: "absolute",
-    borderRadius: 999,
-    backgroundColor: "rgba(255,255,255,0.07)",
-  },
-  circle1: { width: 180, height: 180, top: -60, right: -40 },
-  circle2: { width: 120, height: 120, bottom: -30, left: -20 },
-  heroLabel: {
-    fontSize: 13,
-    color: "rgba(255,255,255,0.55)",
-    letterSpacing: 0.5,
-    marginBottom: 4,
-  },
-  heroValue: {
-    fontSize: 36,
-    fontWeight: "800",
-    letterSpacing: 0.5,
-    marginBottom: 6,
-  },
-  heroSubtitle: {
-    fontSize: 13,
-    color: "rgba(255,255,255,0.45)",
-    marginBottom: 8,
-  },
-  dotRow: {
-    flexDirection: "row",
-    justifyContent: "center",
-    gap: 6,
-    marginTop: 10,
-  },
-  dot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: "rgba(255,255,255,0.25)",
-  },
-  dotActive: {
-    width: 20,
-    borderRadius: 4,
-    backgroundColor: "#000",
-  },
-});
-
-// ── Main Screen ──────────────────────────────────────────────
 const DebtsScreen: React.FC = () => {
   const { colors, typography, spacing, radius } = useAppTheme();
   const dispatch = useDispatch<AppDispatch>();
   const tabBarHeight = useTabBarHeight();
   const navigation = useNavigation<DebtsScreenNavigationProp>();
-  const { items, ids, loading } = useSelector(
-    (state: RootState) => state.debts,
-  );
+  
+  const { items, ids, loading } = useSelector((state: RootState) => state.debts);
 
   useEffect(() => {
     dispatch(fetchDebts());
@@ -165,484 +37,251 @@ const DebtsScreen: React.FC = () => {
 
   const debts = ids.map((id) => items[id]).filter(Boolean);
 
-  const handleAddPayment = (debt: Debt) => {
-    navigation.navigate("AddPayment", {
-      debtId: debt.id,
-      debtName: debt.name,
-      currentBalance: debt.currentBalance,
-      minimumPayment: debt.minimumPayment,
-      interestRate: debt.interestRate,
-    });
-  };
+  // Compute stats
+  const totalYouOwe = debts.reduce((sum, d) => sum + (d.currentBalance > 0 ? d.currentBalance : 0), 0);
+  const totalOwedToYou = debts.reduce((sum, d) => sum + (d.currentBalance < 0 ? Math.abs(d.currentBalance) : 0), 0);
 
-  // ── Analytics ────────────────────────────────────────────────
-  const totalDebt = debts.reduce((sum, d) => sum + d.currentBalance, 0);
-  const totalOriginal = debts.reduce((sum, d) => sum + d.totalAmount, 0);
-  const totalPaid = totalOriginal - totalDebt;
-  const averageInterest =
-    debts.length > 0
-      ? debts.reduce((sum, d) => sum + (d.interestRate || 0), 0) / debts.length
-      : 0;
-  const monthlyMinimums = debts.reduce(
-    (sum, d) => sum + (d.minimumPayment || 0),
-    0,
-  );
-  const activeDebts = debts.filter((d) => d.currentBalance > 0).length;
-  const paidOffDebts = debts.filter((d) => d.currentBalance <= 0).length;
-  const overallProgress =
-    totalOriginal > 0 ? (totalPaid / totalOriginal) * 100 : 0;
+  const [filter, setFilter] = useState<"All Debts" | "Owed to Me" | "I Owe" | "Overdue">("All Debts");
 
-  // ── Pages for the hero card carousel ─────────────────────────
-  const heroPages: HeroPage[] = [
-    {
-      label: "Overall Progress",
-      value: `${overallProgress.toFixed(1)}%`,
-      valueColor: "#fff",
-      subtitle: `${formatCurrency(totalPaid)} paid of ${formatCurrency(totalOriginal)}`,
-    },
-    {
-      label: "Remaining Balance",
-      value: formatCurrency(totalDebt),
-      valueColor: "#FF6B6B",
-      subtitle: `${activeDebts} active · ${paidOffDebts} paid off`,
-    },
-    {
-      label: "Total Paid",
-      value: formatCurrency(totalPaid),
-      valueColor: "#2ED573",
-      subtitle: `${overallProgress.toFixed(1)}% of total debt cleared`,
-    },
-    {
-      label: "Monthly Commitment",
-      value: formatCurrency(monthlyMinimums),
-      valueColor: "#fff",
-      subtitle: `Avg. interest rate: ${averageInterest.toFixed(1)}%`,
-    },
-  ];
+  const filteredDebts = debts.filter(d => {
+    if (filter === "Owed to Me") return d.currentBalance < 0;
+    if (filter === "I Owe") return d.currentBalance > 0;
+    // We don't track overdue dates accurately in the mock, but we'll include it for the UI
+    if (filter === "Overdue") return d.currentBalance > 0 && d.dueDate && new Date(d.dueDate) < new Date();
+    return true;
+  });
 
-  // ── Debt Card ────────────────────────────────────────────────
-  const renderDebtCard = ({ item: debt }: { item: Debt }) => {
-    const amountPaid = Math.max(0, debt.totalAmount - debt.currentBalance);
-    const progressPercentage =
-      debt.totalAmount > 0
-        ? Math.max(0, Math.min(100, (amountPaid / debt.totalAmount) * 100))
-        : 0;
-    const isPaidOff = debt.currentBalance <= 0;
-
-    const progressColors: [string, string] = isPaidOff
-      ? ["#10B981", "#059669"]
-      : [UI.COLORS.PRIMARY, UI.COLORS.PRIMARY_DARK];
-
-    return (
-      <Card variant="outlined" style={{ marginBottom: spacing.md, padding: spacing.lg }}>
-        <View style={styles.debtHeader}>
-          <View style={styles.debtNameRow}>
-            <View style={[styles.iconCircle, { backgroundColor: isPaidOff ? colors.tertiaryContainer : colors.primaryContainer }]}>
-              <Ionicons
-                name={isPaidOff ? "checkmark-circle" : "card"}
-                size={16}
-                color={isPaidOff ? colors.onTertiaryContainer : colors.onPrimaryContainer}
-              />
-            </View>
-            <Text style={[styles.debtName, { color: colors.onSurface }]}>{debt.name}</Text>
-          </View>
-          <View style={{ alignItems: "flex-end", gap: 4 }}>
-            <Text
-              style={[
-                styles.debtAmount,
-                { color: isPaidOff ? colors.tertiary : colors.primary },
-              ]}>
-              {formatCurrency(debt.currentBalance)}
-            </Text>
-            <Badge 
-              label={isPaidOff ? "Paid" : "Active"} 
-              role={isPaidOff ? "success" : "primary"} 
-            />
-          </View>
-        </View>
-
-        <View style={styles.progressContainer}>
-          <View style={[styles.progressBar, { backgroundColor: colors.surfaceVariant }]}>
-            <LinearGradient
-              colors={progressColors}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 0 }}
-              style={[
-                styles.progressFill,
-                { width: `${Math.max(progressPercentage, 2)}%` },
-              ]}
-            />
-          </View>
-          <Text style={[styles.progressText, { color: colors.onSurfaceVariant }]}>
-            {progressPercentage.toFixed(1)}%
-          </Text>
-        </View>
-
-        <View style={styles.debtDetails}>
-          <View>
-            <Text style={[styles.detailLabel, { color: colors.onSurfaceVariant }]}>Original</Text>
-            <Text style={[styles.detailValue, { color: colors.onSurface }]}>
-              {formatCurrency(debt.totalAmount)}
-            </Text>
-          </View>
-          {!!debt.interestRate && (
-            <View style={{ alignItems: "flex-end" }}>
-              <Text style={[styles.detailLabel, { color: colors.onSurfaceVariant }]}>Interest</Text>
-              <Text style={[styles.detailValue, { color: colors.tertiary }]}>
-                {debt.interestRate}%
-              </Text>
-            </View>
-          )}
-        </View>
-
-        <View style={styles.debtActions}>
-          <TouchableOpacity
-            style={[styles.actionBtn, { backgroundColor: colors.surfaceVariant }]}
-            onPress={() =>
-              navigation.navigate("DebtForm", { debtId: debt.id })
-            }>
-            <Ionicons
-              name="create-outline"
-              size={14}
-              color={colors.onSurfaceVariant}
-            />
-            <Text
-              style={[styles.actionBtnText, { color: colors.onSurfaceVariant }]}>
-              Edit
-            </Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={[styles.actionBtn, { backgroundColor: colors.primaryContainer }]}
-            onPress={() =>
-              navigation.navigate("DebtPayments", {
-                debtId: debt.id,
-                debtName: debt.name,
-              })
-            }>
-            <Ionicons
-              name="receipt-outline"
-              size={14}
-              color={colors.onPrimaryContainer}
-            />
-            <Text
-              style={[
-                styles.actionBtnText,
-                { color: colors.onPrimaryContainer },
-              ]}>
-              History
-            </Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={[styles.actionBtn, styles.actionBtnHighlight, { backgroundColor: colors.tertiaryContainer, borderColor: colors.tertiary }]}
-            onPress={() => handleAddPayment(debt)}
-            disabled={isPaidOff}>
-            <Ionicons name="card" size={14} color={colors.onTertiaryContainer} />
-            <Text style={[styles.actionBtnText, { color: colors.onTertiaryContainer }]}>
-              Pay
-            </Text>
-          </TouchableOpacity>
-
-          {!isPaidOff && (
-            <TouchableOpacity
-              style={[styles.actionBtn, { backgroundColor: colors.primaryContainer }]}
-              onPress={() =>
-                dispatch(
-                  makeDebtPayment({
-                    debtId: debt.id,
-                    paymentData: {
-                      amount: debt.currentBalance,
-                      date: new Date().toISOString(),
-                      paymentDate: new Date().toISOString(),
-                      principal: debt.currentBalance,
-                      interest: 0,
-                    },
-                  }),
-                )
-              }>
-              <Ionicons name="checkmark" size={14} color={colors.primary} />
-              <Text style={[styles.actionBtnText, { color: colors.primary }]}>
-                Clear
-              </Text>
-            </TouchableOpacity>
-          )}
-        </View>
-      </Card>
-    );
-  };
-
-  // ── Header ─────────────────────────────────────────────────
-  const renderHeader = () => (
-    <View style={styles.headerContainer}>
-      {debts.length > 0 && <Text style={[styles.sectionTitle, { color: colors.onBackground }]}>Debts</Text>}
-      <HeroCarousel pages={heroPages} />
-
-      {/* Insight card */}
-      {averageInterest > 0 && totalDebt > 0 && (
-        <View style={[styles.insightCard, { backgroundColor: colors.tertiaryContainer, borderColor: colors.tertiary }]}>
-          <View style={[styles.insightIconBox, { backgroundColor: colors.tertiary }]}>
-            <Ionicons name="bulb" size={16} color={colors.onTertiary} />
-          </View>
-          <Text style={[styles.insightText, { color: colors.onTertiaryContainer }]}>
-            Focus on highest interest debts first to save money
-          </Text>
-        </View>
-      )}
-    </View>
-  );
-
-  // ── Empty State ──────────────────────────────────────────────
   const renderEmptyState = () => (
-    <View style={styles.emptyState}>
-      <View style={[styles.emptyIconCircle, { backgroundColor: colors.primaryContainer }]}>
-        <Ionicons name="card-outline" size={40} color={colors.primary} />
-      </View>
-      <Text style={[styles.emptyTitle, { color: colors.onBackground }]}>No Debts</Text>
-      <Text style={[styles.emptyText, { color: colors.onSurfaceVariant }]}>
-        Tap + to add your first debt and start tracking your payoff journey
+    <View style={{ padding: spacing.xl, alignItems: "center" }}>
+      <Ionicons name="card-outline" size={48} color={colors.primary} style={{ marginBottom: spacing.md }} />
+      <Text style={[typography.h3, { color: colors.onSurface }]}>No Debts Found</Text>
+      <Text style={[typography.bodyMedium, { color: colors.onSurfaceVariant, textAlign: "center", marginTop: spacing.sm }]}>
+        Tap the + button to add a new debt record.
       </Text>
-      <TouchableOpacity
-        activeOpacity={0.8}
-        onPress={() => navigation.navigate("DebtForm", {})}>
-        <View style={[styles.emptyButton, { backgroundColor: colors.primary }]}>
-          <Ionicons name="add-circle" size={18} color={colors.onPrimary} />
-          <Text style={[styles.emptyButtonText, { color: colors.onPrimary }]}>Add Your First Debt</Text>
-        </View>
-      </TouchableOpacity>
     </View>
   );
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }} edges={["top"]}>
-      <StatusBar
-          barStyle="light-content"
-          backgroundColor="transparent"
-          translucent
-        />
-
-        {loading && debts.length === 0 ? (
-          <View style={styles.centered}>
-            <ActivityIndicator size="large" color={colors.primary} />
+      <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
+      
+      {/* Top Header */}
+      <View style={styles.topHeader}>
+        <View style={{ flexDirection: "row", alignItems: "center" }}>
+          <View style={[styles.avatarPlaceholder, { backgroundColor: colors.surfaceVariant }]}>
+            <Ionicons name="person" size={16} color={colors.onSurfaceVariant} />
           </View>
-        ) : debts.length === 0 ? (
-          <View style={styles.centered}>{renderEmptyState()}</View>
-        ) : (
-          <FlatList
-            data={debts}
-            renderItem={renderDebtCard}
-            keyExtractor={(item) => item.id}
-            ListHeaderComponent={renderHeader}
-            contentContainerStyle={[styles.list, { paddingBottom: tabBarHeight }]}
-            showsVerticalScrollIndicator={false}
-          />
-        )}
+          <Text style={[typography.h2, { color: colors.onBackground, marginLeft: spacing.md }]}>
+            August Overview
+          </Text>
+        </View>
+        <TouchableOpacity>
+          <Ionicons name="notifications-outline" size={24} color={colors.onBackground} />
+        </TouchableOpacity>
+      </View>
 
-        <FloatingActionButton
-          icon="add"
-          onPress={() => navigation.navigate("DebtForm", {})}
-          style={{ position: "absolute", bottom: tabBarHeight + UI.SPACING.SM, right: 20 }}
-        />
+      <ScrollView contentContainerStyle={{ padding: spacing.lg, paddingBottom: tabBarHeight + spacing.xl }}>
+        
+        {/* Total Owed To You Card */}
+        <View style={[styles.heroCard, { backgroundColor: colors.surfaceVariant, marginBottom: spacing.md }]}>
+          <Text style={[typography.label, { color: colors.onSurfaceVariant, letterSpacing: 1 }]}>
+            TOTAL OWED TO YOU
+          </Text>
+          <Text style={[styles.heroAmount, { color: colors.primaryContainer }]}>
+            {formatCurrency(totalOwedToYou)}
+          </Text>
+          <View style={{ flexDirection: "row", alignItems: "center" }}>
+            <Ionicons name="arrow-up" size={16} color={colors.primaryContainer} style={{ marginRight: 4 }} />
+            <Text style={[typography.bodySmall, { color: colors.primaryContainer }]}>+0% from last month</Text>
+          </View>
+        </View>
+
+        {/* Total You Owe Card */}
+        <View style={[styles.heroCard, { backgroundColor: colors.surfaceVariant, marginBottom: spacing.xl }]}>
+          <Text style={[typography.label, { color: colors.onSurfaceVariant, letterSpacing: 1 }]}>
+            TOTAL YOU OWE
+          </Text>
+          <Text style={[styles.heroAmount, { color: colors.errorContainer }]}>
+            {formatCurrency(totalYouOwe)}
+          </Text>
+          <View style={{ flexDirection: "row", alignItems: "center" }}>
+            <Ionicons name="arrow-down" size={16} color={colors.errorContainer} style={{ marginRight: 4 }} />
+            <Text style={[typography.bodySmall, { color: colors.errorContainer }]}>+$0 this week</Text>
+          </View>
+        </View>
+
+        {/* Filters */}
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: spacing.xl }}>
+          {["All Debts", "Owed to Me", "I Owe", "Overdue"].map((f) => (
+            <TouchableOpacity
+              key={f}
+              onPress={() => setFilter(f as any)}
+              style={[
+                styles.filterChip,
+                {
+                  borderColor: colors.outlineVariant,
+                  backgroundColor: filter === f ? "rgba(128, 203, 196, 0.15)" : "transparent"
+                }
+              ]}
+            >
+              <Text style={[typography.bodyMedium, { 
+                color: filter === f ? colors.primaryContainer : colors.onSurfaceVariant,
+                fontWeight: filter === f ? "600" : "400"
+              }]}>
+                {f}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </ScrollView>
+
+        {/* Active Debts List */}
+        <View style={[styles.debtsListCard, { backgroundColor: colors.surfaceVariant }]}>
+          <View style={styles.debtsListHeader}>
+            <Text style={[typography.h3, { color: colors.onBackground }]}>Active Debts</Text>
+            <TouchableOpacity 
+              style={[styles.addBtn, { backgroundColor: colors.primaryContainer }]}
+              onPress={() => navigation.navigate("DebtForm", {})}
+            >
+              <Ionicons name="add" size={24} color={colors.onPrimaryContainer} />
+            </TouchableOpacity>
+          </View>
+
+          {loading && filteredDebts.length === 0 ? (
+            <ActivityIndicator size="large" color={colors.primary} style={{ margin: spacing.xl }} />
+          ) : filteredDebts.length === 0 ? (
+            renderEmptyState()
+          ) : (
+            filteredDebts.map((debt, index) => {
+              const isOwedToMe = debt.currentBalance < 0;
+              const displayAmount = Math.abs(debt.currentBalance);
+              const isPaid = debt.currentBalance === 0;
+              const isOverdue = debt.currentBalance > 0 && debt.dueDate && new Date(debt.dueDate) < new Date();
+              
+              let badgeText = "Active";
+              let badgeColor = colors.primaryContainer;
+              let badgeBg = "rgba(128,203,196,0.15)";
+              
+              if (isPaid) {
+                badgeText = "Paid";
+                badgeColor = colors.onSurfaceVariant;
+                badgeBg = "rgba(255,255,255,0.05)";
+              } else if (isOverdue) {
+                badgeText = "Overdue";
+                badgeColor = colors.errorContainer;
+                badgeBg = "rgba(255,107,107,0.15)";
+              }
+              
+              return (
+                <TouchableOpacity 
+                  key={debt.id} 
+                  style={[styles.debtRow, { borderBottomColor: index === filteredDebts.length - 1 ? "transparent" : "rgba(255,255,255,0.05)" }]}
+                  onPress={() => navigation.navigate("DebtForm", { debtId: debt.id })}
+                >
+                  <View style={[styles.debtIconBox, { backgroundColor: isOwedToMe ? "rgba(128,203,196,0.15)" : "rgba(255,107,107,0.15)" }]}>
+                    <Ionicons name="person" size={20} color={isOwedToMe ? colors.primaryContainer : colors.errorContainer} />
+                  </View>
+                  <View style={{ flex: 1, marginRight: 16 }}>
+                    <Text style={[typography.bodyLarge, { color: colors.onBackground, fontWeight: "600", marginBottom: 2 }]} numberOfLines={1}>
+                      {debt.name}
+                    </Text>
+                    {debt.description && (
+                      <Text style={[typography.bodySmall, { color: colors.onSurfaceVariant }]} numberOfLines={1}>
+                        {debt.description}
+                      </Text>
+                    )}
+                  </View>
+                  <View style={{ alignItems: "flex-end" }}>
+                    <Text style={[typography.bodyLarge, { 
+                      color: isPaid ? colors.onSurfaceVariant : isOwedToMe ? colors.primaryContainer : colors.errorContainer, 
+                      fontWeight: "600", 
+                      marginBottom: 4 
+                    }]}>
+                      {isPaid ? "" : isOwedToMe ? "+" : "-"}{formatCurrency(displayAmount)}
+                    </Text>
+                    <View style={[styles.badge, { backgroundColor: badgeBg }]}>
+                      <Text style={{ fontSize: 10, color: badgeColor, fontWeight: "600" }}>{badgeText}</Text>
+                    </View>
+                  </View>
+                </TouchableOpacity>
+              );
+            })
+          )}
+        </View>
+
+      </ScrollView>
     </SafeAreaView>
   );
 };
 
 const styles = StyleSheet.create({
-  gradient: { flex: 1 },
-  safeArea: { flex: 1 },
-
-  // ── Header ─────────────────────────────────────────
-  headerContainer: {
-    paddingTop: 8,
-    marginBottom: 8,
-  },
-  sectionTitle: {
-    fontSize: 32,
-    fontWeight: "800",
-    color: UI.COLORS.TEXT_PRIMARY,
-    letterSpacing: 0.3,
-    marginBottom: 16,
-    marginTop: 24,
-  },
-
-  // ── Insight ────────────────────────────────────────
-  insightCard: {
+  topHeader: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "rgba(245,158,11,0.06)",
-    borderRadius: 12,
-    padding: 14,
-    borderWidth: 1,
-    borderColor: "rgba(245,158,11,0.15)",
-    marginTop: 14,
-  },
-  insightIconBox: {
-    width: 28,
-    height: 28,
-    borderRadius: 8,
-    backgroundColor: "rgba(245,158,11,0.1)",
-    alignItems: "center",
-    justifyContent: "center",
-    marginRight: 12,
-  },
-  insightText: {
-    fontSize: 13,
-    fontWeight: "600",
-    color: UI.COLORS.TEXT_PRIMARY,
-    flex: 1,
-  },
-
-  // ── Loading / Centered ─────────────────────────────
-  centered: { flex: 1, justifyContent: "center", alignItems: "center" },
-
-  // ── List ───────────────────────────────────────────
-  list: {
-    paddingHorizontal: 20,
-  },
-
-  // ── Debt Card ──────────────────────────────────────
-  debtCard: {
-    backgroundColor: "rgba(20,20,50,0.65)",
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: "#6c5ce726",
-    padding: 18,
-    marginBottom: 14,
-  },
-  debtHeader: {
-    flexDirection: "row",
     justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: 14,
+    paddingHorizontal: 20,
+    paddingTop: 16,
+    paddingBottom: 8,
   },
-  debtNameRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    flex: 1,
-  },
-  iconCircle: {
+  avatarPlaceholder: {
     width: 32,
     height: 32,
-    borderRadius: 10,
-    backgroundColor: "rgba(108,92,231,0.12)",
+    borderRadius: 16,
     alignItems: "center",
     justifyContent: "center",
-    marginRight: 10,
   },
-  debtName: {
-    fontSize: 17,
+  heroCard: {
+    padding: 24,
+    borderRadius: 24,
+  },
+  heroAmount: {
+    fontSize: 44,
     fontWeight: "700",
-    color: UI.COLORS.TEXT_PRIMARY,
-    flex: 1,
-    letterSpacing: 0.2,
+    marginVertical: 12,
   },
-  debtAmount: { fontSize: 17, fontWeight: "700" },
-  debtColor: { color: "#FF6B6B" },
-  paidColor: { color: "#10B981" },
-
-  // ── Progress ───────────────────────────────────────
-  progressContainer: {
-    flexDirection: "row",
-    alignItems: "center",
-    marginBottom: 14,
+  filterChip: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 20,
+    borderWidth: 1,
+    marginRight: 12,
   },
-  progressBar: {
-    flex: 1,
-    height: 8,
-    backgroundColor: "rgba(108,92,231,0.12)",
-    borderRadius: 4,
-    marginRight: 10,
-    overflow: "hidden",
+  debtsListCard: {
+    borderRadius: 24,
+    padding: 20,
+    marginBottom: 40,
   },
-  progressFill: { height: "100%", borderRadius: 4 },
-  progressText: {
-    fontSize: 13,
-    fontWeight: "700",
-    color: UI.COLORS.TEXT_SECONDARY,
-    minWidth: 42,
-    textAlign: "right",
-  },
-
-  // ── Details ────────────────────────────────────────
-  debtDetails: {
+  debtsListHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
-    marginBottom: 16,
-  },
-  detailLabel: {
-    fontSize: 11,
-    fontWeight: "600",
-    color: UI.COLORS.TEXT_MUTED,
-    textTransform: "uppercase",
-    letterSpacing: 0.5,
-    marginBottom: 4,
-  },
-  detailValue: {
-    fontSize: 15,
-    fontWeight: "700",
-    color: UI.COLORS.TEXT_PRIMARY,
-  },
-
-  // ── Actions ────────────────────────────────────────
-  debtActions: { flexDirection: "row", gap: 8 },
-  actionBtn: {
-    flex: 1,
-    flexDirection: "row",
     alignItems: "center",
-    justifyContent: "center",
-    paddingVertical: 10,
-    borderRadius: 10,
-    backgroundColor: "rgba(255,255,255,0.04)",
-    borderWidth: 1,
-    borderColor: "rgba(108,92,231,0.12)",
-    gap: 4,
-  },
-  actionBtnHighlight: {
-    backgroundColor: "rgba(16,185,129,0.08)",
-    borderColor: "rgba(16,185,129,0.2)",
-  },
-  actionBtnText: { fontSize: 12, fontWeight: "600" },
-
-  // ── Empty State ────────────────────────────────────
-  emptyState: { alignItems: "center", paddingHorizontal: 32 },
-  emptyIconCircle: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    backgroundColor: "rgba(108,92,231,0.1)",
-    borderWidth: 1,
-    borderColor: "rgba(108,92,231,0.2)",
-    alignItems: "center",
-    justifyContent: "center",
     marginBottom: 20,
   },
-  emptyTitle: {
-    fontSize: 22,
-    fontWeight: "700",
-    color: UI.COLORS.TEXT_PRIMARY,
-    marginBottom: 8,
+  addBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: "center",
+    justifyContent: "center",
   },
-  emptyText: {
-    fontSize: 15,
-    color: UI.COLORS.TEXT_MUTED,
-    textAlign: "center",
-    marginBottom: 28,
-    lineHeight: 22,
-  },
-  emptyButton: {
+  debtRow: {
     flexDirection: "row",
     alignItems: "center",
-    paddingHorizontal: 24,
-    paddingVertical: 14,
-    borderRadius: 25,
-    gap: 8,
-    shadowColor: UI.COLORS.PRIMARY,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.35,
-    shadowRadius: 10,
-    elevation: 6,
+    paddingVertical: 16,
+    borderBottomWidth: 1,
   },
-  emptyButtonText: { fontSize: 15, fontWeight: "700", color: "#fff" },
+  debtIconBox: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    alignItems: "center",
+    justifyContent: "center",
+    marginRight: 16,
+  },
+  badge: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
 });
 
 export default DebtsScreen;
