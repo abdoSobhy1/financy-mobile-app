@@ -299,14 +299,10 @@ export const TransactionListScreen: React.FC = () => {
       <StatusBar barStyle="light-content" />
 
       {/* Standard App Header */}
-      <AppHeader
-        title="Transactions"
-        showBack={false}
-        showSettings={false}
-      />
+      <AppHeader title="Transactions" />
 
       <View style={styles.topContainer}>
-        {/* Search Bar */}
+        {/* Search Bar & Filter */}
         <View style={styles.searchRow}>
           <View style={styles.searchBar}>
             <Ionicons
@@ -328,6 +324,12 @@ export const TransactionListScreen: React.FC = () => {
               </TouchableOpacity>
             )}
           </View>
+          <TouchableOpacity style={styles.filterBtn} onPress={openFilterModal}>
+            <Ionicons name="options-outline" size={24} color={colors.onBackground} />
+            {selectedCategoryIds.size > 0 && (
+              <View style={[styles.filterBadge, { backgroundColor: colors.primaryContainer }]} />
+            )}
+          </TouchableOpacity>
         </View>
 
         {/* Segmented Control for Transaction Type (All | Income | Expense) */}
