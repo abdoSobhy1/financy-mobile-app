@@ -374,12 +374,56 @@ export const BudgetListScreen: React.FC = () => {
   };
 
   // ── Header ───────────────────────────────────────────────────
+
+  let totalBudget = 0;
+  let totalSpent = 0;
+  
+  if (progressLoaded) {
+    ids.forEach(id => {
+      const budget = budgets[id];
+      if (budget) {
+        totalBudget += budget.amount;
+        totalSpent += calculateBudgetSpent(id);
+      }
+    });
+  }
+  const totalRemaining = totalBudget - totalSpent;
+  const totalProgressPercentage = totalBudget > 0 ? percentage(totalSpent, totalBudget) : 0;
+
   const renderHeader = () => (
     <View style={styles.header}>
-      <Text style={[styles.title, { color: colors.onBackground }]}>Budgets</Text>
-      <Text style={[styles.subtitle, { color: colors.onSurfaceVariant }]}>
-        Track your spending and stay on target
-      </Text>
+      <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: spacing.xl, paddingHorizontal: spacing.sm }}>
+        <View style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: colors.surfaceVariant, alignItems: "center", justifyContent: "center" }}>
+          <Ionicons name="person" size={20} color={colors.onSurfaceVariant} />
+        </View>
+        <TouchableOpacity style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: colors.surfaceVariant, alignItems: "center", justifyContent: "center" }} onPress={() => navigation.navigate("BudgetForm", {})}>
+          <Ionicons name="add" size={24} color={colors.primaryContainer} />
+        </TouchableOpacity>
+      </View>
+
+      <Card variant="outlined" style={{ padding: spacing.xl, marginBottom: spacing.md, backgroundColor: colors.surfaceVariant, borderColor: colors.outlineVariant }}>
+        <View style={{ flexDirection: "row", justifyContent: "space-between", marginBottom: 8 }}>
+          <Text style={[typography.label, { color: colors.onSurfaceVariant, textTransform: "uppercase" }]}>Total Monthly Budget</Text>
+          <Text style={[typography.label, { color: colors.onSurfaceVariant, textTransform: "uppercase" }]}>Remaining</Text>
+        </View>
+        <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "flex-end", marginBottom: spacing.xl }}>
+          <Text style={[typography.h1, { color: colors.primaryContainer, fontSize: 36 }]}>
+            {formatCurrency(totalBudget)}
+          </Text>
+          <Text style={[typography.h2, { color: colors.secondaryContainer, fontSize: 20, marginBottom: 4 }]}>
+            {formatCurrency(totalRemaining)}
+          </Text>
+        </View>
+        
+        <View style={[styles.progressBar, { backgroundColor: colors.background, height: 12, borderRadius: 6, marginBottom: 12 }]}>
+          <View style={[styles.progressFill, { backgroundColor: colors.primaryContainer, width: `${Math.min(totalProgressPercentage, 100)}%`, borderRadius: 6 }]} />
+        </View>
+
+        <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
+          <Text style={[typography.bodySmall, { color: colors.onSurfaceVariant }]}>{formatCurrency(totalSpent)} spent</Text>
+          <Text style={[typography.bodySmall, { color: colors.onSurfaceVariant }]}>{totalProgressPercentage}% used</Text>
+        </View>
+      </Card>
     </View>
   );
 
@@ -470,10 +514,10 @@ const styles = StyleSheet.create({
 
   // ── Budget Card ────────────────────────────────────
   budgetCard: {
-    backgroundColor: "rgba(20,20,50,0.65)",
+    backgroundColor: "transparent",
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: "#6c5ce726",
+    borderColor: "transparent",
     padding: 18,
     marginBottom: 14,
   },
