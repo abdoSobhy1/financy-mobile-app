@@ -1,5 +1,4 @@
-// Sign In Screen for Firebase Authentication — Premium Dark UI
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState } from "react";
 import {
   View,
   Text,
@@ -10,98 +9,26 @@ import {
   Platform,
   ScrollView,
   StyleSheet,
-  Dimensions,
   ActivityIndicator,
-  Image,
 } from "react-native";
 import { useDispatch, useSelector } from "react-redux";
-import { RootState } from "../store";
+import { RootState, AppDispatch } from "../store";
 import { signIn, signUp, sendPasswordReset } from "../store/slices/authSlice";
-import { Button } from "../components/ui";
 import { Ionicons } from "@expo/vector-icons";
-import { AppDispatch } from "../store";
-
 import { useAppTheme } from "../components/ui/ThemeProvider";
-import Animated, {
-  useSharedValue,
-  useAnimatedStyle,
-  withRepeat,
-  withTiming,
-  withDelay,
-  withSequence,
-  Easing,
-  FadeInUp,
-  FadeInDown,
-} from "react-native-reanimated";
-
-const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get("window");
 
 export const SignInScreen: React.FC = () => {
-  const { colors } = useAppTheme();
+  const { colors, typography, radius } = useAppTheme();
+  
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [confirmPassword, setConfirmPassword] = useState("");
   const [displayName, setDisplayName] = useState("");
   const [isSignUp, setIsSignUp] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [focusedField, setFocusedField] = useState<string | null>(null);
 
   const dispatch = useDispatch<AppDispatch>();
-  const { loading, error } = useSelector((state: RootState) => state.auth);
-
-  // Floating orb animations
-  const orb1Y = useSharedValue(0);
-  const orb2Y = useSharedValue(0);
-  const orb3X = useSharedValue(0);
-
-  useEffect(() => {
-    orb1Y.value = withRepeat(
-      withSequence(
-        withTiming(-20, { duration: 3000, easing: Easing.inOut(Easing.ease) }),
-        withTiming(20, { duration: 3000, easing: Easing.inOut(Easing.ease) }),
-      ),
-      -1,
-      true,
-    );
-    orb2Y.value = withRepeat(
-      withDelay(
-        500,
-        withSequence(
-          withTiming(15, { duration: 2500, easing: Easing.inOut(Easing.ease) }),
-          withTiming(-15, {
-            duration: 2500,
-            easing: Easing.inOut(Easing.ease),
-          }),
-        ),
-      ),
-      -1,
-      true,
-    );
-    orb3X.value = withRepeat(
-      withDelay(
-        1000,
-        withSequence(
-          withTiming(10, { duration: 2000, easing: Easing.inOut(Easing.ease) }),
-          withTiming(-10, {
-            duration: 2000,
-            easing: Easing.inOut(Easing.ease),
-          }),
-        ),
-      ),
-      -1,
-      true,
-    );
-  }, []);
-
-  const orb1Style = useAnimatedStyle(() => ({
-    transform: [{ translateY: orb1Y.value }],
-  }));
-  const orb2Style = useAnimatedStyle(() => ({
-    transform: [{ translateY: orb2Y.value }],
-  }));
-  const orb3Style = useAnimatedStyle(() => ({
-    transform: [{ translateX: orb3X.value }],
-  }));
+  const { loading } = useSelector((state: RootState) => state.auth);
 
   const handleSignIn = async () => {
     if (!email.trim() || !password.trim()) {
@@ -118,10 +45,6 @@ export const SignInScreen: React.FC = () => {
   const handleSignUp = async () => {
     if (!email.trim() || !password.trim() || !displayName.trim()) {
       Alert.alert("Error", "Please fill in all fields");
-      return;
-    }
-    if (password !== confirmPassword) {
-      Alert.alert("Error", "Passwords do not match");
       return;
     }
     if (password.length < 6) {
@@ -148,7 +71,7 @@ export const SignInScreen: React.FC = () => {
     }
     Alert.alert(
       "Reset Password",
-      "Send password reset email to " + email + "?",
+      `Send password reset email to ${email}?`,
       [
         { text: "Cancel", style: "cancel" },
         {
@@ -156,7 +79,7 @@ export const SignInScreen: React.FC = () => {
           onPress: async () => {
             try {
               await dispatch(sendPasswordReset(email.trim())).unwrap();
-              Alert.alert("Success", "Password reset email sent");
+              Alert.alert("Success", "Password reset email sent!");
             } catch (error: any) {
               Alert.alert("Error", error.message);
             }
@@ -166,400 +89,189 @@ export const SignInScreen: React.FC = () => {
     );
   };
 
-  const toggleAuthMode = () => {
-    setIsSignUp(!isSignUp);
-    setPassword("");
-    setConfirmPassword("");
-    setDisplayName("");
-  };
-
-  const renderInput = (
-    icon: string,
-    placeholder: string,
-    value: string,
-    onChange: (text: string) => void,
-    fieldId: string,
-    options: {
-      secure?: boolean;
-      keyboardType?: any;
-      autoCapitalize?: any;
-      togglePassword?: boolean;
-    } = {},
-  ) => (
-    <Animated.View
-      entering={FadeInUp.delay(
-        fieldId === "email" ? 400 : fieldId === "password" ? 500 : 600,
-      ).duration(500)}>
-      <View
-        style={[
-          styles(colors).inputCard,
-          focusedField === fieldId && styles(colors).inputCardFocused,
-        ]}>
-        <View style={styles(colors).inputIconBox}>
-          <Ionicons
-            name={icon as any}
-            size={18}
-            color={
-              focusedField === fieldId
-                ? colors.primary
-                : colors.onSurfaceVariant
-            }
-          />
-        </View>
-        <TextInput
-          style={styles(colors).input}
-          placeholder={placeholder}
-          placeholderTextColor="rgba(255,255,255,0.25)"
-          value={value}
-          onChangeText={onChange}
-          secureTextEntry={options.secure && !showPassword}
-          keyboardType={options.keyboardType || "default"}
-          autoCapitalize={options.autoCapitalize || "none"}
-          autoCorrect={false}
-          onFocus={() => setFocusedField(fieldId)}
-          onBlur={() => setFocusedField(null)}
-        />
-        {options.togglePassword && (
-          <TouchableOpacity
-            onPress={() => setShowPassword(!showPassword)}
-            style={styles(colors).eyeButton}>
-            <Ionicons
-              name={showPassword ? "eye-outline" : "eye-off-outline"}
-              size={18}
-              color="rgba(255,255,255,0.3)"
-            />
-          </TouchableOpacity>
-        )}
+  const renderLogo = () => (
+    <View style={styles.logoContainer}>
+      <View style={[styles.iconWrapper, { backgroundColor: colors.primaryContainer, shadowColor: colors.primaryContainer }]}>
+        <Ionicons name="pulse" size={28} color={colors.onPrimaryContainer} />
       </View>
-    </Animated.View>
+      <Text style={[typography.h1, { color: colors.onBackground, fontSize: 36 }]}>
+        Financy
+      </Text>
+    </View>
   );
 
   return (
-    <View style={[styles(colors).container, { backgroundColor: colors.background }]}>
+    <KeyboardAvoidingView
+      style={{ flex: 1, backgroundColor: colors.background }}
+      behavior={Platform.OS === "ios" ? "padding" : "height"}
+    >
+      <ScrollView contentContainerStyle={styles.scrollContainer} showsVerticalScrollIndicator={false}>
+        
+        {renderLogo()}
 
-      {/* Floating orbs */}
-      <Animated.View style={[styles(colors).orb, styles(colors).orb1, orb1Style]} />
-      <Animated.View style={[styles(colors).orb, styles(colors).orb2, orb2Style]} />
-      <Animated.View style={[styles(colors).orb, styles(colors).orb3, orb3Style]} />
+        <View style={{ alignItems: "center", marginBottom: 40 }}>
+          <Text style={[typography.h1, { color: colors.onBackground, marginBottom: 8, fontSize: 28 }]}>
+            {isSignUp ? "Create an account" : "Welcome back"}
+          </Text>
+          <Text style={[typography.bodyMedium, { color: colors.onSurfaceVariant, textAlign: "center" }]}>
+            {isSignUp ? "Sign up to start managing your finances." : "Sign in to continue managing your finances."}
+          </Text>
+        </View>
 
-      <KeyboardAvoidingView
-        style={styles(colors).keyboardView}
-        behavior={Platform.OS === "ios" ? "padding" : "height"}>
-        <ScrollView
-          contentContainerStyle={styles(colors).scrollContent}
-          keyboardShouldPersistTaps="handled"
-          showsVerticalScrollIndicator={false}>
-          {/* Logo & Header */}
-          <Animated.View
-            entering={FadeInDown.delay(100).duration(600)}
-            style={styles(colors).header}>
-            <View style={styles(colors).logoContainer}>
-              <View style={[styles(colors).logoGradient, { backgroundColor: colors.primaryContainer }]} >
-                <Image
-                  source={require("../../assets/splash-icon.png")}
-                  style={styles(colors).logoImage}
-                  resizeMode="contain"
+        <View style={{ width: "100%", gap: 24 }}>
+          
+          {isSignUp && (
+            <View>
+              <Text style={[typography.label, { color: colors.onSurfaceVariant, marginBottom: 8 }]}>Name</Text>
+              <View style={[
+                styles.inputContainer, 
+                { backgroundColor: "rgba(255,255,255,0.02)", borderColor: focusedField === "name" ? colors.primaryContainer : "rgba(255,255,255,0.05)" }
+              ]}>
+                <Ionicons name="person-outline" size={20} color={colors.onSurfaceVariant} style={styles.inputIcon} />
+                <TextInput
+                  style={[styles.input, { color: colors.onBackground }]}
+                  placeholder="John Doe"
+                  placeholderTextColor={colors.onSurfaceVariant}
+                  value={displayName}
+                  onChangeText={setDisplayName}
+                  onFocus={() => setFocusedField("name")}
+                  onBlur={() => setFocusedField(null)}
                 />
               </View>
             </View>
-            <Text style={styles(colors).appName}>Financy</Text>
-            <Text style={styles(colors).tagline}>
-              {isSignUp
-                ? "Create your account to get started"
-                : "Welcome back! Manage your finances"}
-            </Text>
-          </Animated.View>
+          )}
 
-          {/* Form Card */}
-          <Animated.View
-            entering={FadeInUp.delay(300).duration(600)}
-            style={styles(colors).formCard}>
-            {/* Title inside card */}
-            <Text style={styles(colors).formTitle}>
-              {isSignUp ? "Sign Up" : "Sign In"}
-            </Text>
-
-            {isSignUp &&
-              renderInput(
-                "person-outline",
-                "Display Name",
-                displayName,
-                setDisplayName,
-                "name",
-                { autoCapitalize: "words" },
-              )}
-
-            {renderInput(
-              "mail-outline",
-              "Email address",
-              email,
-              setEmail,
-              "email",
-              { keyboardType: "email-address" },
-            )}
-
-            {renderInput(
-              "lock-closed-outline",
-              "Password",
-              password,
-              setPassword,
-              "password",
-              { secure: true, togglePassword: true },
-            )}
-
-            {isSignUp &&
-              renderInput(
-                "shield-checkmark-outline",
-                "Confirm Password",
-                confirmPassword,
-                setConfirmPassword,
-                "confirm",
-                { secure: true },
-              )}
-
-            {/* Error */}
-            {error && (
-              <View style={styles(colors).errorBanner}>
-                <Ionicons name="alert-circle" size={16} color="#EF4444" />
-                <Text style={styles(colors).errorText}>{error}</Text>
-              </View>
-            )}
-
-            {/* Submit Button */}
-              <Button
-                title={isSignUp ? "Create Account" : "Sign In"}
-                onPress={isSignUp ? handleSignUp : handleSignIn}
-                loading={loading}
-                icon="arrow-forward"
-                iconPosition="right"
-                style={styles(colors).submitButton}
+          <View>
+            <Text style={[typography.label, { color: colors.onSurfaceVariant, marginBottom: 8 }]}>Email</Text>
+            <View style={[
+              styles.inputContainer, 
+              { backgroundColor: "rgba(255,255,255,0.02)", borderColor: focusedField === "email" ? colors.primaryContainer : "rgba(255,255,255,0.05)" }
+            ]}>
+              <Ionicons name="mail-outline" size={20} color={colors.onSurfaceVariant} style={styles.inputIcon} />
+              <TextInput
+                style={[styles.input, { color: colors.onBackground }]}
+                placeholder="name@example.com"
+                placeholderTextColor={colors.onSurfaceVariant}
+                value={email}
+                onChangeText={setEmail}
+                keyboardType="email-address"
+                autoCapitalize="none"
+                onFocus={() => setFocusedField("email")}
+                onBlur={() => setFocusedField(null)}
               />
+            </View>
+          </View>
 
-            {/* Forgot Password */}
-            {!isSignUp && (
-              <TouchableOpacity
-                style={styles(colors).forgotButton}
-                onPress={handleForgotPassword}>
-                <Text style={styles(colors).forgotText}>Forgot Password?</Text>
+          <View>
+            <Text style={[typography.label, { color: colors.onSurfaceVariant, marginBottom: 8 }]}>Password</Text>
+            <View style={[
+              styles.inputContainer, 
+              { backgroundColor: "rgba(255,255,255,0.02)", borderColor: focusedField === "password" ? colors.primaryContainer : "rgba(255,255,255,0.05)" }
+            ]}>
+              <Ionicons name="lock-closed-outline" size={20} color={colors.onSurfaceVariant} style={styles.inputIcon} />
+              <TextInput
+                style={[styles.input, { color: colors.onBackground }]}
+                placeholder="••••••••"
+                placeholderTextColor={colors.onSurfaceVariant}
+                value={password}
+                onChangeText={setPassword}
+                secureTextEntry={!showPassword}
+                onFocus={() => setFocusedField("password")}
+                onBlur={() => setFocusedField(null)}
+              />
+              <TouchableOpacity onPress={() => setShowPassword(!showPassword)}>
+                <Ionicons name={showPassword ? "eye-off-outline" : "eye-outline"} size={20} color={colors.onSurfaceVariant} />
               </TouchableOpacity>
-            )}
-          </Animated.View>
+            </View>
+          </View>
 
-          {/* Switch Auth Mode */}
-          <Animated.View
-            entering={FadeInUp.delay(700).duration(500)}
-            style={styles(colors).switchRow}>
-            <Text style={styles(colors).switchText}>
-              {isSignUp ? "Already have an account?" : "Don't have an account?"}
-            </Text>
-            <TouchableOpacity onPress={toggleAuthMode}>
-              <Text style={styles(colors).switchAction}>
-                {isSignUp ? "Sign In" : "Sign Up"}
-              </Text>
+          {!isSignUp && (
+            <TouchableOpacity onPress={handleForgotPassword} style={{ alignSelf: "flex-end" }}>
+              <Text style={[typography.label, { color: colors.primaryContainer, fontWeight: "600" }]}>Forgot Password?</Text>
             </TouchableOpacity>
-          </Animated.View>
-        </ScrollView>
-      </KeyboardAvoidingView>
-    </View>
+          )}
+
+          <TouchableOpacity
+            style={[styles.primaryButton, { backgroundColor: colors.primaryContainer }]}
+            onPress={isSignUp ? handleSignUp : handleSignIn}
+            disabled={loading}
+          >
+            {loading ? (
+              <ActivityIndicator color={colors.onPrimaryContainer} />
+            ) : (
+              <Text style={[typography.bodyLarge, { color: colors.onPrimaryContainer, fontWeight: "600" }]}>
+                {isSignUp ? "Sign Up" : "Sign In"}
+              </Text>
+            )}
+          </TouchableOpacity>
+
+        </View>
+
+        <View style={{ flexDirection: "row", justifyContent: "center", marginTop: 40 }}>
+          <Text style={[typography.bodyMedium, { color: colors.onSurfaceVariant }]}>
+            {isSignUp ? "Already have an account? " : "Don't have an account? "}
+          </Text>
+          <TouchableOpacity onPress={() => setIsSignUp(!isSignUp)}>
+            <Text style={[typography.bodyMedium, { color: colors.onBackground, fontWeight: "600" }]}>
+              {isSignUp ? "Sign In" : "Sign Up"}
+            </Text>
+          </TouchableOpacity>
+        </View>
+
+      </ScrollView>
+    </KeyboardAvoidingView>
   );
 };
 
-const styles = (colors: any) => StyleSheet.create({
-  container: {
-    flex: 1,
-  },
-  keyboardView: {
-    flex: 1,
-  },
-  scrollContent: {
+const styles = StyleSheet.create({
+  scrollContainer: {
     flexGrow: 1,
-    justifyContent: "center",
     paddingHorizontal: 24,
+    justifyContent: "center",
     paddingVertical: 40,
   },
-
-  // Floating orbs
-  orb: {
-    position: "absolute",
-    borderRadius: 999,
-  },
-  orb1: {
-    width: 180,
-    height: 180,
-    backgroundColor: "rgba(139, 92, 246, 0.12)",
-    top: SCREEN_HEIGHT * 0.08,
-    right: -40,
-  },
-  orb2: {
-    width: 120,
-    height: 120,
-    backgroundColor: "rgba(109, 40, 217, 0.1)",
-    top: SCREEN_HEIGHT * 0.45,
-    left: -30,
-  },
-  orb3: {
-    width: 80,
-    height: 80,
-    backgroundColor: "rgba(167, 139, 250, 0.08)",
-    bottom: SCREEN_HEIGHT * 0.15,
-    right: 30,
-  },
-
-  // Header
-  header: {
-    alignItems: "center",
-    marginBottom: 36,
-  },
   logoContainer: {
-    marginBottom: 16,
-  },
-  logoGradient: {
-    width: 68,
-    height: 68,
-    borderRadius: 22,
-    alignItems: "center",
-    justifyContent: "center",
-
-    shadowColor: "#8B5CF6",
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.4,
-    shadowRadius: 16,
-    elevation: 12,
-    overflow: "hidden",
-  },
-  logoImage: {
-    width: 60,
-    height: 60,
-    borderRadius: 16,
-  },
-  appName: {
-    fontSize: 34,
-    fontWeight: "800",
-    color: colors.onSurface,
-    letterSpacing: -0.5,
-  },
-  tagline: {
-    fontSize: 14,
-    color: "rgba(255,255,255,0.45)",
-    textAlign: "center",
-    marginTop: 6,
-    lineHeight: 20,
-  },
-
-  // Form card
-  formCard: {
-    backgroundColor: "rgba(255, 255, 255, 0.04)",
-    borderRadius: 24,
-    padding: 24,
-    borderWidth: 1,
-    borderColor: "rgba(255, 255, 255, 0.06)",
-  },
-  formTitle: {
-    fontSize: 20,
-    fontWeight: "700",
-    color: colors.onSurface,
-    marginBottom: 20,
-  },
-
-  // Input
-  inputCard: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "rgba(255, 255, 255, 0.04)",
-    borderRadius: 14,
-    paddingHorizontal: 14,
-    paddingVertical: Platform.OS === "ios" ? 14 : 4,
-    marginBottom: 12,
-    borderWidth: 1,
-    borderColor: "rgba(255, 255, 255, 0.06)",
+    justifyContent: "center",
+    marginBottom: 40,
   },
-  inputCardFocused: {
-    borderColor: "rgba(139, 92, 246, 0.4)",
-    backgroundColor: "rgba(139, 92, 246, 0.06)",
-  },
-  inputIconBox: {
-    width: 32,
-    height: 32,
-    borderRadius: 10,
-    backgroundColor: "rgba(255, 255, 255, 0.04)",
+  iconWrapper: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
     alignItems: "center",
     justifyContent: "center",
-    marginRight: 10,
+    marginRight: 12,
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.5,
+    shadowRadius: 10,
+    elevation: 10,
+  },
+  inputContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    borderWidth: 1,
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    height: 56,
+  },
+  inputIcon: {
+    marginRight: 12,
   },
   input: {
     flex: 1,
-    fontSize: 15,
-    color: colors.onSurface,
+    height: "100%",
+    fontSize: 16,
   },
-  eyeButton: {
-    padding: 6,
-  },
-
-  // Error
-  errorBanner: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: "rgba(239, 68, 68, 0.1)",
-    borderRadius: 12,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    marginBottom: 14,
-    borderWidth: 1,
-    borderColor: "rgba(239, 68, 68, 0.2)",
-    gap: 8,
-  },
-  errorText: {
-    fontSize: 13,
-    color: "#EF4444",
-    flex: 1,
-  },
-
-  // Submit button
-  submitButton: {
-    borderRadius: 14,
-    overflow: "hidden",
-    marginTop: 6,
-  },
-  submitGradient: {
-    flexDirection: "row",
+  primaryButton: {
+    width: "100%",
+    height: 56,
+    borderRadius: 28,
     alignItems: "center",
     justifyContent: "center",
-    paddingVertical: 16,
-    gap: 8,
-  },
-  submitText: {
-    fontSize: 16,
-    fontWeight: "700",
-    color: colors.onSurface,
-    letterSpacing: 0.3,
-  },
-
-  // Forgot
-  forgotButton: {
-    alignItems: "center",
     marginTop: 16,
   },
-  forgotText: {
-    fontSize: 13,
-    color: colors.primary,
-    fontWeight: "500",
-  },
-
-  // Switch
-  switchRow: {
-    flexDirection: "row",
-    justifyContent: "center",
-    alignItems: "center",
-    marginTop: 24,
-    gap: 6,
-  },
-  switchText: {
-    fontSize: 14,
-    color: "rgba(255,255,255,0.4)",
-  },
-  switchAction: {
-    fontSize: 14,
-    fontWeight: "700",
-    color: colors.primary,
-  },
 });
+
+export default SignInScreen;
