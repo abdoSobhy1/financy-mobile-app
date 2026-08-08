@@ -13,25 +13,19 @@ import { StackNavigationProp } from "@react-navigation/stack";
 import { useSelector, useDispatch } from "react-redux";
 import { Ionicons } from "@expo/vector-icons";
 import { RootState, AppDispatch } from "../store";
-import {
-  Transaction,
-  Category,
-  TransactionStackParamList,
-} from "../types";
+import { Transaction, Category, TransactionStackParamList } from "../types";
 import { getCurrentBillingPeriod } from "../utils/billingPeriod";
 import { formatCurrency, formatDate } from "../utils";
 import { useAppTheme } from "../components/ui/ThemeProvider";
 import { Badge } from "../components/ui/Badge";
 import { Card } from "../components/ui";
+import { AppHeader } from "../components/ui/AppHeader";
 import { ListRow } from "../components/ui/ListRow";
 import { useTabBarHeight } from "../components/ui";
 import { IconChip } from "../components/ui/IconChip";
 import { addCategory } from "../store/slices/categoriesSlice";
 
-type DashboardNavigationProp = StackNavigationProp<
-  any,
-  "Dashboard"
->;
+type DashboardNavigationProp = StackNavigationProp<any, "Dashboard">;
 
 interface QuickAddSlot {
   id: string;
@@ -44,21 +38,24 @@ interface QuickAddSlot {
 export const DashboardScreen: React.FC = () => {
   const navigation = useNavigation<DashboardNavigationProp>();
   const dispatch = useDispatch<AppDispatch>();
-  const { colors, typography, spacing, radius, categoryPalette } = useAppTheme();
+  const { colors, typography, spacing, radius, categoryPalette } =
+    useAppTheme();
   const tabBarHeight = useTabBarHeight();
 
   const transactions = useSelector(
-    (state: RootState) => state.transactions.items
+    (state: RootState) => state.transactions.items,
   );
   const categoriesMap = useSelector(
-    (state: RootState) => state.categories.items
+    (state: RootState) => state.categories.items,
   );
 
   const [totalIncome, setTotalIncome] = useState<number>(0);
   const [totalExpenses, setTotalExpenses] = useState<number>(0);
   const [balance, setBalance] = useState<number>(0);
   const [quickAddSlots, setQuickAddSlots] = useState<QuickAddSlot[]>([]);
-  const [recentTransactions, setRecentTransactions] = useState<Transaction[]>([]);
+  const [recentTransactions, setRecentTransactions] = useState<Transaction[]>(
+    [],
+  );
 
   useFocusEffect(
     useCallback(() => {
@@ -70,7 +67,7 @@ export const DashboardScreen: React.FC = () => {
           if (!isActive) return;
 
           const allTransactions = Object.values(transactions).filter(
-            (t) => !t.deleted
+            (t) => !t.deleted,
           );
 
           // 1. Transactions in current billing period
@@ -96,7 +93,7 @@ export const DashboardScreen: React.FC = () => {
               (a, b) =>
                 new Date(b.date).getTime() - new Date(a.date).getTime() ||
                 new Date(b.createdAt).getTime() -
-                  new Date(a.createdAt).getTime()
+                  new Date(a.createdAt).getTime(),
             )
             .slice(0, 5);
           setRecentTransactions(sortedRecent);
@@ -106,7 +103,7 @@ export const DashboardScreen: React.FC = () => {
             allTransactions,
             categoriesMap,
             start,
-            end
+            end,
           );
           setQuickAddSlots(topSlots);
         } catch (error) {
@@ -119,18 +116,16 @@ export const DashboardScreen: React.FC = () => {
       return () => {
         isActive = false;
       };
-    }, [transactions, categoriesMap])
+    }, [transactions, categoriesMap]),
   );
 
   const computeTopExpenseCategories = (
     txs: Transaction[],
     catsMap: Record<string, Category>,
     start: Date,
-    end: Date
+    end: Date,
   ): QuickAddSlot[] => {
-    const allExpenseTxs = txs.filter(
-      (t) => t.type === "expense" && !t.deleted
-    );
+    const allExpenseTxs = txs.filter((t) => t.type === "expense" && !t.deleted);
 
     const periodTxs = allExpenseTxs.filter((t) => {
       const d = new Date(t.date);
@@ -156,7 +151,7 @@ export const DashboardScreen: React.FC = () => {
     }
 
     const sortedCatIds = Object.keys(scores).sort(
-      (a, b) => (scores[b] || 0) - (scores[a] || 0)
+      (a, b) => (scores[b] || 0) - (scores[a] || 0),
     );
 
     const slots: QuickAddSlot[] = [];
@@ -181,11 +176,7 @@ export const DashboardScreen: React.FC = () => {
     if (slots.length < 3) {
       for (const cat of Object.values(catsMap)) {
         if (slots.length >= 3) break;
-        if (
-          cat.type === "expense" &&
-          !cat.deleted &&
-          !pickedIds.has(cat.id)
-        ) {
+        if (cat.type === "expense" && !cat.deleted && !pickedIds.has(cat.id)) {
           slots.push({
             id: cat.id,
             name: cat.name,
@@ -229,7 +220,7 @@ export const DashboardScreen: React.FC = () => {
             name: slot.name,
             type: "expense",
             color: "#FF6B6B",
-          })
+          }),
         ).unwrap();
         categoryId = created.id;
       }
@@ -252,114 +243,207 @@ export const DashboardScreen: React.FC = () => {
   };
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={["top"]}>
+    <SafeAreaView
+      style={[styles.container, { backgroundColor: colors.background }]}
+      edges={["top"]}>
       <StatusBar barStyle="light-content" />
+      
+      {/* Shared App Header */}
+      <AppHeader
+        title="Dashboard"
+        showSettings={false}
+        rightAction={
+          <TouchableOpacity style={styles.notificationButton} activeOpacity={0.7}>
+            <Ionicons name="notifications-outline" size={24} color={colors.onBackground} />
+          </TouchableOpacity>
+        }
+      />
+
       <ScrollView
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={{ padding: spacing.lg, paddingBottom: tabBarHeight }}>
+        contentContainerStyle={{
+          padding: spacing.lg,
+          paddingBottom: tabBarHeight,
+        }}>
         
-        {/* Header */}
-        <Text style={[typography.h2, { color: colors.onBackground, marginBottom: spacing.lg }]}>
-          Dashboard
-        </Text>
-
         {/* Balance Card */}
-        <Card variant="outlined" style={{ padding: spacing.lg, marginBottom: spacing.lg }}>
-          <Text style={[typography.bodyMedium, { color: colors.onSurfaceVariant, marginBottom: spacing.xs }]}>
-            Total Balance
-          </Text>
-          <Text style={[typography.h1, { color: colors.onSurface, marginBottom: spacing.md }]}>
+        <Card
+          variant="default"
+          style={{ 
+            padding: spacing.xl, 
+            marginBottom: spacing.xl, 
+            backgroundColor: "#A8DADC", // Light cyan from mockup
+            borderRadius: 32,
+          }}>
+          <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: spacing.sm }}>
+            <Text
+              style={[
+                typography.label,
+                { color: "#455A64", textTransform: "uppercase", letterSpacing: 1 },
+              ]}>
+              TOTAL BALANCE
+            </Text>
+            <View style={{ backgroundColor: "rgba(0,0,0,0.1)", paddingHorizontal: 8, paddingVertical: 4, borderRadius: 12 }}>
+              <Text style={{ fontSize: 12, color: "#455A64", fontWeight: "bold" }}>↑ +2.4%</Text>
+            </View>
+          </View>
+          
+          <Text
+            style={[
+              typography.h1,
+              { color: "#1D3557", fontSize: 48, fontWeight: "900", marginBottom: spacing.xl },
+            ]}>
             {formatCurrency(balance)}
           </Text>
           
-          <View style={{ flexDirection: 'row', gap: spacing.md }}>
-            <Badge label={`Income: ${formatCurrency(totalIncome)}`} role="success" />
-            <Badge label={`Expense: ${formatCurrency(totalExpenses)}`} role="error" />
+          {/* Mockup chart line abstraction */}
+          <View style={{ height: 40, borderBottomWidth: 2, borderBottomColor: "rgba(0,0,0,0.1)" }}>
+             {/* A stylized path could go here; using a placeholder border for now */}
           </View>
         </Card>
 
         {/* Quick Add Row */}
-        <View style={{ marginBottom: spacing.lg }}>
-          <Text style={[typography.h3, { color: colors.onBackground, marginBottom: spacing.md }]}>
-            Quick Add
+        <View style={{ marginBottom: spacing.xl }}>
+          <Text
+            style={[
+              typography.h3,
+              { color: colors.onBackground, marginBottom: spacing.md, fontSize: 14, textTransform: "uppercase" },
+            ]}>
+            QUICK ADD
           </Text>
-          <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+          <View
+            style={{ flexDirection: "row", justifyContent: "space-between" }}>
             {quickAddSlots.map((slot) => (
               <TouchableOpacity
                 key={slot.id}
-                style={{ alignItems: 'center', width: 70 }}
+                style={{ alignItems: "center", width: 64 }}
                 onPress={() => handleQuickAddPress(slot)}>
-                <IconChip 
-                  iconName={slot.iconName as any} 
-                  colorName={slot.colorName as any || 'bluegrey'} 
-                  size={56} 
-                />
-                <Text style={[typography.bodySmall, { color: colors.onBackground, marginTop: spacing.xs, textAlign: 'center' }]} numberOfLines={1}>
+                <View style={[styles.circleIcon, { backgroundColor: colors.surface }]}>
+                  <IconChip
+                    iconName={slot.iconName as any}
+                    colorName={(slot.colorName as any) || "bluegrey"}
+                    size={56}
+                  />
+                </View>
+                <Text
+                  style={[
+                    typography.bodySmall,
+                    {
+                      color: colors.onBackground,
+                      marginTop: spacing.xs,
+                      textAlign: "center",
+                      fontWeight: "600",
+                    },
+                  ]}
+                  numberOfLines={1}>
                   {slot.name}
                 </Text>
               </TouchableOpacity>
             ))}
-            
-            {/* + More chip */}
+
+            {/* Voice / More chip */}
             <TouchableOpacity
-              style={{ alignItems: 'center', width: 70 }}
+              style={{ alignItems: "center", width: 64 }}
               onPress={handleMorePress}>
-              <View style={[styles.moreChip, { backgroundColor: colors.tertiary, borderRadius: radius.pill }]}>
-                <Ionicons name="add" size={32} color={colors.onTertiary} />
+              <View
+                style={[
+                  styles.moreChip,
+                  {
+                    backgroundColor: "#E0F7FA",
+                    borderRadius: 28,
+                  },
+                ]}>
+                <Ionicons name="mic-outline" size={28} color="#006064" />
               </View>
-              <Text style={[typography.bodySmall, { color: colors.onBackground, marginTop: spacing.xs, textAlign: 'center' }]} numberOfLines={1}>
-                More
+              <Text
+                style={[
+                  typography.bodySmall,
+                  {
+                    color: colors.onBackground,
+                    marginTop: spacing.xs,
+                    textAlign: "center",
+                    fontWeight: "600",
+                  },
+                ]}
+                numberOfLines={1}>
+                Voice
               </Text>
             </TouchableOpacity>
           </View>
         </View>
 
         {/* Recent Transactions Preview */}
-        <View style={{ marginBottom: spacing.lg }}>
-          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: spacing.md }}>
-            <Text style={[typography.h3, { color: colors.onBackground }]}>
-              Recent Transactions
+        <View style={{ backgroundColor: colors.surface, borderRadius: 32, padding: spacing.lg, paddingBottom: spacing.xxl }}>
+          <View
+            style={{
+              flexDirection: "row",
+              justifyContent: "space-between",
+              alignItems: "center",
+              marginBottom: spacing.xl,
+            }}>
+            <Text style={[typography.h2, { color: colors.onBackground }]}>
+              Transactions
             </Text>
-            <TouchableOpacity onPress={() => navigation.navigate("TransactionList" as any)}>
-              <Text style={[typography.bodyMedium, { color: colors.primary }]}>View All</Text>
+            <TouchableOpacity
+              onPress={() => navigation.navigate("TransactionList" as any)}>
+              <Text style={[typography.bodySmall, { color: colors.primary, fontWeight: "bold" }]}>
+                View All
+              </Text>
             </TouchableOpacity>
           </View>
 
-          <View style={{ gap: spacing.sm }}>
+          <View style={{ gap: spacing.md }}>
             {recentTransactions.map((tx) => {
-              const category = tx.categoryId ? categoriesMap[tx.categoryId] : null;
+              const category = tx.categoryId
+                ? categoriesMap[tx.categoryId]
+                : null;
               const isIncome = tx.type === "income";
-              
+
               return (
-                <ListRow
-                  key={tx.id}
-                  title={category?.name || "Uncategorized"}
-                  subtitle={tx.description || formatDate(tx.date)}
-                  leading={
-                    <IconChip
-                      iconName={((category as any)?.icon as any) || "help"}
-                      colorName="bluegrey"
-                      size={40}
-                    />
-                  }
-                  trailing={
-                    <Text style={[typography.label, { color: isIncome ? colors.tertiary : colors.error }]}>
-                      {isIncome ? "+" : "-"}{formatCurrency(tx.amount)}
-                    </Text>
-                  }
-                  onPress={() => navigation.navigate("AddTransaction" as any, { editTransaction: tx })}
-                />
+                <View key={tx.id} style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: spacing.sm }}>
+                  <View style={{ flexDirection: "row", alignItems: "center", flex: 1 }}>
+                    <View style={{ marginRight: spacing.md }}>
+                      <IconChip
+                        iconName={((category as any)?.icon as any) || "cafe-outline"}
+                        colorName="bluegrey"
+                        size={48}
+                      />
+                    </View>
+                    <View>
+                      <Text style={[typography.bodyLarge, { color: colors.onBackground, fontWeight: "600" }]}>
+                        {category?.name || "Uncategorized"}
+                      </Text>
+                      <Text style={[typography.bodySmall, { color: colors.onSurfaceVariant, marginTop: 2 }]}>
+                        {formatDate(tx.date)}
+                      </Text>
+                    </View>
+                  </View>
+                  <Text
+                    style={[
+                      typography.h3,
+                      { color: isIncome ? "#48C774" : colors.onBackground },
+                    ]}>
+                    {isIncome ? "+" : "-"}{formatCurrency(tx.amount)}
+                  </Text>
+                </View>
               );
             })}
-            
+
             {recentTransactions.length === 0 && (
-              <Text style={[typography.bodyMedium, { color: colors.onSurfaceVariant, textAlign: 'center', marginVertical: spacing.xl }]}>
+              <Text
+                style={[
+                  typography.bodyMedium,
+                  {
+                    color: colors.onSurfaceVariant,
+                    textAlign: "center",
+                    marginVertical: spacing.xl,
+                  },
+                ]}>
                 No recent transactions
               </Text>
             )}
           </View>
         </View>
-
       </ScrollView>
     </SafeAreaView>
   );
@@ -369,10 +453,20 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
+  notificationButton: {
+    padding: 8,
+  },
+  circleIcon: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    alignItems: "center",
+    justifyContent: "center",
+  },
   moreChip: {
     width: 56,
     height: 56,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
   },
 });
