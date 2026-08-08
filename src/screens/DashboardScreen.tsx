@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from "react";
+import React, { useState, useCallback, useEffect } from "react";
 import {
   View,
   Text,
@@ -23,7 +23,8 @@ import { AppHeader } from "../components/ui/AppHeader";
 import { ListRow } from "../components/ui/ListRow";
 import { useTabBarHeight } from "../components/ui";
 import { IconChip } from "../components/ui/IconChip";
-import { addCategory } from "../store/slices/categoriesSlice";
+import { addCategory, fetchCategories } from "../store/slices/categoriesSlice";
+import { fetchTransactions } from "../store/slices/transactionsSlice";
 
 type DashboardNavigationProp = StackNavigationProp<any, "Dashboard">;
 
@@ -56,6 +57,11 @@ export const DashboardScreen: React.FC = () => {
   const [recentTransactions, setRecentTransactions] = useState<Transaction[]>(
     [],
   );
+
+  useEffect(() => {
+    dispatch(fetchTransactions());
+    dispatch(fetchCategories());
+  }, [dispatch]);
 
   useFocusEffect(
     useCallback(() => {
@@ -249,15 +255,7 @@ export const DashboardScreen: React.FC = () => {
       <StatusBar barStyle="light-content" />
       
       {/* Shared App Header */}
-      <AppHeader
-        title="Dashboard"
-        showSettings={false}
-        rightAction={
-          <TouchableOpacity style={styles.notificationButton} activeOpacity={0.7}>
-            <Ionicons name="notifications-outline" size={24} color={colors.onBackground} />
-          </TouchableOpacity>
-        }
-      />
+      <AppHeader title="Dashboard" />
 
       <ScrollView
         showsVerticalScrollIndicator={false}
