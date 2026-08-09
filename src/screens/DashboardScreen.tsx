@@ -478,13 +478,24 @@ export const DashboardScreen: React.FC = () => {
                       flex: 1,
                     }}>
                     <View style={{ marginRight: spacing.md }}>
-                      <IconChip
-                        iconName={
-                          ((category as any)?.icon as any) || "receipt-outline"
-                        }
-                        colorName="bluegrey"
-                        size={48}
-                      />
+                      <View
+                        style={{
+                          width: 48,
+                          height: 48,
+                          borderRadius: 24,
+                          backgroundColor: (category?.color || colors.primary) + "20",
+                          alignItems: "center",
+                          justifyContent: "center",
+                        }}>
+                        <Ionicons
+                          name={
+                            (((category as any)?.icon as any) ||
+                              "receipt-outline") as any
+                          }
+                          size={24}
+                          color={category?.color || colors.primary}
+                        />
+                      </View>
                     </View>
                     <View>
                       <Text

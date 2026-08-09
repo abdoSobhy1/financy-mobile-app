@@ -27,6 +27,15 @@ const PREDEFINED_COLORS = [
   "#8B5CF6",
   "#EC4899",
   "#64748B",
+  "#14B8A6",
+  "#EAB308",
+  "#F43F5E",
+  "#0EA5E9",
+  "#84CC16",
+  "#D946EF",
+  "#F97316",
+  "#3B82F6",
+  "#10B981",
 ];
 
 // Curated subset of Ionicons that make sense for finance categories
@@ -43,6 +52,26 @@ const CATEGORY_ICONS: string[] = [
   "fitness-outline",
   "game-controller-outline",
   "book-outline",
+  "restaurant-outline",
+  "cart-outline",
+  "cafe-outline",
+  "bus-outline",
+  "train-outline",
+  "bicycle-outline",
+  "medical-outline",
+  "school-outline",
+  "shirt-outline",
+  "cash-outline",
+  "card-outline",
+  "wallet-outline",
+  "business-outline",
+  "construct-outline",
+  "cut-outline",
+  "flower-outline",
+  "gift-outline",
+  "hardware-chip-outline",
+  "headset-outline",
+  "heart-outline",
 ];
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
