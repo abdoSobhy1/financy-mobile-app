@@ -530,6 +530,9 @@ export const AddTransactionScreen: React.FC = () => {
               setShowDatePicker(false);
             }}
             label="Transaction Date"
+            hideTrigger
+            open
+            onClose={() => setShowDatePicker(false)}
           />
         )}
 

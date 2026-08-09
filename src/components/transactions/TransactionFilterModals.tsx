@@ -35,14 +35,16 @@ export type FilterType =
 
 // ─── Filter Modal ──────────────────────────────────────────────────────────────
 
-interface TransactionFilterModalProps {
+export interface TransactionFilterModalProps {
   visible: boolean;
   filterType: FilterType;
   filterPeriod: FilterPeriod;
   selectedCategoryIds?: Set<string>;
+  selectedBudgetIds?: Set<string>;
   onFilterTypeChange: (type: FilterType) => void;
   onFilterPeriodChange: (period: FilterPeriod) => void;
   onCategoryToggle?: (id: string) => void;
+  onBudgetToggle?: (id: string) => void;
   onOpenCustomDate?: () => void;
   onReset?: () => void;
   onApply?: () => void;
@@ -56,9 +58,11 @@ export const TransactionFilterModal: React.FC<TransactionFilterModalProps> = ({
   filterType,
   filterPeriod,
   selectedCategoryIds = new Set(),
+  selectedBudgetIds = new Set(),
   onFilterTypeChange,
   onFilterPeriodChange,
   onCategoryToggle,
+  onBudgetToggle,
   onOpenCustomDate,
   onReset,
   onApply,
@@ -69,9 +73,18 @@ export const TransactionFilterModal: React.FC<TransactionFilterModalProps> = ({
   const { items: categoriesMap } = useSelector(
     (state: RootState) => state.categories,
   );
+  const { items: budgetsMap } = useSelector(
+    (state: RootState) => state.budgets,
+  );
+
   const allCategoriesList = useMemo(
     () => Object.values(categoriesMap || {}).filter((c) => c && !c.deleted),
     [categoriesMap],
+  );
+
+  const allBudgetsList = useMemo(
+    () => Object.values(budgetsMap || {}).filter((b) => b && !b.deleted),
+    [budgetsMap],
   );
 
   const DATE_OPTIONS = [
@@ -80,7 +93,6 @@ export const TransactionFilterModal: React.FC<TransactionFilterModalProps> = ({
     { label: "Last Month", value: "Last Month" },
     { label: "Year", value: "Year" },
     { label: "All Time", value: "All Time" },
-    { label: "Custom", value: "custom" },
   ] as const;
 
   return (
@@ -140,8 +152,7 @@ export const TransactionFilterModal: React.FC<TransactionFilterModalProps> = ({
                   filterPeriod === item.value ||
                   (item.value === "All Time" && filterPeriod === "all") ||
                   (item.value === "This Month" && filterPeriod === "month") ||
-                  (item.value === "Year" && filterPeriod === "year") ||
-                  (item.value === "custom" && filterPeriod === "custom");
+                  (item.value === "Year" && filterPeriod === "year");
 
                 return (
                   <TouchableOpacity
@@ -154,14 +165,10 @@ export const TransactionFilterModal: React.FC<TransactionFilterModalProps> = ({
                           : colors.surfaceVariant,
                         borderColor: isActive
                           ? colors.primary
-                          : colors.outlineVariant,
+                          : "transparent",
                       },
                     ]}
-                    onPress={() => {
-                      onFilterPeriodChange(item.value as FilterPeriod);
-                      if (item.value === "custom" && onOpenCustomDate)
-                        onOpenCustomDate();
-                    }}
+                    onPress={() => onFilterPeriodChange(item.value as FilterPeriod)}
                     activeOpacity={0.8}>
                     <Text
                       style={[
@@ -179,17 +186,40 @@ export const TransactionFilterModal: React.FC<TransactionFilterModalProps> = ({
                 );
               })}
             </View>
+            <TouchableOpacity
+              style={[
+                styles.customDateBtn,
+                {
+                  backgroundColor: filterPeriod === "custom" ? colors.primaryContainer : colors.surfaceVariant,
+                  borderColor: filterPeriod === "custom" ? colors.primary : "transparent",
+                },
+              ]}
+              onPress={() => {
+                onFilterPeriodChange("custom");
+                if (onOpenCustomDate) onOpenCustomDate();
+              }}
+              activeOpacity={0.8}>
+              <Ionicons
+                name="calendar-outline"
+                size={18}
+                color={filterPeriod === "custom" ? colors.onPrimaryContainer : colors.onSurfaceVariant}
+              />
+              <Text
+                style={{
+                  color: filterPeriod === "custom" ? colors.onPrimaryContainer : colors.onSurfaceVariant,
+                  fontWeight: "600",
+                  fontSize: 14,
+                }}>
+                Custom Range
+              </Text>
+            </TouchableOpacity>
 
             {/* TRANSACTION TYPE */}
             <Text
-              style={[styles.sectionLabel, { color: colors.onSurfaceVariant }]}>
+              style={[styles.sectionLabel, { color: colors.onSurfaceVariant, marginTop: 28 }]}>
               TRANSACTION TYPE
             </Text>
-            <View
-              style={[
-                styles.segmentRow,
-                { backgroundColor: colors.surfaceVariant },
-              ]}>
+            <View style={styles.chipRow}>
               {(["All", "Income", "Expense"] as const).map((t) => {
                 const isActive =
                   filterType === t ||
@@ -198,8 +228,19 @@ export const TransactionFilterModal: React.FC<TransactionFilterModalProps> = ({
                   <TouchableOpacity
                     key={t}
                     style={[
-                      styles.segment,
-                      isActive && { backgroundColor: colors.primaryContainer },
+                      styles.chip,
+                      {
+                        backgroundColor: isActive
+                          ? colors.primaryContainer
+                          : colors.surfaceVariant,
+                        borderColor: isActive
+                          ? colors.primary
+                          : "transparent",
+                        paddingHorizontal: 20,
+                        flexDirection: "row",
+                        alignItems: "center",
+                        gap: 6,
+                      },
                     ]}
                     onPress={() => onFilterTypeChange(t as FilterType)}
                     activeOpacity={0.8}>
@@ -208,12 +249,11 @@ export const TransactionFilterModal: React.FC<TransactionFilterModalProps> = ({
                         name="checkmark"
                         size={14}
                         color={colors.onPrimaryContainer}
-                        style={{ marginRight: 4 }}
                       />
                     )}
                     <Text
                       style={[
-                        styles.segmentText,
+                        styles.chipText,
                         {
                           color: isActive
                             ? colors.onPrimaryContainer
@@ -228,68 +268,119 @@ export const TransactionFilterModal: React.FC<TransactionFilterModalProps> = ({
               })}
             </View>
 
-            {/* CATEGORIES */}
-            {onCategoryToggle && (
+            {/* BUDGETS */}
+            {onBudgetToggle && allBudgetsList.length > 0 && (
               <>
                 <Text
                   style={[
                     styles.sectionLabel,
-                    { color: colors.onSurfaceVariant },
+                    { color: colors.onSurfaceVariant, marginTop: 28 },
                   ]}>
-                  CATEGORIES
+                  BUDGETS
                 </Text>
-                <View style={styles.categoryGrid}>
-                  {allCategoriesList.map((cat) => {
-                    const isSelected = selectedCategoryIds.has(cat.id);
+                <View style={styles.cardGrid}>
+                  {allBudgetsList.map((b) => {
+                    const isSelected = selectedBudgetIds.has(b.id);
                     return (
                       <TouchableOpacity
-                        key={cat.id}
+                        key={b.id}
                         style={[
-                          styles.categoryChip,
+                          styles.card,
                           {
                             backgroundColor: isSelected
                               ? colors.primaryContainer
                               : colors.surfaceVariant,
                             borderColor: isSelected
                               ? colors.primary
-                              : colors.outlineVariant,
+                              : "transparent",
+                            borderWidth: 1,
+                          },
+                        ]}
+                        onPress={() => onBudgetToggle(b.id)}
+                        activeOpacity={0.8}>
+                        <Ionicons
+                          name="wallet"
+                          size={24}
+                          color={
+                            isSelected
+                              ? colors.onPrimaryContainer
+                              : colors.primary
+                          }
+                        />
+                        <Text
+                          style={[
+                            styles.cardText,
+                            {
+                              color: isSelected
+                                ? colors.onPrimaryContainer
+                                : colors.onSurface,
+                              fontWeight: isSelected ? "700" : "600",
+                            },
+                          ]}
+                          numberOfLines={2}>
+                          {b.name}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+              </>
+            )}
+
+            {/* CATEGORIES */}
+            {onCategoryToggle && allCategoriesList.length > 0 && (
+              <>
+                <Text
+                  style={[
+                    styles.sectionLabel,
+                    { color: colors.onSurfaceVariant, marginTop: 28 },
+                  ]}>
+                  CATEGORIES
+                </Text>
+                <View style={styles.cardGrid}>
+                  {allCategoriesList.map((cat) => {
+                    const isSelected = selectedCategoryIds.has(cat.id);
+                    return (
+                      <TouchableOpacity
+                        key={cat.id}
+                        style={[
+                          styles.card,
+                          {
+                            backgroundColor: isSelected
+                              ? colors.primaryContainer
+                              : colors.surfaceVariant,
+                            borderColor: isSelected
+                              ? colors.primary
+                              : "transparent",
+                            borderWidth: 1,
                           },
                         ]}
                         onPress={() => onCategoryToggle(cat.id)}
                         activeOpacity={0.8}>
-                        <View style={styles.categoryChipInner}>
-                          <Ionicons
-                            name={
-                              ((cat as any)?.icon || "receipt-outline") as any
-                            }
-                            size={18}
-                            color={
-                              isSelected
+                        <Ionicons
+                          name={
+                            ((cat as any)?.icon || "pricetag") as any
+                          }
+                          size={24}
+                          color={
+                            isSelected
+                              ? colors.onPrimaryContainer
+                              : cat.color || colors.primary
+                          }
+                        />
+                        <Text
+                          style={[
+                            styles.cardText,
+                            {
+                              color: isSelected
                                 ? colors.onPrimaryContainer
-                                : cat.color || colors.primary
-                            }
-                          />
-                          <Text
-                            style={[
-                              styles.categoryChipText,
-                              {
-                                color: isSelected
-                                  ? colors.onPrimaryContainer
-                                  : colors.onSurface,
-                                fontWeight: isSelected ? "700" : "600",
-                              },
-                            ]}
-                            numberOfLines={1}>
-                            {cat.name}
-                          </Text>
-                        </View>
-                        {isSelected && (
-                          <Ionicons
-                            name="checkmark-circle"
-                            size={16}
-                            color={colors.onPrimaryContainer}
-                          />
-                        )}
+                                : colors.onSurface,
+                              fontWeight: isSelected ? "700" : "600",
+                            },
+                          ]}
+                          numberOfLines={2}>
+                          {cat.name}
+                        </Text>
                       </TouchableOpacity>
                     );
                   })}
@@ -592,29 +683,31 @@ const styles = StyleSheet.create({
   segmentText: {
     fontSize: 14,
   },
-  categoryGrid: {
+  cardGrid: {
     flexDirection: "row",
     flexWrap: "wrap",
+    justifyContent: "space-between",
     gap: 8,
     marginBottom: 16,
   },
-  categoryChip: {
+  card: {
+    width: "48%", // two columns
+    height: 90,
+    borderRadius: 16,
+    padding: 14,
+    justifyContent: "space-between",
+  },
+  cardText: {
+    fontSize: 14,
+  },
+  customDateBtn: {
     flexDirection: "row",
     alignItems: "center",
-    paddingHorizontal: 12,
-    paddingVertical: 10,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
     borderRadius: 16,
     borderWidth: 1,
-    gap: 6,
-  },
-  categoryChipInner: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-    flex: 1,
-  },
-  categoryChipText: {
-    fontSize: 13,
+    gap: 12,
   },
   footer: {
     flexDirection: "row",

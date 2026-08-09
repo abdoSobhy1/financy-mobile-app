@@ -27,6 +27,7 @@ import {
   duplicateTransaction,
 } from "../store/slices/transactionsSlice";
 import { fetchCategories } from "../store/slices/categoriesSlice";
+import { fetchBudgets } from "../store/slices/budgetsSlice";
 import { Transaction, TransactionStackParamList } from "../types";
 import { useAppTheme } from "../components/ui/ThemeProvider";
 import { useTabBarHeight } from "../components/ui";
@@ -84,6 +85,9 @@ export const TransactionListScreen: React.FC = () => {
   const [selectedCategoryIds, setSelectedCategoryIds] = useState<Set<string>>(
     new Set(),
   );
+  const [selectedBudgetIds, setSelectedBudgetIds] = useState<Set<string>>(
+    new Set(),
+  );
 
   // Filter Modal state
   const [showFilterModal, setShowFilterModal] = useState(false);
@@ -91,6 +95,9 @@ export const TransactionListScreen: React.FC = () => {
   const [tempTimeFilter, setTempTimeFilter] = useState<TimeFilter>(timeFilter);
   const [tempTypeFilter, setTempTypeFilter] = useState<TypeFilter>(typeFilter);
   const [tempCategoryIds, setTempCategoryIds] = useState<Set<string>>(
+    new Set(),
+  );
+  const [tempBudgetIds, setTempBudgetIds] = useState<Set<string>>(
     new Set(),
   );
 
@@ -110,11 +117,13 @@ export const TransactionListScreen: React.FC = () => {
   useEffect(() => {
     dispatch(fetchTransactions());
     dispatch(fetchCategories());
+    dispatch(fetchBudgets());
   }, [dispatch]);
 
   const handleRefresh = async () => {
     setRefreshing(true);
     await dispatch(fetchTransactions());
+    await dispatch(fetchBudgets());
     setRefreshing(false);
   };
 
@@ -122,6 +131,7 @@ export const TransactionListScreen: React.FC = () => {
     setTempTimeFilter(timeFilter);
     setTempTypeFilter(typeFilter);
     setTempCategoryIds(new Set(selectedCategoryIds));
+    setTempBudgetIds(new Set(selectedBudgetIds));
     setShowFilterModal(true);
   };
 
@@ -129,6 +139,7 @@ export const TransactionListScreen: React.FC = () => {
     setTimeFilter(tempTimeFilter);
     setTypeFilter(tempTypeFilter);
     setSelectedCategoryIds(new Set(tempCategoryIds));
+    setSelectedBudgetIds(new Set(tempBudgetIds));
     setShowFilterModal(false);
   };
 
@@ -136,6 +147,7 @@ export const TransactionListScreen: React.FC = () => {
     setTempTimeFilter("This Month");
     setTempTypeFilter("All");
     setTempCategoryIds(new Set());
+    setTempBudgetIds(new Set());
   };
 
   const toggleCategorySelection = (catId: string) => {
@@ -145,6 +157,18 @@ export const TransactionListScreen: React.FC = () => {
         next.delete(catId);
       } else {
         next.add(catId);
+      }
+      return next;
+    });
+  };
+
+  const toggleBudgetSelection = (budgetId: string) => {
+    setTempBudgetIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(budgetId)) {
+        next.delete(budgetId);
+      } else {
+        next.add(budgetId);
       }
       return next;
     });
@@ -199,6 +223,11 @@ export const TransactionListScreen: React.FC = () => {
         return t.categoryId && selectedCategoryIds.has(t.categoryId);
       })
       .filter((t) => {
+        if (selectedBudgetIds.size === 0) return true;
+        if (t.budgetId && selectedBudgetIds.has(t.budgetId)) return true;
+        return false;
+      })
+      .filter((t) => {
         if (!searchQuery.trim()) return true;
         const query = searchQuery.toLowerCase();
         const desc = (t.description || "").toLowerCase();
@@ -213,6 +242,7 @@ export const TransactionListScreen: React.FC = () => {
     timeFilter,
     typeFilter,
     selectedCategoryIds,
+    selectedBudgetIds,
     searchQuery,
     categories,
   ]);
@@ -363,7 +393,7 @@ export const TransactionListScreen: React.FC = () => {
               size={24}
               color={colors.onBackground}
             />
-            {selectedCategoryIds.size > 0 && (
+            {(selectedCategoryIds.size > 0 || selectedBudgetIds.size > 0) && (
               <View
                 style={[
                   styles.filterBadge,
@@ -537,9 +567,11 @@ export const TransactionListScreen: React.FC = () => {
         filterType={tempTypeFilter}
         filterPeriod={tempTimeFilter}
         selectedCategoryIds={tempCategoryIds}
+        selectedBudgetIds={tempBudgetIds}
         onFilterTypeChange={(t) => setTempTypeFilter(t as any)}
         onFilterPeriodChange={(p) => setTempTimeFilter(p as any)}
         onCategoryToggle={toggleCategorySelection}
+        onBudgetToggle={toggleBudgetSelection}
         onOpenCustomDate={() => setShowCustomDateModal(true)}
         onReset={resetModalFilters}
         onApply={applyModalFilters}

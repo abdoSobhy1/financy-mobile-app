@@ -55,6 +55,9 @@ export interface CustomDatePickerProps {
   maximumDate?: Date;
   mode?: "date" | "datetime";
   inline?: boolean;
+  hideTrigger?: boolean;
+  open?: boolean;
+  onClose?: () => void;
 }
 
 // ─── Helpers ───────────────────────────────────────────────────────────────────
@@ -273,8 +276,12 @@ const WheelColumn: React.FC<WheelColumnProps> = ({
   loop = false,
   colors,
 }) => {
-  // For loop mode, triple the data so we can silently recenter near the edges.
-  const data = loop ? [...values, ...values, ...values] : values;
+  const PAD_COUNT = Math.floor(WHEEL_VISIBLE / 2);
+  const paddingItems = Array(PAD_COUNT).fill("");
+
+  const realData = loop ? [...values, ...values, ...values] : values;
+  const data = [...paddingItems, ...realData, ...paddingItems];
+  
   const baseOffset = loop ? values.length : 0;
 
   const listRef = useRef<FlatList<any>>(null);
@@ -298,7 +305,7 @@ const WheelColumn: React.FC<WheelColumnProps> = ({
     (e: NativeSyntheticEvent<NativeScrollEvent>) => {
       const offsetY = e.nativeEvent.contentOffset.y;
       let index = Math.round(offsetY / WHEEL_ITEM_H);
-      index = Math.max(0, Math.min(data.length - 1, index));
+      index = Math.max(0, Math.min(realData.length - 1, index));
 
       if (loop) {
         const realIndex =
@@ -318,7 +325,7 @@ const WheelColumn: React.FC<WheelColumnProps> = ({
         onSettle(index);
       }
     },
-    [data.length, loop, onSettle, values.length],
+    [realData.length, loop, onSettle, values.length],
   );
 
   const handlePressItem = (index: number) => {
@@ -350,7 +357,6 @@ const WheelColumn: React.FC<WheelColumnProps> = ({
         snapToInterval={WHEEL_ITEM_H}
         decelerationRate="fast"
         bounces={false}
-        contentContainerStyle={{ paddingVertical: WHEEL_PAD }}
         onScroll={Animated.event(
           [{ nativeEvent: { contentOffset: { y: scrollY } } }],
           { useNativeDriver: true },
@@ -363,12 +369,13 @@ const WheelColumn: React.FC<WheelColumnProps> = ({
           index,
         })}
         renderItem={({ item, index }) => {
+          const centerIndex = index - PAD_COUNT;
           const inputRange = [
-            (index - 2) * WHEEL_ITEM_H,
-            (index - 1) * WHEEL_ITEM_H,
-            index * WHEEL_ITEM_H,
-            (index + 1) * WHEEL_ITEM_H,
-            (index + 2) * WHEEL_ITEM_H,
+            (centerIndex - 2) * WHEEL_ITEM_H,
+            (centerIndex - 1) * WHEEL_ITEM_H,
+            centerIndex * WHEEL_ITEM_H,
+            (centerIndex + 1) * WHEEL_ITEM_H,
+            (centerIndex + 2) * WHEEL_ITEM_H,
           ];
           const opacity = scrollY.interpolate({
             inputRange,
@@ -382,8 +389,8 @@ const WheelColumn: React.FC<WheelColumnProps> = ({
           });
           return (
             <TouchableOpacity
-              activeOpacity={0.7}
-              onPress={() => handlePressItem(index)}
+              activeOpacity={item === "" ? 1 : 0.7}
+              onPress={() => item !== "" && handlePressItem(centerIndex)}
               style={{
                 height: WHEEL_ITEM_H,
                 alignItems: "center",
@@ -545,9 +552,12 @@ export const CustomDatePicker: React.FC<CustomDatePickerProps> = ({
   label = "Date",
   showLabel = true,
   inline = false,
+  hideTrigger = false,
+  open,
+  onClose,
 }) => {
   const { colors, typography } = useAppTheme();
-  const [showPicker, setShowPicker] = useState(false);
+  const [showPicker, setShowPicker] = useState(open || false);
   const [pickerView, setPickerView] = useState<"calendar" | "quickJump">(
     "calendar",
   );
@@ -561,6 +571,18 @@ export const CustomDatePicker: React.FC<CustomDatePickerProps> = ({
     }
   }, [value]);
 
+  useEffect(() => {
+    if (open !== undefined) {
+      setShowPicker(open);
+      if (open) {
+        setViewMonth(
+          startOfMonth(value && isValid(value) ? value : new Date()),
+        );
+        setPickerView("calendar");
+      }
+    }
+  }, [open, value]);
+
   const handleOpen = () => {
     if (disabled) return;
     setViewMonth(startOfMonth(value && isValid(value) ? value : new Date()));
@@ -568,9 +590,14 @@ export const CustomDatePicker: React.FC<CustomDatePickerProps> = ({
     setShowPicker(true);
   };
 
+  const handleClose = () => {
+    setShowPicker(false);
+    onClose?.();
+  };
+
   const handleSelectDay = (day: Date) => {
     onDateChange(day);
-    setShowPicker(false);
+    handleClose();
   };
 
   const handleJump = (d: Date) => {
@@ -630,70 +657,72 @@ export const CustomDatePicker: React.FC<CustomDatePickerProps> = ({
 
   return (
     <>
-      <View style={{ marginBottom: 18 }}>
-        {showLabel && (
-          <Text
+      {!hideTrigger && (
+        <View style={{ marginBottom: 18 }}>
+          {showLabel && (
+            <Text
+              style={[
+                typography.label,
+                {
+                  color: colors.primary,
+                  letterSpacing: 0.5,
+                  textTransform: "uppercase",
+                  marginBottom: 8,
+                },
+              ]}>
+              {label}
+            </Text>
+          )}
+          <TouchableOpacity
             style={[
-              typography.label,
+              triggerStyles.input,
               {
-                color: colors.primary,
-                letterSpacing: 0.5,
-                textTransform: "uppercase",
-                marginBottom: 8,
+                backgroundColor: colors.surfaceVariant,
+                borderColor: colors.outlineVariant,
               },
-            ]}>
-            {label}
-          </Text>
-        )}
-        <TouchableOpacity
-          style={[
-            triggerStyles.input,
-            {
-              backgroundColor: colors.surfaceVariant,
-              borderColor: colors.outlineVariant,
-            },
-            disabled && { opacity: 0.5 },
-            style,
-          ]}
-          onPress={handleOpen}
-          disabled={disabled}
-          activeOpacity={0.75}>
-          <View
-            style={[
-              triggerStyles.iconBox,
-              { backgroundColor: colors.primaryContainer + "55" },
-            ]}>
+              disabled && { opacity: 0.5 },
+              style,
+            ]}
+            onPress={handleOpen}
+            disabled={disabled}
+            activeOpacity={0.75}>
+            <View
+              style={[
+                triggerStyles.iconBox,
+                { backgroundColor: colors.primaryContainer + "55" },
+              ]}>
+              <Ionicons
+                name="calendar-outline"
+                size={16}
+                color={colors.primary}
+              />
+            </View>
+            <Text
+              style={[
+                triggerStyles.inputText,
+                { color: value ? colors.onBackground : colors.onSurfaceVariant },
+              ]}>
+              {formatDisplay()}
+            </Text>
             <Ionicons
-              name="calendar-outline"
+              name="chevron-forward"
               size={16}
-              color={colors.primary}
+              color={colors.onSurfaceVariant}
             />
-          </View>
-          <Text
-            style={[
-              triggerStyles.inputText,
-              { color: value ? colors.onBackground : colors.onSurfaceVariant },
-            ]}>
-            {formatDisplay()}
-          </Text>
-          <Ionicons
-            name="chevron-forward"
-            size={16}
-            color={colors.onSurfaceVariant}
-          />
-        </TouchableOpacity>
-      </View>
+          </TouchableOpacity>
+        </View>
+      )}
 
       <Modal
         visible={showPicker}
         transparent
         animationType="fade"
         statusBarTranslucent
-        onRequestClose={() => setShowPicker(false)}>
+        onRequestClose={handleClose}>
         <TouchableOpacity
           style={modalStyles.overlay}
           activeOpacity={1}
-          onPress={() => setShowPicker(false)}>
+          onPress={handleClose}>
           <TouchableOpacity
             activeOpacity={1}
             onPress={(e) => e.stopPropagation()}
