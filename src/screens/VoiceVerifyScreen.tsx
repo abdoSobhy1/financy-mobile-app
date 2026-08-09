@@ -163,8 +163,8 @@ export const VoiceVerifyScreen: React.FC = () => {
                 style={styles.editBtn} 
                 onPress={() => handleEdit(index)}
               >
-                <Ionicons name="pencil" size={14} color="#A5F3FC" />
-                <Text style={[typography.label, { color: "#A5F3FC", marginLeft: 4 }]}>
+                <Ionicons name="pencil" size={14} color={colors.primary} />
+                <Text style={[typography.label, { color: colors.primary, marginLeft: 4 }]}>
                   Edit
                 </Text>
               </TouchableOpacity>
@@ -184,13 +184,13 @@ export const VoiceVerifyScreen: React.FC = () => {
       </ScrollView>
 
       {/* Footer */}
-      <View style={[styles.footer, { backgroundColor: colors.background, borderTopColor: "rgba(255,255,255,0.05)" }]}>
+      <View style={[styles.footer, { backgroundColor: colors.background, borderTopColor: colors.outlineVariant }]}>
         <TouchableOpacity 
-          style={[styles.confirmBtn, { backgroundColor: "#A5F3FC" }]}
+          style={[styles.confirmBtn, { backgroundColor: colors.primary }]}
           onPress={handleConfirmAll}
         >
-          <Ionicons name="checkmark-circle-outline" size={20} color="#164E63" />
-          <Text style={[typography.bodyLarge, { color: "#164E63", fontWeight: "700", marginLeft: 8 }]}>
+          <Ionicons name="checkmark-circle-outline" size={20} color={colors.onPrimary} />
+          <Text style={[typography.bodyLarge, { color: colors.onPrimary, fontWeight: "700", marginLeft: 8 }]}>
             Confirm All ({formatCurrency(totalAmount)})
           </Text>
         </TouchableOpacity>
@@ -254,9 +254,9 @@ export const VoiceVerifyScreen: React.FC = () => {
             <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 24, paddingBottom: 8 }}>
               <TouchableOpacity
                 onPress={() => setEditData(prev => ({ ...prev, budgetId: undefined }))}
-                style={[styles.modalCatPill, { backgroundColor: !editData.budgetId ? "#A5F3FC" : colors.surfaceVariant }]}
+                style={[styles.modalCatPill, { backgroundColor: !editData.budgetId ? colors.primary : colors.surfaceVariant }]}
               >
-                <Text style={[typography.label, { color: !editData.budgetId ? "#111" : colors.onSurfaceVariant }]}>None</Text>
+                <Text style={[typography.label, { color: !editData.budgetId ? colors.onPrimary : colors.onSurfaceVariant }]}>None</Text>
               </TouchableOpacity>
               {budgetIds.map(id => {
                 const b = budgetsMap[id];
@@ -265,17 +265,17 @@ export const VoiceVerifyScreen: React.FC = () => {
                   <TouchableOpacity
                     key={id}
                     onPress={() => setEditData(prev => ({ ...prev, budgetId: id }))}
-                    style={[styles.modalCatPill, { backgroundColor: isSelected ? "#A5F3FC" : colors.surfaceVariant }]}
+                    style={[styles.modalCatPill, { backgroundColor: isSelected ? colors.primary : colors.surfaceVariant }]}
                   >
-                    <Ionicons name="wallet-outline" size={14} color={isSelected ? "#111" : colors.onSurfaceVariant} style={{ marginRight: 4 }} />
-                    <Text style={[typography.label, { color: isSelected ? "#111" : colors.onSurfaceVariant }]}>{b.name}</Text>
+                    <Ionicons name="wallet-outline" size={14} color={isSelected ? colors.onPrimary : colors.onSurfaceVariant} style={{ marginRight: 4 }} />
+                    <Text style={[typography.label, { color: isSelected ? colors.onPrimary : colors.onSurfaceVariant }]}>{b.name}</Text>
                   </TouchableOpacity>
                 );
               })}
             </ScrollView>
 
-            <TouchableOpacity style={[styles.saveBtn, { backgroundColor: "#A5F3FC" }]} onPress={saveEdit}>
-              <Text style={[typography.bodyLarge, { color: "#164E63", fontWeight: "700" }]}>Save Changes</Text>
+            <TouchableOpacity style={[styles.saveBtn, { backgroundColor: colors.primary }]} onPress={saveEdit}>
+              <Text style={[typography.bodyLarge, { color: colors.onPrimary, fontWeight: "700" }]}>Save Changes</Text>
             </TouchableOpacity>
           </View>
         </KeyboardAvoidingView>

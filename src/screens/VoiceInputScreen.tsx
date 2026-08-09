@@ -206,13 +206,13 @@ export const VoiceInputScreen: React.FC = () => {
   }));
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
       <StatusBar barStyle="light-content" />
       
       {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.closeBtn}>
-          <Ionicons name="close" size={28} color="#E4E4E7" />
+          <Ionicons name="close" size={28} color={colors.onBackground} />
         </TouchableOpacity>
       </View>
 
@@ -222,18 +222,18 @@ export const VoiceInputScreen: React.FC = () => {
         onPress={handleStop}
       >
         <View style={styles.micWrapper}>
-          <Animated.View style={[styles.pulseRing, ringAnimStyle]} />
-          <View style={styles.micCircle}>
-            <Ionicons name="mic" size={40} color="#18181B" />
+          <Animated.View style={[styles.pulseRing, { borderColor: colors.primaryContainer, backgroundColor: colors.primaryContainer + "33" }, ringAnimStyle]} />
+          <View style={[styles.micCircle, { backgroundColor: colors.primaryContainer, shadowColor: colors.primaryContainer }]}>
+            <Ionicons name="mic" size={40} color={colors.onPrimaryContainer} />
           </View>
         </View>
 
-        <Text style={styles.statusText}>
+        <Text style={[typography.h3, { color: colors.onBackground, marginBottom: 24 }]}>
           {isOffline ? "Offline" : "Listening..."}
         </Text>
         
         {transcript ? (
-          <Text style={styles.transcriptText}>
+          <Text style={[typography.bodyLarge, { color: colors.onSurfaceVariant, textAlign: "center", marginBottom: 40, lineHeight: 28 }]}>
             "{transcript}"
           </Text>
         ) : null}
@@ -247,13 +247,13 @@ export const VoiceInputScreen: React.FC = () => {
             return (
               <Animated.View 
                 key={i} 
-                style={[styles.audioBar, barStyle, { opacity: isListening ? 1 : 0.3 }]} 
+                style={[styles.audioBar, barStyle, { backgroundColor: colors.primary, opacity: isListening ? 1 : 0.3 }]} 
               />
             );
           })}
         </View>
 
-        <Text style={styles.instructionText}>
+        <Text style={[typography.label, { color: colors.onSurfaceVariant, position: "absolute", bottom: 60 }]}>
           Tap anywhere to stop
         </Text>
       </TouchableOpacity>
@@ -264,7 +264,6 @@ export const VoiceInputScreen: React.FC = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#18181B", // Dark surface to match popup
   },
   header: {
     flexDirection: "row",
@@ -294,35 +293,17 @@ const styles = StyleSheet.create({
     height: 100,
     borderRadius: 50,
     borderWidth: 2,
-    borderColor: "#D0F4F0",
-    backgroundColor: "rgba(208, 244, 240, 0.2)",
   },
   micCircle: {
     width: 80,
     height: 80,
     borderRadius: 40,
-    backgroundColor: "#D0F4F0",
     alignItems: "center",
     justifyContent: "center",
-    shadowColor: "#D0F4F0",
     shadowOffset: { width: 0, height: 0 },
     shadowOpacity: 0.5,
     shadowRadius: 20,
     elevation: 8,
-  },
-  statusText: {
-    fontSize: 18,
-    fontWeight: "600",
-    color: "#E4E4E7",
-    marginBottom: 24,
-  },
-  transcriptText: {
-    fontSize: 18,
-    fontWeight: "400",
-    color: "#A1A1AA",
-    textAlign: "center",
-    marginBottom: 40,
-    lineHeight: 28,
   },
   barsContainer: {
     flexDirection: "row",
@@ -335,12 +316,5 @@ const styles = StyleSheet.create({
   audioBar: {
     width: 6,
     borderRadius: 3,
-    backgroundColor: "#80CAFF", // Light blue matching the image
-  },
-  instructionText: {
-    fontSize: 14,
-    color: "#71717A",
-    position: "absolute",
-    bottom: 60,
   },
 });
