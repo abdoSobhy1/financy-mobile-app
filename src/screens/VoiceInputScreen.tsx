@@ -47,6 +47,8 @@ export const VoiceInputScreen: React.FC = () => {
   const categories = useSelector(selectAllCategories);
   const budgetsMap = useSelector((state: RootState) => state.budgets.items);
   const budgets = Object.values(budgetsMap);
+  const transactionsMap = useSelector((state: RootState) => state.transactions.items);
+  const transactions = Object.values(transactionsMap);
   
   const transcriptRef = useRef("");
   const isNavigatingRef = useRef(false);
@@ -65,7 +67,7 @@ export const VoiceInputScreen: React.FC = () => {
     
     if (finalTranscript.trim()) {
       const categoriesList = categories.map((c) => ({ id: c.id, name: c.name }));
-      const parsed = parseVoiceInput(finalTranscript, categoriesList, undefined, budgets);
+      const parsed = parseVoiceInput(finalTranscript, categoriesList, undefined, budgets, transactions);
       
       if (parsed && parsed.length > 0) {
         navigation.replace("VoiceVerify", { parsedTransactions: parsed });

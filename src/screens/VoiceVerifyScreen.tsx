@@ -39,10 +39,14 @@ export const VoiceVerifyScreen: React.FC = () => {
   );
 
   const [editingIndex, setEditingIndex] = useState<number | null>(null);
-  const [editData, setEditData] = useState<{ amount: string; description: string; categoryId: string }>({ amount: "", description: "", categoryId: "" });
+  const [editData, setEditData] = useState<{ amount: string; description: string; categoryId: string; budgetId?: string }>({ amount: "", description: "", categoryId: "", budgetId: undefined });
 
   const { items: categoriesMap, ids: categoryIds } = useSelector(
     (state: RootState) => state.categories
+  );
+
+  const { items: budgetsMap, ids: budgetIds } = useSelector(
+    (state: RootState) => state.budgets
   );
 
   const totalAmount = useMemo(() => {
@@ -79,6 +83,7 @@ export const VoiceVerifyScreen: React.FC = () => {
       amount: tx.amount?.toString() || "",
       description: tx.description || "",
       categoryId: tx.categoryId || "",
+      budgetId: tx.budgetId,
     });
     setEditingIndex(index);
   };
@@ -92,6 +97,7 @@ export const VoiceVerifyScreen: React.FC = () => {
       amount: isNaN(amountVal) ? updated[editingIndex].amount : amountVal,
       description: editData.description,
       categoryId: editData.categoryId,
+      budgetId: editData.budgetId,
     };
     setParsedTransactions(updated);
     setEditingIndex(null);
@@ -227,7 +233,7 @@ export const VoiceVerifyScreen: React.FC = () => {
             />
 
             <Text style={[typography.label, { color: colors.onSurfaceVariant, marginBottom: 8 }]}>Category</Text>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 24, paddingBottom: 8 }}>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 16, paddingBottom: 8 }}>
               {categoryIds.map(id => {
                 const c = categoriesMap[id];
                 const isSelected = editData.categoryId === id;
@@ -239,6 +245,30 @@ export const VoiceVerifyScreen: React.FC = () => {
                   >
                     <Ionicons name={(c as any).icon || "pricetag"} size={14} color={isSelected ? "#111" : colors.onSurfaceVariant} style={{ marginRight: 4 }} />
                     <Text style={[typography.label, { color: isSelected ? "#111" : colors.onSurfaceVariant }]}>{c.name}</Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
+
+            <Text style={[typography.label, { color: colors.onSurfaceVariant, marginBottom: 8 }]}>Budget (Optional)</Text>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 24, paddingBottom: 8 }}>
+              <TouchableOpacity
+                onPress={() => setEditData(prev => ({ ...prev, budgetId: undefined }))}
+                style={[styles.modalCatPill, { backgroundColor: !editData.budgetId ? "#A5F3FC" : colors.surfaceVariant }]}
+              >
+                <Text style={[typography.label, { color: !editData.budgetId ? "#111" : colors.onSurfaceVariant }]}>None</Text>
+              </TouchableOpacity>
+              {budgetIds.map(id => {
+                const b = budgetsMap[id];
+                const isSelected = editData.budgetId === id;
+                return (
+                  <TouchableOpacity
+                    key={id}
+                    onPress={() => setEditData(prev => ({ ...prev, budgetId: id }))}
+                    style={[styles.modalCatPill, { backgroundColor: isSelected ? "#A5F3FC" : colors.surfaceVariant }]}
+                  >
+                    <Ionicons name="wallet-outline" size={14} color={isSelected ? "#111" : colors.onSurfaceVariant} style={{ marginRight: 4 }} />
+                    <Text style={[typography.label, { color: isSelected ? "#111" : colors.onSurfaceVariant }]}>{b.name}</Text>
                   </TouchableOpacity>
                 );
               })}

@@ -393,6 +393,7 @@ function extractDescription(remaining: string, originalText: string): string {
 function findCategory(
   text: string,
   categories: { id: string; name: string }[],
+  transactions: any[] = [],
   defaultCategoryId?: string,
 ): { id: string | undefined; matchedText: string | undefined } {
   const normalizedText = text.toLowerCase();
@@ -403,6 +404,44 @@ function findCategory(
     if (normalizedText.includes(catName)) {
       console.log("🏷️ Full match:", category.name);
       return { id: category.id, matchedText: category.name };
+    }
+  }
+
+  // Second pass: ML History matching
+  const categoryScores: Record<string, number> = {};
+  const inputWords = normalizedText.split(/\s+/).filter(w => w.length > 2);
+  let hasHistoryMatch = false;
+
+  for (const tx of transactions) {
+    if (!tx.description || !tx.categoryId) continue;
+    const txDesc = tx.description.toLowerCase();
+    
+    let matchCount = 0;
+    for (const word of inputWords) {
+      if (txDesc.includes(word)) {
+        matchCount++;
+      }
+    }
+    
+    if (matchCount > 0) {
+      categoryScores[tx.categoryId] = (categoryScores[tx.categoryId] || 0) + matchCount;
+      hasHistoryMatch = true;
+    }
+  }
+
+  if (hasHistoryMatch) {
+    let maxScore = 0;
+    let bestCatId: string | undefined;
+    for (const [catId, score] of Object.entries(categoryScores)) {
+      if (score > maxScore) {
+        maxScore = score;
+        bestCatId = catId;
+      }
+    }
+    
+    if (bestCatId) {
+      console.log("🧠 ML match:", bestCatId, "with score", maxScore);
+      return { id: bestCatId, matchedText: undefined };
     }
   }
 
@@ -432,6 +471,7 @@ function parseSingleTransaction(
   categories: { id: string; name: string }[] = [],
   defaultCategoryId?: string,
   budgets: { id: string; categoryId?: string | null }[] = [],
+  transactions: any[] = [],
 ): ParsedTransaction {
   const trimmed = text.trim();
   if (!trimmed) {
@@ -446,6 +486,7 @@ function parseSingleTransaction(
   const { id: categoryId, matchedText } = findCategory(
     trimmed,
     categories,
+    transactions,
     defaultCategoryId,
   );
 
@@ -472,12 +513,29 @@ function parseSingleTransaction(
 
   const confidence = fieldsFound / totalFields;
 
-  // Find matching budget if available
+  // Find matching budget if available (ML History Scoring)
   let budgetId: string | undefined;
   if (categoryId) {
-    const matchingBudget = budgets.find(b => b.categoryId === categoryId);
-    if (matchingBudget) {
-      budgetId = matchingBudget.id;
+    // 1. Direct link check
+    const directBudget = budgets.find(b => b.categoryId === categoryId);
+    if (directBudget) {
+      budgetId = directBudget.id;
+    } else {
+      // 2. ML History check: what budget is most often used with this category?
+      const budgetScores: Record<string, number> = {};
+      for (const tx of transactions) {
+        if (tx.categoryId === categoryId && tx.budgetId) {
+          budgetScores[tx.budgetId] = (budgetScores[tx.budgetId] || 0) + 1;
+        }
+      }
+      
+      let maxScore = 0;
+      for (const [bId, score] of Object.entries(budgetScores)) {
+        if (score > maxScore) {
+          maxScore = score;
+          budgetId = bId;
+        }
+      }
     }
   }
 
@@ -506,6 +564,7 @@ export function parseVoiceInput(
   categories: { id: string; name: string }[] = [],
   defaultCategoryId?: string,
   budgets: { id: string; categoryId?: string | null }[] = [],
+  transactions: any[] = [],
 ): ParsedTransaction[] {
   const text = transcript.trim();
   if (!text) return [];
@@ -529,21 +588,21 @@ export function parseVoiceInput(
       }
       if (remaining.trim()) parts.push(remaining.trim());
       if (parts.length > 1) {
-        const transactions: ParsedTransaction[] = [];
+        const transactionsList: ParsedTransaction[] = [];
         for (const part of parts) {
-          const tx = parseSingleTransaction(part, categories, defaultCategoryId, budgets);
+          const tx = parseSingleTransaction(part, categories, defaultCategoryId, budgets, transactions);
           if (tx.confidence > 0) {
-            transactions.push(tx);
+            transactionsList.push(tx);
           }
         }
-        return transactions;
+        return transactionsList;
       }
     }
   }
 
-  const transactions = segments
-    .map((s) => parseSingleTransaction(s, categories, defaultCategoryId, budgets))
+  const transactionsList = segments
+    .map((s) => parseSingleTransaction(s, categories, defaultCategoryId, budgets, transactions))
     .filter((tx) => tx.confidence > 0);
 
-  return transactions.length > 0 ? transactions : [parseSingleTransaction(text, categories, defaultCategoryId, budgets)];
+  return transactionsList.length > 0 ? transactionsList : [parseSingleTransaction(text, categories, defaultCategoryId, budgets, transactions)];
 }
