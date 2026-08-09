@@ -128,21 +128,29 @@ export const CustomAlert: React.FC<CustomAlertProps> = ({
                 </Text>
               ) : null}
 
-              {/* Divider */}
-              <View style={[styles.divider, { backgroundColor: colors.outlineVariant }]} />
-
               {/* Buttons */}
-              <View style={styles.buttonRow}>
+              <View
+                style={[
+                  styles.buttonRow,
+                  { flexDirection: buttons.length > 2 ? "column" : "row" },
+                ]}>
                 {buttons.map((button, index) => {
                   const isDestructive = button.style === "destructive";
                   const isCancel = button.style === "cancel";
-                  const isLast = index === buttons.length - 1;
+                  const btnStyle = [
+                    styles.btn,
+                    buttons.length <= 2 && { flex: 1 },
+                  ];
 
                   if (isDestructive) {
                     return (
                       <TouchableOpacity
                         key={index}
-                        style={[styles.btn, styles.destructiveBtn]}
+                        style={[
+                          btnStyle,
+                          styles.destructiveBtn,
+                          { backgroundColor: "#FF6B6B15" },
+                        ]}
                         activeOpacity={0.75}
                         onPress={() => handleButtonPress(button)}>
                         <Text style={styles.destructiveBtnText}>{button.text}</Text>
@@ -154,10 +162,17 @@ export const CustomAlert: React.FC<CustomAlertProps> = ({
                     return (
                       <TouchableOpacity
                         key={index}
-                        style={[styles.btn, { borderColor: colors.outlineVariant }]}
+                        style={[
+                          btnStyle,
+                          { borderColor: colors.outlineVariant, borderWidth: 1 },
+                        ]}
                         activeOpacity={0.7}
                         onPress={() => handleButtonPress(button)}>
-                        <Text style={[styles.cancelBtnText, { color: colors.onSurfaceVariant }]}>
+                        <Text
+                          style={[
+                            styles.cancelBtnText,
+                            { color: colors.onSurfaceVariant },
+                          ]}>
                           {button.text}
                         </Text>
                       </TouchableOpacity>
@@ -170,7 +185,7 @@ export const CustomAlert: React.FC<CustomAlertProps> = ({
                       key={index}
                       activeOpacity={0.8}
                       onPress={() => handleButtonPress(button)}
-                      style={styles.primaryBtnWrapper}>
+                      style={[btnStyle, { overflow: "hidden" }]}>
                       <LinearGradient
                         colors={[colors.primary, colors.primaryContainer]}
                         style={styles.primaryBtn}
@@ -320,47 +335,42 @@ const styles = StyleSheet.create({
     fontSize: 14,
     lineHeight: 21,
     textAlign: "center",
-    marginBottom: 4,
+    marginBottom: 8,
     paddingHorizontal: 24,
-  },
-  divider: {
-    width: "100%",
-    height: 1,
-    marginTop: 22,
   },
   buttonRow: {
     width: "100%",
-    flexDirection: "column",
+    paddingHorizontal: 24,
+    paddingBottom: 24,
+    paddingTop: 16,
+    gap: 12,
   },
   btn: {
-    height: 52,
+    height: 48,
+    borderRadius: 24,
     alignItems: "center",
     justifyContent: "center",
-    borderTopWidth: 1,
-    borderColor: "transparent",
   },
   destructiveBtn: {
-    borderTopWidth: 0,
+    // Red background applied in JSX
   },
   destructiveBtnText: {
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: "700",
     color: "#FF6B6B",
   },
   cancelBtnText: {
-    fontSize: 16,
-    fontWeight: "500",
-  },
-  primaryBtnWrapper: {
-    width: "100%",
+    fontSize: 15,
+    fontWeight: "600",
   },
   primaryBtn: {
-    height: 52,
+    flex: 1,
     alignItems: "center",
     justifyContent: "center",
+    width: "100%",
   },
   primaryBtnText: {
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: "700",
     color: "#fff",
   },

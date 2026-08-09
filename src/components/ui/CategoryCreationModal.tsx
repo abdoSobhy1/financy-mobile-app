@@ -16,31 +16,89 @@ import { useAppTheme } from "../ui/ThemeProvider";
 // ─── Data ─────────────────────────────────────────────────────────────────────
 
 const PREDEFINED_COLORS = [
-  "#EF4444", "#F97316", "#F59E0B", "#EAB308",
-  "#84CC16", "#22C55E", "#10B981", "#14B8A6",
-  "#06B6D4", "#0EA5E9", "#3B82F6", "#6366F1",
-  "#8B5CF6", "#A855F7", "#D946EF", "#EC4899",
-  "#F43F5E", "#64748B",
+  "#EF4444",
+  "#F97316",
+  "#F59E0B",
+  "#EAB308",
+  "#84CC16",
+  "#22C55E",
+  "#10B981",
+  "#14B8A6",
+  "#06B6D4",
+  "#0EA5E9",
+  "#3B82F6",
+  "#6366F1",
+  "#8B5CF6",
+  "#A855F7",
+  "#D946EF",
+  "#EC4899",
+  "#F43F5E",
+  "#64748B",
 ];
 
 // Curated subset of Ionicons that make sense for finance categories
 const CATEGORY_ICONS: string[] = [
   // Food & Shopping
-  "fast-food", "restaurant", "cafe", "wine", "cart", "bag-handle", "basket",
+  "fast-food",
+  "restaurant",
+  "cafe",
+  "wine",
+  "cart",
+  "bag-handle",
+  "basket",
   // Transport
-  "car", "bus", "train", "airplane", "bicycle", "boat",
+  "car",
+  "bus",
+  "train",
+  "airplane",
+  "bicycle",
+  "boat",
   // Home & Utilities
-  "home", "business", "flash", "water", "wifi", "desktop", "laptop",
+  "home",
+  "business",
+  "flash",
+  "water",
+  "wifi",
+  "desktop",
+  "laptop",
   // Health & Personal
-  "medkit", "fitness", "heart", "body", "glasses", "cut",
+  "medkit",
+  "fitness",
+  "heart",
+  "body",
+  "glasses",
+  "cut",
   // Entertainment
-  "game-controller", "musical-notes", "film", "tv", "book", "camera",
+  "game-controller",
+  "musical-notes",
+  "film",
+  "tv",
+  "book",
+  "camera",
   // Finance
-  "cash", "card", "wallet", "trending-up", "trending-down", "calculator", "stats-chart",
+  "cash",
+  "card",
+  "wallet",
+  "trending-up",
+  "trending-down",
+  "calculator",
+  "stats-chart",
   // Education
-  "school", "library", "journal", "newspaper",
+  "school",
+  "library",
+  "journal",
+  "newspaper",
   // Other
-  "gift", "star", "pricetag", "people", "person", "briefcase", "build", "leaf", "paw", "planet",
+  "gift",
+  "star",
+  "pricetag",
+  "people",
+  "person",
+  "briefcase",
+  "build",
+  "leaf",
+  "paw",
+  "planet",
 ];
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
@@ -77,7 +135,9 @@ export const CategoryCreationModal: React.FC<CategoryCreationModalProps> = ({
   const [name, setName] = useState("");
   const [color, setColor] = useState(PREDEFINED_COLORS[0]);
   const [icon, setIcon] = useState<string>("pricetag");
-  const [catType, setCatType] = useState<"income" | "expense">(type || "expense");
+  const [catType, setCatType] = useState<"income" | "expense">(
+    type || "expense",
+  );
 
   // Pre-fill when initialData changes (edit mode) or modal opens
   useEffect(() => {
@@ -113,14 +173,30 @@ export const CategoryCreationModal: React.FC<CategoryCreationModalProps> = ({
       statusBarTranslucent
       presentationStyle="overFullScreen">
       <View style={[styles.overlay]}>
-        <View style={[styles.sheet, { backgroundColor: colors.surface, borderColor: colors.outlineVariant }]}>
-
+        <View
+          style={[
+            styles.sheet,
+            {
+              backgroundColor: colors.surface,
+              borderColor: colors.outlineVariant,
+            },
+          ]}>
           {/* ── Header ── */}
-          <View style={[styles.header, { borderBottomColor: colors.outlineVariant }]}>
+          <View
+            style={[
+              styles.header,
+              { borderBottomColor: colors.outlineVariant },
+            ]}>
             <TouchableOpacity onPress={handleClose} style={styles.headerBtn}>
-              <Ionicons name="close" size={22} color={colors.onSurfaceVariant} />
+              <Ionicons
+                name="close"
+                size={22}
+                color={colors.onSurfaceVariant}
+              />
             </TouchableOpacity>
-            <Text style={[typography.h3, { color: colors.onBackground }]}>{modalTitle}</Text>
+            <Text style={[typography.h3, { color: colors.onBackground }]}>
+              {modalTitle}
+            </Text>
             <TouchableOpacity
               onPress={handleSave}
               disabled={!name.trim()}
@@ -128,7 +204,11 @@ export const CategoryCreationModal: React.FC<CategoryCreationModalProps> = ({
               <Text
                 style={[
                   styles.saveText,
-                  { color: name.trim() ? colors.primary : colors.onSurfaceVariant },
+                  {
+                    color: name.trim()
+                      ? colors.primary
+                      : colors.onSurfaceVariant,
+                  },
                 ]}>
                 {isEdit ? "Save" : "Add"}
               </Text>
@@ -140,28 +220,50 @@ export const CategoryCreationModal: React.FC<CategoryCreationModalProps> = ({
             contentContainerStyle={{ padding: 20, paddingBottom: 40 }}
             showsVerticalScrollIndicator={false}
             keyboardShouldPersistTaps="handled">
-
             {/* ── Preview ── */}
-            <View style={[styles.preview, { backgroundColor: previewBg, borderColor: color + "55" }]}>
-              <View style={[styles.previewIcon, { backgroundColor: color + "33" }]}>
+            <View
+              style={[
+                styles.preview,
+                { backgroundColor: previewBg, borderColor: color + "55" },
+              ]}>
+              <View
+                style={[styles.previewIcon, { backgroundColor: color + "33" }]}>
                 <Ionicons name={icon as any} size={32} color={color} />
               </View>
-              <Text style={[typography.h3, { color: colors.onBackground, marginTop: 8 }]} numberOfLines={1}>
+              <Text
+                style={[
+                  typography.h3,
+                  { color: colors.onBackground, marginTop: 8 },
+                ]}
+                numberOfLines={1}>
                 {name || "Category name"}
               </Text>
-              <Text style={[typography.bodySmall, { color: color, marginTop: 2, fontWeight: "600" }]}>
+              <Text
+                style={[
+                  typography.bodySmall,
+                  { color: color, marginTop: 2, fontWeight: "600" },
+                ]}>
                 {catType === "expense" ? "Expense" : "Income"}
               </Text>
             </View>
 
             {/* ── Name ── */}
-            <Text style={[styles.label, { color: colors.onSurfaceVariant }]}>NAME</Text>
+            <Text style={[styles.label, { color: colors.onSurfaceVariant }]}>
+              NAME
+            </Text>
             <TextInput
               value={name}
               onChangeText={setName}
               placeholder="Category name"
               placeholderTextColor={colors.onSurfaceVariant + "88"}
-              style={[styles.input, { backgroundColor: colors.surfaceVariant, borderColor: colors.outlineVariant, color: colors.onBackground }]}
+              style={[
+                styles.input,
+                {
+                  backgroundColor: colors.surfaceVariant,
+                  borderColor: colors.outlineVariant,
+                  color: colors.onBackground,
+                },
+              ]}
               maxLength={50}
               autoFocus={!isEdit}
               returnKeyType="done"
@@ -170,7 +272,10 @@ export const CategoryCreationModal: React.FC<CategoryCreationModalProps> = ({
             {/* ── Type (only when not locked) ── */}
             {!type && (
               <>
-                <Text style={[styles.label, { color: colors.onSurfaceVariant }]}>TYPE</Text>
+                <Text
+                  style={[styles.label, { color: colors.onSurfaceVariant }]}>
+                  TYPE
+                </Text>
                 <View style={styles.typeRow}>
                   {(["expense", "income"] as const).map((t) => (
                     <TouchableOpacity
@@ -178,15 +283,26 @@ export const CategoryCreationModal: React.FC<CategoryCreationModalProps> = ({
                       style={[
                         styles.typePill,
                         {
-                          backgroundColor: catType === t ? colors.primaryContainer : colors.surfaceVariant,
-                          borderColor: catType === t ? colors.primary : colors.outlineVariant,
+                          backgroundColor:
+                            catType === t
+                              ? colors.primaryContainer
+                              : colors.surfaceVariant,
+                          borderColor:
+                            catType === t
+                              ? colors.primary
+                              : colors.outlineVariant,
                         },
                       ]}
                       onPress={() => setCatType(t)}>
                       <Text
                         style={[
                           typography.label,
-                          { color: catType === t ? colors.onPrimaryContainer : colors.onSurfaceVariant },
+                          {
+                            color:
+                              catType === t
+                                ? colors.onPrimaryContainer
+                                : colors.onSurfaceVariant,
+                          },
                         ]}>
                         {t === "expense" ? "Expense" : "Income"}
                       </Text>
@@ -197,8 +313,13 @@ export const CategoryCreationModal: React.FC<CategoryCreationModalProps> = ({
             )}
 
             {/* ── Colour ── */}
-            <Text style={[styles.label, { color: colors.onSurfaceVariant }]}>COLOUR</Text>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 24 }}>
+            <Text style={[styles.label, { color: colors.onSurfaceVariant }]}>
+              COLOUR
+            </Text>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              style={{ marginBottom: 24 }}>
               {PREDEFINED_COLORS.map((c) => (
                 <TouchableOpacity
                   key={c}
@@ -208,13 +329,17 @@ export const CategoryCreationModal: React.FC<CategoryCreationModalProps> = ({
                     color === c && styles.colorDotSelected,
                   ]}
                   onPress={() => setColor(c)}>
-                  {color === c && <Ionicons name="checkmark" size={14} color="#fff" />}
+                  {color === c && (
+                    <Ionicons name="checkmark" size={14} color="#fff" />
+                  )}
                 </TouchableOpacity>
               ))}
             </ScrollView>
 
             {/* ── Icon ── */}
-            <Text style={[styles.label, { color: colors.onSurfaceVariant }]}>ICON</Text>
+            <Text style={[styles.label, { color: colors.onSurfaceVariant }]}>
+              ICON
+            </Text>
             <View style={styles.iconGrid}>
               {CATEGORY_ICONS.map((ic) => {
                 const isSelected = icon === ic;
@@ -224,7 +349,9 @@ export const CategoryCreationModal: React.FC<CategoryCreationModalProps> = ({
                     style={[
                       styles.iconCell,
                       {
-                        backgroundColor: isSelected ? color + "33" : colors.surfaceVariant,
+                        backgroundColor: isSelected
+                          ? color + "33"
+                          : colors.surfaceVariant,
                         borderColor: isSelected ? color : "transparent",
                       },
                     ]}
@@ -258,7 +385,7 @@ const styles = StyleSheet.create({
     borderTopRightRadius: 28,
     borderWidth: 1,
     borderBottomWidth: 0,
-    maxHeight: "90%",
+    height: "90%",
     overflow: "hidden",
   },
   header: {

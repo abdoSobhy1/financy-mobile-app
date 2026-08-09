@@ -31,9 +31,7 @@ import { Transaction, TransactionStackParamList } from "../types";
 import { useAppTheme } from "../components/ui/ThemeProvider";
 import { useTabBarHeight } from "../components/ui";
 import { AppHeader } from "../components/ui/AppHeader";
-  TransactionFilterModal,
-  CustomDateRangeModal,
-} from "../components/transactions";
+
 import { formatCurrency } from "../utils";
 import {
   format,
@@ -47,13 +45,23 @@ import {
   startOfYear,
   endOfYear,
 } from "date-fns";
+import {
+  CustomDateRangeModal,
+  TransactionFilterModal,
+} from "../components/transactions";
 
 type NavigationProp = StackNavigationProp<
   TransactionStackParamList,
   "TransactionList"
 >;
 
-type TimeFilter = "Today" | "This Month" | "Last Month" | "Year" | "All Time" | "custom";
+type TimeFilter =
+  | "Today"
+  | "This Month"
+  | "Last Month"
+  | "Year"
+  | "All Time"
+  | "custom";
 type TypeFilter = "All" | "Income" | "Expense";
 
 export const TransactionListScreen: React.FC = () => {
@@ -89,13 +97,15 @@ export const TransactionListScreen: React.FC = () => {
   // Custom Date Modal state
   const [showCustomDateModal, setShowCustomDateModal] = useState(false);
   const [customStartDate, setCustomStartDate] = useState<Date>(
-    new Date(new Date().setMonth(new Date().getMonth() - 1))
+    new Date(new Date().setMonth(new Date().getMonth() - 1)),
   );
   const [customEndDate, setCustomEndDate] = useState<Date>(new Date());
-  
+
   // Temporary custom dates inside the modal
-  const [tempCustomStartDate, setTempCustomStartDate] = useState<Date>(customStartDate);
-  const [tempCustomEndDate, setTempCustomEndDate] = useState<Date>(customEndDate);
+  const [tempCustomStartDate, setTempCustomStartDate] =
+    useState<Date>(customStartDate);
+  const [tempCustomEndDate, setTempCustomEndDate] =
+    useState<Date>(customEndDate);
 
   useEffect(() => {
     dispatch(fetchTransactions());
@@ -339,14 +349,27 @@ export const TransactionListScreen: React.FC = () => {
             />
             {searchQuery.length > 0 && (
               <TouchableOpacity onPress={() => setSearchQuery("")}>
-                <Ionicons name="close-circle" size={18} color={colors.onSurfaceVariant} />
+                <Ionicons
+                  name="close-circle"
+                  size={18}
+                  color={colors.onSurfaceVariant}
+                />
               </TouchableOpacity>
             )}
           </View>
           <TouchableOpacity style={styles.filterBtn} onPress={openFilterModal}>
-            <Ionicons name="options-outline" size={24} color={colors.onBackground} />
+            <Ionicons
+              name="options-outline"
+              size={24}
+              color={colors.onBackground}
+            />
             {selectedCategoryIds.size > 0 && (
-              <View style={[styles.filterBadge, { backgroundColor: colors.primaryContainer }]} />
+              <View
+                style={[
+                  styles.filterBadge,
+                  { backgroundColor: colors.primaryContainer },
+                ]}
+              />
             )}
           </TouchableOpacity>
         </View>
@@ -436,7 +459,10 @@ export const TransactionListScreen: React.FC = () => {
                     <View
                       style={[
                         styles.iconBadge,
-                        { backgroundColor: (cat?.color || colors.primary) + "20" },
+                        {
+                          backgroundColor:
+                            (cat?.color || colors.primary) + "20",
+                        },
                       ]}>
                       <Ionicons
                         name={
@@ -486,7 +512,11 @@ export const TransactionListScreen: React.FC = () => {
                 style={styles.emptyAddBtn}
                 onPress={() => navigation.navigate("AddTransaction" as any)}
                 activeOpacity={0.8}>
-                <Ionicons name="add" size={20} color={colors.onPrimaryContainer} />
+                <Ionicons
+                  name="add"
+                  size={20}
+                  color={colors.onPrimaryContainer}
+                />
                 <Text style={styles.emptyAddText}>Add Transaction</Text>
               </TouchableOpacity>
             </View>
@@ -515,7 +545,7 @@ export const TransactionListScreen: React.FC = () => {
         onApply={applyModalFilters}
         onClose={() => setShowFilterModal(false)}
       />
-      
+
       {/* Custom Date Range Modal */}
       <CustomDateRangeModal
         visible={showCustomDateModal}
@@ -534,363 +564,364 @@ export const TransactionListScreen: React.FC = () => {
   );
 };
 
-const createStyles = (colors: any) => StyleSheet.create({
-  topContainer: {
-    paddingHorizontal: 20,
-    paddingBottom: 8,
-  },
-  searchRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    marginBottom: 14,
-    gap: 10,
-  },
-  searchBar: {
-    flex: 1,
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: colors.surface,
-    borderRadius: 20,
-    paddingHorizontal: 14,
-    height: 48,
-    borderWidth: 1,
-    borderColor: colors.outlineVariant,
-  },
-  searchIcon: {
-    marginRight: 8,
-  },
-  searchInput: {
-    flex: 1,
-    color: colors.onBackground,
-    fontSize: 15,
-  },
-  filterBtn: {
-    width: 48,
-    height: 48,
-    borderRadius: 20,
-    backgroundColor: colors.surface,
-    alignItems: "center",
-    justifyContent: "center",
-    borderWidth: 1,
-    borderColor: colors.outlineVariant,
-  },
-  filterBadge: {
-    position: "absolute",
-    top: 6,
-    right: 6,
-    backgroundColor: colors.primary,
-    width: 18,
-    height: 18,
-    borderRadius: 9,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  filterBadgeText: {
-    fontSize: 10,
-    fontWeight: "700",
-    color: colors.onPrimaryContainer,
-  },
-  segmentedControl: {
-    flexDirection: "row",
-    backgroundColor: colors.surface,
-    borderRadius: 24,
-    padding: 4,
-    marginBottom: 14,
-  },
-  segmentBtn: {
-    flex: 1,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    height: 38,
-    borderRadius: 20,
-  },
-  segmentBtnActive: {
-    backgroundColor: colors.primaryContainer,
-  },
-  segmentText: {
-    fontSize: 14,
-    fontWeight: "600",
-    color: colors.onSurfaceVariant,
-  },
-  segmentTextActive: {
-    color: colors.onPrimaryContainer,
-    fontWeight: "700",
-  },
-  timeFiltersScroll: {
-    paddingBottom: 8,
-    gap: 8,
-  },
-  timeChip: {
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 20,
-    backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: "transparent",
-  },
-  timeChipActive: {
-    backgroundColor: colors.secondaryContainer,
-    borderColor: colors.primary,
-  },
-  timeChipText: {
-    fontSize: 13,
-    fontWeight: "600",
-    color: colors.onSurfaceVariant,
-  },
-  timeChipTextActive: {
-    color: colors.onBackground,
-    fontWeight: "700",
-  },
-  sectionHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingHorizontal: 20,
-    paddingTop: 18,
-    paddingBottom: 8,
-  },
-  sectionHeaderTitle: {
-    fontSize: 12,
-    fontWeight: "700",
-    color: colors.onSurfaceVariant,
-    textTransform: "uppercase",
-  },
-  sectionHeaderTotal: {
-    fontSize: 13,
-    fontWeight: "700",
-    color: colors.onBackground,
-  },
-  cardGroupContainer: {
-    backgroundColor: colors.surfaceVariant,
-    borderRadius: 24,
-    marginHorizontal: 20,
-    marginBottom: 8,
-    paddingVertical: 6,
-    borderWidth: 1,
-    borderColor: colors.outlineVariant,
-  },
-  txRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-  },
-  iconBadge: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    alignItems: "center",
-    justifyContent: "center",
-    marginRight: 14,
-  },
-  txCenterCol: {
-    flex: 1,
-    justifyContent: "center",
-    marginRight: 10,
-  },
-  txTitleText: {
-    fontSize: 15,
-    fontWeight: "600",
-    color: colors.onBackground,
-    marginBottom: 3,
-  },
-  txSubtitleText: {
-    fontSize: 13,
-    color: colors.onSurfaceVariant,
-  },
-  txRightCol: {
-    alignItems: "flex-end",
-    justifyContent: "center",
-  },
-  txAmountText: {
-    fontSize: 16,
-    fontWeight: "700",
-    color: colors.onBackground,
-  },
-  txAmountIncome: {
-    color: colors.tertiary,
-  },
-  separator: {
-    height: 1,
-    backgroundColor: colors.outlineVariant,
-    marginHorizontal: 16,
-  },
-  emptyContainer: {
-    paddingTop: 60,
-    paddingHorizontal: 32,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  emptyTitle: {
-    fontSize: 18,
-    fontWeight: "700",
-    color: colors.onBackground,
-    marginBottom: 8,
-  },
-  emptySubtitle: {
-    fontSize: 14,
-    color: colors.onSurfaceVariant,
-    textAlign: "center",
-    marginBottom: 24,
-    lineHeight: 20,
-  },
-  emptyAddBtn: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: colors.primaryContainer,
-    borderRadius: 28,
-    paddingHorizontal: 24,
-    paddingVertical: 14,
-    gap: 6,
-  },
-  emptyAddText: {
-    fontSize: 15,
-    fontWeight: "700",
-    color: colors.onPrimaryContainer,
-  },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: "rgba(0,0,0,0.75)",
-    justifyContent: "flex-end",
-  },
-  modalSheet: {
-    backgroundColor: colors.surface,
-    borderTopLeftRadius: 32,
-    borderTopRightRadius: 32,
-    maxHeight: "88%",
-    borderWidth: 1,
-    borderColor: colors.outlineVariant,
-  },
-  modalHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingHorizontal: 24,
-    paddingTop: 20,
-    paddingBottom: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.outlineVariant,
-  },
-  modalTitleText: {
-    fontSize: 20,
-    fontWeight: "700",
-    color: colors.onBackground,
-  },
-  modalCloseBtn: {
-    padding: 4,
-  },
-  modalScrollContent: {
-    paddingHorizontal: 24,
-    paddingTop: 20,
-    paddingBottom: 30,
-  },
-  modalSectionTitle: {
-    fontSize: 12,
-    fontWeight: "700",
-    color: colors.onSurfaceVariant,
-    letterSpacing: 0.8,
-    marginBottom: 12,
-    marginTop: 8,
-  },
-  modalPillWrap: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 8,
-    marginBottom: 24,
-  },
-  modalChip: {
-    paddingHorizontal: 18,
-    paddingVertical: 10,
-    borderRadius: 20,
-    backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: colors.outlineVariant,
-  },
-  modalChipActive: {
-    backgroundColor: colors.primary,
-    borderColor: colors.primary,
-  },
-  modalChipText: {
-    fontSize: 14,
-    fontWeight: "600",
-    color: colors.onSurfaceVariant,
-  },
-  modalChipTextActive: {
-    color: colors.onBackground,
-    fontWeight: "700",
-  },
-  categoryGrid: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    justifyContent: "space-between",
-    gap: 12,
-    marginBottom: 20,
-  },
-  catGridCard: {
-    width: "48%",
-    backgroundColor: colors.surface,
-    borderRadius: 20,
-    padding: 16,
-    borderWidth: 1,
-    borderColor: colors.outlineVariant,
-  },
-  catGridCardActive: {
-    backgroundColor: colors.primaryContainer,
-    borderColor: colors.primaryContainer,
-  },
-  catGridCardHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    marginBottom: 10,
-  },
-  catGridCardText: {
-    fontSize: 14,
-    fontWeight: "600",
-    color: colors.onBackground,
-  },
-  catGridCardTextActive: {
-    color: colors.onPrimaryContainer,
-    fontWeight: "700",
-  },
-  modalFooter: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 12,
-    paddingHorizontal: 24,
-    paddingVertical: 18,
-    borderTopWidth: 1,
-    borderTopColor: colors.outlineVariant,
-  },
-  resetBtn: {
-    flex: 1,
-    height: 52,
-    borderRadius: 26,
-    alignItems: "center",
-    justifyContent: "center",
-    borderWidth: 1,
-    borderColor: colors.outlineVariant,
-    backgroundColor: colors.surface,
-  },
-  resetBtnText: {
-    fontSize: 16,
-    fontWeight: "600",
-    color: colors.onBackground,
-  },
-  applyBtn: {
-    flex: 1,
-    height: 52,
-    borderRadius: 26,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: colors.primaryContainer,
-  },
-  applyBtnText: {
-    fontSize: 16,
-    fontWeight: "700",
-    color: colors.onPrimaryContainer,
-  },
-});
+const createStyles = (colors: any) =>
+  StyleSheet.create({
+    topContainer: {
+      paddingHorizontal: 20,
+      paddingBottom: 8,
+    },
+    searchRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      marginBottom: 14,
+      gap: 10,
+    },
+    searchBar: {
+      flex: 1,
+      flexDirection: "row",
+      alignItems: "center",
+      backgroundColor: colors.surface,
+      borderRadius: 20,
+      paddingHorizontal: 14,
+      height: 48,
+      borderWidth: 1,
+      borderColor: colors.outlineVariant,
+    },
+    searchIcon: {
+      marginRight: 8,
+    },
+    searchInput: {
+      flex: 1,
+      color: colors.onBackground,
+      fontSize: 15,
+    },
+    filterBtn: {
+      width: 48,
+      height: 48,
+      borderRadius: 20,
+      backgroundColor: colors.surface,
+      alignItems: "center",
+      justifyContent: "center",
+      borderWidth: 1,
+      borderColor: colors.outlineVariant,
+    },
+    filterBadge: {
+      position: "absolute",
+      top: 6,
+      right: 6,
+      backgroundColor: colors.primary,
+      width: 18,
+      height: 18,
+      borderRadius: 9,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    filterBadgeText: {
+      fontSize: 10,
+      fontWeight: "700",
+      color: colors.onPrimaryContainer,
+    },
+    segmentedControl: {
+      flexDirection: "row",
+      backgroundColor: colors.surface,
+      borderRadius: 24,
+      padding: 4,
+      marginBottom: 14,
+    },
+    segmentBtn: {
+      flex: 1,
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "center",
+      height: 38,
+      borderRadius: 20,
+    },
+    segmentBtnActive: {
+      backgroundColor: colors.primaryContainer,
+    },
+    segmentText: {
+      fontSize: 14,
+      fontWeight: "600",
+      color: colors.onSurfaceVariant,
+    },
+    segmentTextActive: {
+      color: colors.onPrimaryContainer,
+      fontWeight: "700",
+    },
+    timeFiltersScroll: {
+      paddingBottom: 8,
+      gap: 8,
+    },
+    timeChip: {
+      paddingHorizontal: 16,
+      paddingVertical: 8,
+      borderRadius: 20,
+      backgroundColor: colors.surface,
+      borderWidth: 1,
+      borderColor: "transparent",
+    },
+    timeChipActive: {
+      backgroundColor: colors.secondaryContainer,
+      borderColor: colors.primary,
+    },
+    timeChipText: {
+      fontSize: 13,
+      fontWeight: "600",
+      color: colors.onSurfaceVariant,
+    },
+    timeChipTextActive: {
+      color: colors.onBackground,
+      fontWeight: "700",
+    },
+    sectionHeader: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+      paddingHorizontal: 20,
+      paddingTop: 18,
+      paddingBottom: 8,
+    },
+    sectionHeaderTitle: {
+      fontSize: 12,
+      fontWeight: "700",
+      color: colors.onSurfaceVariant,
+      textTransform: "uppercase",
+    },
+    sectionHeaderTotal: {
+      fontSize: 13,
+      fontWeight: "700",
+      color: colors.onBackground,
+    },
+    cardGroupContainer: {
+      backgroundColor: colors.surfaceVariant,
+      borderRadius: 24,
+      marginHorizontal: 20,
+      marginBottom: 8,
+      paddingVertical: 6,
+      borderWidth: 1,
+      borderColor: colors.outlineVariant,
+    },
+    txRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      paddingHorizontal: 16,
+      paddingVertical: 12,
+    },
+    iconBadge: {
+      width: 44,
+      height: 44,
+      borderRadius: 22,
+      alignItems: "center",
+      justifyContent: "center",
+      marginRight: 14,
+    },
+    txCenterCol: {
+      flex: 1,
+      justifyContent: "center",
+      marginRight: 10,
+    },
+    txTitleText: {
+      fontSize: 15,
+      fontWeight: "600",
+      color: colors.onBackground,
+      marginBottom: 3,
+    },
+    txSubtitleText: {
+      fontSize: 13,
+      color: colors.onSurfaceVariant,
+    },
+    txRightCol: {
+      alignItems: "flex-end",
+      justifyContent: "center",
+    },
+    txAmountText: {
+      fontSize: 16,
+      fontWeight: "700",
+      color: colors.onBackground,
+    },
+    txAmountIncome: {
+      color: colors.tertiary,
+    },
+    separator: {
+      height: 1,
+      backgroundColor: colors.outlineVariant,
+      marginHorizontal: 16,
+    },
+    emptyContainer: {
+      paddingTop: 60,
+      paddingHorizontal: 32,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    emptyTitle: {
+      fontSize: 18,
+      fontWeight: "700",
+      color: colors.onBackground,
+      marginBottom: 8,
+    },
+    emptySubtitle: {
+      fontSize: 14,
+      color: colors.onSurfaceVariant,
+      textAlign: "center",
+      marginBottom: 24,
+      lineHeight: 20,
+    },
+    emptyAddBtn: {
+      flexDirection: "row",
+      alignItems: "center",
+      backgroundColor: colors.primaryContainer,
+      borderRadius: 28,
+      paddingHorizontal: 24,
+      paddingVertical: 14,
+      gap: 6,
+    },
+    emptyAddText: {
+      fontSize: 15,
+      fontWeight: "700",
+      color: colors.onPrimaryContainer,
+    },
+    modalOverlay: {
+      flex: 1,
+      backgroundColor: "rgba(0,0,0,0.75)",
+      justifyContent: "flex-end",
+    },
+    modalSheet: {
+      backgroundColor: colors.surface,
+      borderTopLeftRadius: 32,
+      borderTopRightRadius: 32,
+      maxHeight: "88%",
+      borderWidth: 1,
+      borderColor: colors.outlineVariant,
+    },
+    modalHeader: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+      paddingHorizontal: 24,
+      paddingTop: 20,
+      paddingBottom: 16,
+      borderBottomWidth: 1,
+      borderBottomColor: colors.outlineVariant,
+    },
+    modalTitleText: {
+      fontSize: 20,
+      fontWeight: "700",
+      color: colors.onBackground,
+    },
+    modalCloseBtn: {
+      padding: 4,
+    },
+    modalScrollContent: {
+      paddingHorizontal: 24,
+      paddingTop: 20,
+      paddingBottom: 30,
+    },
+    modalSectionTitle: {
+      fontSize: 12,
+      fontWeight: "700",
+      color: colors.onSurfaceVariant,
+      letterSpacing: 0.8,
+      marginBottom: 12,
+      marginTop: 8,
+    },
+    modalPillWrap: {
+      flexDirection: "row",
+      flexWrap: "wrap",
+      gap: 8,
+      marginBottom: 24,
+    },
+    modalChip: {
+      paddingHorizontal: 18,
+      paddingVertical: 10,
+      borderRadius: 20,
+      backgroundColor: colors.surface,
+      borderWidth: 1,
+      borderColor: colors.outlineVariant,
+    },
+    modalChipActive: {
+      backgroundColor: colors.primary,
+      borderColor: colors.primary,
+    },
+    modalChipText: {
+      fontSize: 14,
+      fontWeight: "600",
+      color: colors.onSurfaceVariant,
+    },
+    modalChipTextActive: {
+      color: colors.onBackground,
+      fontWeight: "700",
+    },
+    categoryGrid: {
+      flexDirection: "row",
+      flexWrap: "wrap",
+      justifyContent: "space-between",
+      gap: 12,
+      marginBottom: 20,
+    },
+    catGridCard: {
+      width: "48%",
+      backgroundColor: colors.surface,
+      borderRadius: 20,
+      padding: 16,
+      borderWidth: 1,
+      borderColor: colors.outlineVariant,
+    },
+    catGridCardActive: {
+      backgroundColor: colors.primaryContainer,
+      borderColor: colors.primaryContainer,
+    },
+    catGridCardHeader: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+      marginBottom: 10,
+    },
+    catGridCardText: {
+      fontSize: 14,
+      fontWeight: "600",
+      color: colors.onBackground,
+    },
+    catGridCardTextActive: {
+      color: colors.onPrimaryContainer,
+      fontWeight: "700",
+    },
+    modalFooter: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 12,
+      paddingHorizontal: 24,
+      paddingVertical: 18,
+      borderTopWidth: 1,
+      borderTopColor: colors.outlineVariant,
+    },
+    resetBtn: {
+      flex: 1,
+      height: 52,
+      borderRadius: 26,
+      alignItems: "center",
+      justifyContent: "center",
+      borderWidth: 1,
+      borderColor: colors.outlineVariant,
+      backgroundColor: colors.surface,
+    },
+    resetBtnText: {
+      fontSize: 16,
+      fontWeight: "600",
+      color: colors.onBackground,
+    },
+    applyBtn: {
+      flex: 1,
+      height: 52,
+      borderRadius: 26,
+      alignItems: "center",
+      justifyContent: "center",
+      backgroundColor: colors.primaryContainer,
+    },
+    applyBtnText: {
+      fontSize: 16,
+      fontWeight: "700",
+      color: colors.onPrimaryContainer,
+    },
+  });
 
 export default TransactionListScreen;

@@ -423,15 +423,15 @@ export const CustomDateRangeModal: React.FC<CustomDateRangeModalProps> = ({
             </TouchableOpacity>
           </View>
 
-          <View style={{ padding: 24 }}>
-            <View style={{ flexDirection: "row", gap: 16, marginBottom: 28 }}>
-              <View style={{ flex: 1 }}>
+          <ScrollView style={{ padding: 24 }} contentContainerStyle={{ paddingBottom: 40 }} showsVerticalScrollIndicator={false}>
+            <View style={{ gap: 24, marginBottom: 28 }}>
+              <View>
                 <Text
                   style={[
                     styles.sectionLabel,
                     { color: colors.onSurfaceVariant, marginBottom: 8 },
                   ]}>
-                  START
+                  START DATE
                 </Text>
                 <CustomDatePicker
                   value={startDate}
@@ -439,15 +439,16 @@ export const CustomDateRangeModal: React.FC<CustomDateRangeModalProps> = ({
                   label="Start"
                   showLabel={false}
                   maximumDate={endDate}
+                  inline
                 />
               </View>
-              <View style={{ flex: 1 }}>
+              <View>
                 <Text
                   style={[
                     styles.sectionLabel,
                     { color: colors.onSurfaceVariant, marginBottom: 8 },
                   ]}>
-                  END
+                  END DATE
                 </Text>
                 <CustomDatePicker
                   value={endDate}
@@ -455,6 +456,7 @@ export const CustomDateRangeModal: React.FC<CustomDateRangeModalProps> = ({
                   label="End"
                   showLabel={false}
                   minimumDate={startDate}
+                  inline
                 />
               </View>
             </View>
@@ -489,7 +491,7 @@ export const CustomDateRangeModal: React.FC<CustomDateRangeModalProps> = ({
                 </Text>
               </LinearGradient>
             </TouchableOpacity>
-          </View>
+          </ScrollView>
         </View>
       </View>
     </Modal>

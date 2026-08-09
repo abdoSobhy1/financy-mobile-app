@@ -54,6 +54,7 @@ export interface CustomDatePickerProps {
   minimumDate?: Date;
   maximumDate?: Date;
   mode?: "date" | "datetime";
+  inline?: boolean;
 }
 
 // ─── Helpers ───────────────────────────────────────────────────────────────────
@@ -478,7 +479,6 @@ const QuickJump: React.FC<QuickJumpProps> = ({
             colors={colors}
             onSettle={(idx) => {
               yearRef.current = years[idx];
-              commit();
             }}
           />
         </View>
@@ -490,11 +490,18 @@ const QuickJump: React.FC<QuickJumpProps> = ({
             colors={colors}
             onSettle={(idx) => {
               monthRef.current = idx;
-              commit();
             }}
           />
         </View>
       </View>
+      <TouchableOpacity
+        style={[qjStyles.saveBtn, { backgroundColor: colors.primaryContainer }]}
+        onPress={commit}
+        activeOpacity={0.8}>
+        <Text style={[qjStyles.saveBtnText, { color: colors.onPrimaryContainer }]}>
+          Apply
+        </Text>
+      </TouchableOpacity>
     </View>
   );
 };
@@ -513,8 +520,18 @@ const qjStyles = StyleSheet.create({
     justifyContent: "center",
   },
   title: { fontSize: 20, fontWeight: "700" },
-  columns: { flexDirection: "row", gap: 8 },
+  columns: { flexDirection: "row", gap: 8, marginBottom: 20 },
   col: { flex: 1 },
+  saveBtn: {
+    height: 48,
+    borderRadius: 24,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  saveBtnText: {
+    fontSize: 15,
+    fontWeight: "700",
+  },
 });
 
 // ─── Main Picker ───────────────────────────────────────────────────────────────
@@ -527,6 +544,7 @@ export const CustomDatePicker: React.FC<CustomDatePickerProps> = ({
   style,
   label = "Date",
   showLabel = true,
+  inline = false,
 }) => {
   const { colors, typography } = useAppTheme();
   const [showPicker, setShowPicker] = useState(false);
@@ -568,6 +586,47 @@ export const CustomDatePicker: React.FC<CustomDatePickerProps> = ({
       return placeholder;
     }
   };
+
+  const innerContent = (
+    <>
+      {pickerView === "calendar" ? (
+        <CalendarView
+          viewMonth={viewMonth}
+          selected={value}
+          onSelectDay={handleSelectDay}
+          onPrevMonth={() => setViewMonth((m) => subMonths(m, 1))}
+          onNextMonth={() => setViewMonth((m) => addMonths(m, 1))}
+          onTitlePress={() => setPickerView("quickJump")}
+          colors={colors}
+        />
+      ) : (
+        <QuickJump
+          viewMonth={viewMonth}
+          onJump={handleJump}
+          onBack={() => setPickerView("calendar")}
+          colors={colors}
+        />
+      )}
+    </>
+  );
+
+  if (inline) {
+    return (
+      <View
+        style={[
+          style,
+          {
+            backgroundColor: colors.background,
+            padding: 22,
+            borderRadius: 28,
+            borderWidth: 1,
+            borderColor: colors.outlineVariant,
+          },
+        ]}>
+        {innerContent}
+      </View>
+    );
+  }
 
   return (
     <>
@@ -645,24 +704,7 @@ export const CustomDatePicker: React.FC<CustomDatePickerProps> = ({
                 borderColor: colors.outlineVariant,
               },
             ]}>
-            {pickerView === "calendar" ? (
-              <CalendarView
-                viewMonth={viewMonth}
-                selected={value}
-                onSelectDay={handleSelectDay}
-                onPrevMonth={() => setViewMonth((m) => subMonths(m, 1))}
-                onNextMonth={() => setViewMonth((m) => addMonths(m, 1))}
-                onTitlePress={() => setPickerView("quickJump")}
-                colors={colors}
-              />
-            ) : (
-              <QuickJump
-                viewMonth={viewMonth}
-                onJump={handleJump}
-                onBack={() => setPickerView("calendar")}
-                colors={colors}
-              />
-            )}
+            {innerContent}
           </TouchableOpacity>
         </TouchableOpacity>
       </Modal>
