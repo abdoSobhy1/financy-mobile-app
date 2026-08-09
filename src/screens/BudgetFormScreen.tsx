@@ -18,7 +18,6 @@ import { Ionicons } from "@expo/vector-icons";
 import { useAppTheme } from "../components/ui/ThemeProvider";
 import { AppDispatch, RootState } from "../store";
 import { addBudget, updateBudget } from "../store/slices/budgetsSlice";
-import { fetchCategories } from "../store/slices/categoriesSlice";
 import { BudgetStackParamList } from "../types";
 
 type NavigationProp = StackNavigationProp<BudgetStackParamList, "BudgetForm">;
@@ -34,26 +33,19 @@ const BudgetFormScreen: React.FC = () => {
   const budget = useSelector((state: RootState) =>
     budgetId && state.budgets ? state.budgets.items[budgetId] : null
   );
-  const { items: categories } = useSelector((state: RootState) => state.categories);
 
   const [amountStr, setAmountStr] = useState("");
   const [name, setName] = useState("");
-  const [categoryId, setCategoryId] = useState("");
   const [period, setPeriod] = useState<"weekly" | "monthly">("monthly");
   const [alertsEnabled, setAlertsEnabled] = useState(true);
 
   useEffect(() => {
-    dispatch(fetchCategories());
     if (budget) {
       setAmountStr(budget.amount.toString());
       setName(budget.name);
-      setCategoryId(budget.categoryId || "");
+      setAlertsEnabled(budget.alertsEnabled ?? true);
     }
   }, [budget, dispatch]);
-
-  const activeCategories = Object.values(categories).filter(
-    (c) => c && c.type === "expense" && !c.deleted
-  );
 
   const handleSave = async () => {
     const amount = Number(amountStr);
@@ -65,16 +57,12 @@ const BudgetFormScreen: React.FC = () => {
       alert("Please enter a budget name");
       return;
     }
-    if (!categoryId) {
-      alert("Please select a category");
-      return;
-    }
 
     const budgetData = {
       name: name.trim(),
       amount: amount.toString(),
       resetDay: 1, // Monthly default
-      categoryId,
+      alertsEnabled,
     };
 
     try {
@@ -122,7 +110,7 @@ const BudgetFormScreen: React.FC = () => {
           </View>
 
           {/* Name Input */}
-          <View style={[styles.inputCard, { backgroundColor: colors.surfaceVariant, borderRadius: radius.lg }]}>
+          <View style={[styles.inputCard, { backgroundColor: colors.surfaceVariant, borderRadius: radius.lg, marginBottom: spacing.xl }]}>
             <TextInput
               style={[typography.bodyMedium, { color: colors.onBackground, padding: spacing.md, textAlign: "center" }]}
               placeholder="Budget Name (e.g. Groceries)"
@@ -131,34 +119,6 @@ const BudgetFormScreen: React.FC = () => {
               onChangeText={setName}
             />
           </View>
-
-          {/* Category Section */}
-          <Text style={[styles.sectionTitle, typography.label, { color: colors.onSurfaceVariant }]}>
-            CATEGORY
-          </Text>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: spacing.md, marginBottom: spacing.xl }}>
-            {activeCategories.map((cat) => {
-              const isSelected = cat.id === categoryId;
-              return (
-                <TouchableOpacity
-                  key={cat.id}
-                  onPress={() => setCategoryId(cat.id)}
-                  style={[
-                    styles.categoryChip,
-                    {
-                      backgroundColor: colors.surfaceVariant,
-                      borderColor: isSelected ? colors.primary : "transparent",
-                    },
-                  ]}
-                >
-                  <Ionicons name={((cat as any).icon) || "pricetag"} size={20} color={colors.onBackground} style={{ marginRight: 8 }} />
-                  <Text style={[typography.bodyMedium, { color: colors.onBackground, fontWeight: isSelected ? "700" : "500" }]}>
-                    {cat.name}
-                  </Text>
-                </TouchableOpacity>
-              );
-            })}
-          </ScrollView>
 
           {/* Time Period Section */}
           <Text style={[styles.sectionTitle, typography.label, { color: colors.onSurfaceVariant }]}>

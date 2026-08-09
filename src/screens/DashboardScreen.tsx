@@ -12,9 +12,11 @@ import { useNavigation, useFocusEffect } from "@react-navigation/native";
 import { StackNavigationProp } from "@react-navigation/stack";
 import { useSelector, useDispatch } from "react-redux";
 import { Ionicons } from "@expo/vector-icons";
+import { Dimensions } from "react-native";
+import Svg, { Path, Circle } from "react-native-svg";
 import { RootState, AppDispatch } from "../store";
 import { Transaction, Category, TransactionStackParamList } from "../types";
-import { getCurrentBillingPeriod } from "../utils/billingPeriod";
+import { getCurrentBillingPeriod, getPreviousBillingPeriod } from "../utils/billingPeriod";
 import { formatCurrency, formatDate } from "../utils";
 import { useAppTheme } from "../components/ui/ThemeProvider";
 import { Badge } from "../components/ui/Badge";
@@ -26,6 +28,7 @@ import { useTabBarHeight } from "../components/ui";
 import { IconChip } from "../components/ui/IconChip";
 import { addCategory, fetchCategories } from "../store/slices/categoriesSlice";
 import { fetchTransactions } from "../store/slices/transactionsSlice";
+import { fetchBudgets } from "../store/slices/budgetsSlice";
 
 type DashboardNavigationProp = StackNavigationProp<any, "Dashboard">;
 
@@ -50,10 +53,16 @@ export const DashboardScreen: React.FC = () => {
   const categoriesMap = useSelector(
     (state: RootState) => state.categories.items,
   );
+  const budgetsMap = useSelector(
+    (state: RootState) => state.budgets.items,
+  );
 
   const [totalIncome, setTotalIncome] = useState<number>(0);
   const [totalExpenses, setTotalExpenses] = useState<number>(0);
   const [balance, setBalance] = useState<number>(0);
+  const [balanceChangePct, setBalanceChangePct] = useState<number>(0);
+  const [totalBudget, setTotalBudget] = useState<number>(0);
+  const [balanceHistory, setBalanceHistory] = useState<number[]>([]);
   const [quickAddSlots, setQuickAddSlots] = useState<QuickAddSlot[]>([]);
   const [recentTransactions, setRecentTransactions] = useState<Transaction[]>(
     [],
@@ -62,6 +71,7 @@ export const DashboardScreen: React.FC = () => {
   useEffect(() => {
     dispatch(fetchTransactions());
     dispatch(fetchCategories());
+    dispatch(fetchBudgets());
   }, [dispatch]);
 
   useFocusEffect(
@@ -92,7 +102,49 @@ export const DashboardScreen: React.FC = () => {
 
           setTotalIncome(income);
           setTotalExpenses(expenses);
-          setBalance(income - expenses);
+          const currentBalance = income - expenses;
+          setBalance(currentBalance);
+
+          // Calculate previous period balance
+          const { start: prevStart, end: prevEnd } = await getPreviousBillingPeriod();
+          const prevPeriodTxs = allTransactions.filter((t) => {
+            const d = new Date(t.date);
+            return d >= prevStart && d <= prevEnd;
+          });
+          const prevIncome = prevPeriodTxs
+            .filter((t) => t.type === "income")
+            .reduce((sum, t) => sum + t.amount, 0);
+          const prevExpenses = prevPeriodTxs
+            .filter((t) => t.type === "expense")
+            .reduce((sum, t) => sum + t.amount, 0);
+          const previousBalance = prevIncome - prevExpenses;
+
+          if (previousBalance !== 0) {
+            const pctChange = ((currentBalance - previousBalance) / Math.abs(previousBalance)) * 100;
+            setBalanceChangePct(pctChange);
+          } else if (currentBalance !== 0) {
+            setBalanceChangePct(100);
+          } else {
+            setBalanceChangePct(0);
+          }
+
+          // Calculate budget
+          const activeBudgets = Object.values(budgetsMap).filter((b) => !b.deleted);
+          const currentTotalBudget = activeBudgets.reduce((sum, b) => sum + b.amount, 0);
+          setTotalBudget(currentTotalBudget);
+
+          // Calculate balance history for graph
+          const sortedPeriodTxs = [...periodTxs].sort(
+            (a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()
+          );
+          let runningBalance = 0;
+          const history = [0];
+          sortedPeriodTxs.forEach((t) => {
+            runningBalance += t.type === "income" ? t.amount : -t.amount;
+            history.push(runningBalance);
+          });
+          if (history.length < 2) history.push(runningBalance);
+          setBalanceHistory(history);
 
           // 2. Recent transactions preview
           const sortedRecent = [...allTransactions]
@@ -123,7 +175,7 @@ export const DashboardScreen: React.FC = () => {
       return () => {
         isActive = false;
       };
-    }, [transactions, categoriesMap]),
+    }, [transactions, categoriesMap, budgetsMap]),
   );
 
   const computeTopExpenseCategories = (
@@ -257,6 +309,50 @@ export const DashboardScreen: React.FC = () => {
     navigation.navigate("AddTransaction", {});
   };
 
+  const { width: SCREEN_WIDTH } = Dimensions.get("window");
+  const CARD_WIDTH = SCREEN_WIDTH * 0.85;
+
+  const generateSmoothPath = (data: number[], width: number, height: number) => {
+    if (data.length < 2) {
+      return {
+        strokePath: `M 0 ${height / 2} L ${width} ${height / 2}`,
+        fillPath: `M 0 ${height / 2} L ${width} ${height / 2} L ${width} ${height} L 0 ${height} Z`,
+      };
+    }
+    
+    const max = Math.max(...data);
+    const min = Math.min(...data);
+    const range = max - min || 1;
+    
+    const stepX = width / (data.length - 1);
+    const padding = height * 0.2;
+    const drawHeight = height - padding * 2;
+    
+    const points = data.map((val, i) => {
+      const x = i * stepX;
+      const y = height - padding - ((val - min) / range) * drawHeight;
+      return { x, y };
+    });
+
+    let d = `M ${points[0].x} ${points[0].y}`;
+    for (let i = 0; i < points.length - 1; i++) {
+      const p0 = points[i];
+      const p1 = points[i + 1];
+      const cx = (p0.x + p1.x) / 2;
+      d += ` C ${cx} ${p0.y}, ${cx} ${p1.y}, ${p1.x} ${p1.y}`;
+    }
+    
+    const fillPath = d + ` L ${width} ${height} L 0 ${height} Z`;
+    return { strokePath: d, fillPath };
+  };
+
+  const budgetPercentUsed = totalBudget > 0 ? Math.min(100, Math.round((totalExpenses / totalBudget) * 100)) : 0;
+  const pieRadius = 24;
+  const pieStroke = 6;
+  const pieCircumference = 2 * Math.PI * pieRadius;
+  const pieDashoffset = pieCircumference - (budgetPercentUsed / 100) * pieCircumference;
+  const { strokePath, fillPath } = generateSmoothPath(balanceHistory, CARD_WIDTH, 80);
+
   return (
     <SafeAreaView
       style={[styles.container, { backgroundColor: colors.background }]}
@@ -269,81 +365,210 @@ export const DashboardScreen: React.FC = () => {
       <ScrollView
         showsVerticalScrollIndicator={false}
         contentContainerStyle={{
-          padding: spacing.lg,
           paddingBottom: tabBarHeight,
         }}>
-        {/* Balance Card */}
-        <Card
-          variant="default"
-          style={{
-            padding: spacing.xl,
-            marginBottom: spacing.xl,
-            backgroundColor: colors.primaryContainer,
-            borderRadius: 32,
+        
+        {/* Alerts Section (Hardcoded for design preview) */}
+        <View style={{ paddingHorizontal: spacing.lg, marginBottom: spacing.md }}>
+          <View style={{
+            backgroundColor: colors.errorContainer,
+            borderRadius: radius.lg,
+            padding: spacing.md,
+            flexDirection: 'row',
+            alignItems: 'center'
           }}>
-          <View
-            style={{
-              flexDirection: "row",
-              justifyContent: "space-between",
-              alignItems: "center",
-              marginBottom: spacing.sm,
+            <View style={{
+              width: 40,
+              height: 40,
+              borderRadius: 20,
+              backgroundColor: 'rgba(255, 255, 255, 0.2)',
+              justifyContent: 'center',
+              alignItems: 'center',
+              marginRight: spacing.md
             }}>
-            <Text
-              style={[
-                typography.label,
-                {
-                  color: colors.onPrimaryContainer,
-                  textTransform: "uppercase",
-                  letterSpacing: 1,
-                  opacity: 0.7,
-                },
-              ]}>
-              TOTAL BALANCE
-            </Text>
-            <View
-              style={{
-                backgroundColor: "rgba(0,0,0,0.15)",
-                paddingHorizontal: 8,
-                paddingVertical: 4,
-                borderRadius: 12,
-              }}>
-              <Text
-                style={{
-                  fontSize: 12,
-                  color: colors.onPrimaryContainer,
-                  fontWeight: "bold",
-                  opacity: 0.8,
-                }}>
-                ↑ +2.4%
+              <Ionicons name="warning" size={24} color={colors.error} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={[typography.label, { color: colors.onErrorContainer, fontWeight: '700' }]}>
+                Groceries Overspent
+              </Text>
+              <Text style={[typography.bodyMedium, { color: colors.onErrorContainer, opacity: 0.9 }]}>
+                You exceeded this budget by $120.00
               </Text>
             </View>
           </View>
+        </View>
 
-          <Text
-            style={[
-              typography.h1,
-              {
-                color: colors.onPrimaryContainer,
-                fontSize: 48,
-                fontWeight: "900",
-                marginBottom: spacing.xl,
-              },
-            ]}>
-            {formatCurrency(balance)}
-          </Text>
-
-          {/* Divider */}
+        {/* Dashboard Summary Cards - Horizontal Scroll */}
+        <ScrollView 
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          snapToInterval={CARD_WIDTH + spacing.md}
+          decelerationRate="fast"
+          contentContainerStyle={{
+            paddingHorizontal: spacing.lg,
+            paddingBottom: spacing.xl,
+            gap: spacing.md,
+          }}>
+          
+          {/* 1. Total Balance Card */}
           <View
             style={{
-              height: 1,
-              backgroundColor: colors.onPrimaryContainer,
-              opacity: 0.15,
-            }}
-          />
-        </Card>
+              width: CARD_WIDTH,
+              backgroundColor: colors.tertiaryContainer,
+              borderRadius: 32,
+              padding: spacing.xl,
+              paddingBottom: 0,
+              overflow: "hidden",
+              justifyContent: "space-between",
+            }}>
+            <View>
+              <View
+                style={{
+                  flexDirection: "row",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                  marginBottom: spacing.sm,
+                }}>
+                <Text
+                  style={[
+                    typography.label,
+                    {
+                      color: colors.onTertiaryContainer,
+                      textTransform: "uppercase",
+                      letterSpacing: 1,
+                      opacity: 0.7,
+                    },
+                  ]}>
+                  TOTAL BALANCE
+                </Text>
+                <View
+                  style={{
+                    backgroundColor: "rgba(0,0,0,0.1)",
+                    paddingHorizontal: 8,
+                    paddingVertical: 4,
+                    borderRadius: 12,
+                  }}>
+                  <Text
+                    style={{
+                      fontSize: 12,
+                      color: colors.onTertiaryContainer,
+                      fontWeight: "bold",
+                      opacity: 0.8,
+                    }}>
+                    {balanceChangePct >= 0 ? "↑" : "↓"} {balanceChangePct > 0 ? "+" : ""}{balanceChangePct.toFixed(1)}%
+                  </Text>
+                </View>
+              </View>
+
+              <Text
+                style={[
+                  typography.h1,
+                  {
+                    color: colors.onTertiaryContainer,
+                    fontSize: 48,
+                    fontWeight: "900",
+                  },
+                ]}>
+                {formatCurrency(balance)}
+              </Text>
+            </View>
+            
+            <View style={{ height: 80, marginHorizontal: -spacing.xl, marginTop: spacing.md }}>
+              <Svg width="100%" height="100%">
+                <Path
+                  d={fillPath}
+                  fill={colors.onTertiaryContainer}
+                  fillOpacity={0.1}
+                />
+                <Path
+                  d={strokePath}
+                  fill="none"
+                  stroke={colors.onTertiaryContainer}
+                  strokeWidth={3}
+                  strokeOpacity={0.6}
+                />
+              </Svg>
+            </View>
+          </View>
+
+          {/* 2. Monthly Spend Card */}
+          <View
+            style={{
+              width: CARD_WIDTH,
+              backgroundColor: colors.secondaryContainer,
+              borderRadius: 32,
+              padding: spacing.xl,
+              justifyContent: "space-between",
+            }}>
+            <View>
+              <Text
+                style={[
+                  typography.label,
+                  {
+                    color: colors.onSecondaryContainer,
+                    textTransform: "uppercase",
+                    letterSpacing: 1,
+                    opacity: 0.7,
+                    marginBottom: spacing.sm,
+                  },
+                ]}>
+                MONTHLY SPEND
+              </Text>
+              <Text
+                style={[
+                  typography.h1,
+                  {
+                    color: colors.onSecondaryContainer,
+                    fontSize: 48,
+                    fontWeight: "900",
+                  },
+                ]}>
+                {formatCurrency(totalExpenses)}
+              </Text>
+            </View>
+
+            <View style={{ flexDirection: "row", alignItems: "center", marginTop: spacing.xl }}>
+              <View style={{ width: 48, height: 48, marginRight: spacing.md }}>
+                <Svg width="48" height="48" viewBox="0 0 60 60">
+                  <Circle
+                    cx="30"
+                    cy="30"
+                    r={pieRadius}
+                    stroke={colors.onSecondaryContainer}
+                    strokeOpacity={0.2}
+                    strokeWidth={pieStroke}
+                    fill="none"
+                  />
+                  <Circle
+                    cx="30"
+                    cy="30"
+                    r={pieRadius}
+                    stroke={colors.onSecondaryContainer}
+                    strokeWidth={pieStroke}
+                    fill="none"
+                    strokeDasharray={pieCircumference}
+                    strokeDashoffset={pieDashoffset}
+                    strokeLinecap="round"
+                    rotation="-90"
+                    origin="30, 30"
+                  />
+                </Svg>
+              </View>
+              <View>
+                <Text style={[typography.bodyMedium, { color: colors.onSecondaryContainer, opacity: 0.7 }]}>
+                  vs. {formatCurrency(totalBudget)} Budget
+                </Text>
+                <Text style={[typography.label, { color: colors.onSecondaryContainer, opacity: 0.6, marginTop: 2 }]}>
+                  {budgetPercentUsed}% Used
+                </Text>
+              </View>
+            </View>
+          </View>
+        </ScrollView>
 
         {/* Quick Add Row */}
-        <View style={{ marginBottom: spacing.xl }}>
+        <View style={{ marginBottom: spacing.xl, paddingHorizontal: spacing.lg }}>
           <Text
             style={[
               typography.h3,
@@ -432,6 +657,7 @@ export const DashboardScreen: React.FC = () => {
             borderRadius: 32,
             padding: spacing.lg,
             paddingBottom: spacing.xxl,
+            marginHorizontal: spacing.lg,
           }}>
           <View
             style={{

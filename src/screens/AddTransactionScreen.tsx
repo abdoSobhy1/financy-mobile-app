@@ -21,14 +21,13 @@ import {
 } from "../store/slices/transactionsSlice";
 import { fetchCategories } from "../store/slices/categoriesSlice";
 import { fetchBudgets } from "../store/slices/budgetsSlice";
-import { findMatchingBudgetForCategory } from "../utils/budgetMatching";
 import {
   TransactionFormData,
   TransactionStackParamList,
   TransactionType,
 } from "../types";
 import { useAppTheme } from "../components/ui/ThemeProvider";
-import { Input, CustomDatePicker } from "../components/ui";
+import { Input, CustomDatePicker, Modal } from "../components/ui";
 import { IconChip } from "../components/ui/IconChip";
 import { ParsedTransactionReview } from "../components/input";
 import { CustomKeypad } from "../components/ui/CustomKeypad";
@@ -106,14 +105,6 @@ export const AddTransactionScreen: React.FC = () => {
 
   const handleCategorySelect = (id: string) => {
     setCategoryId(id);
-    if (!manualBudgetSelected) {
-      const matched = findMatchingBudgetForCategory(budgets, id);
-      if (matched) {
-        setBudgetId(matched.id);
-      } else {
-        setBudgetId("");
-      }
-    }
   };
 
   const handleBudgetSelect = (id: string) => {
@@ -132,12 +123,14 @@ export const AddTransactionScreen: React.FC = () => {
       return;
     }
 
+    const finalDescription = description.trim() ? description : categories[categoryId]?.name || "";
+
     const transactionData: TransactionFormData = {
       amount: finalAmount.toString(),
       type,
       categoryId,
       budgetId: budgetId || undefined,
-      description,
+      description: finalDescription,
       note,
       date,
     };
@@ -361,60 +354,88 @@ export const AddTransactionScreen: React.FC = () => {
             })}
           </ScrollView>
 
+          {/* Budgets (Visible by default for expenses) */}
+          {Object.values(budgets).length > 0 && type !== "income" && (
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={{
+                gap: spacing.md,
+                marginBottom: spacing.xl,
+              }}>
+              <TouchableOpacity
+                onPress={() => {
+                  setBudgetId("");
+                  setManualBudgetSelected(true);
+                }}
+                style={[
+                  styles.categoryChip,
+                  {
+                    backgroundColor: colors.surfaceVariant,
+                    borderColor: !budgetId ? colors.primary : "transparent",
+                  },
+                ]}>
+                <Ionicons
+                  name="pie-chart-outline"
+                  size={20}
+                  color={colors.onBackground}
+                  style={{ marginRight: 6 }}
+                />
+                <Text
+                  style={[
+                    typography.bodyMedium,
+                    {
+                      color: colors.onBackground,
+                      fontWeight: !budgetId ? "700" : "500",
+                    },
+                  ]}>
+                  None
+                </Text>
+              </TouchableOpacity>
+              {Object.values(budgets).map((b) => {
+                const isSelected = b.id === budgetId;
+                return (
+                  <TouchableOpacity
+                    key={b.id}
+                    onPress={() => {
+                      setBudgetId(b.id);
+                      setManualBudgetSelected(true);
+                    }}
+                    style={[
+                      styles.categoryChip,
+                      {
+                        backgroundColor: colors.surfaceVariant,
+                        borderColor: isSelected ? colors.primary : "transparent",
+                      },
+                    ]}>
+                    <Ionicons
+                      name="pie-chart"
+                      size={20}
+                      color={colors.onBackground}
+                      style={{ marginRight: 6 }}
+                    />
+                    <Text
+                      style={[
+                        typography.bodyMedium,
+                        {
+                          color: colors.onBackground,
+                          fontWeight: isSelected ? "700" : "500",
+                        },
+                      ]}>
+                      {b.name}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
+          )}
+
           {/* Options Grouped Card */}
           <View
             style={[
               styles.optionsCard,
               { backgroundColor: colors.surfaceVariant },
             ]}>
-            {/* Budget */}
-            {Object.values(budgets).length > 0 && (
-              <TouchableOpacity
-                style={[
-                  styles.optionRow,
-                  {
-                    borderBottomColor: colors.outlineVariant,
-                    borderBottomWidth: 1,
-                  },
-                ]}
-                onPress={() => {}}>
-                <View
-                  style={[
-                    styles.optionIcon,
-                    { backgroundColor: "rgba(128, 203, 196, 0.15)" },
-                  ]}>
-                  <Ionicons
-                    name="pie-chart-outline"
-                    size={20}
-                    color={colors.primary}
-                  />
-                </View>
-                <View style={styles.optionContent}>
-                  <Text
-                    style={[
-                      typography.bodyMedium,
-                      { color: colors.onBackground, fontWeight: "600" },
-                    ]}>
-                    {selectedBudget ? selectedBudget.name : "Select Budget"}
-                  </Text>
-                  {selectedBudget && (
-                    <Text
-                      style={[
-                        typography.bodySmall,
-                        { color: colors.onSurfaceVariant },
-                      ]}>
-                      Remaining: ${selectedBudget.amount}
-                    </Text>
-                  )}
-                </View>
-                <Ionicons
-                  name="chevron-forward"
-                  size={20}
-                  color={colors.onSurfaceVariant}
-                />
-              </TouchableOpacity>
-            )}
-
             {/* Date */}
             <TouchableOpacity
               style={[

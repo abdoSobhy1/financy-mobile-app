@@ -42,7 +42,7 @@ export interface Budget {
   amount: number;
   currentBalance: number;
   resetDay: number; // Day of month (1-31)
-  categoryId?: string; // Optional category association
+  alertsEnabled?: boolean; // Overspending alerts toggle
   createdAt: string;
   updatedAt: string;
   // Sync fields
@@ -175,7 +175,7 @@ export interface BudgetFormData {
   name: string;
   amount: string;
   resetDay: number;
-  categoryId?: string;
+  alertsEnabled?: boolean;
 }
 
 export interface BillFormData {
