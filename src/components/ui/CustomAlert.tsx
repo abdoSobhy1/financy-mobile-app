@@ -18,7 +18,7 @@ import {
   Animated,
   Dimensions,
 } from "react-native";
-import { LinearGradient } from "expo-linear-gradient";
+
 import { Ionicons } from "@expo/vector-icons";
 import { useAppTheme } from "./ThemeProvider";
 import { AlertService, AlertButton } from "../../services/AlertService";
@@ -83,9 +83,8 @@ export const CustomAlert: React.FC<CustomAlertProps> = ({
 
   const hasDestructive = buttons.some((b) => b.style === "destructive");
   const iconName: any = hasDestructive ? "warning" : "information-circle";
-  const iconGradient: [string, string] = hasDestructive
-    ? ["#FF6B6B", "#EE5A24"]
-    : [colors.primary, colors.primaryContainer];
+  const iconBgColor = hasDestructive ? "#3A1A1A" : colors.primaryContainer;
+  const iconFgColor = hasDestructive ? "#FFB3A7" : colors.primary;
 
   return (
     <Modal
@@ -108,13 +107,10 @@ export const CustomAlert: React.FC<CustomAlertProps> = ({
                 },
               ]}>
               {/* Icon badge */}
-              <LinearGradient
-                colors={iconGradient}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 1 }}
-                style={styles.iconCircle}>
-                <Ionicons name={iconName} size={26} color="#fff" />
-              </LinearGradient>
+              <View
+                style={[styles.iconCircle, { backgroundColor: iconBgColor }]}>
+                <Ionicons name={iconName} size={28} color={iconFgColor} />
+              </View>
 
               {/* Title */}
               <Text style={[styles.title, { color: colors.onBackground }]}>
@@ -149,11 +145,11 @@ export const CustomAlert: React.FC<CustomAlertProps> = ({
                         style={[
                           btnStyle,
                           styles.destructiveBtn,
-                          { backgroundColor: "#FF6B6B15" },
+                          { backgroundColor: "#FFB3A7" },
                         ]}
                         activeOpacity={0.75}
                         onPress={() => handleButtonPress(button)}>
-                        <Text style={styles.destructiveBtnText}>{button.text}</Text>
+                        <Text style={[styles.destructiveBtnText, { color: "#7A1C1C" }]}>{button.text}</Text>
                       </TouchableOpacity>
                     );
                   }
@@ -164,14 +160,13 @@ export const CustomAlert: React.FC<CustomAlertProps> = ({
                         key={index}
                         style={[
                           btnStyle,
-                          { borderColor: colors.outlineVariant, borderWidth: 1 },
                         ]}
                         activeOpacity={0.7}
                         onPress={() => handleButtonPress(button)}>
                         <Text
                           style={[
                             styles.cancelBtnText,
-                            { color: colors.onSurfaceVariant },
+                            { color: "#80CAFF" },
                           ]}>
                           {button.text}
                         </Text>
@@ -185,14 +180,8 @@ export const CustomAlert: React.FC<CustomAlertProps> = ({
                       key={index}
                       activeOpacity={0.8}
                       onPress={() => handleButtonPress(button)}
-                      style={[btnStyle, { overflow: "hidden" }]}>
-                      <LinearGradient
-                        colors={[colors.primary, colors.primaryContainer]}
-                        style={styles.primaryBtn}
-                        start={{ x: 0, y: 0 }}
-                        end={{ x: 1, y: 1 }}>
-                        <Text style={styles.primaryBtnText}>{button.text}</Text>
-                      </LinearGradient>
+                      style={[btnStyle, { backgroundColor: colors.primaryContainer }]}>
+                      <Text style={[styles.primaryBtnText, { color: colors.onPrimaryContainer }]}>{button.text}</Text>
                     </TouchableOpacity>
                   );
                 })}
@@ -342,7 +331,7 @@ const styles = StyleSheet.create({
     width: "100%",
     paddingHorizontal: 24,
     paddingBottom: 24,
-    paddingTop: 16,
+    paddingTop: 12,
     gap: 12,
   },
   btn: {

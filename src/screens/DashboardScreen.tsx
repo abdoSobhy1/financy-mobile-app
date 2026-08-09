@@ -480,7 +480,7 @@ export const DashboardScreen: React.FC = () => {
                     <View style={{ marginRight: spacing.md }}>
                       <IconChip
                         iconName={
-                          ((category as any)?.icon as any) || "cafe-outline"
+                          ((category as any)?.icon as any) || "receipt-outline"
                         }
                         colorName="bluegrey"
                         size={48}
