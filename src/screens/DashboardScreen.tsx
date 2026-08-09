@@ -258,13 +258,13 @@ export const DashboardScreen: React.FC = () => {
     const pickedIds = new Set<string>();
 
     for (const catId of sortedCatIds) {
-      if (slots.length >= 3) break;
+      if (slots.length >= 10) break;
       const cat = catsMap[catId];
       if (cat && cat.type === "expense" && !cat.deleted) {
         slots.push({
           id: cat.id,
           name: cat.name,
-          colorName: "red", // map properly if needed, fallback to something
+          colorName: (cat as any).color || "bluegrey",
           isFallback: false,
           iconName: (cat as any).icon || "receipt-outline",
         });
@@ -273,38 +273,20 @@ export const DashboardScreen: React.FC = () => {
     }
 
     // Fill remaining slots
-    if (slots.length < 3) {
+    if (slots.length < 10) {
       for (const cat of Object.values(catsMap)) {
-        if (slots.length >= 3) break;
+        if (slots.length >= 10) break;
         if (cat.type === "expense" && !cat.deleted && !pickedIds.has(cat.id)) {
           slots.push({
             id: cat.id,
             name: cat.name,
-            colorName: "red",
+            colorName: (cat as any).color || "bluegrey",
             isFallback: false,
             iconName: (cat as any).icon || "cart",
           });
           pickedIds.add(cat.id);
         }
       }
-    }
-
-    // Fallback defaults
-    const DEFAULT_DEFAULTS = [
-      { name: "Food", iconName: "fast-food", colorName: "orange" },
-      { name: "Transport", iconName: "car", colorName: "teal" },
-      { name: "Bills", iconName: "document-text", colorName: "bluegrey" },
-    ];
-
-    for (const def of DEFAULT_DEFAULTS) {
-      if (slots.length >= 3) break;
-      slots.push({
-        id: `default-${def.name.toLowerCase()}`,
-        name: def.name,
-        colorName: def.colorName,
-        isFallback: true,
-        iconName: def.iconName,
-      });
     }
 
     return slots;
@@ -629,39 +611,44 @@ export const DashboardScreen: React.FC = () => {
             ]}>
             QUICK ADD
           </Text>
-          <View
-            style={{ flexDirection: "row", justifyContent: "space-between" }}>
-            {quickAddSlots.map((slot) => (
-              <TouchableOpacity
-                key={slot.id}
-                style={{ alignItems: "center", width: 64 }}
-                onPress={() => handleQuickAddPress(slot)}>
-                <View
-                  style={[
-                    styles.circleIcon,
-                    { backgroundColor: colors.surface },
-                  ]}>
-                  <IconChip
-                    iconName={slot.iconName as any}
-                    colorName={(slot.colorName as any) || "bluegrey"}
-                    size={56}
-                  />
-                </View>
-                <Text
-                  style={[
-                    typography.bodySmall,
-                    {
-                      color: colors.onBackground,
-                      marginTop: spacing.xs,
-                      textAlign: "center",
-                      fontWeight: "600",
-                    },
-                  ]}
-                  numberOfLines={1}>
-                  {slot.name}
-                </Text>
-              </TouchableOpacity>
-            ))}
+          <View style={{ flexDirection: "row", alignItems: "flex-start" }}>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              style={{ flex: 1 }}
+              contentContainerStyle={{ gap: 8, paddingRight: spacing.md }}>
+              {quickAddSlots.map((slot) => (
+                <TouchableOpacity
+                  key={slot.id}
+                  style={{ alignItems: "center", width: 64 }}
+                  onPress={() => handleQuickAddPress(slot)}>
+                  <View
+                    style={[
+                      styles.circleIcon,
+                      { backgroundColor: colors.surface },
+                    ]}>
+                    <IconChip
+                      iconName={slot.iconName as any}
+                      colorName={(slot.colorName as any) || "bluegrey"}
+                      size={56}
+                    />
+                  </View>
+                  <Text
+                    style={[
+                      typography.bodySmall,
+                      {
+                        color: colors.onBackground,
+                        marginTop: spacing.xs,
+                        textAlign: "center",
+                        fontWeight: "600",
+                      },
+                    ]}
+                    numberOfLines={1}>
+                    {slot.name}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
 
             {/* Voice / More chip */}
             <TouchableOpacity

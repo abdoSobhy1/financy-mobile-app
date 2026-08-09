@@ -22,9 +22,21 @@ export const IconChip: React.FC<IconChipProps> = ({
 }) => {
   const { isDark, radius } = useAppTheme();
 
-  const palette = CATEGORY_PALETTE[colorName];
-  const bgColor = isDark ? palette.dark : palette.light;
-  const iconColor = isDark ? palette.iconDark : palette.iconLight;
+  let bgColor: string;
+  let iconColor: string;
+
+  if (colorName?.startsWith('#')) {
+    iconColor = colorName;
+    // Add 20% opacity (33 in hex) to the hex color for the background
+    bgColor = colorName + '33';
+  } else {
+    let palette = CATEGORY_PALETTE[colorName as PaletteColor];
+    if (!palette) {
+      palette = CATEGORY_PALETTE['bluegrey'];
+    }
+    bgColor = isDark ? palette.dark : palette.light;
+    iconColor = isDark ? palette.iconDark : palette.iconLight;
+  }
 
   const borderRadius = shape === 'circle' ? radius.pill : radius.md;
 
