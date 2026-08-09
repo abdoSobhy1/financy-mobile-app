@@ -6,12 +6,11 @@ import {
   TouchableOpacity,
   SafeAreaView,
   StatusBar,
-  Dimensions,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useNavigation } from "@react-navigation/native";
 import { StackNavigationProp } from "@react-navigation/stack";
-import { TransactionStackParamList, ParsedTransaction } from "../types";
+import { TransactionStackParamList } from "../types";
 import { useAppTheme } from "../components/ui/ThemeProvider";
 import Animated, {
   useSharedValue,
@@ -31,10 +30,11 @@ import {
 import { parseVoiceInput } from "../services/voiceParser";
 import { useSelector } from "react-redux";
 import { selectAllCategories } from "../store/slices/categoriesSlice";
-import { TransactionRepository } from "../database/queries/transactions";
+import { RootState } from "../store";
 
 type NavigationProp = StackNavigationProp<TransactionStackParamList>;
 const NUM_BARS = 5;
+const SILENCE_TIMEOUT_MS = 3000;
 
 export const VoiceInputScreen: React.FC = () => {
   const navigation = useNavigation<NavigationProp>();
@@ -45,22 +45,27 @@ export const VoiceInputScreen: React.FC = () => {
   const [isOffline, setIsOffline] = useState(false);
 
   const categories = useSelector(selectAllCategories);
+  const budgetsMap = useSelector((state: RootState) => state.budgets.items);
+  const budgets = Object.values(budgetsMap);
+  
   const transcriptRef = useRef("");
   const isNavigatingRef = useRef(false);
+  const silenceTimeoutRef = useRef<any>(null);
 
   // Animation values
   const pulseAnim = useSharedValue(1);
-  const barHeights = Array(NUM_BARS).fill(0).map(() => useSharedValue(4));
+  const barHeights = Array(NUM_BARS).fill(0).map(() => useSharedValue(8));
 
   const processTranscript = async (finalTranscript: string) => {
     if (isNavigatingRef.current) return;
     isNavigatingRef.current = true;
     
     stopAnimations();
+    clearSilenceTimeout();
     
     if (finalTranscript.trim()) {
       const categoriesList = categories.map((c) => ({ id: c.id, name: c.name }));
-      const parsed = parseVoiceInput(finalTranscript, categoriesList);
+      const parsed = parseVoiceInput(finalTranscript, categoriesList, undefined, budgets);
       
       if (parsed && parsed.length > 0) {
         navigation.replace("VoiceVerify", { parsedTransactions: parsed });
@@ -71,21 +76,45 @@ export const VoiceInputScreen: React.FC = () => {
     navigation.goBack();
   };
 
-  useSpeechRecognitionEvent("start", () => setIsListening(true));
+  const clearSilenceTimeout = () => {
+    if (silenceTimeoutRef.current) {
+      clearTimeout(silenceTimeoutRef.current);
+      silenceTimeoutRef.current = null;
+    }
+  };
+
+  const resetSilenceTimeout = () => {
+    clearSilenceTimeout();
+    silenceTimeoutRef.current = setTimeout(() => {
+      handleStop();
+    }, SILENCE_TIMEOUT_MS);
+  };
+
+  useSpeechRecognitionEvent("start", () => {
+    setIsListening(true);
+    resetSilenceTimeout();
+  });
+  
   useSpeechRecognitionEvent("end", () => {
     setIsListening(false);
+    clearSilenceTimeout();
     if (transcriptRef.current) {
       processTranscript(transcriptRef.current);
     }
   });
+
   useSpeechRecognitionEvent("result", (event) => {
     const text = event.results[0]?.transcript || "";
     setTranscript(text);
     transcriptRef.current = text;
+    // Reset silence timeout whenever we get a new result
+    resetSilenceTimeout();
   });
+
   useSpeechRecognitionEvent("error", (event) => {
     console.warn("Speech recognition error:", event.error, event.message);
     setIsListening(false);
+    clearSilenceTimeout();
   });
 
   const startAnimations = () => {
@@ -118,7 +147,7 @@ export const VoiceInputScreen: React.FC = () => {
     pulseAnim.value = withTiming(1);
     barHeights.forEach((bar) => {
       cancelAnimation(bar);
-      bar.value = withTiming(4);
+      bar.value = withTiming(8);
     });
   };
 
@@ -160,6 +189,7 @@ export const VoiceInputScreen: React.FC = () => {
     return () => {
       ExpoSpeechRecognitionModule.stop();
       stopAnimations();
+      clearSilenceTimeout();
     };
   }, [startListening]);
 
@@ -174,13 +204,13 @@ export const VoiceInputScreen: React.FC = () => {
   }));
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
+    <SafeAreaView style={styles.container}>
       <StatusBar barStyle="light-content" />
       
       {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.closeBtn}>
-          <Ionicons name="close" size={28} color={colors.onBackground} />
+          <Ionicons name="close" size={28} color="#E4E4E7" />
         </TouchableOpacity>
       </View>
 
@@ -190,37 +220,38 @@ export const VoiceInputScreen: React.FC = () => {
         onPress={handleStop}
       >
         <View style={styles.micWrapper}>
-          <Animated.View style={[styles.pulseRing, { borderColor: "#A5F3FC" }, ringAnimStyle]} />
-          <View style={[styles.micCircle, { backgroundColor: "#A5F3FC" }]}>
-            <Ionicons name="mic" size={40} color="#164E63" />
+          <Animated.View style={[styles.pulseRing, ringAnimStyle]} />
+          <View style={styles.micCircle}>
+            <Ionicons name="mic" size={40} color="#18181B" />
           </View>
         </View>
 
-        <Text style={[typography.h2, styles.statusText, { color: colors.onBackground }]}>
+        <Text style={styles.statusText}>
           {isOffline ? "Offline" : "Listening..."}
         </Text>
+        
+        {transcript ? (
+          <Text style={styles.transcriptText}>
+            "{transcript}"
+          </Text>
+        ) : null}
 
-        <Text style={[typography.bodyLarge, styles.transcript, { color: colors.onSurfaceVariant }]}>
-          {transcript ? `"${transcript}"` : ""}
-        </Text>
+        {/* Animated Audio Bars */}
+        <View style={styles.barsContainer}>
+          {barHeights.map((heightAnim, i) => {
+            const barStyle = useAnimatedStyle(() => ({
+              height: heightAnim.value,
+            }));
+            return (
+              <Animated.View 
+                key={i} 
+                style={[styles.audioBar, barStyle, { opacity: isListening ? 1 : 0.3 }]} 
+              />
+            );
+          })}
+        </View>
 
-        {!isOffline && (
-          <View style={styles.waveform}>
-            {barHeights.map((bar, i) => {
-              const barStyle = useAnimatedStyle(() => ({
-                height: bar.value,
-              }));
-              return (
-                <Animated.View 
-                  key={i} 
-                  style={[styles.waveBar, { backgroundColor: "#7DD3FC" }, barStyle]} 
-                />
-              );
-            })}
-          </View>
-        )}
-
-        <Text style={[typography.bodyMedium, styles.footerText, { color: colors.onSurfaceVariant }]}>
+        <Text style={styles.instructionText}>
           Tap anywhere to stop
         </Text>
       </TouchableOpacity>
@@ -231,73 +262,83 @@ export const VoiceInputScreen: React.FC = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    backgroundColor: "#18181B", // Dark surface to match popup
   },
   header: {
+    flexDirection: "row",
+    justifyContent: "flex-start",
     paddingHorizontal: 20,
-    paddingTop: 10,
-    alignItems: "flex-start",
+    paddingTop: 16,
   },
   closeBtn: {
     padding: 8,
-    marginLeft: -8,
   },
   content: {
     flex: 1,
     alignItems: "center",
     justifyContent: "center",
-    paddingHorizontal: 30,
+    paddingHorizontal: 32,
   },
   micWrapper: {
-    width: 140,
-    height: 140,
+    width: 120,
+    height: 120,
     alignItems: "center",
     justifyContent: "center",
-    marginBottom: 40,
+    marginBottom: 48,
   },
   pulseRing: {
     position: "absolute",
-    width: 140,
-    height: 140,
-    borderRadius: 70,
-    borderWidth: 4,
-  },
-  micCircle: {
     width: 100,
     height: 100,
     borderRadius: 50,
+    borderWidth: 2,
+    borderColor: "#D0F4F0",
+    backgroundColor: "rgba(208, 244, 240, 0.2)",
+  },
+  micCircle: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: "#D0F4F0",
     alignItems: "center",
     justifyContent: "center",
-    shadowColor: "#A5F3FC",
+    shadowColor: "#D0F4F0",
     shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.6,
+    shadowOpacity: 0.5,
     shadowRadius: 20,
-    elevation: 10,
+    elevation: 8,
   },
   statusText: {
-    marginBottom: 16,
+    fontSize: 18,
     fontWeight: "600",
+    color: "#E4E4E7",
+    marginBottom: 24,
   },
-  transcript: {
+  transcriptText: {
+    fontSize: 18,
+    fontWeight: "400",
+    color: "#A1A1AA",
     textAlign: "center",
-    minHeight: 60,
     marginBottom: 40,
-    fontStyle: "italic",
+    lineHeight: 28,
   },
-  waveform: {
+  barsContainer: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    gap: 6,
     height: 60,
-    marginBottom: 60,
+    gap: 6,
+    marginBottom: 40,
   },
-  waveBar: {
+  audioBar: {
     width: 6,
     borderRadius: 3,
+    backgroundColor: "#80CAFF", // Light blue matching the image
   },
-  footerText: {
+  instructionText: {
+    fontSize: 14,
+    color: "#71717A",
     position: "absolute",
-    bottom: 50,
-    opacity: 0.7,
-  }
+    bottom: 60,
+  },
 });

@@ -431,6 +431,7 @@ function parseSingleTransaction(
   text: string,
   categories: { id: string; name: string }[] = [],
   defaultCategoryId?: string,
+  budgets: { id: string; categoryId?: string | null }[] = [],
 ): ParsedTransaction {
   const trimmed = text.trim();
   if (!trimmed) {
@@ -471,6 +472,15 @@ function parseSingleTransaction(
 
   const confidence = fieldsFound / totalFields;
 
+  // Find matching budget if available
+  let budgetId: string | undefined;
+  if (categoryId) {
+    const matchingBudget = budgets.find(b => b.categoryId === categoryId);
+    if (matchingBudget) {
+      budgetId = matchingBudget.id;
+    }
+  }
+
   return {
     amount,
     type: type ?? "expense",
@@ -478,6 +488,7 @@ function parseSingleTransaction(
     date: date ?? new Date(),
     categoryHint,
     categoryId,
+    budgetId,
     confidence,
     rawText: trimmed,
   };
@@ -494,6 +505,7 @@ export function parseVoiceInput(
   transcript: string,
   categories: { id: string; name: string }[] = [],
   defaultCategoryId?: string,
+  budgets: { id: string; categoryId?: string | null }[] = [],
 ): ParsedTransaction[] {
   const text = transcript.trim();
   if (!text) return [];
@@ -517,22 +529,21 @@ export function parseVoiceInput(
       }
       if (remaining.trim()) parts.push(remaining.trim());
       if (parts.length > 1) {
-        return parts
-          .map((part) =>
-            parseSingleTransaction(part, categories, defaultCategoryId),
-          )
-          .filter((p) => p.confidence > 0);
+        const transactions: ParsedTransaction[] = [];
+        for (const part of parts) {
+          const tx = parseSingleTransaction(part, categories, defaultCategoryId, budgets);
+          if (tx.confidence > 0) {
+            transactions.push(tx);
+          }
+        }
+        return transactions;
       }
     }
   }
 
-  const results = segments
-    .map((segment) =>
-      parseSingleTransaction(segment, categories, defaultCategoryId),
-    )
-    .filter((p) => p.confidence > 0);
+  const transactions = segments
+    .map((s) => parseSingleTransaction(s, categories, defaultCategoryId, budgets))
+    .filter((tx) => tx.confidence > 0);
 
-  return results.length > 0
-    ? results
-    : [parseSingleTransaction(text, categories, defaultCategoryId)];
+  return transactions.length > 0 ? transactions : [parseSingleTransaction(text, categories, defaultCategoryId, budgets)];
 }

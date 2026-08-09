@@ -1,4 +1,4 @@
-import React, { useMemo } from "react";
+import React, { useMemo, useState } from "react";
 import {
   View,
   Text,
@@ -7,6 +7,11 @@ import {
   ScrollView,
   SafeAreaView,
   StatusBar,
+  Modal,
+  TextInput,
+  TouchableWithoutFeedback,
+  KeyboardAvoidingView,
+  Platform,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useNavigation, useRoute, RouteProp } from "@react-navigation/native";
@@ -14,7 +19,7 @@ import { StackNavigationProp } from "@react-navigation/stack";
 import { TransactionStackParamList, ParsedTransaction } from "../types";
 import { useAppTheme } from "../components/ui/ThemeProvider";
 import { formatCurrency } from "../utils";
-import { useCustomAlert, useToast, Button, Card } from "../components/ui";
+import { useToast, Card } from "../components/ui";
 import { useSelector, useDispatch } from "react-redux";
 import { RootState, AppDispatch } from "../store";
 import { addTransaction } from "../store/slices/transactionsSlice";
@@ -25,13 +30,18 @@ type VoiceVerifyRouteProp = RouteProp<TransactionStackParamList, "VoiceVerify">;
 export const VoiceVerifyScreen: React.FC = () => {
   const navigation = useNavigation<NavigationProp>();
   const route = useRoute<VoiceVerifyRouteProp>();
-  const { colors, typography, spacing, radius } = useAppTheme();
+  const { colors, typography } = useAppTheme();
   const dispatch = useDispatch<AppDispatch>();
   const { showSuccess, showError } = useToast();
   
-  const parsedTransactions = route.params.parsedTransactions || [];
+  const [parsedTransactions, setParsedTransactions] = useState<ParsedTransaction[]>(
+    route.params.parsedTransactions || []
+  );
 
-  const { items: categoriesMap } = useSelector(
+  const [editingIndex, setEditingIndex] = useState<number | null>(null);
+  const [editData, setEditData] = useState<{ amount: string; description: string; categoryId: string }>({ amount: "", description: "", categoryId: "" });
+
+  const { items: categoriesMap, ids: categoryIds } = useSelector(
     (state: RootState) => state.categories
   );
 
@@ -49,6 +59,7 @@ export const VoiceVerifyScreen: React.FC = () => {
             description: t.description || "",
             date: t.date || new Date(),
             categoryId: t.categoryId || "",
+            budgetId: t.budgetId,
             note: t.note || "",
           })
         ).unwrap();
@@ -62,9 +73,28 @@ export const VoiceVerifyScreen: React.FC = () => {
     }
   };
 
-  const handleEdit = (transaction: ParsedTransaction) => {
-    // Navigate to AddTransaction with prefilled data for editing
-    navigation.replace("AddTransaction", { prefilledData: transaction });
+  const handleEdit = (index: number) => {
+    const tx = parsedTransactions[index];
+    setEditData({
+      amount: tx.amount?.toString() || "",
+      description: tx.description || "",
+      categoryId: tx.categoryId || "",
+    });
+    setEditingIndex(index);
+  };
+
+  const saveEdit = () => {
+    if (editingIndex === null) return;
+    const updated = [...parsedTransactions];
+    const amountVal = parseFloat(editData.amount);
+    updated[editingIndex] = {
+      ...updated[editingIndex],
+      amount: isNaN(amountVal) ? updated[editingIndex].amount : amountVal,
+      description: editData.description,
+      categoryId: editData.categoryId,
+    };
+    setParsedTransactions(updated);
+    setEditingIndex(null);
   };
 
   const handleAddAnother = () => {
@@ -101,7 +131,7 @@ export const VoiceVerifyScreen: React.FC = () => {
                 <View style={styles.cardLeft}>
                   <View style={[styles.iconBox, { backgroundColor: "rgba(255,255,255,0.05)" }]}>
                     <Ionicons 
-                      name="help-outline" 
+                      name={(category as any)?.icon || "help-outline"} 
                       size={20} 
                       color={iconColor} 
                     />
@@ -125,7 +155,7 @@ export const VoiceVerifyScreen: React.FC = () => {
 
               <TouchableOpacity 
                 style={styles.editBtn} 
-                onPress={() => handleEdit(tx)}
+                onPress={() => handleEdit(index)}
               >
                 <Ionicons name="pencil" size={14} color="#A5F3FC" />
                 <Text style={[typography.label, { color: "#A5F3FC", marginLeft: 4 }]}>
@@ -159,6 +189,68 @@ export const VoiceVerifyScreen: React.FC = () => {
           </Text>
         </TouchableOpacity>
       </View>
+
+      {/* Inline Edit Modal */}
+      <Modal
+        visible={editingIndex !== null}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setEditingIndex(null)}
+      >
+        <KeyboardAvoidingView 
+          behavior={Platform.OS === "ios" ? "padding" : undefined}
+          style={styles.modalOverlay}
+        >
+          <TouchableWithoutFeedback onPress={() => setEditingIndex(null)}>
+            <View style={{ position: 'absolute', top: 0, bottom: 0, left: 0, right: 0 }} />
+          </TouchableWithoutFeedback>
+          <View style={[styles.modalCard, { backgroundColor: colors.surface }]}>
+            <Text style={[typography.h3, { color: colors.onBackground, marginBottom: 16 }]}>Quick Edit</Text>
+
+            <Text style={[typography.label, { color: colors.onSurfaceVariant, marginBottom: 8 }]}>Description</Text>
+            <TextInput
+              style={[styles.input, { backgroundColor: colors.surfaceVariant, color: colors.onBackground }]}
+              value={editData.description}
+              onChangeText={t => setEditData(prev => ({ ...prev, description: t }))}
+              placeholder="What did you spend on?"
+              placeholderTextColor={colors.onSurfaceVariant + "88"}
+            />
+
+            <Text style={[typography.label, { color: colors.onSurfaceVariant, marginBottom: 8 }]}>Amount</Text>
+            <TextInput
+              style={[styles.input, { backgroundColor: colors.surfaceVariant, color: colors.onBackground }]}
+              value={editData.amount}
+              onChangeText={t => setEditData(prev => ({ ...prev, amount: t }))}
+              placeholder="0.00"
+              keyboardType="numeric"
+              placeholderTextColor={colors.onSurfaceVariant + "88"}
+            />
+
+            <Text style={[typography.label, { color: colors.onSurfaceVariant, marginBottom: 8 }]}>Category</Text>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 24, paddingBottom: 8 }}>
+              {categoryIds.map(id => {
+                const c = categoriesMap[id];
+                const isSelected = editData.categoryId === id;
+                return (
+                  <TouchableOpacity
+                    key={id}
+                    onPress={() => setEditData(prev => ({ ...prev, categoryId: id }))}
+                    style={[styles.modalCatPill, { backgroundColor: isSelected ? c.color : colors.surfaceVariant }]}
+                  >
+                    <Ionicons name={(c as any).icon || "pricetag"} size={14} color={isSelected ? "#111" : colors.onSurfaceVariant} style={{ marginRight: 4 }} />
+                    <Text style={[typography.label, { color: isSelected ? "#111" : colors.onSurfaceVariant }]}>{c.name}</Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
+
+            <TouchableOpacity style={[styles.saveBtn, { backgroundColor: "#A5F3FC" }]} onPress={saveEdit}>
+              <Text style={[typography.bodyLarge, { color: "#164E63", fontWeight: "700" }]}>Save Changes</Text>
+            </TouchableOpacity>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
+
     </SafeAreaView>
   );
 };
@@ -190,6 +282,7 @@ const styles = StyleSheet.create({
     padding: 16,
     marginBottom: 16,
     borderRadius: 24,
+    backgroundColor: "#18181B",
   },
   cardTop: {
     flexDirection: "row",
@@ -248,5 +341,42 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     paddingVertical: 16,
     borderRadius: 100,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.6)",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  modalCard: {
+    width: "90%",
+    borderRadius: 24,
+    padding: 24,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.3,
+    shadowRadius: 20,
+    elevation: 10,
+  },
+  input: {
+    height: 52,
+    borderRadius: 16,
+    paddingHorizontal: 16,
+    marginBottom: 16,
+    fontSize: 16,
+  },
+  modalCatPill: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 20,
+    marginRight: 8,
+  },
+  saveBtn: {
+    height: 52,
+    borderRadius: 26,
+    alignItems: "center",
+    justifyContent: "center",
   },
 });
