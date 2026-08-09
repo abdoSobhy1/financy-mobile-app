@@ -173,7 +173,7 @@ export const DashboardScreen: React.FC = () => {
           name: cat.name,
           colorName: "red", // map properly if needed, fallback to something
           isFallback: false,
-          iconName: (cat as any).icon || "cart",
+          iconName: (cat as any).icon || "receipt-outline",
         });
         pickedIds.add(cat.id);
       }
@@ -262,7 +262,7 @@ export const DashboardScreen: React.FC = () => {
       style={[styles.container, { backgroundColor: colors.background }]}
       edges={["top"]}>
       <StatusBar barStyle="light-content" />
-      
+
       {/* Shared App Header */}
       <AppHeader title="Dashboard" />
 
@@ -272,39 +272,74 @@ export const DashboardScreen: React.FC = () => {
           padding: spacing.lg,
           paddingBottom: tabBarHeight,
         }}>
-        
         {/* Balance Card */}
         <Card
           variant="default"
-          style={{ 
-            padding: spacing.xl, 
-            marginBottom: spacing.xl, 
+          style={{
+            padding: spacing.xl,
+            marginBottom: spacing.xl,
             backgroundColor: colors.primaryContainer,
             borderRadius: 32,
           }}>
-          <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: spacing.sm }}>
+          <View
+            style={{
+              flexDirection: "row",
+              justifyContent: "space-between",
+              alignItems: "center",
+              marginBottom: spacing.sm,
+            }}>
             <Text
               style={[
                 typography.label,
-                { color: colors.onPrimaryContainer, textTransform: "uppercase", letterSpacing: 1, opacity: 0.7 },
+                {
+                  color: colors.onPrimaryContainer,
+                  textTransform: "uppercase",
+                  letterSpacing: 1,
+                  opacity: 0.7,
+                },
               ]}>
               TOTAL BALANCE
             </Text>
-            <View style={{ backgroundColor: "rgba(0,0,0,0.15)", paddingHorizontal: 8, paddingVertical: 4, borderRadius: 12 }}>
-              <Text style={{ fontSize: 12, color: colors.onPrimaryContainer, fontWeight: "bold", opacity: 0.8 }}>↑ +2.4%</Text>
+            <View
+              style={{
+                backgroundColor: "rgba(0,0,0,0.15)",
+                paddingHorizontal: 8,
+                paddingVertical: 4,
+                borderRadius: 12,
+              }}>
+              <Text
+                style={{
+                  fontSize: 12,
+                  color: colors.onPrimaryContainer,
+                  fontWeight: "bold",
+                  opacity: 0.8,
+                }}>
+                ↑ +2.4%
+              </Text>
             </View>
           </View>
-          
+
           <Text
             style={[
               typography.h1,
-              { color: colors.onPrimaryContainer, fontSize: 48, fontWeight: "900", marginBottom: spacing.xl },
+              {
+                color: colors.onPrimaryContainer,
+                fontSize: 48,
+                fontWeight: "900",
+                marginBottom: spacing.xl,
+              },
             ]}>
             {formatCurrency(balance)}
           </Text>
-          
+
           {/* Divider */}
-          <View style={{ height: 1, backgroundColor: colors.onPrimaryContainer, opacity: 0.15 }} />
+          <View
+            style={{
+              height: 1,
+              backgroundColor: colors.onPrimaryContainer,
+              opacity: 0.15,
+            }}
+          />
         </Card>
 
         {/* Quick Add Row */}
@@ -312,7 +347,12 @@ export const DashboardScreen: React.FC = () => {
           <Text
             style={[
               typography.h3,
-              { color: colors.onBackground, marginBottom: spacing.md, fontSize: 14, textTransform: "uppercase" },
+              {
+                color: colors.onBackground,
+                marginBottom: spacing.md,
+                fontSize: 14,
+                textTransform: "uppercase",
+              },
             ]}>
             QUICK ADD
           </Text>
@@ -323,7 +363,11 @@ export const DashboardScreen: React.FC = () => {
                 key={slot.id}
                 style={{ alignItems: "center", width: 64 }}
                 onPress={() => handleQuickAddPress(slot)}>
-                <View style={[styles.circleIcon, { backgroundColor: colors.surface }]}>
+                <View
+                  style={[
+                    styles.circleIcon,
+                    { backgroundColor: colors.surface },
+                  ]}>
                   <IconChip
                     iconName={slot.iconName as any}
                     colorName={(slot.colorName as any) || "bluegrey"}
@@ -358,7 +402,11 @@ export const DashboardScreen: React.FC = () => {
                     borderRadius: 28,
                   },
                 ]}>
-                <Ionicons name="mic-outline" size={28} color={colors.onPrimaryContainer} />
+                <Ionicons
+                  name="mic-outline"
+                  size={28}
+                  color={colors.onPrimaryContainer}
+                />
               </View>
               <Text
                 style={[
@@ -378,7 +426,13 @@ export const DashboardScreen: React.FC = () => {
         </View>
 
         {/* Recent Transactions Preview */}
-        <View style={{ backgroundColor: colors.surface, borderRadius: 32, padding: spacing.lg, paddingBottom: spacing.xxl }}>
+        <View
+          style={{
+            backgroundColor: colors.surface,
+            borderRadius: 32,
+            padding: spacing.lg,
+            paddingBottom: spacing.xxl,
+          }}>
           <View
             style={{
               flexDirection: "row",
@@ -391,7 +445,11 @@ export const DashboardScreen: React.FC = () => {
             </Text>
             <TouchableOpacity
               onPress={() => navigation.navigate("TransactionList" as any)}>
-              <Text style={[typography.bodySmall, { color: colors.primary, fontWeight: "bold" }]}>
+              <Text
+                style={[
+                  typography.bodySmall,
+                  { color: colors.primary, fontWeight: "bold" },
+                ]}>
                 View All
               </Text>
             </TouchableOpacity>
@@ -405,20 +463,42 @@ export const DashboardScreen: React.FC = () => {
               const isIncome = tx.type === "income";
 
               return (
-                <View key={tx.id} style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: spacing.sm }}>
-                  <View style={{ flexDirection: "row", alignItems: "center", flex: 1 }}>
+                <View
+                  key={tx.id}
+                  style={{
+                    flexDirection: "row",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    marginBottom: spacing.sm,
+                  }}>
+                  <View
+                    style={{
+                      flexDirection: "row",
+                      alignItems: "center",
+                      flex: 1,
+                    }}>
                     <View style={{ marginRight: spacing.md }}>
                       <IconChip
-                        iconName={((category as any)?.icon as any) || "cafe-outline"}
+                        iconName={
+                          ((category as any)?.icon as any) || "cafe-outline"
+                        }
                         colorName="bluegrey"
                         size={48}
                       />
                     </View>
                     <View>
-                      <Text style={[typography.bodyLarge, { color: colors.onBackground, fontWeight: "600" }]}>
+                      <Text
+                        style={[
+                          typography.bodyLarge,
+                          { color: colors.onBackground, fontWeight: "600" },
+                        ]}>
                         {category?.name || "Uncategorized"}
                       </Text>
-                      <Text style={[typography.bodySmall, { color: colors.onSurfaceVariant, marginTop: 2 }]}>
+                      <Text
+                        style={[
+                          typography.bodySmall,
+                          { color: colors.onSurfaceVariant, marginTop: 2 },
+                        ]}>
                         {formatDate(tx.date)}
                       </Text>
                     </View>
@@ -428,7 +508,8 @@ export const DashboardScreen: React.FC = () => {
                       typography.h3,
                       { color: isIncome ? "#48C774" : colors.onBackground },
                     ]}>
-                    {isIncome ? "+" : "-"}{formatCurrency(tx.amount)}
+                    {isIncome ? "+" : "-"}
+                    {formatCurrency(tx.amount)}
                   </Text>
                 </View>
               );
