@@ -7,6 +7,7 @@ import {
   TouchableOpacity,
   StatusBar,
 } from "react-native";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useNavigation, useFocusEffect } from "@react-navigation/native";
 import { StackNavigationProp } from "@react-navigation/stack";
@@ -64,15 +65,41 @@ export const DashboardScreen: React.FC = () => {
   const [totalBudget, setTotalBudget] = useState<number>(0);
   const [balanceHistory, setBalanceHistory] = useState<number[]>([]);
   const [quickAddSlots, setQuickAddSlots] = useState<QuickAddSlot[]>([]);
-  const [recentTransactions, setRecentTransactions] = useState<Transaction[]>(
-    [],
-  );
+  const [recentTransactions, setRecentTransactions] = useState<Transaction[]>([]);
+  const [overspentBudgets, setOverspentBudgets] = useState<{ id: string; name: string; excess: number }[]>([]);
+  
+  const [showAlert, setShowAlert] = useState(true);
 
   useEffect(() => {
     dispatch(fetchTransactions());
     dispatch(fetchCategories());
     dispatch(fetchBudgets());
   }, [dispatch]);
+
+  useEffect(() => {
+    const checkAlert = async () => {
+      try {
+        const dismissedDate = await AsyncStorage.getItem("overspendingAlertDismissedDate");
+        const today = new Date().toDateString();
+        if (dismissedDate === today) {
+          setShowAlert(false);
+        }
+      } catch (e) {
+        console.error(e);
+      }
+    };
+    checkAlert();
+  }, []);
+
+  const handleDismissAlert = async () => {
+    try {
+      setShowAlert(false);
+      const today = new Date().toDateString();
+      await AsyncStorage.setItem("overspendingAlertDismissedDate", today);
+    } catch (e) {
+      console.error(e);
+    }
+  };
 
   useFocusEffect(
     useCallback(() => {
@@ -132,6 +159,20 @@ export const DashboardScreen: React.FC = () => {
           const activeBudgets = Object.values(budgetsMap).filter((b) => !b.deleted);
           const currentTotalBudget = activeBudgets.reduce((sum, b) => sum + b.amount, 0);
           setTotalBudget(currentTotalBudget);
+
+          // Calculate overspent budgets
+          const overspent: { id: string; name: string; excess: number }[] = [];
+          activeBudgets.forEach((b) => {
+            if (b.alertsEnabled) {
+              const spent = periodTxs
+                .filter((t) => t.budgetId === b.id && t.type === "expense")
+                .reduce((sum, t) => sum + t.amount, 0);
+              if (spent > b.amount) {
+                overspent.push({ id: b.id, name: b.name, excess: spent - b.amount });
+              }
+            }
+          });
+          setOverspentBudgets(overspent);
 
           // Calculate balance history for graph
           const sortedPeriodTxs = [...periodTxs].sort(
@@ -368,36 +409,43 @@ export const DashboardScreen: React.FC = () => {
           paddingBottom: tabBarHeight,
         }}>
         
-        {/* Alerts Section (Hardcoded for design preview) */}
-        <View style={{ paddingHorizontal: spacing.lg, marginBottom: spacing.md }}>
-          <View style={{
-            backgroundColor: colors.errorContainer,
-            borderRadius: radius.lg,
-            padding: spacing.md,
-            flexDirection: 'row',
-            alignItems: 'center'
-          }}>
-            <View style={{
-              width: 40,
-              height: 40,
-              borderRadius: 20,
-              backgroundColor: 'rgba(255, 255, 255, 0.2)',
-              justifyContent: 'center',
-              alignItems: 'center',
-              marginRight: spacing.md
-            }}>
-              <Ionicons name="warning" size={24} color={colors.error} />
-            </View>
-            <View style={{ flex: 1 }}>
-              <Text style={[typography.label, { color: colors.onErrorContainer, fontWeight: '700' }]}>
-                Groceries Overspent
-              </Text>
-              <Text style={[typography.bodyMedium, { color: colors.onErrorContainer, opacity: 0.9 }]}>
-                You exceeded this budget by $120.00
-              </Text>
-            </View>
+        {/* Alerts Section (Dynamic Overspending Alerts) */}
+        {showAlert && overspentBudgets.length > 0 && (
+          <View style={{ paddingHorizontal: spacing.lg, marginBottom: spacing.md, gap: spacing.sm }}>
+            {overspentBudgets.map((ob) => (
+              <View key={ob.id} style={{
+                backgroundColor: colors.errorContainer,
+                borderRadius: radius.lg,
+                padding: spacing.md,
+                flexDirection: 'row',
+                alignItems: 'center'
+              }}>
+                <View style={{
+                  width: 40,
+                  height: 40,
+                  borderRadius: 20,
+                  backgroundColor: 'rgba(255, 255, 255, 0.2)',
+                  justifyContent: 'center',
+                  alignItems: 'center',
+                  marginRight: spacing.md
+                }}>
+                  <Ionicons name="warning" size={24} color={colors.error} />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={[typography.label, { color: colors.onErrorContainer, fontWeight: '700' }]}>
+                    {ob.name} Overspent
+                  </Text>
+                  <Text style={[typography.bodyMedium, { color: colors.onErrorContainer, opacity: 0.9 }]}>
+                    You exceeded this budget by {formatCurrency(ob.excess)}
+                  </Text>
+                </View>
+                <TouchableOpacity onPress={handleDismissAlert} style={{ padding: 8 }}>
+                  <Ionicons name="close" size={20} color={colors.onErrorContainer} />
+                </TouchableOpacity>
+              </View>
+            ))}
           </View>
-        </View>
+        )}
 
         {/* Dashboard Summary Cards - Horizontal Scroll */}
         <ScrollView 
