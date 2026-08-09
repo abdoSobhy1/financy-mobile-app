@@ -26,6 +26,7 @@ export interface CategoryTable {
   name: string;
   type: string;
   color?: string;
+  icon?: string;
   entry_count: number;
   created_at: string;
   // Sync fields
@@ -143,8 +144,9 @@ export const transformTransaction = (row: TransactionTable): Transaction => ({
 export const transformCategory = (row: CategoryTable): Category => ({
   id: row.id,
   name: row.name,
-  type: row.type as Category["type"],
+  type: row.type as "income" | "expense",
   color: row.color,
+  icon: row.icon,
   entryCount: row.entry_count,
   createdAt: row.created_at,
   // Sync fields
@@ -204,6 +206,7 @@ export const toCategoryTable = (category: Omit<Category, "id" | "createdAt">): O
   name: category.name,
   type: category.type,
   color: category.color,
+  icon: category.icon,
   entry_count: category.entryCount,
   // Sync fields
   sync_updated_at: category.updatedAt || Date.now(),

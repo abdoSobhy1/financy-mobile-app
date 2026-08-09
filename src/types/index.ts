@@ -27,6 +27,7 @@ export interface Category {
   name: string;
   type: "income" | "expense";
   color?: string;
+  icon?: string;
   entryCount: number;
   createdAt: string;
   // Sync fields

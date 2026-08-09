@@ -62,7 +62,7 @@ export const CategoriesScreen: React.FC = () => {
   // ── Handlers ────────────────────────────────────────────────────────
 
   const handleAdd = useCallback(
-    async (data: { name: string; type: "income" | "expense"; color?: string }) => {
+    async (data: { name: string; type: "income" | "expense"; color?: string; icon?: string }) => {
       const colour = data.color || COLOUR_PALETTE[allCategories.length % COLOUR_PALETTE.length];
       await dispatch(addCategory({ ...data, color: colour })).unwrap();
       setShowAddModal(false);

@@ -400,6 +400,7 @@ export const SettingsScreen: React.FC = () => {
     name: string;
     type: "income" | "expense";
     color?: string;
+    icon?: string;
   }) => {
     const arr = Object.values(categories);
     if (
