@@ -1,17 +1,20 @@
 import { AlertService } from "../../../services/AlertService";
 import React, { useState, useEffect, useMemo } from "react";
-import { Alert } from "react-native";
+import { View, Text, StyleSheet, TextInput, TouchableOpacity, ScrollView, KeyboardAvoidingView, Platform } from "react-native";
 import { useDispatch } from "react-redux";
 import { useNavigation } from "@react-navigation/native";
+import { StackNavigationProp } from "@react-navigation/stack";
+import { DebtStackParamList } from "../../../navigation/DebtStackNavigator";
 import { useToast, CustomDatePicker } from "../../ui";
 import { AppDispatch } from "../../../store";
 import { addDebt, updateDebt, deleteDebt } from "../../../store/slices/debtsSlice";
 import { Debt } from "../../../types";
-import { UnifiedForm } from "../UnifiedForm";
-import { FormField } from "../FormField";
+import { useAppTheme } from "../../ui/ThemeProvider";
+import { SafeAreaView } from "react-native-safe-area-context";
+import { Ionicons } from "@expo/vector-icons";
 
 interface DebtFormProps {
-  debt?: Debt | null; // If provided, we're editing; if null/undefined, we're creating
+  debt?: Debt | null; 
   onSuccess?: () => void;
   onCancel?: () => void;
 }
@@ -26,10 +29,13 @@ interface FormData {
   dueDate?: Date | null;
 }
 
+type DebtFormNavigationProp = StackNavigationProp<DebtStackParamList, "DebtForm">;
+
 export const DebtForm: React.FC<DebtFormProps> = ({ debt, onSuccess, onCancel }) => {
   const dispatch = useDispatch<AppDispatch>();
-  const navigation = useNavigation();
+  const navigation = useNavigation<DebtFormNavigationProp>();
   const { showSuccess, showError } = useToast();
+  const { colors, typography, spacing, radius } = useAppTheme();
 
   const isEditing = !!debt;
 
@@ -46,7 +52,6 @@ export const DebtForm: React.FC<DebtFormProps> = ({ debt, onSuccess, onCancel })
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(false);
 
-  // Initialize form data when editing
   useEffect(() => {
     if (debt) {
       setFormData({
@@ -90,7 +95,7 @@ export const DebtForm: React.FC<DebtFormProps> = ({ debt, onSuccess, onCancel })
       const debtData = {
         name: formData.name.trim(),
         totalAmount: Number(formData.totalAmount),
-        currentBalance: isEditing ? debt!.currentBalance : Number(formData.totalAmount), // Keep current balance when editing
+        currentBalance: isEditing ? debt!.currentBalance : Number(formData.totalAmount),
         interestRate: formData.interestRate ? Number(formData.interestRate) : undefined,
         minimumPayment: formData.minimumPayment ? Number(formData.minimumPayment) : undefined,
         creditor: formData.creditor.trim() || undefined,
@@ -123,11 +128,6 @@ export const DebtForm: React.FC<DebtFormProps> = ({ debt, onSuccess, onCancel })
     }
   };
 
-  const handleCancel = () => {
-    onCancel?.();
-    navigation.goBack();
-  };
-
   const handleDelete = () => {
     if (!debt) return;
 
@@ -157,102 +157,163 @@ export const DebtForm: React.FC<DebtFormProps> = ({ debt, onSuccess, onCancel })
 
   const updateField = (field: keyof FormData, value: string) => {
     setFormData((prev) => ({ ...prev, [field]: value }));
-    // Clear error when user starts typing
     if (errors[field]) {
       setErrors((prev) => ({ ...prev, [field]: "" }));
     }
   };
 
-  // Compute form validity reactively
-  const isFormValid = useMemo(() => {
-    // Check if there are any validation errors
-    const hasErrors = Object.keys(errors).length > 0;
-
-    // Check required fields
-    const hasRequiredFields = !!(formData.name.trim() && formData.totalAmount.trim());
-
-    return !hasErrors && hasRequiredFields;
-  }, [errors, formData.name, formData.totalAmount]);
-
   return (
-    <UnifiedForm
-      title={isEditing ? "Edit Debt" : "Add Debt"}
-      onSubmit={handleSubmit}
-      onCancel={handleCancel}
-      onDelete={isEditing ? handleDelete : undefined}
-      showDeleteButton={isEditing}
-      submitLabel={isEditing ? "Update Debt" : "Add Debt"}
-      loading={loading}
-      isValid={isFormValid}>
-      <FormField
-        label="Debt Name"
-        icon="card-outline"
-        required
-        placeholder="Credit Card, Student Loan, etc."
-        value={formData.name}
-        onChangeText={(text) => updateField("name", text)}
-        error={errors.name}
-        autoFocus={!isEditing}
-      />
+    <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} style={{ flex: 1 }}>
+      {/* Top Bar */}
+      <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 20, paddingTop: 10, paddingBottom: 20 }}>
+        <TouchableOpacity style={{ width: 40, height: 40, justifyContent: "center" }} onPress={onCancel || (() => navigation.goBack())}>
+          <Text style={[typography.bodyLarge, { color: colors.onSurfaceVariant }]}>Cancel</Text>
+        </TouchableOpacity>
+        <Text style={[typography.h3, { color: colors.onBackground }]}>
+          {isEditing ? "Edit Debt" : "New Debt"}
+        </Text>
+        {isEditing ? (
+          <TouchableOpacity style={{ width: 40, height: 40, justifyContent: "center", alignItems: "flex-end" }} onPress={handleDelete}>
+            <Text style={[typography.bodyLarge, { color: colors.error }]}>Delete</Text>
+          </TouchableOpacity>
+        ) : (
+          <View style={{ width: 40 }} />
+        )}
+      </View>
 
-      <FormField
-        label="Total Amount"
-        icon="cash-outline"
-        required
-        placeholder="0.00"
-        value={formData.totalAmount}
-        onChangeText={(text) => updateField("totalAmount", text)}
-        keyboardType="numeric"
-        error={errors.totalAmount}
-      />
+      <ScrollView contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 100 }} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+        {/* Giant Amount Input */}
+        <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "center", marginVertical: 32 }}>
+          <Text style={{ fontSize: 32, fontWeight: "600", marginRight: 8, color: colors.onSurfaceVariant }}>$</Text>
+          <TextInput
+            style={{ fontSize: 56, fontWeight: "700", textAlign: "center", minWidth: 150, color: formData.totalAmount ? colors.onBackground : colors.onSurfaceVariant }}
+            placeholder="0.00"
+            placeholderTextColor={colors.onSurfaceVariant}
+            keyboardType="decimal-pad"
+            value={formData.totalAmount}
+            onChangeText={(text) => updateField("totalAmount", text)}
+            autoFocus={!isEditing}
+          />
+        </View>
 
-      <FormField
-        label="Interest Rate (%)"
-        icon="trending-up-outline"
-        placeholder="0.00"
-        value={formData.interestRate}
-        onChangeText={(text) => updateField("interestRate", text)}
-        keyboardType="numeric"
-        error={errors.interestRate}
-      />
+        {/* Debt Name */}
+        <View style={{ marginBottom: spacing.xl }}>
+          <Text style={[typography.label, { color: colors.onSurfaceVariant, marginBottom: spacing.xs, marginLeft: spacing.sm }]}>Debt Name</Text>
+          <View style={{ borderWidth: 1, borderColor: errors.name ? colors.error : "rgba(255,255,255,0.05)", backgroundColor: colors.surfaceVariant, borderRadius: radius.lg }}>
+            <TextInput
+              style={[typography.bodyMedium, { color: colors.onBackground, padding: spacing.md, textAlign: "center" }]}
+              placeholder="e.g. Student Loan"
+            placeholderTextColor={colors.onSurfaceVariant}
+            value={formData.name}
+            onChangeText={(text) => updateField("name", text)}
+          />
+          </View>
+        </View>
 
-      <FormField
-        label="Minimum Payment"
-        icon="calendar-outline"
-        placeholder="0.00"
-        value={formData.minimumPayment}
-        onChangeText={(text) => updateField("minimumPayment", text)}
-        keyboardType="numeric"
-        error={errors.minimumPayment}
-      />
+        {/* Min Payment & Interest Rate */}
+        <View style={{ flexDirection: "row", gap: spacing.md, marginBottom: spacing.xl }}>
+          <View style={{ flex: 1 }}>
+            <Text style={[typography.label, { color: colors.onSurfaceVariant, marginBottom: spacing.xs, marginLeft: spacing.sm, textAlign: "center" }]}>Min Payment</Text>
+            <View style={{ borderWidth: 1, borderColor: "rgba(255,255,255,0.05)", backgroundColor: colors.surfaceVariant, borderRadius: radius.lg }}>
+              <TextInput
+                style={[typography.bodyMedium, { color: colors.onBackground, padding: spacing.md, textAlign: "center" }]}
+                placeholder="0.00"
+              placeholderTextColor={colors.onSurfaceVariant}
+              keyboardType="decimal-pad"
+              value={formData.minimumPayment}
+              onChangeText={(text) => updateField("minimumPayment", text)}
+            />
+            </View>
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={[typography.label, { color: colors.onSurfaceVariant, marginBottom: spacing.xs, marginLeft: spacing.sm, textAlign: "center" }]}>Interest Rate (%)</Text>
+            <View style={{ borderWidth: 1, borderColor: "rgba(255,255,255,0.05)", backgroundColor: colors.surfaceVariant, borderRadius: radius.lg }}>
+              <TextInput
+                style={[typography.bodyMedium, { color: colors.onBackground, padding: spacing.md, textAlign: "center" }]}
+                placeholder="0"
+              placeholderTextColor={colors.onSurfaceVariant}
+              keyboardType="decimal-pad"
+              value={formData.interestRate}
+              onChangeText={(text) => updateField("interestRate", text)}
+            />
+            </View>
+          </View>
+        </View>
 
-      {/* Due Date */}
-      <CustomDatePicker
-        label="Due Date"
-        value={formData.dueDate || undefined}
-        onDateChange={(date) => setFormData((prev) => ({ ...prev, dueDate: date }))}
-      />
+        {/* Creditor */}
+        <View style={{ marginBottom: spacing.xl }}>
+          <Text style={[typography.label, { color: colors.onSurfaceVariant, marginBottom: spacing.xs, marginLeft: spacing.sm }]}>Creditor</Text>
+          <View style={{ borderWidth: 1, borderColor: "rgba(255,255,255,0.05)", backgroundColor: colors.surfaceVariant, borderRadius: radius.lg }}>
+            <TextInput
+              style={[typography.bodyMedium, { color: colors.onBackground, padding: spacing.md, textAlign: "center" }]}
+              placeholder="e.g. Bank of America"
+            placeholderTextColor={colors.onSurfaceVariant}
+            value={formData.creditor}
+            onChangeText={(text) => updateField("creditor", text)}
+          />
+          </View>
+        </View>
 
-      <FormField
-        label="Creditor"
-        icon="business-outline"
-        placeholder="Bank or Company Name"
-        value={formData.creditor}
-        onChangeText={(text) => updateField("creditor", text)}
-      />
+        {/* Due Date - wrapping CustomDatePicker to look somewhat like the input cards */}
+        <View style={{ marginBottom: spacing.xl }}>
+          <CustomDatePicker
+            label="Due Date"
+            value={formData.dueDate || undefined}
+            onDateChange={(date) => setFormData((prev) => ({ ...prev, dueDate: date }))}
+          />
+        </View>
 
-      <FormField
-        label="Description"
-        icon="document-text-outline"
-        placeholder="Additional notes..."
-        value={formData.description}
-        onChangeText={(text) => updateField("description", text)}
-        multiline
-      />
-    </UnifiedForm>
+        {/* Description */}
+        <View style={{ marginBottom: spacing.xl }}>
+          <Text style={[typography.label, { color: colors.onSurfaceVariant, marginBottom: spacing.xs, marginLeft: spacing.sm }]}>Notes (Optional)</Text>
+          <View style={{ borderWidth: 1, borderColor: "rgba(255,255,255,0.05)", backgroundColor: colors.surfaceVariant, borderRadius: radius.lg }}>
+            <TextInput
+              style={[typography.bodyMedium, { color: colors.onBackground, padding: spacing.md, textAlign: "center", minHeight: 80 }]}
+              placeholder="Additional Notes..."
+            placeholderTextColor={colors.onSurfaceVariant}
+            value={formData.description}
+            onChangeText={(text) => updateField("description", text)}
+            multiline
+          />
+          </View>
+        </View>
+      </ScrollView>
+
+      {/* Footer */}
+      <View style={{ padding: 20, paddingTop: 10, paddingBottom: Platform.OS === "ios" ? 34 : 24, backgroundColor: colors.background, borderTopWidth: 1, borderColor: colors.outlineVariant }}>
+        {isEditing && (
+          <TouchableOpacity
+            style={{ backgroundColor: colors.tertiaryContainer, paddingVertical: 16, borderRadius: radius.pill, alignItems: "center", marginBottom: 12, opacity: loading ? 0.7 : 1 }}
+            onPress={() => {
+              if (debt) {
+                navigation.navigate("AddPayment", {
+                  debtId: debt.id,
+                  debtName: debt.name,
+                  currentBalance: debt.currentBalance,
+                  minimumPayment: debt.minimumPayment,
+                  interestRate: debt.interestRate,
+                });
+              }
+            }}
+            disabled={loading}
+          >
+            <Text style={[typography.bodyLarge, { color: colors.onTertiaryContainer, fontWeight: "700" }]}>
+              Record Payment
+            </Text>
+          </TouchableOpacity>
+        )}
+        <TouchableOpacity
+          style={{ backgroundColor: colors.primaryContainer, paddingVertical: 16, borderRadius: radius.pill, alignItems: "center", opacity: loading ? 0.7 : 1 }}
+          onPress={handleSubmit}
+          disabled={loading}
+        >
+          <Text style={[typography.bodyLarge, { color: colors.onPrimaryContainer, fontWeight: "700" }]}>
+            {loading ? "Saving..." : isEditing ? "Update Debt" : "Create Debt"}
+          </Text>
+        </TouchableOpacity>
+      </View>
+    </KeyboardAvoidingView>
   );
 };
-
-// Styles are now handled by UnifiedForm and FormField components
 
 export default DebtForm;

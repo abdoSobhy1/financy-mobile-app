@@ -730,7 +730,7 @@ export const DashboardScreen: React.FC = () => {
                     flexDirection: "row",
                     alignItems: "center",
                     justifyContent: "space-between",
-                    marginBottom: spacing.sm,
+                    paddingVertical: 4,
                   }}>
                   <View
                     style={{
@@ -738,51 +738,49 @@ export const DashboardScreen: React.FC = () => {
                       alignItems: "center",
                       flex: 1,
                     }}>
-                    <View style={{ marginRight: spacing.md }}>
-                      <View
-                        style={{
-                          width: 48,
-                          height: 48,
-                          borderRadius: 24,
-                          backgroundColor: (category?.color || colors.primary) + "20",
-                          alignItems: "center",
-                          justifyContent: "center",
-                        }}>
-                        <Ionicons
-                          name={
-                            (((category as any)?.icon as any) ||
-                              "receipt-outline") as any
-                          }
-                          size={24}
-                          color={category?.color || colors.primary}
-                        />
-                      </View>
+                    <View
+                      style={{
+                        width: 44,
+                        height: 44,
+                        borderRadius: 22,
+                        backgroundColor: (category?.color || colors.primary) + "20",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        marginRight: 14,
+                      }}>
+                      <Ionicons
+                        name={
+                          (((category as any)?.icon as any) ||
+                            "receipt-outline") as any
+                        }
+                        size={22}
+                        color={category?.color || colors.primary}
+                      />
                     </View>
-                    <View>
+                    <View style={{ flex: 1, justifyContent: "center", marginRight: 10 }}>
                       <Text
-                        style={[
-                          typography.bodyLarge,
-                          { color: colors.onBackground, fontWeight: "600" },
-                        ]}>
-                        {category?.name || "Uncategorized"}
+                        style={{ fontSize: 15, fontWeight: "600", color: colors.onBackground, marginBottom: 3 }}
+                        numberOfLines={1}>
+                        {tx.description || category?.name || "Transaction"}
                       </Text>
                       <Text
-                        style={[
-                          typography.bodySmall,
-                          { color: colors.onSurfaceVariant, marginTop: 2 },
-                        ]}>
-                        {formatDate(tx.date)}
+                        style={{ fontSize: 13, color: colors.onSurfaceVariant }}
+                        numberOfLines={1}>
+                        {category?.name || "Uncategorized"} • {formatDate(tx.date)}
                       </Text>
                     </View>
                   </View>
-                  <Text
-                    style={[
-                      typography.h3,
-                      { color: isIncome ? "#48C774" : colors.onBackground },
-                    ]}>
-                    {isIncome ? "+" : "-"}
-                    {formatCurrency(tx.amount)}
-                  </Text>
+                  <View style={{ alignItems: "flex-end", justifyContent: "center" }}>
+                    <Text
+                      style={{
+                        fontSize: 16,
+                        fontWeight: "700",
+                        color: isIncome ? colors.tertiary : colors.onBackground,
+                      }}>
+                      {isIncome ? "+" : "-"}
+                      {formatCurrency(tx.amount)}
+                    </Text>
+                  </View>
                 </View>
               );
             })}

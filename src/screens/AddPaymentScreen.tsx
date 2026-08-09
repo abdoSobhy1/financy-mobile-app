@@ -24,8 +24,6 @@ import { AppDispatch } from "../store";
 import { makeDebtPayment } from "../store/slices/debtsSlice";
 import { formatCurrency } from "../utils";
 import { DebtStackParamList } from "../navigation/DebtStackNavigator";
-import UnifiedForm from "../components/forms/UnifiedForm";
-import Input from "../components/ui/Input";
 
 type AddPaymentScreenNavigationProp = StackNavigationProp<
   DebtStackParamList,
@@ -133,16 +131,20 @@ const AddPaymentScreen: React.FC = () => {
   };
 
   return (
-    <UnifiedForm
-      title="Record Payment"
-      submitLabel="Record Payment"
-      onSubmit={handleSubmit}
-      onCancel={() => navigation.goBack()}
-      loading={loading}
-    >
-      <Text style={[styles.navSubtitle, { color: colors.onSurfaceVariant }]}>
-        {debtName}
-      </Text>
+    <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} style={{ flex: 1, backgroundColor: colors.background }}>
+      {/* Top Bar */}
+      <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 20, paddingTop: 10, paddingBottom: 10 }}>
+        <TouchableOpacity style={{ width: 60, height: 40, justifyContent: "center" }} onPress={() => navigation.goBack()}>
+          <Text style={[typography.bodyLarge, { color: colors.onSurfaceVariant }]}>Cancel</Text>
+        </TouchableOpacity>
+        <View style={{ alignItems: "center" }}>
+          <Text style={[typography.h3, { color: colors.onBackground }]}>Record Payment</Text>
+          <Text style={[typography.bodySmall, { color: colors.onSurfaceVariant, marginTop: 2 }]}>{debtName}</Text>
+        </View>
+        <View style={{ width: 60 }} />
+      </View>
+
+      <ScrollView contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 100 }} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
 
       {/* ── Debt Info Hero ─────────────────────── */}
       <View
@@ -224,11 +226,14 @@ const AddPaymentScreen: React.FC = () => {
         </View>
       </View>
 
-      {/* ── Payment Amount ─────────────────────── */}
-      <View style={styles.section}>
-        <Input
-          label="Payment Amount"
+      {/* Giant Amount Input */}
+      <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "center", marginVertical: 32 }}>
+        <Text style={{ fontSize: 32, fontWeight: "600", marginRight: 8, color: colors.onSurfaceVariant }}>$</Text>
+        <TextInput
+          style={{ fontSize: 56, fontWeight: "700", textAlign: "center", minWidth: 150, color: paymentData.amount ? colors.onBackground : colors.onSurfaceVariant }}
           placeholder="0.00"
+          placeholderTextColor={colors.onSurfaceVariant}
+          keyboardType="decimal-pad"
           value={paymentData.amount}
           onChangeText={(text) =>
             setPaymentData((prev) => ({
@@ -238,11 +243,11 @@ const AddPaymentScreen: React.FC = () => {
               interest: "",
             }))
           }
-          keyboardType="decimal-pad"
-          error={errors.amount}
-          leftIcon={<Ionicons name="cash" size={18} color={colors.primary} />}
         />
       </View>
+      {errors.amount && (
+        <Text style={{ color: colors.error, textAlign: "center", marginTop: -20, marginBottom: 20 }}>{errors.amount}</Text>
+      )}
 
       {/* ── Breakdown ──────────────────────────── */}
       <View style={styles.section}>
@@ -305,19 +310,36 @@ const AddPaymentScreen: React.FC = () => {
       </View>
 
       {/* ── Note ───────────────────────────────── */}
-      <View style={styles.section}>
-        <Input
-          label="Note (Optional)"
-          placeholder="Payment note or reference..."
+      <View style={{ marginBottom: spacing.xl }}>
+        <Text style={[typography.label, { color: colors.onSurfaceVariant, marginBottom: spacing.xs, marginLeft: spacing.sm }]}>Notes (Optional)</Text>
+        <View style={{ borderWidth: 1, borderColor: "rgba(255,255,255,0.05)", backgroundColor: colors.surfaceVariant, borderRadius: radius.lg }}>
+          <TextInput
+            style={[typography.bodyMedium, { color: colors.onBackground, padding: spacing.md, textAlign: "center", minHeight: 80 }]}
+            placeholder="Payment note or reference..."
+            placeholderTextColor={colors.onSurfaceVariant}
           value={paymentData.note}
           onChangeText={(text) =>
             setPaymentData((prev) => ({ ...prev, note: text }))
           }
           multiline
-          leftIcon={<Ionicons name="document-text" size={18} color={colors.primary} />}
         />
+        </View>
       </View>
-    </UnifiedForm>
+      </ScrollView>
+      
+      {/* Footer */}
+      <View style={{ padding: 20, paddingTop: 10, paddingBottom: Platform.OS === "ios" ? 34 : 24, backgroundColor: colors.background, borderTopWidth: 1, borderColor: colors.outlineVariant }}>
+        <TouchableOpacity
+          style={{ backgroundColor: colors.primaryContainer, paddingVertical: 16, borderRadius: radius.pill, alignItems: "center", opacity: loading ? 0.7 : 1 }}
+          onPress={handleSubmit}
+          disabled={loading}
+        >
+          <Text style={[typography.bodyLarge, { color: colors.onPrimaryContainer, fontWeight: "700" }]}>
+            {loading ? "Recording..." : "Record Payment"}
+          </Text>
+        </TouchableOpacity>
+      </View>
+    </KeyboardAvoidingView>
   );
 };
 
