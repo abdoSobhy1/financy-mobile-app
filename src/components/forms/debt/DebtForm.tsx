@@ -1,3 +1,4 @@
+import { AlertService } from "../../../services/AlertService";
 import React, { useState, useEffect, useMemo } from "react";
 import { Alert } from "react-native";
 import { useDispatch } from "react-redux";
@@ -130,7 +131,7 @@ export const DebtForm: React.FC<DebtFormProps> = ({ debt, onSuccess, onCancel })
   const handleDelete = () => {
     if (!debt) return;
 
-    Alert.alert("Delete Debt", `Are you sure you want to delete "${debt.name}" and all its payment history? This action cannot be undone.`, [
+    AlertService.alert("Delete Debt", `Are you sure you want to delete "${debt.name}" and all its payment history? This action cannot be undone.`, [
       { text: "Cancel", style: "cancel" },
       {
         text: "Delete",

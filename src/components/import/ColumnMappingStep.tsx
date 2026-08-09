@@ -1,3 +1,4 @@
+import { AlertService } from "../../services/AlertService";
 import React, { useState, useEffect } from "react";
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
@@ -70,7 +71,7 @@ export const ColumnMappingStep: React.FC<ColumnMappingStepProps> = ({ preview, m
     const missingRequired = requiredTargets.filter((target) => !mappedTargets.includes(target));
 
     if (missingRequired.length > 0) {
-      Alert.alert("Missing Required Mappings", `Please map the following required columns: ${missingRequired.join(", ")}`);
+      AlertService.alert("Missing Required Mappings", `Please map the following required columns: ${missingRequired.join(", ")}`);
       return;
     }
 

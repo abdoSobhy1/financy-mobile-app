@@ -1,3 +1,4 @@
+import { AlertService } from "../../services/AlertService";
 import React, { useState, useEffect } from "react";
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert } from "react-native";
 import { useSelector } from "react-redux";
@@ -57,7 +58,7 @@ export const GlobalSettingsStep: React.FC<GlobalSettingsStepProps> = ({ settings
   const handleContinue = () => {
     // Validate settings
     if (!localSettings.globalTransactionType) {
-      Alert.alert("Error", "Please select a transaction type");
+      AlertService.alert("Error", "Please select a transaction type");
       return;
     }
 

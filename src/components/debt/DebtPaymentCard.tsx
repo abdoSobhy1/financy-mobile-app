@@ -1,3 +1,4 @@
+import { AlertService } from "../../services/AlertService";
 import React, { useState } from "react";
 import { View, Text, StyleSheet, TouchableOpacity, Alert } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
@@ -27,7 +28,7 @@ const DebtPaymentCard: React.FC<DebtPaymentCardProps> = ({
   const [isExpanded, setIsExpanded] = useState(false);
 
   const handleDelete = () => {
-    Alert.alert(
+    AlertService.alert(
       "Delete Payment",
       "Are you sure you want to delete this payment? This action cannot be undone.",
       [

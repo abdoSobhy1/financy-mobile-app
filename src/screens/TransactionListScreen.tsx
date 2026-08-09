@@ -1,3 +1,4 @@
+import { AlertService } from "../services/AlertService";
 import React, { useEffect, useState, useMemo } from "react";
 import {
   View,
@@ -30,7 +31,9 @@ import { Transaction, TransactionStackParamList } from "../types";
 import { useAppTheme } from "../components/ui/ThemeProvider";
 import { useTabBarHeight } from "../components/ui";
 import { AppHeader } from "../components/ui/AppHeader";
-import { TransactionFilterModal } from "../components/transactions";
+  TransactionFilterModal,
+  CustomDateRangeModal,
+} from "../components/transactions";
 import { formatCurrency } from "../utils";
 import {
   format,
@@ -50,7 +53,7 @@ type NavigationProp = StackNavigationProp<
   "TransactionList"
 >;
 
-type TimeFilter = "Today" | "This Month" | "Last Month" | "Year" | "All Time";
+type TimeFilter = "Today" | "This Month" | "Last Month" | "Year" | "All Time" | "custom";
 type TypeFilter = "All" | "Income" | "Expense";
 
 export const TransactionListScreen: React.FC = () => {
@@ -82,6 +85,17 @@ export const TransactionListScreen: React.FC = () => {
   const [tempCategoryIds, setTempCategoryIds] = useState<Set<string>>(
     new Set(),
   );
+
+  // Custom Date Modal state
+  const [showCustomDateModal, setShowCustomDateModal] = useState(false);
+  const [customStartDate, setCustomStartDate] = useState<Date>(
+    new Date(new Date().setMonth(new Date().getMonth() - 1))
+  );
+  const [customEndDate, setCustomEndDate] = useState<Date>(new Date());
+  
+  // Temporary custom dates inside the modal
+  const [tempCustomStartDate, setTempCustomStartDate] = useState<Date>(customStartDate);
+  const [tempCustomEndDate, setTempCustomEndDate] = useState<Date>(customEndDate);
 
   useEffect(() => {
     dispatch(fetchTransactions());
@@ -149,6 +163,11 @@ export const TransactionListScreen: React.FC = () => {
     } else if (timeFilter === "Year") {
       startDate = startOfYear(now);
       endDate = endOfYear(now);
+    } else if (timeFilter === "custom") {
+      startDate = new Date(customStartDate);
+      startDate.setHours(0, 0, 0, 0);
+      endDate = new Date(customEndDate);
+      endDate.setHours(23, 59, 59, 999);
     } else {
       // "All Time" - no date bounds
       startDate = undefined;
@@ -233,7 +252,7 @@ export const TransactionListScreen: React.FC = () => {
         },
       );
     } else {
-      Alert.alert(
+      AlertService.alert(
         transaction.description || "Transaction",
         "What would you like to do?",
         [
@@ -265,7 +284,7 @@ export const TransactionListScreen: React.FC = () => {
   };
 
   const handleDelete = async (transaction: Transaction) => {
-    Alert.alert(
+    AlertService.alert(
       "Delete",
       "Are you sure you want to delete this transaction?",
       [
@@ -482,7 +501,7 @@ export const TransactionListScreen: React.FC = () => {
         }
       />
 
-      {/* Filter Modal (Image 2) */}
+      {/* Filter Modal */}
       <TransactionFilterModal
         visible={showFilterModal}
         filterType={tempTypeFilter}
@@ -491,9 +510,25 @@ export const TransactionListScreen: React.FC = () => {
         onFilterTypeChange={(t) => setTempTypeFilter(t as any)}
         onFilterPeriodChange={(p) => setTempTimeFilter(p as any)}
         onCategoryToggle={toggleCategorySelection}
+        onOpenCustomDate={() => setShowCustomDateModal(true)}
         onReset={resetModalFilters}
         onApply={applyModalFilters}
         onClose={() => setShowFilterModal(false)}
+      />
+      
+      {/* Custom Date Range Modal */}
+      <CustomDateRangeModal
+        visible={showCustomDateModal}
+        startDate={tempCustomStartDate}
+        endDate={tempCustomEndDate}
+        onStartDateChange={setTempCustomStartDate}
+        onEndDateChange={setTempCustomEndDate}
+        onApply={() => {
+          setCustomStartDate(tempCustomStartDate);
+          setCustomEndDate(tempCustomEndDate);
+          setShowCustomDateModal(false);
+        }}
+        onClose={() => setShowCustomDateModal(false)}
       />
     </SafeAreaView>
   );

@@ -1,3 +1,4 @@
+import { AlertService } from "../services/AlertService";
 import React, { useEffect, useState } from "react";
 import {
   View,
@@ -174,7 +175,7 @@ export const SettingsScreen: React.FC = () => {
   };
 
   const handleComingSoon = (feature: string) => {
-    Alert.alert("Coming Soon", `The ${feature} feature is not yet available. Stay tuned!`, [{ text: "OK" }]);
+    AlertService.alert("Coming Soon", `The ${feature} feature is not yet available. Stay tuned!`, [{ text: "OK" }]);
   };
 
   const handleVersionClick = () => {

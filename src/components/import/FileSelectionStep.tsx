@@ -1,3 +1,4 @@
+import { AlertService } from "../../services/AlertService";
 import React, { useState } from "react";
 import { View, Text, TouchableOpacity, StyleSheet, Alert } from "react-native";
 import * as DocumentPicker from "expo-document-picker";
@@ -29,7 +30,7 @@ export const FileSelectionStep: React.FC<FileSelectionStepProps> = ({ onFileSele
         // Validate file size (10MB limit)
         const maxSize = 10 * 1024 * 1024; // 10MB
         if ((file as any).size && (file as any).size > maxSize) {
-          Alert.alert("File Too Large", "Please select a file smaller than 10MB.");
+          AlertService.alert("File Too Large", "Please select a file smaller than 10MB.");
           return;
         }
 
@@ -38,7 +39,7 @@ export const FileSelectionStep: React.FC<FileSelectionStepProps> = ({ onFileSele
       }
     } catch (error) {
       console.error("Document picker error:", error);
-      Alert.alert("Error", "Failed to select file. Please try again.");
+      AlertService.alert("Error", "Failed to select file. Please try again.");
     } finally {
       setIsLoading(false);
     }

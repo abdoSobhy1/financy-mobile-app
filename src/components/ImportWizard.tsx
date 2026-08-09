@@ -1,3 +1,4 @@
+import { AlertService } from "../services/AlertService";
 import React, { useState, useCallback } from "react";
 import { View, Text, StyleSheet, Alert } from "react-native";
 import { useDispatch, useSelector } from "react-redux";
@@ -80,7 +81,7 @@ export const ImportWizard: React.FC<ImportWizardProps> = ({ visible, onClose, on
         setPreview(previewData);
         setCurrentStep("preview");
       } catch (error) {
-        Alert.alert("Error", error instanceof Error ? error.message : "Failed to read file");
+        AlertService.alert("Error", error instanceof Error ? error.message : "Failed to read file");
       }
     },
     [importService]
@@ -109,7 +110,7 @@ export const ImportWizard: React.FC<ImportWizardProps> = ({ visible, onClose, on
       handleImportComplete(result);
     } catch (error) {
       console.error("Import failed:", error);
-      Alert.alert("Import Failed", error instanceof Error ? error.message : "Unknown error occurred");
+      AlertService.alert("Import Failed", error instanceof Error ? error.message : "Unknown error occurred");
       setCurrentStep("validation"); // Go back to validation
     }
   }, [preview, mapping, settings, importService, handleImportComplete]);

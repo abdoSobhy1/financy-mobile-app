@@ -1,3 +1,4 @@
+import { AlertService } from "../../services/AlertService";
 import React, { useState } from "react";
 import { View, Text, StyleSheet, ScrollView, Alert } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
@@ -58,7 +59,7 @@ export const FirebaseCleanupModal: React.FC<FirebaseCleanupModalProps> = ({ visi
   };
 
   const performFullCleanup = async () => {
-    Alert.alert(
+    AlertService.alert(
       "Full Firebase Cleanup",
       "This will remove duplicate documents, orphaned records, and unused fields. This action cannot be undone. Are you sure?",
       [

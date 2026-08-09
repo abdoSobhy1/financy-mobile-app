@@ -1,3 +1,4 @@
+import { AlertService } from "../services/AlertService";
 import React, { useState } from "react";
 import {
   View,
@@ -32,23 +33,23 @@ export const SignInScreen: React.FC = () => {
 
   const handleSignIn = async () => {
     if (!email.trim() || !password.trim()) {
-      Alert.alert("Error", "Please fill in all fields");
+      AlertService.alert("Error", "Please fill in all fields");
       return;
     }
     try {
       await dispatch(signIn({ email: email.trim(), password })).unwrap();
     } catch (error: any) {
-      Alert.alert("Sign In Failed", error.message);
+      AlertService.alert("Sign In Failed", error.message);
     }
   };
 
   const handleSignUp = async () => {
     if (!email.trim() || !password.trim() || !displayName.trim()) {
-      Alert.alert("Error", "Please fill in all fields");
+      AlertService.alert("Error", "Please fill in all fields");
       return;
     }
     if (password.length < 6) {
-      Alert.alert("Error", "Password must be at least 6 characters long");
+      AlertService.alert("Error", "Password must be at least 6 characters long");
       return;
     }
     try {
@@ -60,16 +61,16 @@ export const SignInScreen: React.FC = () => {
         }),
       ).unwrap();
     } catch (error: any) {
-      Alert.alert("Sign Up Failed", error.message);
+      AlertService.alert("Sign Up Failed", error.message);
     }
   };
 
   const handleForgotPassword = () => {
     if (!email.trim()) {
-      Alert.alert("Error", "Please enter your email address first");
+      AlertService.alert("Error", "Please enter your email address first");
       return;
     }
-    Alert.alert(
+    AlertService.alert(
       "Reset Password",
       `Send password reset email to ${email}?`,
       [
@@ -79,9 +80,9 @@ export const SignInScreen: React.FC = () => {
           onPress: async () => {
             try {
               await dispatch(sendPasswordReset(email.trim())).unwrap();
-              Alert.alert("Success", "Password reset email sent!");
+              AlertService.alert("Success", "Password reset email sent!");
             } catch (error: any) {
-              Alert.alert("Error", error.message);
+              AlertService.alert("Error", error.message);
             }
           },
         },

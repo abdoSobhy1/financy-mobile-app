@@ -1,3 +1,4 @@
+import { AlertService } from "../../services/AlertService";
 import React, { useState, useEffect } from "react";
 import { View, Text, StyleSheet, ScrollView, FlatList, Alert } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
@@ -40,7 +41,7 @@ export const ValidationStep: React.FC<ValidationStepProps> = ({ preview, mapping
 
   const handleProceedWithWarnings = () => {
     if (!validation?.isValid) {
-      Alert.alert(
+      AlertService.alert(
         "Validation Errors",
         "There are validation errors that must be fixed before importing. Please go back and correct the mapping or data.",
         [{ text: "OK" }]
@@ -49,7 +50,7 @@ export const ValidationStep: React.FC<ValidationStepProps> = ({ preview, mapping
     }
 
     if (validation.warnings.length > 0) {
-      Alert.alert(
+      AlertService.alert(
         "Proceed with Warnings?",
         `There are ${validation.warnings.length} warnings. The import will skip problematic rows. Do you want to continue?`,
         [

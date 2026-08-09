@@ -1,3 +1,4 @@
+import { AlertService } from "../../services/AlertService";
 import { useAppTheme } from "../../components/ui/ThemeProvider";
 import React, { useState, useEffect } from "react";
 import { View, StyleSheet, ScrollView, Text, TouchableOpacity, Alert, Modal, FlatList } from "react-native";
@@ -66,7 +67,7 @@ export const CreateCustomChartScreen: React.FC = () => {
 
   const handleSave = async () => {
     if (!chartTitle.trim()) {
-      Alert.alert("Error", "Please enter a chart title");
+      AlertService.alert("Error", "Please enter a chart title");
       return;
     }
 
@@ -99,7 +100,7 @@ export const CreateCustomChartScreen: React.FC = () => {
 
       navigation.goBack();
     } catch (error) {
-      Alert.alert("Error", "Failed to save chart");
+      AlertService.alert("Error", "Failed to save chart");
     } finally {
       setSaving(false);
     }
@@ -108,7 +109,7 @@ export const CreateCustomChartScreen: React.FC = () => {
   const handleDelete = () => {
     if (!chartId) return;
 
-    Alert.alert("Delete Chart", "Are you sure you want to delete this chart?", [
+    AlertService.alert("Delete Chart", "Are you sure you want to delete this chart?", [
       { text: "Cancel", style: "cancel" },
       {
         text: "Delete",

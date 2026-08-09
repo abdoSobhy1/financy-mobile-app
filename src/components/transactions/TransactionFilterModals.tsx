@@ -89,6 +89,7 @@ export const TransactionFilterModal: React.FC<TransactionFilterModalProps> = ({
       transparent
       animationType="slide"
       statusBarTranslucent
+      presentationStyle="overFullScreen"
       onRequestClose={onClose}>
       <View style={styles.overlay}>
         <View
@@ -369,6 +370,7 @@ export const CustomDateRangeModal: React.FC<CustomDateRangeModalProps> = ({
       transparent
       animationType="slide"
       statusBarTranslucent
+      presentationStyle="overFullScreen"
       onRequestClose={onClose}>
       <View style={styles.overlay}>
         <View

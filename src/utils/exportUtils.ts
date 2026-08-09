@@ -1,4 +1,5 @@
 ﻿import * as XLSX from "xlsx";
+import { AlertService } from "../services/AlertService";
 import { writeAsStringAsync, documentDirectory, EncodingType } from "expo-file-system/legacy";
 import * as Sharing from "expo-sharing";
 import { Alert } from "react-native";
@@ -222,7 +223,7 @@ export const exportToCSV = async (data: ExportData): Promise<void> => {
     }
   } catch (error) {
     console.error("CSV export error:", error);
-    Alert.alert("Export Failed", "Failed to create CSV file. Please try again.");
+    AlertService.alert("Export Failed", "Failed to create CSV file. Please try again.");
     throw error;
   }
 };
