@@ -30,6 +30,7 @@ import { IconChip } from "../components/ui/IconChip";
 import { addCategory, fetchCategories } from "../store/slices/categoriesSlice";
 import { fetchTransactions } from "../store/slices/transactionsSlice";
 import { fetchBudgets } from "../store/slices/budgetsSlice";
+import { useTransactionActions } from "../hooks/useTransactionActions";
 
 type DashboardNavigationProp = StackNavigationProp<any, "Dashboard">;
 
@@ -47,6 +48,7 @@ export const DashboardScreen: React.FC = () => {
   const { colors, typography, spacing, radius, categoryPalette } =
     useAppTheme();
   const tabBarHeight = useTabBarHeight();
+  const { handleTransactionPress } = useTransactionActions();
 
   const transactions = useSelector(
     (state: RootState) => state.transactions.items,
@@ -724,8 +726,10 @@ export const DashboardScreen: React.FC = () => {
               const isIncome = tx.type === "income";
 
               return (
-                <View
+                <TouchableOpacity
                   key={tx.id}
+                  onPress={() => handleTransactionPress(tx)}
+                  activeOpacity={0.7}
                   style={{
                     flexDirection: "row",
                     alignItems: "center",
@@ -781,7 +785,7 @@ export const DashboardScreen: React.FC = () => {
                       {formatCurrency(tx.amount)}
                     </Text>
                   </View>
-                </View>
+                </TouchableOpacity>
               );
             })}
 

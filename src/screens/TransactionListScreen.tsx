@@ -23,8 +23,6 @@ import { StackNavigationProp } from "@react-navigation/stack";
 import { RootState, AppDispatch } from "../store";
 import {
   fetchTransactions,
-  deleteTransaction,
-  duplicateTransaction,
 } from "../store/slices/transactionsSlice";
 import { fetchCategories } from "../store/slices/categoriesSlice";
 import { fetchBudgets } from "../store/slices/budgetsSlice";
@@ -32,6 +30,7 @@ import { Transaction, TransactionStackParamList } from "../types";
 import { useAppTheme } from "../components/ui/ThemeProvider";
 import { useTabBarHeight } from "../components/ui";
 import { AppHeader } from "../components/ui/AppHeader";
+import { useTransactionActions } from "../hooks/useTransactionActions";
 
 import { formatCurrency } from "../utils";
 import {
@@ -70,6 +69,7 @@ export const TransactionListScreen: React.FC = () => {
   const navigation = useNavigation<NavigationProp>();
   const { colors, typography, spacing, radius } = useAppTheme();
   const tabBarHeight = useTabBarHeight();
+  const { handleTransactionPress } = useTransactionActions();
 
   const { items: transactionsMap, loading } = useSelector(
     (state: RootState) => state.transactions,
@@ -276,73 +276,7 @@ export const TransactionListScreen: React.FC = () => {
     });
   }, [filteredTransactions]);
 
-  const handleTransactionPress = (transaction: Transaction) => {
-    if (Platform.OS === "ios") {
-      ActionSheetIOS.showActionSheetWithOptions(
-        {
-          options: ["Cancel", "Edit", "Duplicate", "Delete"],
-          destructiveButtonIndex: 3,
-          cancelButtonIndex: 0,
-          title: transaction.description || "Transaction",
-        },
-        (buttonIndex) => {
-          if (buttonIndex === 1) handleEdit(transaction);
-          if (buttonIndex === 2) handleDuplicate(transaction);
-          if (buttonIndex === 3) handleDelete(transaction);
-        },
-      );
-    } else {
-      AlertService.alert(
-        transaction.description || "Transaction",
-        "What would you like to do?",
-        [
-          { text: "Edit", onPress: () => handleEdit(transaction) },
-          { text: "Duplicate", onPress: () => handleDuplicate(transaction) },
-          {
-            text: "Delete",
-            onPress: () => handleDelete(transaction),
-            style: "destructive",
-          },
-          { text: "Cancel", style: "cancel" },
-        ],
-      );
-    }
-  };
 
-  const handleEdit = (transaction: Transaction) => {
-    navigation.navigate("AddTransaction" as any, {
-      editTransaction: transaction,
-    });
-  };
-
-  const handleDuplicate = async (transaction: Transaction) => {
-    try {
-      await dispatch(duplicateTransaction(transaction.id)).unwrap();
-    } catch (error) {
-      console.error(error);
-    }
-  };
-
-  const handleDelete = async (transaction: Transaction) => {
-    AlertService.alert(
-      "Delete",
-      "Are you sure you want to delete this transaction?",
-      [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Delete",
-          style: "destructive",
-          onPress: async () => {
-            try {
-              await dispatch(deleteTransaction(transaction.id)).unwrap();
-            } catch (error) {
-              console.error(error);
-            }
-          },
-        },
-      ],
-    );
-  };
 
   const allCategoriesList = useMemo(
     () => Object.values(categories).filter((c) => c && !c.deleted),
