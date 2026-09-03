@@ -9,6 +9,7 @@ import {
   KeyboardAvoidingView,
   Platform,
 } from "react-native";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useDispatch, useSelector } from "react-redux";
 import { useNavigation, useRoute, RouteProp } from "@react-navigation/native";
@@ -30,7 +31,6 @@ import { useAppTheme } from "../components/ui/ThemeProvider";
 import { Input, CustomDatePicker, Modal } from "../components/ui";
 import { IconChip } from "../components/ui/IconChip";
 import { ParsedTransactionReview } from "../components/input";
-import { CustomKeypad } from "../components/ui/CustomKeypad";
 
 type NavigationProp = StackNavigationProp<
   TransactionStackParamList,
@@ -38,12 +38,26 @@ type NavigationProp = StackNavigationProp<
 >;
 type RouteParam = RouteProp<TransactionStackParamList, "AddTransaction">;
 
+const LAST_CATEGORY_KEY = "lastUsedCategoryId";
+const LAST_BUDGET_KEY = "lastUsedBudgetId";
+
+/** Convert Arabic-Indic digits (٠-٩) to Western ASCII digits */
+const arabicToWestern = (str: string): string =>
+  str.replace(/[٠-٩]/g, (d) => String(d.charCodeAt(0) - 0x0660));
+
 const evaluateMath = (expr: string): number => {
   try {
-    const sanitized = expr.replace(/[^-()\d/*+.]/g, "");
+    // Normalize Arabic digits first
+    const normalized = arabicToWestern(expr);
+    // Replace × and ÷ in case someone pastes them
+    const sanitized = normalized
+      .replace(/×/g, "*")
+      .replace(/÷/g, "/")
+      .replace(/[^-()\d/*+.]/g, "");
     if (!sanitized) return 0;
     // eslint-disable-next-line no-new-func
-    return Number(new Function("return " + sanitized)());
+    const result = Number(new Function("return " + sanitized)());
+    return isNaN(result) ? 0 : result;
   } catch (e) {
     return 0;
   }
@@ -75,9 +89,12 @@ export const AddTransactionScreen: React.FC = () => {
   const [note, setNote] = useState("");
   const [date, setDate] = useState<Date>(new Date());
   const [showDatePicker, setShowDatePicker] = useState(false);
+  const [amountFocused, setAmountFocused] = useState(false);
 
   const [voiceResults, setVoiceResults] = useState<any[]>([]);
   const [showVoiceReview, setShowVoiceReview] = useState(false);
+
+  const amountInputRef = useRef<TextInput>(null);
 
   useEffect(() => {
     dispatch(fetchCategories());
@@ -100,6 +117,19 @@ export const AddTransactionScreen: React.FC = () => {
       if (prefilledData.date) setDate(new Date(prefilledData.date));
     } else if (initialCategoryId) {
       setCategoryId(initialCategoryId);
+      // Still load last budget for quick-add flows
+      AsyncStorage.getItem(LAST_BUDGET_KEY).then((id) => {
+        if (id) setBudgetId(id);
+      }).catch(() => {});
+    } else {
+      // New transaction — restore last used category & budget
+      Promise.all([
+        AsyncStorage.getItem(LAST_CATEGORY_KEY),
+        AsyncStorage.getItem(LAST_BUDGET_KEY),
+      ]).then(([lastCat, lastBudget]) => {
+        if (lastCat) setCategoryId(lastCat);
+        if (lastBudget) setBudgetId(lastBudget);
+      }).catch(() => {});
     }
   }, [editTransaction, prefilledData, initialCategoryId, dispatch]);
 
@@ -112,9 +142,21 @@ export const AddTransactionScreen: React.FC = () => {
     setManualBudgetSelected(true);
   };
 
+  /** Resolve math expression on blur */
+  const handleAmountBlur = () => {
+    setAmountFocused(false);
+    if (!amountStr) return;
+    const result = evaluateMath(amountStr);
+    if (result > 0) {
+      // Format to at most 2 decimal places, removing trailing zeros
+      setAmountStr(parseFloat(result.toFixed(2)).toString());
+    }
+  };
+
   const handleSave = async () => {
+    // Evaluate any pending expression before saving
     const finalAmount = evaluateMath(amountStr);
-    if (!finalAmount || isNaN(finalAmount)) {
+    if (!finalAmount || isNaN(finalAmount) || finalAmount <= 0) {
       alert("Please enter a valid amount");
       return;
     }
@@ -123,7 +165,8 @@ export const AddTransactionScreen: React.FC = () => {
       return;
     }
 
-    const finalDescription = description.trim() ? description : categories[categoryId]?.name || "";
+    const finalDescription =
+      description.trim() ? description : categories[categoryId]?.name || "";
 
     const transactionData: TransactionFormData = {
       amount: finalAmount.toString(),
@@ -145,20 +188,19 @@ export const AddTransactionScreen: React.FC = () => {
         ).unwrap();
       } else {
         await dispatch(addTransaction(transactionData)).unwrap();
+        // Persist last-used category & budget for next time
+        await Promise.all([
+          AsyncStorage.setItem(LAST_CATEGORY_KEY, categoryId),
+          budgetId
+            ? AsyncStorage.setItem(LAST_BUDGET_KEY, budgetId)
+            : AsyncStorage.removeItem(LAST_BUDGET_KEY),
+        ]).catch(() => {});
       }
       navigation.goBack();
     } catch (error) {
       console.error(error);
       alert("Failed to save transaction");
     }
-  };
-
-  const handleKeypadPress = (key: string) => {
-    setAmountStr((prev) => prev + key);
-  };
-
-  const handleBackspace = () => {
-    setAmountStr((prev) => prev.slice(0, -1));
   };
 
   const handleVoiceResult = (results: any[]) => {
@@ -180,10 +222,15 @@ export const AddTransactionScreen: React.FC = () => {
     }
   };
 
-  const activeCategories = Object.values(categories).filter(
-    (c) => c && c.type === type && !c.deleted,
-  );
+  // Sort categories by usage count (entryCount) descending
+  const activeCategories = Object.values(categories)
+    .filter((c) => c && c.type === type && !c.deleted)
+    .sort((a, b) => ((b as any).entryCount || 0) - ((a as any).entryCount || 0));
+
   const selectedBudget = budgetId ? budgets[budgetId] : null;
+
+  /** Display value: while focused show raw expression, after blur show resolved number */
+  const amountDisplay = amountStr || "";
 
   return (
     <SafeAreaView
@@ -223,7 +270,8 @@ export const AddTransactionScreen: React.FC = () => {
           contentContainerStyle={{
             padding: spacing.lg,
             paddingBottom: spacing.xxl,
-          }}>
+          }}
+          keyboardShouldPersistTaps="handled">
           {/* Segmented Control */}
           <View
             style={[
@@ -267,7 +315,7 @@ export const AddTransactionScreen: React.FC = () => {
             })}
           </View>
 
-          {/* Amount Section */}
+          {/* Amount Section — native TextInput */}
           <View style={styles.amountSection}>
             <Text
               style={[
@@ -285,13 +333,27 @@ export const AddTransactionScreen: React.FC = () => {
                   ]}>
                   $
                 </Text>
-                <Text
+                <TextInput
+                  ref={amountInputRef}
                   style={[
                     styles.amountValue,
-                    { color: colors.onPrimaryContainer },
-                  ]}>
-                  {amountStr || "0.00"}
-                </Text>
+                    {
+                      color: amountFocused
+                        ? colors.primary
+                        : colors.onPrimaryContainer,
+                      minWidth: 80,
+                    },
+                  ]}
+                  value={amountDisplay}
+                  onChangeText={setAmountStr}
+                  onFocus={() => setAmountFocused(true)}
+                  onBlur={handleAmountBlur}
+                  keyboardType="default"
+                  placeholder="0.00"
+                  placeholderTextColor={colors.onSurfaceVariant}
+                  returnKeyType="done"
+                  selectTextOnFocus
+                />
               </View>
               {!editTransaction && (
                 <View style={styles.voiceBtnContainer}>
@@ -310,12 +372,21 @@ export const AddTransactionScreen: React.FC = () => {
                 </View>
               )}
             </View>
+            {/* Math hint */}
+            <Text
+              style={[
+                typography.bodySmall,
+                { color: colors.onSurfaceVariant, marginTop: 4, opacity: 0.6 },
+              ]}>
+              Supports math (e.g. 50+20) and Arabic numerals
+            </Text>
           </View>
 
-          {/* Categories */}
+          {/* Categories — sorted by usage count */}
           <ScrollView
             horizontal
             showsHorizontalScrollIndicator={false}
+            keyboardShouldPersistTaps="handled"
             contentContainerStyle={{
               gap: spacing.md,
               marginBottom: spacing.xl,
@@ -359,6 +430,7 @@ export const AddTransactionScreen: React.FC = () => {
             <ScrollView
               horizontal
               showsHorizontalScrollIndicator={false}
+              keyboardShouldPersistTaps="handled"
               contentContainerStyle={{
                 gap: spacing.md,
                 marginBottom: spacing.xl,
@@ -556,12 +628,6 @@ export const AddTransactionScreen: React.FC = () => {
             onClose={() => setShowDatePicker(false)}
           />
         )}
-
-        {/* Custom Keypad pinned to bottom */}
-        <CustomKeypad
-          onPress={handleKeypadPress}
-          onBackspace={handleBackspace}
-        />
       </KeyboardAvoidingView>
 
       {/* Voice Review Modal */}
@@ -611,7 +677,7 @@ const styles = StyleSheet.create({
   },
   amountSection: {
     alignItems: "center",
-    marginBottom: 32,
+    marginBottom: 24,
   },
   amountRow: {
     flexDirection: "row",

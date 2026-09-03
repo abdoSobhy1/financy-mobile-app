@@ -218,7 +218,7 @@ export type TransactionStackParamList = {
   TransactionList: undefined;
   AddTransaction: { editTransaction?: Transaction; prefilledData?: ParsedTransaction; categoryId?: string };
   Dashboard: undefined;
-  VoiceInput: undefined;
+  VoiceInput: { existingTransactions?: ParsedTransaction[] } | undefined;
   VoiceVerify: { parsedTransactions: ParsedTransaction[] };
 };
 

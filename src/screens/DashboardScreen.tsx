@@ -62,6 +62,7 @@ export const DashboardScreen: React.FC = () => {
 
   const [totalIncome, setTotalIncome] = useState<number>(0);
   const [totalExpenses, setTotalExpenses] = useState<number>(0);
+  const [budgetedExpenses, setBudgetedExpenses] = useState<number>(0);
   const [balance, setBalance] = useState<number>(0);
   const [balanceChangePct, setBalanceChangePct] = useState<number>(0);
   const [totalBudget, setTotalBudget] = useState<number>(0);
@@ -128,9 +129,14 @@ export const DashboardScreen: React.FC = () => {
           const expenses = periodTxs
             .filter((t) => t.type === "expense")
             .reduce((sum, t) => sum + t.amount, 0);
+          // Only count transactions that are assigned to a budget
+          const budgeted = periodTxs
+            .filter((t) => t.type === "expense" && !!t.budgetId)
+            .reduce((sum, t) => sum + t.amount, 0);
 
           setTotalIncome(income);
           setTotalExpenses(expenses);
+          setBudgetedExpenses(budgeted);
           const currentBalance = income - expenses;
           setBalance(currentBalance);
 
@@ -252,9 +258,14 @@ export const DashboardScreen: React.FC = () => {
       scores[tx.categoryId] = (scores[tx.categoryId] || 0) + weight;
     }
 
-    const sortedCatIds = Object.keys(scores).sort(
-      (a, b) => (scores[b] || 0) - (scores[a] || 0),
-    );
+    const sortedCatIds = Object.keys(scores).sort((a, b) => {
+      const scoreDiff = (scores[b] || 0) - (scores[a] || 0);
+      if (scoreDiff !== 0) return scoreDiff;
+      // Tiebreaker: total usage count (entryCount)
+      const countA = (catsMap[a] as any)?.entryCount || 0;
+      const countB = (catsMap[b] as any)?.entryCount || 0;
+      return countB - countA;
+    });
 
     const slots: QuickAddSlot[] = [];
     const pickedIds = new Set<string>();
@@ -371,7 +382,7 @@ export const DashboardScreen: React.FC = () => {
     return { strokePath: d, fillPath };
   };
 
-  const budgetPercentUsed = totalBudget > 0 ? Math.min(100, Math.round((totalExpenses / totalBudget) * 100)) : 0;
+  const budgetPercentUsed = totalBudget > 0 ? Math.min(100, Math.round((budgetedExpenses / totalBudget) * 100)) : 0;
   const pieRadius = 24;
   const pieStroke = 6;
   const pieCircumference = 2 * Math.PI * pieRadius;
@@ -524,7 +535,7 @@ export const DashboardScreen: React.FC = () => {
             </View>
           </View>
 
-          {/* 2. Monthly Spend Card */}
+          {/* 2. Monthly Spend vs Budget Card (budgeted transactions only) */}
           <View
             style={{
               width: CARD_WIDTH,
@@ -545,7 +556,7 @@ export const DashboardScreen: React.FC = () => {
                     marginBottom: spacing.sm,
                   },
                 ]}>
-                MONTHLY SPEND
+                BUDGETED SPEND
               </Text>
               <Text
                 style={[
@@ -556,7 +567,7 @@ export const DashboardScreen: React.FC = () => {
                     fontWeight: "900",
                   },
                 ]}>
-                {formatCurrency(totalExpenses)}
+                {formatCurrency(budgetedExpenses)}
               </Text>
             </View>
 
@@ -595,6 +606,75 @@ export const DashboardScreen: React.FC = () => {
                   {budgetPercentUsed}% Used
                 </Text>
               </View>
+            </View>
+          </View>
+
+          {/* 3. Income / Balance / Spend Summary Card */}
+          <View
+            style={{
+              width: CARD_WIDTH,
+              backgroundColor: colors.primaryContainer,
+              borderRadius: 32,
+              padding: spacing.xl,
+              justifyContent: "space-between",
+            }}>
+            <Text
+              style={[
+                typography.label,
+                {
+                  color: colors.onPrimaryContainer,
+                  textTransform: "uppercase",
+                  letterSpacing: 1,
+                  opacity: 0.7,
+                  marginBottom: spacing.lg,
+                },
+              ]}>
+              PERIOD SUMMARY
+            </Text>
+
+            {/* Income row */}
+            <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: spacing.md }}>
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+                <View style={{ width: 32, height: 32, borderRadius: 16, backgroundColor: "rgba(255,255,255,0.15)", alignItems: "center", justifyContent: "center" }}>
+                  <Ionicons name="arrow-down" size={16} color={colors.onPrimaryContainer} />
+                </View>
+                <Text style={[typography.bodyMedium, { color: colors.onPrimaryContainer, opacity: 0.8 }]}>Income</Text>
+              </View>
+              <Text style={[typography.label, { color: colors.onPrimaryContainer, fontWeight: "700", fontSize: 16 }]}>
+                +{formatCurrency(totalIncome)}
+              </Text>
+            </View>
+
+            {/* Spend row */}
+            <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: spacing.md }}>
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+                <View style={{ width: 32, height: 32, borderRadius: 16, backgroundColor: "rgba(255,255,255,0.15)", alignItems: "center", justifyContent: "center" }}>
+                  <Ionicons name="arrow-up" size={16} color={colors.onPrimaryContainer} />
+                </View>
+                <Text style={[typography.bodyMedium, { color: colors.onPrimaryContainer, opacity: 0.8 }]}>Total Spend</Text>
+              </View>
+              <Text style={[typography.label, { color: colors.onPrimaryContainer, fontWeight: "700", fontSize: 16 }]}>
+                -{formatCurrency(totalExpenses)}
+              </Text>
+            </View>
+
+            {/* Divider */}
+            <View style={{ height: 1, backgroundColor: "rgba(255,255,255,0.2)", marginBottom: spacing.md }} />
+
+            {/* Balance row */}
+            <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
+              <Text style={[typography.label, { color: colors.onPrimaryContainer, opacity: 0.9, fontWeight: "700" }]}>Net Balance</Text>
+              <Text
+                style={[
+                  typography.h2,
+                  {
+                    color: colors.onPrimaryContainer,
+                    fontWeight: "900",
+                    fontSize: 28,
+                  },
+                ]}>
+                {balance >= 0 ? "+" : ""}{formatCurrency(balance)}
+              </Text>
             </View>
           </View>
         </ScrollView>

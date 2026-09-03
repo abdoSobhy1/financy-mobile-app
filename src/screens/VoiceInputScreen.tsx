@@ -8,7 +8,7 @@ import {
   StatusBar,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { useNavigation } from "@react-navigation/native";
+import { useNavigation, useRoute, RouteProp } from "@react-navigation/native";
 import { StackNavigationProp } from "@react-navigation/stack";
 import { TransactionStackParamList } from "../types";
 import { useAppTheme } from "../components/ui/ThemeProvider";
@@ -33,11 +33,14 @@ import { selectAllCategories } from "../store/slices/categoriesSlice";
 import { RootState } from "../store";
 
 type NavigationProp = StackNavigationProp<TransactionStackParamList>;
+type VoiceInputRouteProp = RouteProp<TransactionStackParamList, "VoiceInput">;
 const NUM_BARS = 5;
 const SILENCE_TIMEOUT_MS = 3000;
 
 export const VoiceInputScreen: React.FC = () => {
   const navigation = useNavigation<NavigationProp>();
+  const route = useRoute<VoiceInputRouteProp>();
+  const existingTransactions = (route.params as any)?.existingTransactions || [];
   const { colors, typography } = useAppTheme();
   
   const [isListening, setIsListening] = useState(false);
@@ -70,7 +73,9 @@ export const VoiceInputScreen: React.FC = () => {
       const parsed = parseVoiceInput(finalTranscript, categoriesList, undefined, budgets, transactions);
       
       if (parsed && parsed.length > 0) {
-        navigation.replace("VoiceVerify", { parsedTransactions: parsed });
+        // Merge with any existing transactions passed from VoiceVerify
+        const merged = [...existingTransactions, ...parsed];
+        navigation.replace("VoiceVerify", { parsedTransactions: merged });
         return;
       }
     }
