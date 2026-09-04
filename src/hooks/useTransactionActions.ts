@@ -11,7 +11,7 @@ import {
 
 export const useTransactionActions = () => {
   const dispatch = useDispatch<AppDispatch>();
-  const navigation = useNavigation();
+  const navigation = useNavigation<any>();
 
   const handleEdit = (transaction: Transaction) => {
     navigation.navigate("AddTransaction" as never, {

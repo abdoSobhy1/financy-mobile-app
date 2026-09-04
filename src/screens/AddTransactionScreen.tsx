@@ -112,6 +112,7 @@ export const AddTransactionScreen: React.FC = () => {
       if (prefilledData.amount) setAmountStr(prefilledData.amount.toString());
       if (prefilledData.type) setType(prefilledData.type);
       if (prefilledData.categoryId) setCategoryId(prefilledData.categoryId);
+      if (prefilledData.budgetId) setBudgetId(prefilledData.budgetId);
       if (prefilledData.description) setDescription(prefilledData.description);
       if (prefilledData.note) setNote(prefilledData.note);
       if (prefilledData.date) setDate(new Date(prefilledData.date));
@@ -352,7 +353,6 @@ export const AddTransactionScreen: React.FC = () => {
                   placeholder="0.00"
                   placeholderTextColor={colors.onSurfaceVariant}
                   returnKeyType="done"
-                  selectTextOnFocus
                 />
               </View>
               {!editTransaction && (

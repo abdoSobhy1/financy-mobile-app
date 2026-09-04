@@ -22,4 +22,5 @@ export { TabBar, useTabBarHeight } from "./TabBar";
 export { Badge } from "./Badge";
 export { ListRow } from "./ListRow";
 export { AppHeader } from "./AppHeader";
+export { FilterChips } from "./FilterChips";
 export * from "./CustomKeypad";

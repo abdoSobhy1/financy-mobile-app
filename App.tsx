@@ -1,12 +1,13 @@
-import React, { useEffect, useState } from "react";
-import { View, Text, AppState } from "react-native";
+import React, { useEffect, useRef, useState } from "react";
+import { View, Text, AppState, Platform } from "react-native";
 import { Provider } from "react-redux";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { BottomSheetModalProvider } from "@gorhom/bottom-sheet";
 import * as SplashScreen from "expo-splash-screen";
+import * as Notifications from "expo-notifications";
 import { store } from "./src/store";
-import AppNavigator from "./src/navigation/AppNavigator";
+import AppNavigator, { navigationRef } from "./src/navigation/AppNavigator";
 import { DatabaseManager } from "./src/database";
 import {
   LoadingOverlay,
@@ -21,6 +22,12 @@ import { offlineFirstSync } from "./src/services/OfflineFirstSync";
 import { useSyncDataRefresh } from "./src/hooks";
 import { ShimmerProvider } from "react-native-fast-shimmer";
 import { ThemeProvider } from "./src/components/ui/ThemeProvider";
+import {
+  smsService,
+  retrieveSmsTransaction,
+  clearSmsTransaction,
+  SMS_TX_KEY_PREFIX,
+} from "./src/services/smsService";
 
 // Keep the splash screen visible while we fetch resources
 SplashScreen.preventAutoHideAsync();
@@ -110,7 +117,35 @@ export default function App() {
           console.log("Notification service initialized successfully");
         } catch (error) {
           console.error("Failed to initialize notification service:", error);
-          // Don't fail app initialization if notifications fail
+        }
+
+        // Initialize SMS Detection Service (Android only)
+        if (Platform.OS === "android") {
+          try {
+            const state = store.getState() as any;
+            const cats = Object.values(state.categories?.items || {}) as any[];
+            const budgets = state.budgets?.items || {};
+            const hasPerms = await smsService.hasPermissions();
+            if (hasPerms) {
+              smsService.startListening(
+                cats.map((c: any) => ({ id: c.id, name: c.name })),
+                budgets
+              );
+              console.log("📱 SMS detection service started");
+            } else {
+              // Request permissions — user will see the dialog
+              const granted = await smsService.requestPermissions();
+              if (granted) {
+                smsService.startListening(
+                  cats.map((c: any) => ({ id: c.id, name: c.name })),
+                  budgets
+                );
+                console.log("📱 SMS detection service started after permission grant");
+              }
+            }
+          } catch (e) {
+            console.warn("SMS service init failed (non-critical):", e);
+          }
         }
 
         // Note: Initial cloud pull will happen after user authentication
@@ -134,14 +169,52 @@ export default function App() {
 
     initApp();
 
-    // Cleanup function
+    // ── Notification tap handler — SMS deep-link ──────────────────────
+    // When user taps an SMS notification, open AddTransaction pre-filled
+    const handleNotificationResponse = async (
+      response: Notifications.NotificationResponse | null
+    ) => {
+      if (!response) return;
+      const data = response.notification.request.content.data as any;
+      if (data?.type !== "sms-transaction") return;
+
+      // The notification identifier is the key into AsyncStorage
+      const notifId = response.notification.request.identifier;
+      const tx = await retrieveSmsTransaction(notifId);
+      if (!tx) return;
+
+      // Clean up stored entry
+      await clearSmsTransaction(notifId);
+
+      // Navigate — wait for navigator to be ready
+      const navigate = () => {
+        if (navigationRef.isReady()) {
+          (navigationRef as any).navigate("Main", {
+            screen: "Transactions",
+            params: {
+              screen: "AddTransaction",
+              params: { prefilledData: tx },
+            },
+          });
+        } else {
+          setTimeout(navigate, 200);
+        }
+      };
+      navigate();
+    };
+
+    // Cold-start notification click check
+    Notifications.getLastNotificationResponseAsync().then(handleNotificationResponse).catch(() => {});
+
+    // Foreground/background notification click listener
+    const notifSubscription =
+      Notifications.addNotificationResponseReceivedListener(handleNotificationResponse);
+
     return () => {
-      if (networkUnsubscribe) {
-        networkUnsubscribe();
-      }
-      if (appStateListener) {
-        appStateListener.remove();
-      }
+      if (networkUnsubscribe) networkUnsubscribe();
+      if (appStateListener) appStateListener.remove();
+      notifSubscription.remove();
+      smsService.stopListening();
     };
   }, []);
   if (dbError) {

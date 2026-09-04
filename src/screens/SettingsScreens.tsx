@@ -12,6 +12,7 @@ import {
   StatusBar,
   Share,
   Alert,
+  DeviceEventEmitter,
 } from "react-native";
 import { useAppTheme } from "../components/ui/ThemeProvider";
 import { LinearGradient } from "expo-linear-gradient";
@@ -21,7 +22,7 @@ import { useNavigation } from "@react-navigation/native";
 import { StackNavigationProp } from "@react-navigation/stack";
 import { SettingsStackParamList } from "../types";
 import { useDispatch, useSelector } from "react-redux";
-import { RootState, AppDispatch } from "../store";
+import { RootState, AppDispatch, store } from "../store";
 import {
   useCustomAlert,
   useToast,
@@ -56,6 +57,12 @@ import { useSync } from "../contexts/SyncProvider";
 import { setDebugMode, getDebugMode } from "../utils/logger";
 import { getDeviceId } from "../utils/deviceId";
 import { signOut } from "../store/slices/authSlice";
+import {
+  getSmsDetectionEnabled,
+  setSmsDetectionEnabled,
+  smsService,
+} from "../services/smsService";
+import { Platform } from "react-native";
 
 type SettingsScreenNavigationProp = StackNavigationProp<SettingsStackParamList>;
 
@@ -146,6 +153,7 @@ export const SettingsScreen: React.FC = () => {
   const [deviceId, setDeviceId] = useState<string>("");
   const { showAlert, AlertComponent } = useCustomAlert();
   const { showSuccess, showError } = useToast();
+  const [smsEnabled, setSmsEnabled] = useState(true);
 
   const currentBillingDay = settings.data?.billingPeriodStartDay || 28;
 
@@ -160,7 +168,35 @@ export const SettingsScreen: React.FC = () => {
     dispatch(fetchSettings());
     dispatch(fetchTransactions());
     getDeviceId().then(setDeviceId);
+    // Load SMS detection toggle state
+    if (Platform.OS === "android") {
+      getSmsDetectionEnabled().then(setSmsEnabled);
+    }
   }, [dispatch]);
+
+  const handleSmsToggle = async (value: boolean) => {
+    setSmsEnabled(value);
+    await setSmsDetectionEnabled(value);
+    if (value) {
+      // Restart listener with current categories & budgets
+      const state = (store as any).getState();
+      const cats = Object.values(state.categories?.items || {}) as any[];
+      const budgets = state.budgets?.items || {};
+      const granted = await smsService.hasPermissions() || await smsService.requestPermissions();
+      if (granted) {
+        smsService.stopListening();
+        smsService.startListening(
+          cats.map((c: any) => ({ id: c.id, name: c.name })),
+          budgets
+        );
+      }
+      showSuccess("SMS detection enabled");
+    } else {
+      smsService.stopListening();
+      showSuccess("SMS detection disabled");
+    }
+  };
+
 
   // ── Handlers ────────────────────────────────────────────────────
 
@@ -395,83 +431,17 @@ export const SettingsScreen: React.FC = () => {
     );
   };
 
-  // ── Add category ───────────────────────────────────────────────
-  const handleNewCategoryAdd = async (categoryData: {
-    name: string;
-    type: "income" | "expense";
-    color?: string;
-    icon?: string;
-  }) => {
-    const arr = Object.values(categories);
-    if (
-      arr.find(
-        (c) =>
-          c.name.toLowerCase() === categoryData.name.toLowerCase() &&
-          c.type === categoryData.type,
-      )
-    ) {
-      showError("Category already exists");
-      return;
-    }
-    try {
-      await dispatch(addCategory(categoryData)).unwrap();
-      setAddCategoryModalVisible(false);
-      showSuccess(`Category "${categoryData.name}" added`);
-    } catch (e: any) {
-      showError(e?.message || "Failed to add category");
-    }
-  };
-
-  // ── Export Category Map (dev tool) ────────────────────────────
-  const handleExportCategoryMap = async () => {
-    try {
-      const txList = Object.values(transactions || {});
-      const cats = categories || {};
-
-      // Group descriptions by categoryId
-      const grouped: Record<string, Set<string>> = {};
-      for (const tx of txList) {
-        if (!tx.categoryId || !tx.description) continue;
-        if (!grouped[tx.categoryId]) grouped[tx.categoryId] = new Set();
-        grouped[tx.categoryId].add(tx.description.trim());
-      }
-
-      // Resolve to category names
-      const result: Record<string, string[]> = {};
-      for (const [catId, descs] of Object.entries(grouped)) {
-        const catName = cats[catId]?.name || `Unknown (${catId})`;
-        result[catName] = Array.from(descs).sort();
-      }
-
-      const json = JSON.stringify(result, null, 2);
-      console.log("=== CATEGORY MAP ===");
-      console.log(json);
-
-      await Share.share({ message: json, title: "Category Map" });
-      const catCount = Object.keys(result).length;
-      showSuccess(`Exported ${catCount} categories with descriptions`);
-    } catch (e: any) {
-      if (e?.message !== "User did not share") {
-        showError(`Export failed: ${e?.message || "Unknown"}`);
-      }
-    }
-  };
-
   // ═══════════════════════════════════════════════════════════════
   // RENDER
   // ═══════════════════════════════════════════════════════════════
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }} edges={["top"]}>
       <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
-      
+
       {/* Top Header */}
       <AppHeader title="Settings" showSettings={false} />
 
       <ScrollView contentContainerStyle={{ paddingHorizontal: spacing.lg, paddingBottom: tabBarHeight + 100 }} showsVerticalScrollIndicator={false}>
-        
-        <Text style={[typography.h1, { color: colors.onBackground, marginTop: spacing.md, marginBottom: 4 }]}>Settings</Text>
-        <Text style={[typography.bodyMedium, { color: colors.onSurfaceVariant, marginBottom: spacing.xl }]}>Manage your account and preferences.</Text>
-
         <SectionLabel text="ACCOUNT" />
         <GlassCard>
           <SettingRow icon="person-outline" title="Profile Information" subtitle="Update your name, email, and avatar" onPress={() => handleComingSoon("Profile")} />
@@ -485,6 +455,25 @@ export const SettingsScreen: React.FC = () => {
           <SettingRow icon="globe-outline" title="Language" subtitle="English (US)" rightElement={<Ionicons name="chevron-forward" size={16} color={colors.onSurfaceVariant} />} onPress={() => handleComingSoon("Language")} />
           <SettingRow icon="moon-outline" title="Theme" subtitle="Dark mode" rightElement={<Ionicons name="chevron-forward" size={16} color={colors.onSurfaceVariant} />} onPress={() => handleComingSoon("Theme")} />
           <SettingRow icon="apps-outline" title="Categories" subtitle="Manage transaction categories and icons" onPress={() => navigation.navigate("CategoryManagement")} />
+          {Platform.OS === "android" && (
+            <>
+              <SettingRow
+                icon="chatbubble-outline"
+                title="SMS Transaction Detection"
+                subtitle={smsEnabled ? "Detects bank SMS and notifies you" : "Disabled — tap to enable"}
+                rightElement={
+                  <Switch
+                    value={smsEnabled}
+                    onValueChange={handleSmsToggle}
+                    trackColor={{ false: colors.surfaceVariant, true: colors.primaryContainer }}
+                    thumbColor={smsEnabled ? colors.primary : colors.onSurfaceVariant}
+                  />
+                }
+                onPress={() => handleSmsToggle(!smsEnabled)}
+              />
+
+            </>
+          )}
         </GlassCard>
 
         <SectionLabel text="DATA" />
@@ -543,11 +532,12 @@ export const SettingsScreen: React.FC = () => {
         </View>
       </Modal>
 
-      <FirebaseCleanupModal 
-        visible={showFirebaseCleanup} 
-        onClose={() => setShowFirebaseCleanup(false)} 
+      <FirebaseCleanupModal
+        visible={showFirebaseCleanup}
+        onClose={() => setShowFirebaseCleanup(false)}
       />
 
+      <AlertComponent />
     </SafeAreaView>
   );
 };

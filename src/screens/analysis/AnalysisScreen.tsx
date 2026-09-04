@@ -14,7 +14,7 @@ import { useAppTheme } from "../../components/ui/ThemeProvider";
 import { useAnalysisData } from "./hooks/useAnalysisData";
 import { AppHeader } from "../../components/ui/AppHeader";
 import { startOfMonth, endOfMonth, subMonths } from "date-fns";
-import { useTabBarHeight } from "../../components/ui";
+import { useTabBarHeight, FilterChips } from "../../components/ui";
 import { formatCurrency } from "../../utils";
 
 export const AnalysisScreen: React.FC = () => {
@@ -46,39 +46,6 @@ export const AnalysisScreen: React.FC = () => {
   };
 
   const { summary, categoryBreakdown, monthlyTrends, budgetUsage } = analyticsData;
-
-  // Removed manual top header
-
-  const renderFilters = () => (
-    <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: spacing.xl, paddingHorizontal: spacing.lg }}>
-      {["This Month", "Last Month", "3 Months"].map((f) => (
-        <TouchableOpacity
-          key={f}
-          onPress={() => setFilter(f as any)}
-          style={[
-            styles.filterChip,
-            {
-              borderColor: colors.outlineVariant,
-              backgroundColor: filter === f ? "rgba(128, 203, 196, 0.15)" : "transparent",
-            },
-          ]}
-        >
-          <Text
-            style={[
-              typography.bodyMedium,
-              {
-                color: filter === f ? colors.primaryContainer : colors.onSurfaceVariant,
-                fontWeight: filter === f ? "600" : "400",
-              },
-            ]}
-          >
-            {f}
-          </Text>
-        </TouchableOpacity>
-      ))}
-      <View style={{ width: 20 }} />
-    </ScrollView>
-  );
 
   const renderSpendingBreakdown = () => {
     const expenses = categoryBreakdown.filter((item) => item.category.type === "expense");
@@ -121,7 +88,7 @@ export const AnalysisScreen: React.FC = () => {
   };
 
   const renderCashFlowTrend = () => {
-    // take the last 4 months for the bar chart
+    // Always take the last 4 months for the bar chart so it's useful for comparison
     const data = monthlyTrends.slice(-4);
     const maxVal = Math.max(
       ...data.map((d) => Math.max(d.income, d.expenses)),
@@ -228,8 +195,12 @@ export const AnalysisScreen: React.FC = () => {
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }} edges={["top"]}>
       <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
       <AppHeader title="Analytics" />
-      <View style={{ marginTop: spacing.md }} />
-      {renderFilters()}
+      <FilterChips
+        options={["This Month", "Last Month", "3 Months"]}
+        selected={filter}
+        onSelect={(f) => setFilter(f as any)}
+        style={{ marginBottom: spacing.xl, paddingHorizontal: spacing.lg, height: 40 }}
+      />
 
       <ScrollView
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />}
@@ -245,28 +216,6 @@ export const AnalysisScreen: React.FC = () => {
 };
 
 const styles = StyleSheet.create({
-  topHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingHorizontal: 20,
-    paddingTop: 16,
-    paddingBottom: 8,
-  },
-  avatarPlaceholder: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  filterChip: {
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 20,
-    borderWidth: 1,
-    marginRight: 12,
-  },
   card: {
     padding: 24,
     borderRadius: 24,

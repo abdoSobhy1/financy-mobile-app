@@ -41,6 +41,7 @@ export interface Budget {
   name: string;
   amount: number;
   currentBalance: number;
+  categoryId?: string;
   resetDay: number; // Day of month (1-31)
   alertsEnabled?: boolean; // Overspending alerts toggle
   createdAt: string;
@@ -174,6 +175,7 @@ export interface ParsedTransaction {
 export interface BudgetFormData {
   name: string;
   amount: string;
+  categoryId?: string;
   resetDay: number;
   alertsEnabled?: boolean;
 }

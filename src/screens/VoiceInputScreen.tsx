@@ -74,13 +74,18 @@ export const VoiceInputScreen: React.FC = () => {
       
       if (parsed && parsed.length > 0) {
         // Merge with any existing transactions passed from VoiceVerify
+        // Always use replace to keep a flat navigation stack
         const merged = [...existingTransactions, ...parsed];
         navigation.replace("VoiceVerify", { parsedTransactions: merged });
         return;
       }
     }
     
-    navigation.goBack();
+    if (existingTransactions.length > 0) {
+      navigation.replace("VoiceVerify", { parsedTransactions: existingTransactions });
+    } else {
+      navigation.goBack();
+    }
   };
 
   const clearSilenceTimeout = () => {
@@ -216,7 +221,19 @@ export const VoiceInputScreen: React.FC = () => {
       
       {/* Header */}
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.closeBtn}>
+        <TouchableOpacity
+          onPress={() => {
+            isNavigatingRef.current = true;
+            transcriptRef.current = "";
+            clearSilenceTimeout();
+            ExpoSpeechRecognitionModule.stop();
+            if (existingTransactions.length > 0) {
+              navigation.replace("VoiceVerify", { parsedTransactions: existingTransactions });
+            } else {
+              navigation.goBack();
+            }
+          }}
+          style={styles.closeBtn}>
           <Ionicons name="close" size={28} color={colors.onBackground} />
         </TouchableOpacity>
       </View>

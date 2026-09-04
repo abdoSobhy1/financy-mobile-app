@@ -70,7 +70,7 @@ export const DashboardScreen: React.FC = () => {
   const [quickAddSlots, setQuickAddSlots] = useState<QuickAddSlot[]>([]);
   const [recentTransactions, setRecentTransactions] = useState<Transaction[]>([]);
   const [overspentBudgets, setOverspentBudgets] = useState<{ id: string; name: string; excess: number }[]>([]);
-  
+
   const [showAlert, setShowAlert] = useState(true);
 
   useEffect(() => {
@@ -201,7 +201,7 @@ export const DashboardScreen: React.FC = () => {
               (a, b) =>
                 new Date(b.date).getTime() - new Date(a.date).getTime() ||
                 new Date(b.createdAt).getTime() -
-                  new Date(a.createdAt).getTime(),
+                new Date(a.createdAt).getTime(),
             )
             .slice(0, 5);
           setRecentTransactions(sortedRecent);
@@ -355,15 +355,15 @@ export const DashboardScreen: React.FC = () => {
         fillPath: `M 0 ${height / 2} L ${width} ${height / 2} L ${width} ${height} L 0 ${height} Z`,
       };
     }
-    
+
     const max = Math.max(...data);
     const min = Math.min(...data);
     const range = max - min || 1;
-    
+
     const stepX = width / (data.length - 1);
     const padding = height * 0.2;
     const drawHeight = height - padding * 2;
-    
+
     const points = data.map((val, i) => {
       const x = i * stepX;
       const y = height - padding - ((val - min) / range) * drawHeight;
@@ -377,7 +377,7 @@ export const DashboardScreen: React.FC = () => {
       const cx = (p0.x + p1.x) / 2;
       d += ` C ${cx} ${p0.y}, ${cx} ${p1.y}, ${p1.x} ${p1.y}`;
     }
-    
+
     const fillPath = d + ` L ${width} ${height} L 0 ${height} Z`;
     return { strokePath: d, fillPath };
   };
@@ -403,7 +403,7 @@ export const DashboardScreen: React.FC = () => {
         contentContainerStyle={{
           paddingBottom: tabBarHeight,
         }}>
-        
+
         {/* Alerts Section (Dynamic Overspending Alerts) */}
         {showAlert && overspentBudgets.length > 0 && (
           <View style={{ paddingHorizontal: spacing.lg, marginBottom: spacing.md, gap: spacing.sm }}>
@@ -443,7 +443,7 @@ export const DashboardScreen: React.FC = () => {
         )}
 
         {/* Dashboard Summary Cards - Horizontal Scroll */}
-        <ScrollView 
+        <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
           snapToInterval={CARD_WIDTH + spacing.md}
@@ -453,103 +453,94 @@ export const DashboardScreen: React.FC = () => {
             paddingBottom: spacing.xl,
             gap: spacing.md,
           }}>
-          
-          {/* 1. Total Balance Card */}
+
+          {/* 1. Unified Summary Card */}
           <View
             style={{
               width: CARD_WIDTH,
-              backgroundColor: colors.tertiaryContainer,
+              backgroundColor: colors.primaryContainer,
               borderRadius: 32,
               padding: spacing.xl,
-              paddingBottom: 0,
               overflow: "hidden",
-              justifyContent: "space-between",
+              justifyContent: "center",
+              minHeight: 180,
             }}>
-            <View>
-              <View
-                style={{
-                  flexDirection: "row",
-                  justifyContent: "space-between",
-                  alignItems: "center",
-                  marginBottom: spacing.sm,
-                }}>
-                <Text
-                  style={[
-                    typography.label,
-                    {
-                      color: colors.onTertiaryContainer,
-                      textTransform: "uppercase",
-                      letterSpacing: 1,
-                      opacity: 0.7,
-                    },
-                  ]}>
-                  TOTAL BALANCE
-                </Text>
-                <View
-                  style={{
-                    backgroundColor: "rgba(0,0,0,0.1)",
-                    paddingHorizontal: 8,
-                    paddingVertical: 4,
-                    borderRadius: 12,
-                  }}>
-                  <Text
-                    style={{
-                      fontSize: 12,
-                      color: colors.onTertiaryContainer,
-                      fontWeight: "bold",
-                      opacity: 0.8,
-                    }}>
-                    {balanceChangePct >= 0 ? "↑" : "↓"} {balanceChangePct > 0 ? "+" : ""}{balanceChangePct.toFixed(1)}%
-                  </Text>
-                </View>
-              </View>
 
-              <Text
-                style={[
-                  typography.h1,
-                  {
-                    color: colors.onTertiaryContainer,
-                    fontSize: 48,
-                    fontWeight: "900",
-                  },
-                ]}>
-                {formatCurrency(balance)}
-              </Text>
-            </View>
-            
-            <View style={{ height: 80, marginHorizontal: -spacing.xl, marginTop: spacing.md }}>
-              <Svg width="100%" height="100%">
-                <Path
-                  d={fillPath}
-                  fill={colors.onTertiaryContainer}
-                  fillOpacity={0.1}
-                />
-                <Path
-                  d={strokePath}
-                  fill="none"
-                  stroke={colors.onTertiaryContainer}
-                  strokeWidth={3}
-                  strokeOpacity={0.6}
-                />
+            {/* Absolute Graph Background */}
+            <View style={{ position: "absolute", bottom: -5, left: 0, right: 0, height: "60%" }}>
+              <Svg width="100%" height="100%" preserveAspectRatio="none">
+                <Path d={fillPath} fill={colors.onPrimaryContainer} fillOpacity={0.1} />
+                <Path d={strokePath} fill="none" stroke={colors.onPrimaryContainer} strokeWidth={3} strokeOpacity={0.6} />
               </Svg>
             </View>
+
+            <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start", flex: 1 }}>
+
+              {/* Left Side: Header, Big Number, NET BALANCE */}
+              <View style={{ flex: 1, paddingRight: spacing.sm }}>
+                <View style={{ flexDirection: "row", alignItems: "center", justifyContent: 'space-between', marginBottom: spacing.sm, flexWrap: "wrap", gap: spacing.sm }}>
+                  <Text style={[typography.label, { color: colors.onPrimaryContainer, textTransform: "uppercase", letterSpacing: 1, opacity: 0.7 }]}>
+                    TOTAL BALANCE
+                  </Text>
+                  <View style={{ backgroundColor: "rgba(0,0,0,0.1)", paddingHorizontal: 8, paddingVertical: 4, borderRadius: 12 }}>
+                    <Text style={{ fontSize: 10, color: colors.onPrimaryContainer, fontWeight: "bold", opacity: 0.8 }}>
+                      {balanceChangePct >= 0 ? "↑" : "↓"} {balanceChangePct > 0 ? "+" : ""}{balanceChangePct.toFixed(1)}%
+                    </Text>
+                  </View>
+                </View>
+
+                <Text style={[typography.h1, { color: colors.onPrimaryContainer, fontSize: 40, fontWeight: "900", marginBottom: spacing.xs }]} numberOfLines={1} adjustsFontSizeToFit>
+                  {balance >= 0 ? "+" : ""}{formatCurrency(balance)}
+                </Text>
+              </View>
+
+              {/* Right Side: Stacked Pills */}
+              <View style={{ width: 120, gap: spacing.sm }}>
+
+                {/* Income Pill (stacked) */}
+                <View style={{ backgroundColor: "rgba(0,0,0,0.15)", borderRadius: 16, padding: spacing.sm, flexDirection: "row", alignItems: "center", gap: spacing.xs }}>
+                  <View style={{ width: 24, height: 24, borderRadius: 12, backgroundColor: "rgba(255,255,255,0.2)", alignItems: "center", justifyContent: "center" }}>
+                    <Ionicons name="arrow-down" size={12} color={colors.onPrimaryContainer} />
+                  </View>
+                  <View style={{ flex: 1, justifyContent: "center" }}>
+                    <Text style={[typography.bodySmall, { color: colors.onPrimaryContainer, opacity: 0.8, fontSize: 10, lineHeight: 12 }]} numberOfLines={1} adjustsFontSizeToFit>Income</Text>
+                    <Text style={[typography.label, { color: colors.onPrimaryContainer, fontWeight: "700", fontSize: 12, lineHeight: 14 }]} numberOfLines={1} adjustsFontSizeToFit>+{formatCurrency(totalIncome)}</Text>
+                  </View>
+                </View>
+
+                {/* Expenses Pill (stacked) */}
+                <View style={{ backgroundColor: "rgba(0,0,0,0.15)", borderRadius: 16, padding: spacing.sm, flexDirection: "row", alignItems: "center", gap: spacing.xs }}>
+                  <View style={{ width: 24, height: 24, borderRadius: 12, backgroundColor: "rgba(255,255,255,0.2)", alignItems: "center", justifyContent: "center" }}>
+                    <Ionicons name="arrow-up" size={12} color={colors.onPrimaryContainer} />
+                  </View>
+                  <View style={{ flex: 1, justifyContent: "center" }}>
+                    <Text style={[typography.bodySmall, { color: colors.onPrimaryContainer, opacity: 0.8, fontSize: 10, lineHeight: 12 }]} numberOfLines={1} adjustsFontSizeToFit>Expenses</Text>
+                    <Text style={[typography.label, { color: colors.onPrimaryContainer, fontWeight: "700", fontSize: 12, lineHeight: 14 }]} numberOfLines={1} adjustsFontSizeToFit>-{formatCurrency(totalExpenses)}</Text>
+                  </View>
+                </View>
+
+              </View>
+
+            </View>
+
           </View>
 
           {/* 2. Monthly Spend vs Budget Card (budgeted transactions only) */}
           <View
             style={{
               width: CARD_WIDTH,
-              backgroundColor: colors.secondaryContainer,
+              backgroundColor: colors.primaryContainer,
               borderRadius: 32,
               padding: spacing.xl,
               justifyContent: "space-between",
+              minHeight: 180,
             }}>
             <View>
               <Text
                 style={[
                   typography.label,
                   {
-                    color: colors.onSecondaryContainer,
+                    color: colors.onPrimaryContainer,
                     textTransform: "uppercase",
                     letterSpacing: 1,
                     opacity: 0.7,
@@ -562,11 +553,14 @@ export const DashboardScreen: React.FC = () => {
                 style={[
                   typography.h1,
                   {
-                    color: colors.onSecondaryContainer,
-                    fontSize: 48,
+                    color: colors.onPrimaryContainer,
+                    fontSize: 40,
                     fontWeight: "900",
+                    marginBottom: spacing.xs,
                   },
-                ]}>
+                ]}
+                numberOfLines={1}
+                adjustsFontSizeToFit>
                 {formatCurrency(budgetedExpenses)}
               </Text>
             </View>
@@ -578,7 +572,7 @@ export const DashboardScreen: React.FC = () => {
                     cx="30"
                     cy="30"
                     r={pieRadius}
-                    stroke={colors.onSecondaryContainer}
+                    stroke={colors.onPrimaryContainer}
                     strokeOpacity={0.2}
                     strokeWidth={pieStroke}
                     fill="none"
@@ -587,7 +581,7 @@ export const DashboardScreen: React.FC = () => {
                     cx="30"
                     cy="30"
                     r={pieRadius}
-                    stroke={colors.onSecondaryContainer}
+                    stroke={colors.onPrimaryContainer}
                     strokeWidth={pieStroke}
                     fill="none"
                     strokeDasharray={pieCircumference}
@@ -599,84 +593,17 @@ export const DashboardScreen: React.FC = () => {
                 </Svg>
               </View>
               <View>
-                <Text style={[typography.bodyMedium, { color: colors.onSecondaryContainer, opacity: 0.7 }]}>
+                <Text style={[typography.bodyMedium, { color: colors.onPrimaryContainer, opacity: 0.7 }]}>
                   vs. {formatCurrency(totalBudget)} Budget
                 </Text>
-                <Text style={[typography.label, { color: colors.onSecondaryContainer, opacity: 0.6, marginTop: 2 }]}>
+                <Text style={[typography.label, { color: colors.onPrimaryContainer, opacity: 0.8, marginTop: 2 }]}>
                   {budgetPercentUsed}% Used
                 </Text>
               </View>
             </View>
           </View>
 
-          {/* 3. Income / Balance / Spend Summary Card */}
-          <View
-            style={{
-              width: CARD_WIDTH,
-              backgroundColor: colors.primaryContainer,
-              borderRadius: 32,
-              padding: spacing.xl,
-              justifyContent: "space-between",
-            }}>
-            <Text
-              style={[
-                typography.label,
-                {
-                  color: colors.onPrimaryContainer,
-                  textTransform: "uppercase",
-                  letterSpacing: 1,
-                  opacity: 0.7,
-                  marginBottom: spacing.lg,
-                },
-              ]}>
-              PERIOD SUMMARY
-            </Text>
 
-            {/* Income row */}
-            <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: spacing.md }}>
-              <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-                <View style={{ width: 32, height: 32, borderRadius: 16, backgroundColor: "rgba(255,255,255,0.15)", alignItems: "center", justifyContent: "center" }}>
-                  <Ionicons name="arrow-down" size={16} color={colors.onPrimaryContainer} />
-                </View>
-                <Text style={[typography.bodyMedium, { color: colors.onPrimaryContainer, opacity: 0.8 }]}>Income</Text>
-              </View>
-              <Text style={[typography.label, { color: colors.onPrimaryContainer, fontWeight: "700", fontSize: 16 }]}>
-                +{formatCurrency(totalIncome)}
-              </Text>
-            </View>
-
-            {/* Spend row */}
-            <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: spacing.md }}>
-              <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-                <View style={{ width: 32, height: 32, borderRadius: 16, backgroundColor: "rgba(255,255,255,0.15)", alignItems: "center", justifyContent: "center" }}>
-                  <Ionicons name="arrow-up" size={16} color={colors.onPrimaryContainer} />
-                </View>
-                <Text style={[typography.bodyMedium, { color: colors.onPrimaryContainer, opacity: 0.8 }]}>Total Spend</Text>
-              </View>
-              <Text style={[typography.label, { color: colors.onPrimaryContainer, fontWeight: "700", fontSize: 16 }]}>
-                -{formatCurrency(totalExpenses)}
-              </Text>
-            </View>
-
-            {/* Divider */}
-            <View style={{ height: 1, backgroundColor: "rgba(255,255,255,0.2)", marginBottom: spacing.md }} />
-
-            {/* Balance row */}
-            <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
-              <Text style={[typography.label, { color: colors.onPrimaryContainer, opacity: 0.9, fontWeight: "700" }]}>Net Balance</Text>
-              <Text
-                style={[
-                  typography.h2,
-                  {
-                    color: colors.onPrimaryContainer,
-                    fontWeight: "900",
-                    fontSize: 28,
-                  },
-                ]}>
-                {balance >= 0 ? "+" : ""}{formatCurrency(balance)}
-              </Text>
-            </View>
-          </View>
         </ScrollView>
 
         {/* Quick Add Row */}

@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import React, { useMemo, useState, useEffect } from "react";
 import {
   View,
   Text,
@@ -37,6 +37,13 @@ export const VoiceVerifyScreen: React.FC = () => {
   const [parsedTransactions, setParsedTransactions] = useState<ParsedTransaction[]>(
     route.params.parsedTransactions || []
   );
+
+  // Sync state when navigating back with updated list from VoiceInput
+  useEffect(() => {
+    if (route.params?.parsedTransactions) {
+      setParsedTransactions(route.params.parsedTransactions);
+    }
+  }, [route.params?.parsedTransactions]);
 
   const [editingIndex, setEditingIndex] = useState<number | null>(null);
   const [editData, setEditData] = useState<{
@@ -82,9 +89,9 @@ export const VoiceVerifyScreen: React.FC = () => {
     }
   };
 
-  // ── Add another — navigate back to VoiceInput with current list ───────
+  // ── Add another — replace current screen with VoiceInput with current list ───────
   const handleAddAnother = () => {
-    navigation.navigate("VoiceInput", {
+    navigation.replace("VoiceInput", {
       existingTransactions: parsedTransactions,
     });
   };

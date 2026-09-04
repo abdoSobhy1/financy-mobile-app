@@ -1,5 +1,5 @@
 import React from "react";
-import { NavigationContainer } from "@react-navigation/native";
+import { NavigationContainer, createNavigationContainerRef } from "@react-navigation/native";
 import { createStackNavigator } from "@react-navigation/stack";
 import { useAuth } from "../contexts/AuthContext";
 import { SignInScreen } from "../screens/SignInScreen";
@@ -9,6 +9,7 @@ import { Text, View, StyleSheet, ActivityIndicator } from "react-native";
 import { UI } from "../constants";
 import { useAppTheme } from "../components/ui/ThemeProvider";
 
+export const navigationRef = createNavigationContainerRef<any>();
 
 const Stack = createStackNavigator();
 
@@ -25,7 +26,7 @@ const AppNavigator: React.FC = () => {
   }
 
   return (
-    <NavigationContainer>
+    <NavigationContainer ref={navigationRef}>
       <Stack.Navigator screenOptions={{ headerShown: false }}>
         {isAuthenticated ? (
           <>

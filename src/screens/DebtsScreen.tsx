@@ -15,7 +15,7 @@ import { useAppTheme } from "../components/ui/ThemeProvider";
 import { AppHeader } from "../components/ui/AppHeader";
 import { useNavigation } from "@react-navigation/native";
 import { StackNavigationProp } from "@react-navigation/stack";
-import { useTabBarHeight } from "../components/ui";
+import { useTabBarHeight, FilterChips } from "../components/ui";
 import { formatCurrency } from "../utils";
 import { Debt } from "../types";
 import { RootState, AppDispatch } from "../store";
@@ -100,28 +100,12 @@ const DebtsScreen: React.FC = () => {
         </View>
 
         {/* Filters */}
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: spacing.xl }}>
-          {["All Debts", "Owed to Me", "I Owe", "Overdue"].map((f) => (
-            <TouchableOpacity
-              key={f}
-              onPress={() => setFilter(f as any)}
-              style={[
-                styles.filterChip,
-                {
-                  borderColor: filter === f ? colors.primary : colors.outlineVariant,
-                  backgroundColor: filter === f ? "rgba(128, 203, 196, 0.15)" : "transparent"
-                }
-              ]}
-            >
-              <Text style={[typography.bodyMedium, { 
-                color: filter === f ? colors.primary : colors.onSurfaceVariant,
-                fontWeight: filter === f ? "600" : "400"
-              }]}>
-                {f}
-              </Text>
-            </TouchableOpacity>
-          ))}
-        </ScrollView>
+        <FilterChips
+          options={["All Debts", "Owed to Me", "I Owe", "Overdue"]}
+          selected={filter}
+          onSelect={(f) => setFilter(f as any)}
+          style={{ marginBottom: spacing.xl }}
+        />
 
         {/* Active Debts List */}
         <View style={[styles.debtsListCard, { backgroundColor: colors.surfaceVariant }]}>
@@ -223,9 +207,9 @@ const styles = StyleSheet.create({
     borderRadius: 24,
   },
   heroAmount: {
-    fontSize: 44,
-    fontWeight: "700",
-    marginVertical: 12,
+    fontSize: 36,
+    fontWeight: "800",
+    marginVertical: 8,
   },
   filterChip: {
     paddingHorizontal: 16,

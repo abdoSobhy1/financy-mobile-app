@@ -174,6 +174,17 @@ export const useAnalysisData = (
       .filter(Boolean)
       .sort((a, b) => b!.amount - a!.amount) as NonNullable<(typeof categoryBreakdownArray)[0]>[];
 
+    // Filter for trends: ignore startDate/endDate, but keep other filters
+    const trendTransactions = transactions.filter((transaction) => {
+      if (categoryIds && categoryIds.length > 0 && transaction.categoryId) {
+        if (!categoryIds.includes(transaction.categoryId)) return false;
+      }
+      if (transactionType !== "both" && transaction.type !== transactionType) {
+        return false;
+      }
+      return true;
+    });
+
     // Calculate monthly trends (last 6 months)
     const monthlyTrends: {
       month: string;
@@ -185,7 +196,7 @@ export const useAnalysisData = (
       const monthStart = startOfMonth(subMonths(new Date(), i));
       const monthEnd = endOfMonth(monthStart);
 
-      const monthTransactions = filteredTransactions.filter((transaction) => {
+      const monthTransactions = trendTransactions.filter((transaction) => {
         const date = parseISO(transaction.date);
         return date >= monthStart && date <= monthEnd;
       });
