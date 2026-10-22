@@ -98,13 +98,6 @@ export default function App() {
                 console.error("Background sync failed:", error);
               });
 
-              // Process any due recurring transactions
-              recurringService
-                .processDueRecurringTransactions(store.dispatch)
-                .catch((err) =>
-                  console.warn("Recurring transactions check failed:", err),
-                );
-
               // Also ensure notifications are still scheduled
               try {
                 const { default: NotificationService } =
@@ -122,13 +115,6 @@ export default function App() {
             }
           },
         );
-
-        // Process any due recurring transactions on startup
-        try {
-          await recurringService.processDueRecurringTransactions(store.dispatch);
-        } catch (err) {
-          console.warn("Initial recurring transactions check failed:", err);
-        }
 
         // Initialize Notification Service
         console.log("Initializing notification service...");

@@ -497,13 +497,6 @@ export const TransactionListScreen: React.FC = () => {
                             color={colors.primary}
                           />
                         )}
-                        {Boolean(tx.recurringId) && (
-                          <Ionicons
-                            name="repeat-outline"
-                            size={14}
-                            color={colors.primary}
-                          />
-                        )}
                       </View>
                       <Text style={styles.txSubtitleText} numberOfLines={1}>
                         {cat?.name || "Uncategorized"} •{" "}

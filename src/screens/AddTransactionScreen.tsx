@@ -27,7 +27,6 @@ import {
 import { fetchCategories, addCategory } from "../store/slices/categoriesSlice";
 import { fetchBudgets } from "../store/slices/budgetsSlice";
 import {
-  RecurringFrequency,
   TransactionFormData,
   TransactionStackParamList,
   TransactionType,
@@ -44,7 +43,6 @@ import {
 import { ParsedTransactionReview } from "../components/input";
 import { formatCurrency } from "../utils";
 import { walletService } from "../services/walletService";
-import { recurringService } from "../services/recurringService";
 
 type NavigationProp = StackNavigationProp<
   TransactionStackParamList,
@@ -110,9 +108,6 @@ export const AddTransactionScreen: React.FC = () => {
   const [wallets, setWallets] = useState<WalletAccount[]>([]);
   const [receiptUri, setReceiptUri] = useState<string>("");
   const [receiptName, setReceiptName] = useState<string>("");
-  const [makeRecurring, setMakeRecurring] = useState<boolean>(false);
-  const [recurringFrequency, setRecurringFrequency] =
-    useState<RecurringFrequency>("monthly");
   const [manualBudgetSelected, setManualBudgetSelected] = useState(false);
   const [showMore, setShowMore] = useState(false);
   const [description, setDescription] = useState("");
@@ -341,26 +336,6 @@ export const AddTransactionScreen: React.FC = () => {
         ).unwrap();
       } else {
         await dispatch(addTransaction(transactionData)).unwrap();
-
-        if (makeRecurring) {
-          const nextDue = new Date(date);
-          if (recurringFrequency === "daily") nextDue.setDate(nextDue.getDate() + 1);
-          else if (recurringFrequency === "weekly") nextDue.setDate(nextDue.getDate() + 7);
-          else if (recurringFrequency === "monthly") nextDue.setMonth(nextDue.getMonth() + 1);
-          else if (recurringFrequency === "yearly") nextDue.setFullYear(nextDue.getFullYear() + 1);
-
-          await recurringService.addRecurring({
-            title: finalDescription || "Recurring Transaction",
-            amount: finalAmount,
-            type,
-            categoryId,
-            budgetId: budgetId || undefined,
-            accountId: accountId || "default_cash",
-            frequency: recurringFrequency,
-            nextDueDate: nextDue.toISOString(),
-            autoLog: true,
-          });
-        }
 
         await Promise.all([
           AsyncStorage.setItem(LAST_CATEGORY_KEY, categoryId),
@@ -1038,100 +1013,6 @@ export const AddTransactionScreen: React.FC = () => {
 
           {showMore && (
             <View style={{ gap: spacing.md, marginBottom: spacing.xl }}>
-              {!editTransaction && (
-                <View
-                  style={{
-                    backgroundColor: colors.surfaceVariant,
-                    borderRadius: 20,
-                    padding: spacing.md,
-                  }}>
-                  <TouchableOpacity
-                    onPress={() => setMakeRecurring(!makeRecurring)}
-                    style={{
-                      flexDirection: "row",
-                      alignItems: "center",
-                      justifyContent: "space-between",
-                    }}>
-                    <View
-                      style={{
-                        flexDirection: "row",
-                        alignItems: "center",
-                        gap: 10,
-                      }}>
-                      <Ionicons
-                        name="repeat-outline"
-                        size={20}
-                        color={colors.primary}
-                      />
-                      <View>
-                        <Text
-                          style={[
-                            typography.bodyMedium,
-                            { color: colors.onBackground, fontWeight: "700" },
-                          ]}>
-                          Repeat Recurring Transaction
-                        </Text>
-                        <Text
-                          style={[
-                            typography.bodySmall,
-                            { color: colors.onSurfaceVariant },
-                          ]}>
-                          Auto-log this {type} on schedule
-                        </Text>
-                      </View>
-                    </View>
-                    <Ionicons
-                      name={makeRecurring ? "checkbox" : "square-outline"}
-                      size={22}
-                      color={
-                        makeRecurring
-                          ? colors.primary
-                          : colors.onSurfaceVariant
-                      }
-                    />
-                  </TouchableOpacity>
-
-                  {makeRecurring && (
-                    <View
-                      style={{
-                        flexDirection: "row",
-                        gap: 8,
-                        marginTop: spacing.md,
-                      }}>
-                      {(
-                        ["daily", "weekly", "monthly", "yearly"] as RecurringFrequency[]
-                      ).map((freq) => {
-                        const active = recurringFrequency === freq;
-                        return (
-                          <TouchableOpacity
-                            key={freq}
-                            onPress={() => setRecurringFrequency(freq)}
-                            style={{
-                              flex: 1,
-                              paddingVertical: 8,
-                              borderRadius: 12,
-                              alignItems: "center",
-                              backgroundColor: active
-                                ? colors.primary
-                                : colors.surface,
-                            }}>
-                            <Text
-                              style={{
-                                fontSize: 12,
-                                fontWeight: "700",
-                                textTransform: "capitalize",
-                                color: active ? "#FFFFFF" : colors.onBackground,
-                              }}>
-                              {freq}
-                            </Text>
-                          </TouchableOpacity>
-                        );
-                      })}
-                    </View>
-                  )}
-                </View>
-              )}
-
               <Input
                 label="Note"
                 placeholder="Additional details..."
