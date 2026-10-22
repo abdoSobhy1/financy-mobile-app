@@ -12,13 +12,13 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { useAppTheme } from "../components/ui/ThemeProvider";
 import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons } from "@expo/vector-icons";
-import { useDispatch } from "react-redux";
+import { useDispatch, useSelector } from "react-redux";
 import { useNavigation, useRoute } from "@react-navigation/native";
 import { StackNavigationProp } from "@react-navigation/stack";
 import { RouteProp } from "@react-navigation/native";
 import { useToast, FloatingActionButton } from "../components/ui";
 import { DebtPaymentCard } from "../components/debt";
-import { AppDispatch } from "../store";
+import { AppDispatch, RootState } from "../store";
 import { DebtPayment } from "../types";
 import { formatCurrency, formatDate } from "../utils";
 import { UI } from "../constants";
@@ -42,12 +42,23 @@ const DebtPaymentsScreen: React.FC = () => {
   const { showSuccess, showError } = useToast();
 
   const { debtId, debtName } = route.params;
+  const debt = useSelector((state: RootState) => state.debts.items[debtId]);
   const [payments, setPayments] = useState<DebtPayment[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     loadPayments();
   }, [debtId]);
+
+  const navigateToAddPayment = () => {
+    navigation.navigate("AddPayment", {
+      debtId,
+      debtName: debt?.name || debtName,
+      currentBalance: debt?.currentBalance ?? 0,
+      minimumPayment: debt?.minimumPayment,
+      interestRate: debt?.interestRate,
+    });
+  };
 
   const loadPayments = async () => {
     try {
@@ -76,14 +87,8 @@ const DebtPaymentsScreen: React.FC = () => {
     }
   };
 
-  const handleEditPayment = (payment: DebtPayment) => {
-    navigation.navigate("AddPayment", {
-      debtId,
-      debtName,
-      currentBalance: 0,
-      minimumPayment: 0,
-      interestRate: 0,
-    });
+  const handleEditPayment = (_payment: DebtPayment) => {
+    navigateToAddPayment();
   };
 
   // ── Computed stats ─────────────────────────────────────────
@@ -205,15 +210,7 @@ const DebtPaymentsScreen: React.FC = () => {
       </Text>
       <TouchableOpacity
         activeOpacity={0.8}
-        onPress={() =>
-          navigation.navigate("AddPayment", {
-            debtId,
-            debtName,
-            currentBalance: 0,
-            minimumPayment: 0,
-            interestRate: 0,
-          })
-        }>
+        onPress={navigateToAddPayment}>
         <View style={[styles.emptyButton, { backgroundColor: colors.primary }]}>
           <Ionicons name="add-circle" size={18} color={colors.onPrimary} />
           <Text style={[styles.emptyButtonText, { color: colors.onPrimary }]}>Record a Payment</Text>
@@ -248,15 +245,7 @@ const DebtPaymentsScreen: React.FC = () => {
 
         <FloatingActionButton
           icon="add"
-          onPress={() =>
-            navigation.navigate("AddPayment", {
-              debtId,
-              debtName,
-              currentBalance: 0,
-              minimumPayment: 0,
-              interestRate: 0,
-            })
-          }
+          onPress={navigateToAddPayment}
           style={{ position: "absolute", bottom: 30, right: 20 }}
         />
     </SafeAreaView>

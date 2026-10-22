@@ -8,8 +8,12 @@ import {
   TouchableOpacity,
   KeyboardAvoidingView,
   Platform,
+  Keyboard,
+  Image,
 } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import * as DocumentPicker from "expo-document-picker";
+import * as FileSystem from "expo-file-system/legacy";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useDispatch, useSelector } from "react-redux";
 import { useNavigation, useRoute, RouteProp } from "@react-navigation/native";
@@ -20,17 +24,27 @@ import {
   addTransaction,
   updateTransaction,
 } from "../store/slices/transactionsSlice";
-import { fetchCategories } from "../store/slices/categoriesSlice";
+import { fetchCategories, addCategory } from "../store/slices/categoriesSlice";
 import { fetchBudgets } from "../store/slices/budgetsSlice";
 import {
+  RecurringFrequency,
   TransactionFormData,
   TransactionStackParamList,
   TransactionType,
+  WalletAccount,
 } from "../types";
 import { useAppTheme } from "../components/ui/ThemeProvider";
-import { Input, CustomDatePicker, Modal } from "../components/ui";
-import { IconChip } from "../components/ui/IconChip";
+import {
+  Input,
+  CustomDatePicker,
+  CustomKeypad,
+  CategoryCreationModal,
+  useToast,
+} from "../components/ui";
 import { ParsedTransactionReview } from "../components/input";
+import { formatCurrency } from "../utils";
+import { walletService } from "../services/walletService";
+import { recurringService } from "../services/recurringService";
 
 type NavigationProp = StackNavigationProp<
   TransactionStackParamList,
@@ -40,6 +54,7 @@ type RouteParam = RouteProp<TransactionStackParamList, "AddTransaction">;
 
 const LAST_CATEGORY_KEY = "lastUsedCategoryId";
 const LAST_BUDGET_KEY = "lastUsedBudgetId";
+const LAST_ACCOUNT_KEY = "lastUsedAccountId";
 
 /** Convert Arabic-Indic digits (٠-٩) to Western ASCII digits */
 const arabicToWestern = (str: string): string =>
@@ -72,7 +87,15 @@ export const AddTransactionScreen: React.FC = () => {
   const initialCategoryId = params?.categoryId;
 
   const dispatch = useDispatch<AppDispatch>();
-  const { colors, typography, spacing, radius } = useAppTheme();
+  const {
+    colors,
+    typography,
+    spacing,
+    radius,
+    currencySymbol,
+    resolveCategoryColor,
+  } = useAppTheme();
+  const { showError, showSuccess } = useToast();
 
   const { items: categories } = useSelector(
     (state: RootState) => state.categories,
@@ -83,31 +106,46 @@ export const AddTransactionScreen: React.FC = () => {
   const [type, setType] = useState<TransactionType>("expense");
   const [categoryId, setCategoryId] = useState<string>("");
   const [budgetId, setBudgetId] = useState<string>("");
+  const [accountId, setAccountId] = useState<string>("default_cash");
+  const [wallets, setWallets] = useState<WalletAccount[]>([]);
+  const [receiptUri, setReceiptUri] = useState<string>("");
+  const [receiptName, setReceiptName] = useState<string>("");
+  const [makeRecurring, setMakeRecurring] = useState<boolean>(false);
+  const [recurringFrequency, setRecurringFrequency] =
+    useState<RecurringFrequency>("monthly");
   const [manualBudgetSelected, setManualBudgetSelected] = useState(false);
   const [showMore, setShowMore] = useState(false);
   const [description, setDescription] = useState("");
   const [note, setNote] = useState("");
   const [date, setDate] = useState<Date>(new Date());
   const [showDatePicker, setShowDatePicker] = useState(false);
-  const [amountFocused, setAmountFocused] = useState(false);
+  const [showKeypad, setShowKeypad] = useState<boolean>(!editTransaction);
+  const [showCreateCategoryModal, setShowCreateCategoryModal] = useState(false);
 
   const [voiceResults, setVoiceResults] = useState<any[]>([]);
   const [showVoiceReview, setShowVoiceReview] = useState(false);
 
-  const amountInputRef = useRef<TextInput>(null);
-
   useEffect(() => {
     dispatch(fetchCategories());
     dispatch(fetchBudgets());
+    walletService.getWallets().then(setWallets).catch(() => {});
 
     if (editTransaction) {
       setAmountStr(editTransaction.amount.toString());
       setType(editTransaction.type);
       setCategoryId(editTransaction.categoryId || "");
       setBudgetId(editTransaction.budgetId || "");
+      setAccountId(editTransaction.accountId || "default_cash");
+      if (editTransaction.receiptUri) {
+        setReceiptUri(editTransaction.receiptUri);
+        setReceiptName(
+          editTransaction.receiptUri.split("/").pop() || "Attached Receipt",
+        );
+      }
       setDescription(editTransaction.description || "");
       setNote(editTransaction.note || "");
       setDate(new Date(editTransaction.date));
+      setShowKeypad(false);
     } else if (prefilledData) {
       if (prefilledData.amount) setAmountStr(prefilledData.amount.toString());
       if (prefilledData.type) setType(prefilledData.type);
@@ -116,21 +154,34 @@ export const AddTransactionScreen: React.FC = () => {
       if (prefilledData.description) setDescription(prefilledData.description);
       if (prefilledData.note) setNote(prefilledData.note);
       if (prefilledData.date) setDate(new Date(prefilledData.date));
+      AsyncStorage.getItem(LAST_ACCOUNT_KEY)
+        .then((id) => {
+          if (id) setAccountId(id);
+        })
+        .catch(() => {});
     } else if (initialCategoryId) {
       setCategoryId(initialCategoryId);
-      // Still load last budget for quick-add flows
-      AsyncStorage.getItem(LAST_BUDGET_KEY).then((id) => {
-        if (id) setBudgetId(id);
-      }).catch(() => {});
+      Promise.all([
+        AsyncStorage.getItem(LAST_BUDGET_KEY),
+        AsyncStorage.getItem(LAST_ACCOUNT_KEY),
+      ])
+        .then(([id, accId]) => {
+          if (id) setBudgetId(id);
+          if (accId) setAccountId(accId);
+        })
+        .catch(() => {});
     } else {
-      // New transaction — restore last used category & budget
       Promise.all([
         AsyncStorage.getItem(LAST_CATEGORY_KEY),
         AsyncStorage.getItem(LAST_BUDGET_KEY),
-      ]).then(([lastCat, lastBudget]) => {
-        if (lastCat) setCategoryId(lastCat);
-        if (lastBudget) setBudgetId(lastBudget);
-      }).catch(() => {});
+        AsyncStorage.getItem(LAST_ACCOUNT_KEY),
+      ])
+        .then(([lastCat, lastBudget, lastAcc]) => {
+          if (lastCat) setCategoryId(lastCat);
+          if (lastBudget) setBudgetId(lastBudget);
+          if (lastAcc) setAccountId(lastAcc);
+        })
+        .catch(() => {});
     }
   }, [editTransaction, prefilledData, initialCategoryId, dispatch]);
 
@@ -138,31 +189,130 @@ export const AddTransactionScreen: React.FC = () => {
     setCategoryId(id);
   };
 
-  const handleBudgetSelect = (id: string) => {
-    setBudgetId(id);
-    setManualBudgetSelected(true);
+  const hasMathOperator = /[+\-*/×÷]/.test(amountStr.slice(1));
+  const evaluatedAmount = evaluateMath(amountStr);
+
+  const handleKeypadPress = (key: string) => {
+    setAmountStr((prev) => {
+      const isOp = ["+", "-", "*", "/"].includes(key);
+      if (isOp) {
+        if (!prev) return "";
+        const lastChar = prev.slice(-1);
+        if (["+", "-", "*", "/", "."].includes(lastChar)) {
+          return prev.slice(0, -1) + key;
+        }
+      }
+      if (key === ".") {
+        const parts = prev.split(/[+\-*/]/);
+        const currentPart = parts[parts.length - 1] || "";
+        if (currentPart.includes(".")) return prev;
+        if (!currentPart) return prev + "0.";
+      }
+      return prev + key;
+    });
   };
 
-  /** Resolve math expression on blur */
-  const handleAmountBlur = () => {
-    setAmountFocused(false);
+  const handleKeypadBackspace = () => {
+    setAmountStr((prev) => prev.slice(0, -1));
+  };
+
+  const handleKeypadClear = () => {
+    setAmountStr("");
+  };
+
+  const handleEvaluateExpression = () => {
     if (!amountStr) return;
     const result = evaluateMath(amountStr);
     if (result > 0) {
-      // Format to at most 2 decimal places, removing trailing zeros
       setAmountStr(parseFloat(result.toFixed(2)).toString());
     }
   };
 
+  const handleQuickCreateCategory = async (data: {
+    name: string;
+    type: "income" | "expense";
+    color?: string;
+    icon?: string;
+  }) => {
+    try {
+      const created = await dispatch(
+        addCategory({
+          name: data.name,
+          type: data.type || type,
+          color: data.color || "teal",
+          icon: data.icon || "pricetag",
+        })
+      ).unwrap();
+      setCategoryId(created.id);
+      setShowCreateCategoryModal(false);
+      showSuccess(`Created "${created.name}"`);
+    } catch (e) {
+      showError("Could not create category");
+    }
+  };
+
+  const handleAttachReceipt = async () => {
+    try {
+      const result = await DocumentPicker.getDocumentAsync({
+        type: ["image/*", "application/pdf", "text/*"],
+        copyToCacheDirectory: true,
+      });
+
+      if (result.canceled || !result.assets || result.assets.length === 0) {
+        return;
+      }
+
+      const asset = result.assets[0];
+      setReceiptUri(asset.uri);
+      setReceiptName(asset.name || "Receipt Attachment");
+
+      // Smart Receipt Scanner: attempt to extract total/amount & merchant from text or filename
+      let scannedText = asset.name || "";
+      if (
+        asset.mimeType?.startsWith("text/") ||
+        asset.name?.toLowerCase().endsWith(".txt")
+      ) {
+        try {
+          const content = await FileSystem.readAsStringAsync(asset.uri);
+          if (content) scannedText += "\n" + content;
+        } catch {}
+      }
+
+      const amountMatch = scannedText.match(
+        /(?:total|amount|egp|usd|\$|ج\.م)?\s*(\d{1,6}(?:\.\d{1,2})?)/i,
+      );
+      if (amountMatch && amountMatch[1] && !amountStr) {
+        const parsedVal = parseFloat(amountMatch[1]);
+        if (parsedVal > 0 && parsedVal < 1000000) {
+          setAmountStr(parsedVal.toString());
+        }
+      }
+
+      if (!description && asset.name) {
+        const cleanTitle = asset.name
+          .replace(/\.[^/.]+$/, "")
+          .replace(/[_-]+/g, " ")
+          .trim();
+        if (cleanTitle) {
+          setDescription(cleanTitle);
+        }
+      }
+
+      showSuccess("Receipt attached");
+    } catch (error) {
+      console.warn("Receipt picker failed:", error);
+      showError("Could not attach receipt");
+    }
+  };
+
   const handleSave = async () => {
-    // Evaluate any pending expression before saving
     const finalAmount = evaluateMath(amountStr);
     if (!finalAmount || isNaN(finalAmount) || finalAmount <= 0) {
-      alert("Please enter a valid amount");
+      showError("Please enter a valid amount");
       return;
     }
     if (!categoryId) {
-      alert("Please select a category");
+      showError("Please select or create a category");
       return;
     }
 
@@ -174,6 +324,8 @@ export const AddTransactionScreen: React.FC = () => {
       type,
       categoryId,
       budgetId: budgetId || undefined,
+      accountId: accountId || "default_cash",
+      receiptUri: receiptUri || undefined,
       description: finalDescription,
       note,
       date,
@@ -189,9 +341,30 @@ export const AddTransactionScreen: React.FC = () => {
         ).unwrap();
       } else {
         await dispatch(addTransaction(transactionData)).unwrap();
-        // Persist last-used category & budget for next time
+
+        if (makeRecurring) {
+          const nextDue = new Date(date);
+          if (recurringFrequency === "daily") nextDue.setDate(nextDue.getDate() + 1);
+          else if (recurringFrequency === "weekly") nextDue.setDate(nextDue.getDate() + 7);
+          else if (recurringFrequency === "monthly") nextDue.setMonth(nextDue.getMonth() + 1);
+          else if (recurringFrequency === "yearly") nextDue.setFullYear(nextDue.getFullYear() + 1);
+
+          await recurringService.addRecurring({
+            title: finalDescription || "Recurring Transaction",
+            amount: finalAmount,
+            type,
+            categoryId,
+            budgetId: budgetId || undefined,
+            accountId: accountId || "default_cash",
+            frequency: recurringFrequency,
+            nextDueDate: nextDue.toISOString(),
+            autoLog: true,
+          });
+        }
+
         await Promise.all([
           AsyncStorage.setItem(LAST_CATEGORY_KEY, categoryId),
+          AsyncStorage.setItem(LAST_ACCOUNT_KEY, accountId || "default_cash"),
           budgetId
             ? AsyncStorage.setItem(LAST_BUDGET_KEY, budgetId)
             : AsyncStorage.removeItem(LAST_BUDGET_KEY),
@@ -200,13 +373,8 @@ export const AddTransactionScreen: React.FC = () => {
       navigation.goBack();
     } catch (error) {
       console.error(error);
-      alert("Failed to save transaction");
+      showError("Failed to save transaction");
     }
-  };
-
-  const handleVoiceResult = (results: any[]) => {
-    setVoiceResults(results);
-    setShowVoiceReview(true);
   };
 
   const handleAcceptVoiceResults = async (accepted: any[]) => {
@@ -219,7 +387,7 @@ export const AddTransactionScreen: React.FC = () => {
       navigation.goBack();
     } catch (error) {
       console.error(error);
-      alert("Failed to save voice transactions");
+      showError("Failed to save voice transactions");
     }
   };
 
@@ -228,10 +396,9 @@ export const AddTransactionScreen: React.FC = () => {
     .filter((c) => c && c.type === type && !c.deleted)
     .sort((a, b) => ((b as any).entryCount || 0) - ((a as any).entryCount || 0));
 
-  const selectedBudget = budgetId ? budgets[budgetId] : null;
-
-  /** Display value: while focused show raw expression, after blur show resolved number */
-  const amountDisplay = amountStr || "";
+  const amountDisplay = amountStr
+    ? amountStr.replace(/\*/g, "×").replace(/\//g, "÷")
+    : "0.00";
 
   return (
     <SafeAreaView
@@ -316,12 +483,18 @@ export const AddTransactionScreen: React.FC = () => {
             })}
           </View>
 
-          {/* Amount Section — native TextInput */}
-          <View style={styles.amountSection}>
+          {/* Amount Section — Tactile Calculator Display */}
+          <TouchableOpacity
+            activeOpacity={0.9}
+            style={styles.amountSection}
+            onPress={() => {
+              Keyboard.dismiss();
+              setShowKeypad(true);
+            }}>
             <Text
               style={[
                 typography.bodyMedium,
-                { color: colors.onSurfaceVariant, marginBottom: 8 },
+                { color: colors.onSurfaceVariant, marginBottom: 6 },
               ]}>
               Amount
             </Text>
@@ -332,28 +505,23 @@ export const AddTransactionScreen: React.FC = () => {
                     styles.currencySymbol,
                     { color: colors.onSurfaceVariant },
                   ]}>
-                  $
+                  {currencySymbol.trim()}
                 </Text>
-                <TextInput
-                  ref={amountInputRef}
+                <Text
                   style={[
                     styles.amountValue,
                     {
-                      color: amountFocused
-                        ? colors.primary
-                        : colors.onPrimaryContainer,
-                      minWidth: 80,
+                      color: amountStr
+                        ? type === "income"
+                          ? colors.tertiary
+                          : colors.onBackground
+                        : colors.onSurfaceVariant,
                     },
                   ]}
-                  value={amountDisplay}
-                  onChangeText={setAmountStr}
-                  onFocus={() => setAmountFocused(true)}
-                  onBlur={handleAmountBlur}
-                  keyboardType="default"
-                  placeholder="0.00"
-                  placeholderTextColor={colors.onSurfaceVariant}
-                  returnKeyType="done"
-                />
+                  numberOfLines={1}
+                  adjustsFontSizeToFit>
+                  {amountDisplay}
+                </Text>
               </View>
               {!editTransaction && (
                 <View style={styles.voiceBtnContainer}>
@@ -367,54 +535,101 @@ export const AddTransactionScreen: React.FC = () => {
                       backgroundColor: colors.primaryContainer,
                     }}
                     onPress={() => navigation.navigate("VoiceInput")}>
-                    <Ionicons name="mic" size={24} color={colors.primary} />
+                    <Ionicons
+                      name="mic"
+                      size={24}
+                      color={colors.onPrimaryContainer}
+                    />
                   </TouchableOpacity>
                 </View>
               )}
             </View>
-            {/* Math hint */}
-            <Text
-              style={[
-                typography.bodySmall,
-                { color: colors.onSurfaceVariant, marginTop: 4, opacity: 0.6 },
-              ]}>
-              Supports math (e.g. 50+20) and Arabic numerals
-            </Text>
-          </View>
 
-          {/* Categories — sorted by usage count */}
+            {/* Live Math Preview Pill */}
+            {hasMathOperator && evaluatedAmount > 0 ? (
+              <TouchableOpacity
+                onPress={handleEvaluateExpression}
+                style={{
+                  marginTop: 8,
+                  paddingHorizontal: 12,
+                  paddingVertical: 4,
+                  borderRadius: 12,
+                  backgroundColor: colors.secondaryContainer,
+                }}>
+                <Text
+                  style={[
+                    typography.label,
+                    { color: colors.onSecondaryContainer },
+                  ]}>
+                  = {formatCurrency(evaluatedAmount)} (Tap to resolve)
+                </Text>
+              </TouchableOpacity>
+            ) : (
+              <Text
+                style={[
+                  typography.bodySmall,
+                  { color: colors.onSurfaceVariant, marginTop: 4, opacity: 0.7 },
+                ]}>
+                {showKeypad
+                  ? "Use calculator pad below (+, -, ×, ÷)"
+                  : "Tap amount to open calculator pad"}
+              </Text>
+            )}
+          </TouchableOpacity>
+
+          {/* Categories — Color-coded chips + Quick Create */}
+          <Text
+            style={[
+              typography.label,
+              {
+                color: colors.onSurfaceVariant,
+                marginBottom: spacing.sm,
+                textTransform: "uppercase",
+                letterSpacing: 0.8,
+              },
+            ]}>
+            Category
+          </Text>
           <ScrollView
             horizontal
             showsHorizontalScrollIndicator={false}
             keyboardShouldPersistTaps="handled"
             contentContainerStyle={{
-              gap: spacing.md,
-              marginBottom: spacing.xl,
+              gap: spacing.sm,
+              marginBottom: spacing.lg,
             }}>
             {activeCategories.map((cat) => {
               const isSelected = cat.id === categoryId;
+              const catTheme = resolveCategoryColor((cat as any).color);
               return (
                 <TouchableOpacity
                   key={cat.id}
                   onPress={() => handleCategorySelect(cat.id)}
+                  activeOpacity={0.75}
                   style={[
                     styles.categoryChip,
                     {
-                      backgroundColor: colors.surfaceVariant,
-                      borderColor: isSelected ? colors.primary : "transparent",
+                      backgroundColor: isSelected
+                        ? catTheme.bgColor
+                        : colors.surfaceVariant,
+                      borderColor: isSelected
+                        ? catTheme.iconColor
+                        : colors.outlineVariant,
                     },
                   ]}>
                   <Ionicons
-                    name={(cat as any).icon || "pricetag"}
-                    size={20}
-                    color={colors.onBackground}
+                    name={((cat as any).icon || "pricetag") as any}
+                    size={18}
+                    color={catTheme.iconColor}
                     style={{ marginRight: 6 }}
                   />
                   <Text
                     style={[
                       typography.bodyMedium,
                       {
-                        color: colors.onBackground,
+                        color: isSelected
+                          ? catTheme.iconColor
+                          : colors.onBackground,
                         fontWeight: isSelected ? "700" : "500",
                       },
                     ]}>
@@ -423,90 +638,226 @@ export const AddTransactionScreen: React.FC = () => {
                 </TouchableOpacity>
               );
             })}
+
+            {/* Quick "+ New" Category Chip */}
+            <TouchableOpacity
+              onPress={() => setShowCreateCategoryModal(true)}
+              activeOpacity={0.75}
+              style={[
+                styles.categoryChip,
+                {
+                  backgroundColor: colors.surface,
+                  borderColor: colors.primary,
+                  borderStyle: "dashed",
+                },
+              ]}>
+              <Ionicons
+                name="add-circle-outline"
+                size={18}
+                color={colors.primary}
+                style={{ marginRight: 6 }}
+              />
+              <Text
+                style={[
+                  typography.bodyMedium,
+                  { color: colors.primary, fontWeight: "700" },
+                ]}>
+                New Category
+              </Text>
+            </TouchableOpacity>
           </ScrollView>
 
           {/* Budgets (Visible by default for expenses) */}
           {Object.values(budgets).length > 0 && type !== "income" && (
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              keyboardShouldPersistTaps="handled"
-              contentContainerStyle={{
-                gap: spacing.md,
-                marginBottom: spacing.xl,
-              }}>
-              <TouchableOpacity
-                onPress={() => {
-                  setBudgetId("");
-                  setManualBudgetSelected(true);
-                }}
+            <>
+              <Text
                 style={[
-                  styles.categoryChip,
+                  typography.label,
                   {
-                    backgroundColor: colors.surfaceVariant,
-                    borderColor: !budgetId ? colors.primary : "transparent",
+                    color: colors.onSurfaceVariant,
+                    marginBottom: spacing.sm,
+                    textTransform: "uppercase",
+                    letterSpacing: 0.8,
                   },
                 ]}>
-                <Ionicons
-                  name="pie-chart-outline"
-                  size={20}
-                  color={colors.onBackground}
-                  style={{ marginRight: 6 }}
-                />
-                <Text
+                Budget
+              </Text>
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                keyboardShouldPersistTaps="handled"
+                contentContainerStyle={{
+                  gap: spacing.sm,
+                  marginBottom: spacing.lg,
+                }}>
+                <TouchableOpacity
+                  onPress={() => {
+                    setBudgetId("");
+                    setManualBudgetSelected(true);
+                  }}
                   style={[
-                    typography.bodyMedium,
+                    styles.categoryChip,
                     {
-                      color: colors.onBackground,
-                      fontWeight: !budgetId ? "700" : "500",
+                      backgroundColor: !budgetId
+                        ? colors.primaryContainer
+                        : colors.surfaceVariant,
+                      borderColor: !budgetId
+                        ? colors.primaryContainer
+                        : colors.outlineVariant,
                     },
                   ]}>
-                  None
-                </Text>
-              </TouchableOpacity>
-              {Object.values(budgets).map((b) => {
-                const isSelected = b.id === budgetId;
-                return (
-                  <TouchableOpacity
-                    key={b.id}
-                    onPress={() => {
-                      setBudgetId(b.id);
-                      setManualBudgetSelected(true);
-                    }}
+                  <Ionicons
+                    name="pie-chart-outline"
+                    size={18}
+                    color={
+                      !budgetId
+                        ? colors.onPrimaryContainer
+                        : colors.onSurfaceVariant
+                    }
+                    style={{ marginRight: 6 }}
+                  />
+                  <Text
                     style={[
-                      styles.categoryChip,
+                      typography.bodyMedium,
                       {
-                        backgroundColor: colors.surfaceVariant,
-                        borderColor: isSelected ? colors.primary : "transparent",
+                        color: !budgetId
+                          ? colors.onPrimaryContainer
+                          : colors.onBackground,
+                        fontWeight: !budgetId ? "700" : "500",
                       },
                     ]}>
-                    <Ionicons
-                      name="pie-chart"
-                      size={20}
-                      color={colors.onBackground}
-                      style={{ marginRight: 6 }}
-                    />
-                    <Text
+                    None
+                  </Text>
+                </TouchableOpacity>
+                {Object.values(budgets)
+                  .filter((b) => !b.deleted)
+                  .map((b) => {
+                    const isSelected = b.id === budgetId;
+                    return (
+                      <TouchableOpacity
+                        key={b.id}
+                        onPress={() => {
+                          setBudgetId(b.id);
+                          setManualBudgetSelected(true);
+                        }}
+                        style={[
+                          styles.categoryChip,
+                          {
+                            backgroundColor: isSelected
+                              ? colors.primaryContainer
+                              : colors.surfaceVariant,
+                            borderColor: isSelected
+                              ? colors.primaryContainer
+                              : colors.outlineVariant,
+                          },
+                        ]}>
+                        <Ionicons
+                          name="pie-chart"
+                          size={18}
+                          color={
+                            isSelected
+                              ? colors.onPrimaryContainer
+                              : colors.primary
+                          }
+                          style={{ marginRight: 6 }}
+                        />
+                        <Text
+                          style={[
+                            typography.bodyMedium,
+                            {
+                              color: isSelected
+                                ? colors.onPrimaryContainer
+                                : colors.onBackground,
+                              fontWeight: isSelected ? "700" : "500",
+                            },
+                          ]}>
+                          {b.name}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+              </ScrollView>
+            </>
+          )}
+
+          {/* Account / Wallet Selector */}
+          {wallets.length > 0 && (
+            <>
+              <Text
+                style={[
+                  typography.label,
+                  {
+                    color: colors.onSurfaceVariant,
+                    marginBottom: spacing.sm,
+                    textTransform: "uppercase",
+                    letterSpacing: 0.8,
+                  },
+                ]}>
+                Account / Wallet
+              </Text>
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                keyboardShouldPersistTaps="handled"
+                contentContainerStyle={{
+                  gap: spacing.sm,
+                  marginBottom: spacing.lg,
+                }}>
+                {wallets.map((w) => {
+                  const isSelected = w.id === accountId;
+                  return (
+                    <TouchableOpacity
+                      key={w.id}
+                      onPress={() => setAccountId(w.id)}
                       style={[
-                        typography.bodyMedium,
+                        styles.categoryChip,
                         {
-                          color: colors.onBackground,
-                          fontWeight: isSelected ? "700" : "500",
+                          backgroundColor: isSelected
+                            ? colors.primaryContainer
+                            : colors.surfaceVariant,
+                          borderColor: isSelected
+                            ? colors.primaryContainer
+                            : colors.outlineVariant,
                         },
                       ]}>
-                      {b.name}
-                    </Text>
-                  </TouchableOpacity>
-                );
-              })}
-            </ScrollView>
+                      <Ionicons
+                        name={(w.icon || "wallet-outline") as any}
+                        size={18}
+                        color={
+                          isSelected
+                            ? colors.onPrimaryContainer
+                            : colors.primary
+                        }
+                        style={{ marginRight: 6 }}
+                      />
+                      <Text
+                        style={[
+                          typography.bodyMedium,
+                          {
+                            color: isSelected
+                              ? colors.onPrimaryContainer
+                              : colors.onBackground,
+                            fontWeight: isSelected ? "700" : "500",
+                          },
+                        ]}>
+                        {w.name}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </ScrollView>
+            </>
           )}
 
           {/* Options Grouped Card */}
           <View
             style={[
               styles.optionsCard,
-              { backgroundColor: colors.surfaceVariant },
+              {
+                backgroundColor: colors.surfaceVariant,
+                borderColor: colors.outlineVariant,
+                borderWidth: 1,
+              },
             ]}>
             {/* Date */}
             <TouchableOpacity
@@ -521,12 +872,12 @@ export const AddTransactionScreen: React.FC = () => {
               <View
                 style={[
                   styles.optionIcon,
-                  { backgroundColor: "rgba(255, 255, 255, 0.05)" },
+                  { backgroundColor: colors.surface },
                 ]}>
                 <Ionicons
                   name="calendar-outline"
                   size={20}
-                  color={colors.onSurfaceVariant}
+                  color={colors.primary}
                 />
               </View>
               <View style={styles.optionContent}>
@@ -544,23 +895,31 @@ export const AddTransactionScreen: React.FC = () => {
                   })}
                 </Text>
               </View>
+              <Ionicons
+                name="chevron-forward"
+                size={18}
+                color={colors.onSurfaceVariant}
+              />
             </TouchableOpacity>
 
             {/* Description */}
             <View
               style={[
                 styles.optionRow,
-                { borderBottomColor: "transparent", borderBottomWidth: 0 },
+                {
+                  borderBottomColor: colors.outlineVariant,
+                  borderBottomWidth: 1,
+                },
               ]}>
               <View
                 style={[
                   styles.optionIcon,
-                  { backgroundColor: "rgba(255, 255, 255, 0.05)" },
+                  { backgroundColor: colors.surface },
                 ]}>
                 <Ionicons
                   name="pencil-outline"
                   size={20}
-                  color={colors.onSurfaceVariant}
+                  color={colors.primary}
                 />
               </View>
               <View style={styles.optionContent}>
@@ -572,11 +931,88 @@ export const AddTransactionScreen: React.FC = () => {
                   placeholder="Add a description..."
                   placeholderTextColor={colors.onSurfaceVariant}
                   value={description}
+                  onFocus={() => setShowKeypad(false)}
                   onChangeText={setDescription}
                 />
               </View>
             </View>
+
+            {/* Receipt Attachment / Smart Scanner */}
+            <TouchableOpacity
+              style={[
+                styles.optionRow,
+                { borderBottomColor: "transparent", borderBottomWidth: 0 },
+              ]}
+              onPress={handleAttachReceipt}>
+              <View
+                style={[
+                  styles.optionIcon,
+                  { backgroundColor: colors.surface },
+                ]}>
+                <Ionicons
+                  name={receiptUri ? "document-attach" : "camera-outline"}
+                  size={20}
+                  color={colors.primary}
+                />
+              </View>
+              <View style={styles.optionContent}>
+                <Text
+                  style={[
+                    typography.bodyMedium,
+                    {
+                      color: receiptUri
+                        ? colors.primary
+                        : colors.onSurfaceVariant,
+                      fontWeight: receiptUri ? "700" : "500",
+                    },
+                  ]}
+                  numberOfLines={1}>
+                  {receiptUri
+                    ? receiptName || "Receipt Attached"
+                    : "Attach or Scan Receipt (Image / PDF / Text)"}
+                </Text>
+              </View>
+              {receiptUri ? (
+                <TouchableOpacity
+                  onPress={() => {
+                    setReceiptUri("");
+                    setReceiptName("");
+                  }}
+                  hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+                  <Ionicons
+                    name="close-circle"
+                    size={20}
+                    color={colors.error}
+                  />
+                </TouchableOpacity>
+              ) : (
+                <Ionicons
+                  name="attach-outline"
+                  size={20}
+                  color={colors.onSurfaceVariant}
+                />
+              )}
+            </TouchableOpacity>
           </View>
+
+          {/* Receipt Image Thumbnail Preview if image attached */}
+          {receiptUri &&
+            /\.(jpg|jpeg|png|webp|gif)$/i.test(receiptName || receiptUri) && (
+              <View
+                style={{
+                  marginBottom: spacing.lg,
+                  borderRadius: 16,
+                  overflow: "hidden",
+                  borderWidth: 1,
+                  borderColor: colors.outlineVariant,
+                }}>
+                <Image
+                  source={{ uri: receiptUri }}
+                  style={{ width: "100%", height: 140 }}
+                  resizeMode="cover"
+                />
+              </View>
+            )}
 
           {/* More Options */}
           <TouchableOpacity
@@ -586,7 +1022,7 @@ export const AddTransactionScreen: React.FC = () => {
               style={[
                 typography.bodyMedium,
                 {
-                  color: colors.primaryContainer,
+                  color: colors.primary,
                   fontWeight: "700",
                   marginRight: 4,
                 },
@@ -596,16 +1032,111 @@ export const AddTransactionScreen: React.FC = () => {
             <Ionicons
               name={showMore ? "chevron-up" : "chevron-down"}
               size={16}
-              color={colors.primaryContainer}
+              color={colors.primary}
             />
           </TouchableOpacity>
 
           {showMore && (
             <View style={{ gap: spacing.md, marginBottom: spacing.xl }}>
+              {!editTransaction && (
+                <View
+                  style={{
+                    backgroundColor: colors.surfaceVariant,
+                    borderRadius: 20,
+                    padding: spacing.md,
+                  }}>
+                  <TouchableOpacity
+                    onPress={() => setMakeRecurring(!makeRecurring)}
+                    style={{
+                      flexDirection: "row",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                    }}>
+                    <View
+                      style={{
+                        flexDirection: "row",
+                        alignItems: "center",
+                        gap: 10,
+                      }}>
+                      <Ionicons
+                        name="repeat-outline"
+                        size={20}
+                        color={colors.primary}
+                      />
+                      <View>
+                        <Text
+                          style={[
+                            typography.bodyMedium,
+                            { color: colors.onBackground, fontWeight: "700" },
+                          ]}>
+                          Repeat Recurring Transaction
+                        </Text>
+                        <Text
+                          style={[
+                            typography.bodySmall,
+                            { color: colors.onSurfaceVariant },
+                          ]}>
+                          Auto-log this {type} on schedule
+                        </Text>
+                      </View>
+                    </View>
+                    <Ionicons
+                      name={makeRecurring ? "checkbox" : "square-outline"}
+                      size={22}
+                      color={
+                        makeRecurring
+                          ? colors.primary
+                          : colors.onSurfaceVariant
+                      }
+                    />
+                  </TouchableOpacity>
+
+                  {makeRecurring && (
+                    <View
+                      style={{
+                        flexDirection: "row",
+                        gap: 8,
+                        marginTop: spacing.md,
+                      }}>
+                      {(
+                        ["daily", "weekly", "monthly", "yearly"] as RecurringFrequency[]
+                      ).map((freq) => {
+                        const active = recurringFrequency === freq;
+                        return (
+                          <TouchableOpacity
+                            key={freq}
+                            onPress={() => setRecurringFrequency(freq)}
+                            style={{
+                              flex: 1,
+                              paddingVertical: 8,
+                              borderRadius: 12,
+                              alignItems: "center",
+                              backgroundColor: active
+                                ? colors.primary
+                                : colors.surface,
+                            }}>
+                            <Text
+                              style={{
+                                fontSize: 12,
+                                fontWeight: "700",
+                                textTransform: "capitalize",
+                                color: active ? "#FFFFFF" : colors.onBackground,
+                              }}>
+                              {freq}
+                            </Text>
+                          </TouchableOpacity>
+                        );
+                      })}
+                    </View>
+                  )}
+                </View>
+              )}
+
               <Input
                 label="Note"
                 placeholder="Additional details..."
                 value={note}
+                onFocus={() => setShowKeypad(false)}
                 onChangeText={setNote}
                 multiline
                 numberOfLines={3}
@@ -614,6 +1145,17 @@ export const AddTransactionScreen: React.FC = () => {
             </View>
           )}
         </ScrollView>
+
+        {showKeypad && (
+          <CustomKeypad
+            onPress={handleKeypadPress}
+            onBackspace={handleKeypadBackspace}
+            onClear={handleKeypadClear}
+            onEvaluate={handleEvaluateExpression}
+            onSubmit={handleSave}
+            hasOperator={hasMathOperator}
+          />
+        )}
 
         {showDatePicker && (
           <CustomDatePicker
@@ -628,6 +1170,13 @@ export const AddTransactionScreen: React.FC = () => {
             onClose={() => setShowDatePicker(false)}
           />
         )}
+
+        <CategoryCreationModal
+          visible={showCreateCategoryModal}
+          onClose={() => setShowCreateCategoryModal(false)}
+          onCreateCategory={handleQuickCreateCategory}
+          initialData={{ name: "", type }}
+        />
       </KeyboardAvoidingView>
 
       {/* Voice Review Modal */}

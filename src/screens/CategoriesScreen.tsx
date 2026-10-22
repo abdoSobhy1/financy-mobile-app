@@ -12,7 +12,7 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { useDispatch, useSelector } from "react-redux";
-import { useAppTheme } from "../components/ui/ThemeProvider";
+import { useAppTheme, resolveCategoryColor } from "../components/ui/ThemeProvider";
 import { AppHeader } from "../components/ui/AppHeader";
 import { CategoryCreationModal } from "../components/ui/CategoryCreationModal";
 import { RootState, AppDispatch } from "../store";
@@ -38,7 +38,7 @@ const COLOUR_PALETTE = [
 ];
 
 export const CategoriesScreen: React.FC = () => {
-  const { colors, typography, spacing } = useAppTheme();
+  const { colors, typography, spacing, isDark } = useAppTheme();
   const dispatch = useDispatch<AppDispatch>();
 
   const [viewMode, setViewMode] = useState<"list" | "grid">("grid");
@@ -116,20 +116,19 @@ export const CategoriesScreen: React.FC = () => {
   const renderGridCard = (cat: Category) => {
     const spendingData = topSpendingCategories.find((t) => t.category.id === cat.id);
     const spent = spendingData ? spendingData.totalSpent : 0;
-    const bgColor = cat.color ? cat.color + "22" : "rgba(255,255,255,0.05)";
-    const iconColor = cat.color || colors.primary;
+    const resolved = resolveCategoryColor(cat.color, isDark);
 
     return (
       <TouchableOpacity
         key={cat.id}
         style={[
           styles.categoryCard,
-          { backgroundColor: colors.surfaceVariant, borderColor: cat.color ? cat.color + "44" : colors.outlineVariant },
+          { backgroundColor: colors.surfaceVariant, borderColor: resolved.fg + "40" },
         ]}
         onPress={() => handleCardPress(cat)}
         activeOpacity={0.7}>
-        <View style={[styles.iconBox, { backgroundColor: bgColor }]}>
-          <Ionicons name={(cat as any).icon || "pricetag"} size={24} color={iconColor} />
+        <View style={[styles.iconBox, { backgroundColor: resolved.bg }]}>
+          <Ionicons name={(cat as any).icon || "pricetag"} size={24} color={resolved.fg} />
         </View>
         <Text
           style={[typography.label, { color: colors.onBackground, textAlign: "center", marginBottom: 4 }]}
@@ -140,7 +139,7 @@ export const CategoriesScreen: React.FC = () => {
           {cat.type === "expense" ? "Expense" : "Income"}
         </Text>
         {spent > 0 && (
-          <Text style={[typography.bodySmall, { color: iconColor, fontWeight: "600", marginTop: 4 }]}>
+          <Text style={[typography.bodySmall, { color: resolved.fg, fontWeight: "600", marginTop: 4 }]}>
             {formatCurrency(spent)}
           </Text>
         )}
@@ -151,8 +150,7 @@ export const CategoriesScreen: React.FC = () => {
   const renderListRow = (cat: Category) => {
     const spendingData = topSpendingCategories.find((t) => t.category.id === cat.id);
     const spent = spendingData ? spendingData.totalSpent : 0;
-    const iconColor = cat.color || colors.primary;
-    const bgColor = cat.color ? cat.color + "22" : "rgba(255,255,255,0.08)";
+    const resolved = resolveCategoryColor(cat.color, isDark);
 
     return (
       <TouchableOpacity
@@ -160,8 +158,8 @@ export const CategoriesScreen: React.FC = () => {
         style={[styles.listRow, { backgroundColor: colors.surfaceVariant, borderColor: colors.outlineVariant }]}
         onPress={() => handleCardPress(cat)}
         activeOpacity={0.7}>
-        <View style={[styles.listIconBox, { backgroundColor: bgColor }]}>
-          <Ionicons name={(cat as any).icon || "pricetag"} size={20} color={iconColor} />
+        <View style={[styles.listIconBox, { backgroundColor: resolved.bg }]}>
+          <Ionicons name={(cat as any).icon || "pricetag"} size={20} color={resolved.fg} />
         </View>
         <View style={{ flex: 1 }}>
           <Text style={[typography.label, { color: colors.onBackground }]}>{cat.name}</Text>
@@ -170,7 +168,7 @@ export const CategoriesScreen: React.FC = () => {
           </Text>
         </View>
         {spent > 0 && (
-          <Text style={[typography.label, { color: iconColor }]}>{formatCurrency(spent)}</Text>
+          <Text style={[typography.label, { color: resolved.fg }]}>{formatCurrency(spent)}</Text>
         )}
         <Ionicons name="chevron-forward" size={16} color={colors.onSurfaceVariant} style={{ marginLeft: 8 }} />
       </TouchableOpacity>
@@ -179,7 +177,7 @@ export const CategoriesScreen: React.FC = () => {
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }} edges={["top"]}>
-      <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
+      <StatusBar barStyle={isDark ? "light-content" : "dark-content"} backgroundColor="transparent" translucent />
       <AppHeader title="Categories" />
 
       <ScrollView contentContainerStyle={{ padding: spacing.lg, paddingBottom: 100 }}>

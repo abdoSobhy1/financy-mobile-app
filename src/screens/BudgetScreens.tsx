@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useMemo } from "react";
 import {
   View,
   Text,
@@ -7,27 +7,23 @@ import {
   RefreshControl,
   TouchableOpacity,
   StatusBar,
+  Alert,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useAppTheme } from "../components/ui/ThemeProvider";
 import { Ionicons } from "@expo/vector-icons";
-import { useTabBarHeight } from "../components/ui";
+import { useTabBarHeight, IconChip, Screen, AppHeader } from "../components/ui";
 import { useDispatch, useSelector } from "react-redux";
-import { useNavigation, useFocusEffect } from "@react-navigation/native";
+import { useNavigation, useRoute, RouteProp } from "@react-navigation/native";
 import { StackNavigationProp } from "@react-navigation/stack";
 import { RootState, AppDispatch } from "../store";
-import { fetchBudgets } from "../store/slices/budgetsSlice";
+import { fetchBudgets, deleteBudget } from "../store/slices/budgetsSlice";
 import { fetchTransactions } from "../store/slices/transactionsSlice";
 import { fetchCategories } from "../store/slices/categoriesSlice";
 import { getCurrentBillingPeriod } from "../utils/billingPeriod";
-import { getDateRangeForBillingPeriod } from "../utils";
-import {
-  Screen,
-  AppHeader,
-} from "../components/ui";
-import { UI } from "../constants";
-import { formatCurrency, percentage } from "../utils";
-import { BudgetStackParamList, Budget, Category } from "../types";
+import { getDateRangeForBillingPeriod, formatCurrency, percentage, formatRelativeTime } from "../utils";
+import { startOfWeek, endOfWeek } from "date-fns";
+import { BudgetStackParamList, Transaction } from "../types";
 
 type BudgetListNavigationProp = StackNavigationProp<
   BudgetStackParamList,
@@ -35,7 +31,7 @@ type BudgetListNavigationProp = StackNavigationProp<
 >;
 
 export const BudgetListScreen: React.FC = () => {
-  const { colors, typography, spacing, radius } = useAppTheme();
+  const { colors, typography, spacing, isDark } = useAppTheme();
   const dispatch = useDispatch<AppDispatch>();
   const navigation = useNavigation<BudgetListNavigationProp>();
   const tabBarHeight = useTabBarHeight();
@@ -53,7 +49,7 @@ export const BudgetListScreen: React.FC = () => {
 
   useEffect(() => {
     loadData();
-  }, [dispatch]);
+  }, [dispatch, Object.keys(budgets).length, Object.keys(transactions).length]);
 
   const loadData = async () => {
     try {
@@ -80,10 +76,13 @@ export const BudgetListScreen: React.FC = () => {
 
       const promises = (fetchedBudgets || []).map(async (b: any) => {
         try {
+          const isWeekly = b.period === "weekly";
+          const bStart = isWeekly ? startOfWeek(new Date(), { weekStartsOn: 1 }) : start;
+          const bEnd = isWeekly ? endOfWeek(new Date(), { weekStartsOn: 1 }) : end;
           const progress = await queriesModule.db.budgets.getBudgetProgressForPeriod(
             b.id,
-            start.toISOString(),
-            end.toISOString(),
+            bStart.toISOString(),
+            bEnd.toISOString(),
           );
           return { id: b.id, progress };
         } catch (err) {
@@ -124,7 +123,6 @@ export const BudgetListScreen: React.FC = () => {
       return sum + (p ? p.spent : 0);
     }, 0);
   } else {
-    // Fallback naive calculation
     const allTxs = Object.values(transactions).filter((t) => !t.deleted && t.type === "expense");
     totalSpent = ids.reduce((sum, id) => {
       const budgetTxs = allTxs.filter((t) => t.budgetId === id);
@@ -139,7 +137,7 @@ export const BudgetListScreen: React.FC = () => {
 
   const renderHeader = () => (
     <View style={{ marginBottom: spacing.lg }}>
-      <View style={[styles.heroCard, { backgroundColor: colors.surface }]}>
+      <View style={[styles.heroCard, { backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.outlineVariant }]}>
         <View style={styles.heroRow}>
           <View>
             <Text style={[typography.label, { color: colors.onSurfaceVariant, textTransform: "uppercase" }]}>Total Monthly Budget</Text>
@@ -149,19 +147,19 @@ export const BudgetListScreen: React.FC = () => {
           </View>
           <View style={{ alignItems: "flex-end" }}>
             <Text style={[typography.label, { color: colors.onSurfaceVariant, textTransform: "uppercase" }]}>Remaining</Text>
-            <Text style={[typography.h2, { color: isTotalOver ? colors.error : colors.primaryContainer, fontSize: 20, marginTop: 4 }]}>
+            <Text style={[typography.h2, { color: isTotalOver ? colors.error : colors.primary, fontSize: 20, marginTop: 4 }]}>
               {formatCurrency(totalRemaining)}
             </Text>
           </View>
         </View>
 
         {/* Total Progress Bar */}
-        <View style={[styles.progressBarContainer, { backgroundColor: "rgba(255,255,255,0.1)", marginVertical: 16 }]}>
+        <View style={[styles.progressBarContainer, { backgroundColor: colors.surfaceVariant, marginVertical: 16 }]}>
           <View
             style={[
               styles.progressBarFill,
               {
-                backgroundColor: isTotalOver ? colors.error : colors.primaryContainer,
+                backgroundColor: isTotalOver ? colors.error : colors.primary,
                 width: `${Math.min(100, Math.max(0, totalProgressPercentage))}%`,
               },
             ]}
@@ -195,37 +193,54 @@ export const BudgetListScreen: React.FC = () => {
     const isOverBudget = spent > budget.amount;
 
     const category = budget.categoryId ? categoriesMap[budget.categoryId] : null;
-    const iconName = "wallet";
-    const iconColor = category && category.color ? category.color : colors.primaryContainer;
+    const iconName = (category?.icon as any) || "wallet-outline";
+    const iconColor = category?.color || colors.primary;
 
-    const progressColor = isOverBudget ? colors.error : colors.primaryContainer;
-    const progressBg = isOverBudget ? "rgba(255,100,100,0.15)" : "rgba(255,255,255,0.1)";
+    const progressColor = isOverBudget ? colors.error : progressPercentage > 80 ? "#FDCB6E" : colors.primary;
+    const progressBg = isOverBudget ? colors.errorContainer : colors.surfaceVariant;
 
     return (
       <TouchableOpacity 
-        style={[styles.budgetCard, { backgroundColor: colors.surface, borderColor: isOverBudget ? "rgba(255,0,0,0.2)" : "transparent", borderWidth: 1 }]}
+        style={[
+          styles.budgetCard,
+          {
+            backgroundColor: colors.surface,
+            borderColor: isOverBudget ? colors.error + "40" : colors.outlineVariant,
+            borderWidth: 1,
+          },
+        ]}
         activeOpacity={0.8}
         onPress={() => {
-          navigation.navigate("BudgetForm", { budgetId: id });
+          navigation.navigate("BudgetDetails", { budgetId: id });
         }}
       >
         <View style={styles.budgetRow}>
-          <View style={{ flexDirection: "row", alignItems: "center" }}>
-            <View style={[styles.iconCircle, { backgroundColor: "rgba(255,255,255,0.05)" }]}>
-              <Ionicons name={iconName as any} size={20} color={iconColor} />
-            </View>
-            <View style={{ marginLeft: 12 }}>
-              <Text style={[typography.h3, { color: colors.onSurface }]}>{budget.name}</Text>
+          <View style={{ flexDirection: "row", alignItems: "center", flex: 1 }}>
+            <IconChip icon={iconName} color={iconColor} size="md" />
+            <View style={{ marginLeft: 12, flex: 1 }}>
+              <Text style={[typography.h3, { color: colors.onSurface }]} numberOfLines={1}>
+                {budget.name}
+              </Text>
               <Text style={[typography.label, { color: colors.onSurfaceVariant, marginTop: 4 }]}>
-                {formatCurrency(spent)} / {formatCurrency(budget.amount)}
+                {formatCurrency(spent)} / {formatCurrency(budget.amount)} • {budget.period === "weekly" ? "Weekly" : "Monthly"}
+                {category ? ` • ${category.name}` : ""}
               </Text>
             </View>
           </View>
           
-          <View style={{ alignItems: "flex-end" }}>
-            <Text style={[typography.h3, { color: isOverBudget ? colors.error : colors.primaryContainer, fontSize: 15 }]}>
-              {isOverBudget ? `-${formatCurrency(Math.abs(remaining))} over` : `${formatCurrency(remaining)} left`}
+          <View style={{ alignItems: "flex-end", marginLeft: 8 }}>
+            <Text style={[typography.h3, { color: isOverBudget ? colors.error : colors.primary, fontSize: 15 }]}>
+              {isOverBudget ? `${formatCurrency(Math.abs(remaining))} over` : `${formatCurrency(remaining)} left`}
             </Text>
+            <TouchableOpacity
+              onPress={() => navigation.navigate("BudgetForm", { budgetId: id })}
+              style={{ marginTop: 4, padding: 2 }}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            >
+              <Text style={[typography.caption, { color: colors.onSurfaceVariant, fontWeight: "600" }]}>
+                Edit ›
+              </Text>
+            </TouchableOpacity>
           </View>
         </View>
 
@@ -262,13 +277,48 @@ export const BudgetListScreen: React.FC = () => {
       <Text style={[typography.bodyMedium, { color: colors.onSurfaceVariant, textAlign: "center", marginBottom: spacing.xl, paddingHorizontal: spacing.xl }]}>
         Create budgets to track your spending categories and stay on target.
       </Text>
+      <TouchableOpacity
+        style={{
+          backgroundColor: colors.primary,
+          paddingHorizontal: 24,
+          paddingVertical: 14,
+          borderRadius: 24,
+          flexDirection: "row",
+          alignItems: "center",
+          gap: 8,
+        }}
+        onPress={() => navigation.navigate("BudgetForm", {})}
+      >
+        <Ionicons name="add" size={20} color={colors.onPrimary} />
+        <Text style={[typography.bodyMedium, { color: colors.onPrimary, fontWeight: "700" }]}>
+          Create First Budget
+        </Text>
+      </TouchableOpacity>
     </View>
   );
 
   return (
     <SafeAreaView style={[styles.safeArea, { backgroundColor: colors.background }]} edges={["top"]}>
-      <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
-      <AppHeader title="Budgets" />
+      <StatusBar barStyle={isDark ? "light-content" : "dark-content"} backgroundColor="transparent" translucent />
+      <AppHeader
+        title="Budgets"
+        rightAction={
+          <TouchableOpacity
+            onPress={() => navigation.navigate("BudgetForm", {})}
+            style={{
+              width: 40,
+              height: 40,
+              borderRadius: 20,
+              backgroundColor: colors.surfaceVariant,
+              alignItems: "center",
+              justifyContent: "center",
+            }}
+            accessibilityLabel="Create new budget"
+          >
+            <Ionicons name="add" size={22} color={colors.onBackground} />
+          </TouchableOpacity>
+        }
+      />
       
       <FlatList
         data={ids}
@@ -287,12 +337,211 @@ export const BudgetListScreen: React.FC = () => {
 };
 
 export const BudgetDetailsScreen: React.FC = () => {
+  const { colors, typography, spacing, isDark } = useAppTheme();
+  const route = useRoute<RouteProp<BudgetStackParamList, "BudgetDetails">>();
+  const navigation = useNavigation<StackNavigationProp<BudgetStackParamList, "BudgetDetails">>();
+  const dispatch = useDispatch<AppDispatch>();
+  const tabBarHeight = useTabBarHeight();
+
+  const { budgetId } = route.params;
+  const budget = useSelector((state: RootState) => state.budgets.items[budgetId]);
+  const transactions = useSelector((state: RootState) => state.transactions.items);
+  const categoriesMap = useSelector((state: RootState) => state.categories.items);
+  const settingsData = useSelector((state: RootState) => state.settings.data);
+
+  const periodRange = useMemo(() => {
+    if (budget?.period === "weekly") {
+      return {
+        start: startOfWeek(new Date(), { weekStartsOn: 1 }),
+        end: endOfWeek(new Date(), { weekStartsOn: 1 }),
+      };
+    }
+    const startDay = settingsData?.billingPeriodStartDay ?? 1;
+    return getDateRangeForBillingPeriod(startDay);
+  }, [budget?.period, settingsData?.billingPeriodStartDay]);
+
+  const budgetTransactions = useMemo(() => {
+    if (!budget) return [];
+    const startMs = periodRange.start.getTime();
+    const endMs = periodRange.end.getTime();
+    return Object.values(transactions)
+      .filter((tx) => {
+        if (tx.deleted || tx.type !== "expense") return false;
+        const txMs = new Date(tx.date).getTime();
+        if (txMs < startMs || txMs > endMs) return false;
+        if (tx.budgetId === budgetId) return true;
+        if (budget.categoryId && tx.categoryId === budget.categoryId) return true;
+        return false;
+      })
+      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+  }, [transactions, budget, budgetId, periodRange]);
+
+  if (!budget) {
+    return (
+      <Screen>
+        <View style={{ flex: 1, justifyContent: "center", alignItems: "center", padding: 24 }}>
+          <Text style={[typography.h3, { color: colors.onBackground }]}>Budget not found</Text>
+          <TouchableOpacity onPress={() => navigation.goBack()} style={{ marginTop: 16 }}>
+            <Text style={[typography.bodyMedium, { color: colors.primary }]}>Go Back</Text>
+          </TouchableOpacity>
+        </View>
+      </Screen>
+    );
+  }
+
+  const spent = budgetTransactions.reduce((sum, tx) => sum + tx.amount, 0);
+  const remaining = budget.amount - spent;
+  const progressPercentage = percentage(spent, budget.amount);
+  const isOver = spent > budget.amount;
+  const daysLeft = Math.max(1, Math.ceil((periodRange.end.getTime() - Date.now()) / (1000 * 60 * 60 * 24)));
+  const safeDaily = Math.max(0, remaining / daysLeft);
+  const category = budget.categoryId ? categoriesMap[budget.categoryId] : null;
+
+  const handleDelete = () => {
+    Alert.alert(
+      "Delete Budget",
+      `Are you sure you want to delete "${budget.name}"?`,
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Delete",
+          style: "destructive",
+          onPress: async () => {
+            await dispatch(deleteBudget(budget.id));
+            navigation.goBack();
+          },
+        },
+      ]
+    );
+  };
+
+  const renderTransactionItem = ({ item: tx }: { item: Transaction }) => {
+    const cat = categoriesMap[tx.categoryId];
+    return (
+      <TouchableOpacity
+        style={[
+          styles.txItem,
+          { backgroundColor: colors.surface, borderColor: colors.outlineVariant },
+        ]}
+        onPress={() => (navigation as any).navigate("AddTransaction", { editTransaction: tx })}
+        activeOpacity={0.75}
+      >
+        <IconChip
+          icon={(cat?.icon as any) || "pricetag-outline"}
+          color={cat?.color || colors.primary}
+          size="md"
+        />
+        <View style={{ flex: 1, marginLeft: 12 }}>
+          <Text style={[typography.bodyLarge, { color: colors.onSurface, fontWeight: "600" }]} numberOfLines={1}>
+            {tx.description || cat?.name || "Expense"}
+          </Text>
+          <Text style={[typography.caption, { color: colors.onSurfaceVariant, marginTop: 2 }]}>
+            {cat?.name || "Uncategorized"} • {formatRelativeTime(tx.date)}
+          </Text>
+        </View>
+        <Text style={[typography.bodyLarge, { color: colors.onSurface, fontWeight: "700" }]}>
+          -{formatCurrency(tx.amount)}
+        </Text>
+      </TouchableOpacity>
+    );
+  };
+
   return (
-    <Screen>
-      <Text style={{ color: "white", fontSize: 24, textAlign: "center", marginTop: 50 }}>
-        Budget Details Screen
-      </Text>
-    </Screen>
+    <SafeAreaView style={[styles.safeArea, { backgroundColor: colors.background }]} edges={["top"]}>
+      <StatusBar barStyle={isDark ? "light-content" : "dark-content"} backgroundColor="transparent" translucent />
+      <View style={styles.detailsHeader}>
+        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.headerBtn}>
+          <Ionicons name="arrow-back" size={24} color={colors.onBackground} />
+        </TouchableOpacity>
+        <Text style={[typography.h2, { color: colors.onBackground, flex: 1, textAlign: "center" }]} numberOfLines={1}>
+          {budget.name}
+        </Text>
+        <View style={{ flexDirection: "row", gap: 8 }}>
+          <TouchableOpacity
+            onPress={() => navigation.navigate("BudgetForm", { budgetId: budget.id })}
+            style={[styles.headerBtn, { backgroundColor: colors.surfaceVariant, borderRadius: 20 }]}
+          >
+            <Ionicons name="create-outline" size={20} color={colors.onBackground} />
+          </TouchableOpacity>
+          <TouchableOpacity
+            onPress={handleDelete}
+            style={[styles.headerBtn, { backgroundColor: colors.errorContainer, borderRadius: 20 }]}
+          >
+            <Ionicons name="trash-outline" size={20} color={colors.error} />
+          </TouchableOpacity>
+        </View>
+      </View>
+
+      <FlatList
+        data={budgetTransactions}
+        keyExtractor={(item) => item.id}
+        renderItem={renderTransactionItem}
+        contentContainerStyle={[styles.container, { paddingBottom: tabBarHeight + 100 }]}
+        ListHeaderComponent={
+          <View style={{ marginBottom: spacing.lg }}>
+            <View style={[styles.heroCard, { backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.outlineVariant }]}>
+              <View style={styles.heroRow}>
+                <View>
+                  <Text style={[typography.label, { color: colors.onSurfaceVariant, textTransform: "uppercase" }]}>
+                    Spent This Period
+                  </Text>
+                  <Text style={[typography.h1, { color: colors.onSurface, fontSize: 32, marginTop: 4 }]}>
+                    {formatCurrency(spent)}
+                  </Text>
+                  <Text style={[typography.caption, { color: colors.onSurfaceVariant, marginTop: 2 }]}>
+                    of {formatCurrency(budget.amount)} limit {category ? `• ${category.name}` : ""}
+                  </Text>
+                </View>
+                <View style={{ alignItems: "flex-end" }}>
+                  <Text style={[typography.label, { color: colors.onSurfaceVariant, textTransform: "uppercase" }]}>
+                    {isOver ? "Over Limit" : "Safe Daily"}
+                  </Text>
+                  <Text style={[typography.h2, { color: isOver ? colors.error : colors.primary, fontSize: 20, marginTop: 4 }]}>
+                    {isOver ? formatCurrency(Math.abs(remaining)) : `${formatCurrency(safeDaily)}/d`}
+                  </Text>
+                  <Text style={[typography.caption, { color: colors.onSurfaceVariant, marginTop: 2 }]}>
+                    {daysLeft} days left
+                  </Text>
+                </View>
+              </View>
+
+              <View style={[styles.progressBarContainer, { backgroundColor: colors.surfaceVariant, marginVertical: 16 }]}>
+                <View
+                  style={[
+                    styles.progressBarFill,
+                    {
+                      backgroundColor: isOver ? colors.error : colors.primary,
+                      width: `${Math.min(100, Math.max(0, progressPercentage))}%`,
+                    },
+                  ]}
+                />
+              </View>
+
+              <View style={styles.heroRow}>
+                <Text style={[typography.label, { color: colors.onSurfaceVariant }]}>
+                  {isOver ? `${formatCurrency(Math.abs(remaining))} over budget` : `${formatCurrency(remaining)} remaining`}
+                </Text>
+                <Text style={[typography.label, { color: colors.onSurfaceVariant }]}>
+                  {progressPercentage.toFixed(0)}% used
+                </Text>
+              </View>
+            </View>
+
+            <Text style={[typography.h3, { color: colors.onBackground, marginTop: 24, marginBottom: 8 }]}>
+              Transactions ({budgetTransactions.length})
+            </Text>
+          </View>
+        }
+        ListEmptyComponent={
+          <View style={{ alignItems: "center", paddingVertical: 40 }}>
+            <Ionicons name="receipt-outline" size={40} color={colors.onSurfaceVariant} />
+            <Text style={[typography.bodyMedium, { color: colors.onSurfaceVariant, marginTop: 12 }]}>
+              No expenses recorded for this budget yet.
+            </Text>
+          </View>
+        }
+      />
+    </SafeAreaView>
   );
 };
 
@@ -303,6 +552,19 @@ const styles = StyleSheet.create({
   container: {
     paddingHorizontal: 20,
     paddingTop: 10,
+  },
+  detailsHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+  },
+  headerBtn: {
+    width: 40,
+    height: 40,
+    alignItems: "center",
+    justifyContent: "center",
   },
   heroCard: {
     padding: 24,
@@ -323,13 +585,6 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     alignItems: "center",
   },
-  iconCircle: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    alignItems: "center",
-    justifyContent: "center",
-  },
   progressBarContainer: {
     height: 6,
     borderRadius: 3,
@@ -339,6 +594,14 @@ const styles = StyleSheet.create({
   progressBarFill: {
     height: "100%",
     borderRadius: 3,
+  },
+  txItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    padding: 14,
+    borderRadius: 16,
+    marginBottom: 10,
+    borderWidth: 1,
   },
   emptyState: {
     flex: 1,

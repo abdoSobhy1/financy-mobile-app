@@ -58,6 +58,9 @@ export const updateDebt = createAsyncThunk("debts/updateDebt", async ({ id, upda
   if (updates.name !== undefined) {
     debtUpdates.name = updates.name;
   }
+  if (updates.type !== undefined) {
+    debtUpdates.type = updates.type;
+  }
   if (updates.totalAmount !== undefined) {
     debtUpdates.totalAmount = updates.totalAmount;
   }

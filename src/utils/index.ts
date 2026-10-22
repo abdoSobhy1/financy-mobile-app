@@ -4,16 +4,64 @@ import { CURRENCY, DATE_FORMATS } from "../constants";
 // Export date utilities
 export * from "./dateUtils";
 
+// Dynamic active currency state (synced with Redux settingsSlice)
+let activeCurrencyCode: string = CURRENCY.DEFAULT;
+
+export const CURRENCY_METADATA: Record<
+  string,
+  { symbol: string; name: string; locale: string }
+> = {
+  USD: { symbol: "$", name: "US Dollar", locale: "en-US" },
+  EGP: { symbol: "E£", name: "Egyptian Pound", locale: "en-EG" },
+  EUR: { symbol: "€", name: "Euro", locale: "de-DE" },
+  GBP: { symbol: "£", name: "British Pound", locale: "en-GB" },
+  SAR: { symbol: "SAR ", name: "Saudi Riyal", locale: "en-SA" },
+  AED: { symbol: "AED ", name: "UAE Dirham", locale: "en-AE" },
+};
+
+export const setActiveCurrency = (code?: string | null) => {
+  if (code && typeof code === "string") {
+    activeCurrencyCode = code.toUpperCase();
+  }
+};
+
+export const getActiveCurrency = (): string => activeCurrencyCode;
+
+export const getCurrencySymbol = (code: string = activeCurrencyCode): string => {
+  const upper = (code || activeCurrencyCode).toUpperCase();
+  return CURRENCY_METADATA[upper]?.symbol || `${upper} `;
+};
+
 // Currency formatting utilities
-export const formatCurrency = (amount: number, currency: string = CURRENCY.DEFAULT, locale: string = CURRENCY.LOCALE): string => {
+export const formatCurrency = (
+  amount: number,
+  currency: string = activeCurrencyCode,
+  locale?: string
+): string => {
+  const code = (currency || activeCurrencyCode || CURRENCY.DEFAULT).toUpperCase();
+  const meta = CURRENCY_METADATA[code];
+  const resolvedLocale = locale || meta?.locale || CURRENCY.LOCALE;
+
+  if (code === "EGP" || code === "SAR" || code === "AED") {
+    const absFormatted = Math.abs(amount).toLocaleString("en-US", {
+      minimumFractionDigits: amount % 1 === 0 ? 0 : 2,
+      maximumFractionDigits: 2,
+    });
+    const sign = amount < 0 ? "-" : "";
+    return `${sign}${meta?.symbol || code + " "}${absFormatted}`;
+  }
+
   try {
-    return new Intl.NumberFormat(locale, {
+    return new Intl.NumberFormat(resolvedLocale, {
       style: "currency",
-      currency,
+      currency: code,
+      minimumFractionDigits: amount % 1 === 0 ? 0 : 2,
+      maximumFractionDigits: 2,
     }).format(amount);
   } catch (error) {
     // Fallback to basic formatting if Intl fails
-    return `${CURRENCY.SYMBOL}${amount.toFixed(2)}`;
+    const sym = getCurrencySymbol(code);
+    return `${sym}${amount.toFixed(2)}`;
   }
 };
 
@@ -43,6 +91,30 @@ export const formatDateForInput = (date: Date | string): string => {
 
 export const formatDateForDisplay = (date: Date | string): string => {
   return formatDate(date, DATE_FORMATS.DISPLAY);
+};
+
+export const formatRelativeTime = (dateInput: Date | string | number): string => {
+  try {
+    const dateObj =
+      typeof dateInput === "string"
+        ? parseISO(dateInput)
+        : typeof dateInput === "number"
+        ? new Date(dateInput)
+        : dateInput;
+    if (!isValid(dateObj)) return "Recently";
+    const diffMs = Date.now() - dateObj.getTime();
+    const diffMin = Math.floor(diffMs / 60000);
+    if (diffMin < 1) return "Just now";
+    if (diffMin < 60) return `${diffMin}m ago`;
+    const diffHours = Math.floor(diffMin / 60);
+    if (diffHours < 24) return `${diffHours}h ago`;
+    const diffDays = Math.floor(diffHours / 24);
+    if (diffDays === 1) return "Yesterday";
+    if (diffDays < 7) return `${diffDays}d ago`;
+    return format(dateObj, "MMM d, yyyy");
+  } catch {
+    return "Recently";
+  }
 };
 
 export const formatDateForStorage = (date: Date): string => {

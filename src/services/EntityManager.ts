@@ -1,7 +1,7 @@
 // Centralized Entity Manager - Single Source of Truth for all data operations
 import { db } from "../database/queries";
 import { offlineFirstSync } from "./OfflineFirstSync";
-import { Debt, Budget, Category, DebtPayment, Transaction, Bill } from "../types";
+import { Debt, Budget, Category, DebtPayment, Transaction } from "../types";
 import { generateId } from "../utils";
 import { cleanDebtData, cleanBudgetData, cleanCategoryData } from "../utils/validation";
 

@@ -1,4 +1,4 @@
-import { Transaction, Category, Budget, Bill, Settings, Debt, DebtPayment } from "../../types";
+import { Transaction, Category, Budget, Settings, Debt, DebtPayment } from "../../types";
 import { DateUtils } from "../../utils/dateUtils";
 
 // Database table schemas
@@ -8,10 +8,12 @@ export interface TransactionTable {
   type: string;
   category_id: string;
   budget_id?: string;
+  account_id?: string;
+  receipt_uri?: string;
+  recurring_id?: string;
   description: string;
   date: string;
   note?: string;
-  linked_bill_id?: string;
   linked_debt_payment_id?: string;
   created_at: string;
   duplicated_at?: string;
@@ -40,27 +42,10 @@ export interface BudgetTable {
   name: string;
   amount: number;
   current_balance: number;
+  period_type?: string;
+  alerts_enabled?: number;
   reset_day: number;
   category_id: string | null;
-  created_at: string;
-  updated_at: string;
-  // Sync fields
-  sync_updated_at: number;
-  deleted: number;
-  sync_status: string;
-}
-
-export interface BillTable {
-  id: string;
-  name: string;
-  amount: number;
-  due_date: string;
-  paid: number; // SQLite boolean (0/1)
-  budget_id?: string;
-  category_id?: string;
-  linked_transaction_id?: string;
-  recurring: number; // SQLite boolean (0/1)
-  recurring_type?: string;
   created_at: string;
   updated_at: string;
   // Sync fields
@@ -86,6 +71,7 @@ export interface SettingsTable {
 export interface DebtTable {
   id: string;
   name: string;
+  debt_type?: string | null;
   amount: number; // Total debt amount (same as total_amount for compatibility)
   total_amount: number;
   current_balance: number;
@@ -128,10 +114,12 @@ export const transformTransaction = (row: TransactionTable): Transaction => ({
   type: row.type as Transaction["type"],
   categoryId: row.category_id,
   budgetId: row.budget_id,
+  accountId: row.account_id || undefined,
+  receiptUri: row.receipt_uri || undefined,
+  recurringId: row.recurring_id || undefined,
   description: row.description,
   date: row.date,
   note: row.note,
-  linkedBillId: row.linked_bill_id,
   linkedDebtPaymentId: row.linked_debt_payment_id,
   createdAt: row.created_at,
   duplicatedAt: row.duplicated_at,
@@ -160,6 +148,8 @@ export const transformBudget = (row: BudgetTable): Budget => ({
   name: row.name,
   amount: row.amount,
   currentBalance: row.current_balance,
+  period: (row.period_type as "weekly" | "monthly") || "monthly",
+  alertsEnabled: row.alerts_enabled !== undefined && row.alerts_enabled !== null ? Boolean(row.alerts_enabled) : true,
   resetDay: row.reset_day,
   categoryId: row.category_id || undefined,
   createdAt: row.created_at,
@@ -190,10 +180,12 @@ export const toTransactionTable = (transaction: Omit<Transaction, "id" | "create
   type: transaction.type,
   category_id: transaction.categoryId,
   budget_id: transaction.budgetId,
+  account_id: transaction.accountId,
+  receipt_uri: transaction.receiptUri,
+  recurring_id: transaction.recurringId,
   description: transaction.description,
   date: transaction.date,
   note: transaction.note,
-  linked_bill_id: transaction.linkedBillId,
   linked_debt_payment_id: transaction.linkedDebtPaymentId,
   duplicated_at: transaction.duplicatedAt,
   // Sync fields
@@ -218,6 +210,8 @@ export const toBudgetTable = (budget: Omit<Budget, "id" | "createdAt" | "updated
   name: budget.name,
   amount: budget.amount,
   current_balance: budget.currentBalance,
+  period_type: budget.period || "monthly",
+  alerts_enabled: budget.alertsEnabled === false ? 0 : 1,
   reset_day: budget.resetDay,
   category_id: budget.categoryId || null,
   // Sync fields
@@ -242,6 +236,7 @@ export const toSettingsTable = (
 
 export const toDebtTable = (debt: Omit<Debt, "id" | "createdAt" | "updatedAt">): Omit<DebtTable, "id" | "created_at" | "updated_at"> => ({
   name: debt.name,
+  debt_type: debt.type || "i_owe",
   amount: debt.totalAmount, // Use totalAmount for amount field
   total_amount: debt.totalAmount,
   current_balance: debt.currentBalance,
@@ -276,6 +271,7 @@ export const toDebtPaymentTable = (payment: Omit<DebtPayment, "id" | "createdAt"
 export const fromDebtTable = (row: DebtTable): Debt => ({
   id: row.id,
   name: row.name,
+  type: (row.debt_type === "owed_to_me" ? "owed_to_me" : "i_owe"),
   totalAmount: row.total_amount,
   currentBalance: row.current_balance,
   interestRate: row.interest_rate ?? undefined,

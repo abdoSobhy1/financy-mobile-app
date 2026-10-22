@@ -2,7 +2,7 @@ import { collection, getDocs, doc, setDoc, deleteDoc, writeBatch, query, where, 
 import { getFirestoreInstance } from "../services/firebase";
 import { authService } from "../services/authService";
 import { CollectionName, COLLECTIONS } from "../types";
-import { TransactionTable, CategoryTable, BudgetTable, BillTable, DebtTable, DebtPaymentTable } from "../database/models";
+import { TransactionTable, CategoryTable, BudgetTable, DebtTable, DebtPaymentTable } from "../database/models";
 
 export interface CleanupReport {
   totalDocuments: number;

@@ -16,6 +16,8 @@ export const addBudget = createAsyncThunk("budgets/addBudget", async (budgetData
     name: budgetData.name,
     amount: parseFloat(budgetData.amount),
     currentBalance: parseFloat(budgetData.amount), // Start with full amount
+    period: budgetData.period || "monthly",
+    alertsEnabled: budgetData.alertsEnabled ?? true,
     resetDay: budgetData.resetDay,
     categoryId: budgetData.categoryId,
     syncUpdatedAt: Date.now(),
@@ -34,6 +36,15 @@ export const updateBudget = createAsyncThunk("budgets/updateBudget", async ({ id
   }
   if (updates.resetDay !== undefined) {
     budgetUpdates.resetDay = updates.resetDay;
+  }
+  if (updates.categoryId !== undefined) {
+    budgetUpdates.categoryId = updates.categoryId;
+  }
+  if (updates.period !== undefined) {
+    budgetUpdates.period = updates.period;
+  }
+  if (updates.alertsEnabled !== undefined) {
+    budgetUpdates.alertsEnabled = updates.alertsEnabled;
   }
 
   await db.budgets.updateBudget(id, budgetUpdates);

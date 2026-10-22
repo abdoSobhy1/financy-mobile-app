@@ -25,6 +25,8 @@ const MODAL_SCREENS = [
   "VoiceInput",
   "VoiceVerify",
   "CategoryManagement",
+  "WalletManagement",
+  "SmsSettings",
   "Import",
 ];
 

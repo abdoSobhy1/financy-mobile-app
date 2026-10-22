@@ -1,4 +1,4 @@
-﻿import { DatabaseManager } from "../index";
+import { DatabaseManager } from "../index";
 import { Transaction, TransactionFilters } from "../../types";
 import {
   TransactionTable,
@@ -31,19 +31,21 @@ export class TransactionRepository {
 
     await database.runAsync(
       `INSERT INTO transactions (
-        id, amount, type, category_id, budget_id, description, 
-        date, note, linked_bill_id, linked_debt_payment_id, created_at, duplicated_at, sync_updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        id, amount, type, category_id, budget_id, account_id, receipt_uri, recurring_id, description, 
+        date, note, linked_debt_payment_id, created_at, duplicated_at, sync_updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         id,
         tableData.amount,
         tableData.type,
         tableData.category_id,
         tableData.budget_id || null,
+        tableData.account_id || "default_cash",
+        tableData.receipt_uri || null,
+        tableData.recurring_id || null,
         tableData.description,
         tableData.date,
         tableData.note || null,
-        tableData.linked_bill_id || null,
         tableData.linked_debt_payment_id || null,
         createdAt,
         tableData.duplicated_at || null,
@@ -230,6 +232,16 @@ export class TransactionRepository {
       updateValues.push(cleanedUpdates.note || null);
     }
 
+    if (cleanedUpdates.accountId !== undefined) {
+      updateFields.push("account_id = ?");
+      updateValues.push(cleanedUpdates.accountId || "default_cash");
+    }
+
+    if (cleanedUpdates.receiptUri !== undefined) {
+      updateFields.push("receipt_uri = ?");
+      updateValues.push(cleanedUpdates.receiptUri || null);
+    }
+
     if (updateFields.length === 0) {
       throw new Error("No valid updates provided");
     }
@@ -268,17 +280,6 @@ export class TransactionRepository {
       throw new Error("Transaction not found");
     }
 
-    // If this transaction is linked to a bill, update the bill to unpaid and unlink
-    if (transaction.linkedBillId) {
-      await database.runAsync(
-        "UPDATE bills SET paid = 0, linked_transaction_id = NULL, updated_at = ?, sync_updated_at = ? WHERE id = ?",
-        [new Date().toISOString(), Date.now(), transaction.linkedBillId],
-      );
-      console.log(
-        `Unlinked and marked bill ${transaction.linkedBillId} as unpaid when deleting transaction ${id}`,
-      );
-    }
-
     // If this transaction is linked to a debt payment, delete the debt payment and restore balance
     if (transaction.linkedDebtPaymentId) {
       const debtPayment = (await database.getFirstAsync(
@@ -313,19 +314,6 @@ export class TransactionRepository {
     if (!options?.skipSync) {
       await offlineFirstSync.logOperation("transactions", id, "delete", { id });
     }
-  }
-
-  // Helper function to get transactions linked to bills
-  async getTransactionsByBillId(billId: string): Promise<Transaction[]> {
-    await this.db.ensureInitialized();
-    const database = this.db.getDatabase();
-
-    const results = (await database.getAllAsync(
-      "SELECT * FROM transactions WHERE linked_bill_id = ? ORDER BY date DESC",
-      [billId],
-    )) as TransactionTable[];
-
-    return results.map(transformTransaction);
   }
 
   // Helper function to get transactions linked to debt payments

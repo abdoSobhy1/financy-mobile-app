@@ -1,4 +1,4 @@
-﻿import * as XLSX from "xlsx";
+import * as XLSX from "xlsx";
 import { AlertService } from "../services/AlertService";
 import { writeAsStringAsync, documentDirectory, EncodingType } from "expo-file-system/legacy";
 import * as Sharing from "expo-sharing";

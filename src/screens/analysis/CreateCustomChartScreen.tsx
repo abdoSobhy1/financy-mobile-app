@@ -155,11 +155,6 @@ export const CreateCustomChartScreen: React.FC = () => {
       description: "Budget usage and remaining amounts",
     },
     {
-      source: "bills",
-      label: "Bills",
-      description: "Recurring bill payments",
-    },
-    {
       source: "debts",
       label: "Debts",
       description: "Debt balances and payments",

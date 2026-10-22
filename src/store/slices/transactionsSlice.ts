@@ -5,6 +5,53 @@ import {
   TransactionFormData,
 } from "../../types";
 import { db } from "../../database/queries";
+import { formatCurrency, getDateRangeForBillingPeriod } from "../../utils";
+import { startOfWeek, endOfWeek } from "date-fns";
+
+async function checkAndTriggerBudgetAlert(tx: Transaction, state: any) {
+  try {
+    if (tx.type !== "expense") return;
+    const budgetsMap = state?.budgets?.items || {};
+    const settingsData = state?.settings?.data;
+    const allBudgets = Object.values(budgetsMap) as any[];
+    const matchingBudgets = allBudgets.filter(
+      (b) =>
+        !b.deleted &&
+        b.alertsEnabled !== false &&
+        (b.id === tx.budgetId || (b.categoryId && b.categoryId === tx.categoryId))
+    );
+    if (matchingBudgets.length === 0) return;
+
+    const { default: NotificationService } = await import("../../services/notificationService");
+    const notifService = NotificationService.getInstance();
+
+    for (const budget of matchingBudgets) {
+      const isWeekly = budget.period === "weekly";
+      const range = isWeekly
+        ? {
+            start: startOfWeek(new Date(), { weekStartsOn: 1 }),
+            end: endOfWeek(new Date(), { weekStartsOn: 1 }),
+          }
+        : getDateRangeForBillingPeriod(settingsData?.billingPeriodStartDay ?? 1);
+
+      const progress = await db.budgets.getBudgetProgressForPeriod(
+        budget.id,
+        range.start.toISOString(),
+        range.end.toISOString()
+      );
+      if (progress && progress.percentageUsed >= 80) {
+        await notifService.sendBudgetAlertNotification(
+          budget.name,
+          formatCurrency(progress.spent),
+          formatCurrency(budget.amount),
+          progress.percentageUsed
+        );
+      }
+    }
+  } catch (err) {
+    console.warn("Budget alert check failed (non-fatal):", err);
+  }
+}
 
 // Async thunks for database operations
 export const fetchTransactions = createAsyncThunk(
@@ -16,30 +63,38 @@ export const fetchTransactions = createAsyncThunk(
 
 export const addTransaction = createAsyncThunk(
   "transactions/addTransaction",
-  async (transactionData: TransactionFormData) => {
+  async (transactionData: TransactionFormData, { getState }) => {
     const transaction: Omit<Transaction, "id" | "createdAt"> = {
       amount: parseFloat(transactionData.amount),
       type: transactionData.type,
       categoryId: transactionData.categoryId,
       budgetId: transactionData.budgetId,
+      accountId: transactionData.accountId || "default_cash",
+      receiptUri: transactionData.receiptUri,
+      recurringId: transactionData.recurringId,
       description: transactionData.description,
       date: transactionData.date.toISOString(),
       note: transactionData.note,
       updatedAt: Date.now(),
     };
-    return await db.transactions.createTransaction(transaction);
+    const created = await db.transactions.createTransaction(transaction);
+    await checkAndTriggerBudgetAlert(created, getState());
+    return created;
   },
 );
 
 export const updateTransaction = createAsyncThunk(
   "transactions/updateTransaction",
-  async ({
-    id,
-    updates,
-  }: {
-    id: string;
-    updates: Partial<TransactionFormData>;
-  }) => {
+  async (
+    {
+      id,
+      updates,
+    }: {
+      id: string;
+      updates: Partial<TransactionFormData>;
+    },
+    { getState }
+  ) => {
     const transactionUpdates: Partial<Omit<Transaction, "id" | "createdAt">> =
       {};
 
@@ -55,6 +110,12 @@ export const updateTransaction = createAsyncThunk(
     if (updates.budgetId !== undefined) {
       transactionUpdates.budgetId = updates.budgetId;
     }
+    if (updates.accountId !== undefined) {
+      transactionUpdates.accountId = updates.accountId;
+    }
+    if (updates.receiptUri !== undefined) {
+      transactionUpdates.receiptUri = updates.receiptUri;
+    }
     if (updates.description !== undefined) {
       transactionUpdates.description = updates.description;
     }
@@ -66,7 +127,11 @@ export const updateTransaction = createAsyncThunk(
     }
 
     await db.transactions.updateTransaction(id, transactionUpdates);
-    return await db.transactions.getTransactionById(id);
+    const updated = await db.transactions.getTransactionById(id);
+    if (updated) {
+      await checkAndTriggerBudgetAlert(updated, getState());
+    }
+    return updated;
   },
 );
 

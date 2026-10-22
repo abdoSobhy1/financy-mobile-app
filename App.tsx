@@ -22,6 +22,8 @@ import { offlineFirstSync } from "./src/services/OfflineFirstSync";
 import { useSyncDataRefresh } from "./src/hooks";
 import { ShimmerProvider } from "react-native-fast-shimmer";
 import { ThemeProvider } from "./src/components/ui/ThemeProvider";
+import { AppLockOverlay } from "./src/components/ui/AppLockOverlay";
+import { fetchSettings } from "./src/store/slices/settingsSlice";
 import {
   smsService,
   retrieveSmsTransaction,
@@ -59,6 +61,13 @@ export default function App() {
         const dbManager = DatabaseManager.getInstance();
         await dbManager.init();
 
+        // Hydrate theme & currency settings early
+        try {
+          await store.dispatch(fetchSettings()).unwrap();
+        } catch (e) {
+          console.warn("Could not pre-fetch settings:", e);
+        }
+
         // Run database migrations if needed for cloud compatibility
         console.log("Checking for database migrations...");
         const { databaseMigration } =
@@ -89,6 +98,13 @@ export default function App() {
                 console.error("Background sync failed:", error);
               });
 
+              // Process any due recurring transactions
+              recurringService
+                .processDueRecurringTransactions(store.dispatch)
+                .catch((err) =>
+                  console.warn("Recurring transactions check failed:", err),
+                );
+
               // Also ensure notifications are still scheduled
               try {
                 const { default: NotificationService } =
@@ -106,6 +122,13 @@ export default function App() {
             }
           },
         );
+
+        // Process any due recurring transactions on startup
+        try {
+          await recurringService.processDueRecurringTransactions(store.dispatch);
+        } catch (err) {
+          console.warn("Initial recurring transactions check failed:", err);
+        }
 
         // Initialize Notification Service
         console.log("Initializing notification service...");
@@ -254,23 +277,24 @@ export default function App() {
     <GestureHandlerRootView style={{ flex: 1 }}>
       <SafeAreaProvider>
         <ShimmerProvider duration={1000}>
-          <ThemeProvider>
-            <ErrorBoundary>
-              <Provider store={store}>
+          <Provider store={store}>
+            <ThemeProvider>
+              <ErrorBoundary>
                 <AuthProvider>
                   <ToastProvider>
                     <BottomSheetModalProvider>
                       <SyncProvider>
                         <GlobalAlertProvider>
                           {!isLoading && !dbError && <AppWithSyncRefresh />}
+                          <AppLockOverlay />
                         </GlobalAlertProvider>
                       </SyncProvider>
                     </BottomSheetModalProvider>
                   </ToastProvider>
                 </AuthProvider>
-              </Provider>
-            </ErrorBoundary>
-          </ThemeProvider>
+              </ErrorBoundary>
+            </ThemeProvider>
+          </Provider>
         </ShimmerProvider>
       </SafeAreaProvider>
     </GestureHandlerRootView>

@@ -1,7 +1,7 @@
 import React from "react";
 import { createStackNavigator } from "@react-navigation/stack";
 import { BudgetStackParamList } from "../types";
-import { BudgetListScreen } from "../screens/BudgetScreens";
+import { BudgetListScreen, BudgetDetailsScreen } from "../screens/BudgetScreens";
 import BudgetFormScreen from "../screens/BudgetFormScreen";
 
 const Stack = createStackNavigator<BudgetStackParamList>();
@@ -13,6 +13,7 @@ const BudgetStackNavigator: React.FC = () => {
         headerShown: false,
       }}>
       <Stack.Screen name="BudgetList" component={BudgetListScreen} />
+      <Stack.Screen name="BudgetDetails" component={BudgetDetailsScreen} />
       <Stack.Screen
         name="BudgetForm"
         component={BudgetFormScreen}

@@ -1,8 +1,10 @@
-import React, { createContext, useContext, useMemo } from "react";
-import { useColorScheme } from "react-native";
+import React, { createContext, useContext, useMemo, useEffect } from "react";
+import { useColorScheme, StatusBar } from "react-native";
 import { useMaterial3Theme } from "@pchmn/expo-material3-theme";
+import { useSelector } from "react-redux";
+import { setActiveCurrency, getCurrencySymbol } from "../../utils";
 
-// Fixed category-icon color palette
+// Fixed category-icon color palette from last synced github version
 export const CATEGORY_PALETTE = {
   red: {
     light: "#FFCDD2",
@@ -66,6 +68,43 @@ export const CATEGORY_PALETTE = {
   },
 };
 
+export const resolveCategoryColor = (
+  colorName?: string | null,
+  isDark: boolean = true
+): {
+  bgColor: string;
+  iconColor: string;
+  borderColor: string;
+  bg: string;
+  fg: string;
+} => {
+  const key = (colorName || "bluegrey").toLowerCase().trim();
+  if (key.startsWith("#")) {
+    const cleanHex = key.length === 7 ? key : "#7AD7A8";
+    const bgColor = cleanHex + (isDark ? "24" : "1A");
+    const borderColor = cleanHex + (isDark ? "4D" : "38");
+    return {
+      iconColor: cleanHex,
+      bgColor,
+      borderColor,
+      fg: cleanHex,
+      bg: bgColor,
+    };
+  }
+  const palette =
+    CATEGORY_PALETTE[key as keyof typeof CATEGORY_PALETTE] ||
+    CATEGORY_PALETTE.bluegrey;
+  const iconColor = isDark ? palette.iconDark : palette.iconLight;
+  const bgColor = isDark ? palette.dark : palette.light;
+  return {
+    bgColor,
+    iconColor,
+    borderColor: iconColor + (isDark ? "44" : "33"),
+    fg: iconColor,
+    bg: bgColor,
+  };
+};
+
 // Design tokens
 export const TYPOGRAPHY = {
   h1: { fontSize: 32, fontWeight: "700" as const, lineHeight: 40 },
@@ -74,6 +113,7 @@ export const TYPOGRAPHY = {
   bodyLarge: { fontSize: 16, fontWeight: "400" as const, lineHeight: 24 },
   bodyMedium: { fontSize: 14, fontWeight: "400" as const, lineHeight: 20 },
   bodySmall: { fontSize: 12, fontWeight: "400" as const, lineHeight: 16 },
+  caption: { fontSize: 12, fontWeight: "400" as const, lineHeight: 16 },
   label: { fontSize: 14, fontWeight: "600" as const, lineHeight: 20 },
 };
 
@@ -149,10 +189,20 @@ type ThemeContextType = {
     backdrop: string;
   };
   isDark: boolean;
+  currency: string;
+  currencyCode: string;
+  currencySymbol: string;
   typography: typeof TYPOGRAPHY;
   spacing: typeof SPACING;
   radius: typeof RADIUS;
   categoryPalette: typeof CATEGORY_PALETTE;
+  resolveCategoryColor: (colorName?: string | null) => {
+    bgColor: string;
+    iconColor: string;
+    borderColor: string;
+    bg: string;
+    fg: string;
+  };
 };
 
 const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
@@ -160,35 +210,83 @@ const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
 export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({
   children,
 }) => {
-  const colorScheme = useColorScheme();
-  const isDark = colorScheme === "dark";
+  const systemColorScheme = useColorScheme();
+  const settingsData = useSelector((state: any) => state?.settings?.data);
+  const preferredTheme = settingsData?.theme as "dark" | "light" | undefined;
+  const currency = settingsData?.currency || "USD";
+
+  useEffect(() => {
+    if (currency) {
+      setActiveCurrency(currency);
+    }
+  }, [currency]);
+
+  const isDark = preferredTheme
+    ? preferredTheme === "dark"
+    : systemColorScheme !== "light";
+
   const { theme } = useMaterial3Theme({
     fallbackSourceColor: FALLBACK_SOURCE_COLOR,
   });
 
-  const activeColors = { ...(isDark ? theme.dark : theme.light) };
+  const activeColors = useMemo(() => {
+    const colors = { ...(isDark ? theme.dark : theme.light) };
 
-  if (isDark) {
-    // Darken the Material3 colours proportionally so the seed hue is preserved.
-    activeColors.background    = darkenHex(activeColors.background, 0.30);
-    activeColors.surface       = darkenHex(activeColors.surface, 0.38);
-    activeColors.surfaceVariant = darkenHex(activeColors.surfaceVariant, 0.45);
-  }
+    if (isDark) {
+      // Darken the Material3 colours proportionally so the seed hue is preserved (from git commit 8a29225)
+      colors.background = darkenHex(colors.background, 0.3);
+      colors.surface = darkenHex(colors.surface, 0.38);
+      colors.surfaceVariant = darkenHex(colors.surfaceVariant, 0.45);
+    }
+
+    return {
+      ...colors,
+      elevation: (colors as any).elevation || {
+        level0: "transparent",
+        level1: colors.surfaceVariant,
+        level2: colors.surfaceVariant,
+        level3: colors.surfaceVariant,
+        level4: colors.surfaceVariant,
+        level5: colors.surfaceVariant,
+      },
+      surfaceDisabled:
+        (colors as any).surfaceDisabled ||
+        (isDark ? "rgba(255, 255, 255, 0.12)" : "rgba(0, 0, 0, 0.12)"),
+      onSurfaceDisabled:
+        (colors as any).onSurfaceDisabled ||
+        (isDark ? "rgba(255, 255, 255, 0.38)" : "rgba(0, 0, 0, 0.38)"),
+      backdrop:
+        (colors as any).backdrop ||
+        (isDark ? "rgba(0, 0, 0, 0.6)" : "rgba(0, 0, 0, 0.4)"),
+    };
+  }, [isDark, theme]);
 
   const value = useMemo(
     () => ({
       colors: activeColors,
       isDark,
+      currency,
+      currencyCode: currency,
+      currencySymbol: getCurrencySymbol(currency),
       typography: TYPOGRAPHY,
       spacing: SPACING,
       radius: RADIUS,
       categoryPalette: CATEGORY_PALETTE,
+      resolveCategoryColor: (colorName?: string | null) =>
+        resolveCategoryColor(colorName, isDark),
     }),
-    [activeColors, isDark],
+    [activeColors, isDark, currency]
   );
 
   return (
-    <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>
+    <ThemeContext.Provider value={value}>
+      <StatusBar
+        barStyle={isDark ? "light-content" : "dark-content"}
+        backgroundColor="transparent"
+        translucent
+      />
+      {children}
+    </ThemeContext.Provider>
   );
 };
 

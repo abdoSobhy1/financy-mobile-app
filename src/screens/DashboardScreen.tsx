@@ -6,6 +6,8 @@ import {
   ScrollView,
   TouchableOpacity,
   StatusBar,
+  Modal,
+  TextInput,
 } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -16,7 +18,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { Dimensions } from "react-native";
 import Svg, { Path, Circle } from "react-native-svg";
 import { RootState, AppDispatch } from "../store";
-import { Transaction, Category, TransactionStackParamList } from "../types";
+import { Transaction, Category, TransactionStackParamList, WalletAccount, WalletType } from "../types";
 import { getCurrentBillingPeriod, getPreviousBillingPeriod } from "../utils/billingPeriod";
 import { formatCurrency, formatDate } from "../utils";
 import { useAppTheme } from "../components/ui/ThemeProvider";
@@ -31,6 +33,7 @@ import { addCategory, fetchCategories } from "../store/slices/categoriesSlice";
 import { fetchTransactions } from "../store/slices/transactionsSlice";
 import { fetchBudgets } from "../store/slices/budgetsSlice";
 import { useTransactionActions } from "../hooks/useTransactionActions";
+import { walletService } from "../services/walletService";
 
 type DashboardNavigationProp = StackNavigationProp<any, "Dashboard">;
 
@@ -45,7 +48,7 @@ interface QuickAddSlot {
 export const DashboardScreen: React.FC = () => {
   const navigation = useNavigation<DashboardNavigationProp>();
   const dispatch = useDispatch<AppDispatch>();
-  const { colors, typography, spacing, radius, categoryPalette } =
+  const { colors, typography, spacing, radius, isDark } =
     useAppTheme();
   const tabBarHeight = useTabBarHeight();
   const { handleTransactionPress } = useTransactionActions();
@@ -66,18 +69,46 @@ export const DashboardScreen: React.FC = () => {
   const [balance, setBalance] = useState<number>(0);
   const [balanceChangePct, setBalanceChangePct] = useState<number>(0);
   const [totalBudget, setTotalBudget] = useState<number>(0);
+  const [daysLeftInPeriod, setDaysLeftInPeriod] = useState<number>(1);
   const [balanceHistory, setBalanceHistory] = useState<number[]>([]);
   const [quickAddSlots, setQuickAddSlots] = useState<QuickAddSlot[]>([]);
   const [recentTransactions, setRecentTransactions] = useState<Transaction[]>([]);
   const [overspentBudgets, setOverspentBudgets] = useState<{ id: string; name: string; excess: number }[]>([]);
 
   const [showAlert, setShowAlert] = useState(true);
+  const [hideBalances, setHideBalances] = useState(false);
+
+  // Multi-Wallet State
+  const [wallets, setWallets] = useState<WalletAccount[]>([]);
+  const [walletBalances, setWalletBalances] = useState<Record<string, number>>({});
+  const [showTransferModal, setShowTransferModal] = useState(false);
+  const [fromWalletId, setFromWalletId] = useState<string>("default_cash");
+  const [toWalletId, setToWalletId] = useState<string>("default_bank");
+  const [transferAmount, setTransferAmount] = useState<string>("");
 
   useEffect(() => {
     dispatch(fetchTransactions());
     dispatch(fetchCategories());
     dispatch(fetchBudgets());
+    AsyncStorage.getItem("dashboardHideBalances")
+      .then((val) => {
+        if (val === "true") setHideBalances(true);
+      })
+      .catch(() => {});
   }, [dispatch]);
+
+  const toggleHideBalances = async () => {
+    const next = !hideBalances;
+    setHideBalances(next);
+    try {
+      await AsyncStorage.setItem("dashboardHideBalances", next ? "true" : "false");
+    } catch {}
+  };
+
+  const maskCurrency = (amount: number, prefix: string = "") => {
+    if (hideBalances) return "••••••";
+    return `${prefix}${formatCurrency(amount)}`;
+  };
 
   useEffect(() => {
     const checkAlert = async () => {
@@ -113,9 +144,28 @@ export const DashboardScreen: React.FC = () => {
           const { start, end } = await getCurrentBillingPeriod();
           if (!isActive) return;
 
+          const daysRemaining = Math.max(
+            1,
+            Math.ceil((end.getTime() - Date.now()) / (1000 * 60 * 60 * 24))
+          );
+          setDaysLeftInPeriod(daysRemaining);
+
           const allTransactions = Object.values(transactions).filter(
             (t) => !t.deleted,
           );
+
+          // Load Wallets & Compute Live Balances
+          const loadedWallets = await walletService.getWallets();
+          if (isActive) {
+            setWallets(loadedWallets);
+            setWalletBalances(
+              walletService.calculateWalletBalances(loadedWallets, allTransactions),
+            );
+            if (loadedWallets.length >= 2) {
+              setFromWalletId((prev) => prev || loadedWallets[0].id);
+              setToWalletId((prev) => prev || loadedWallets[1].id);
+            }
+          }
 
           // 1. Transactions in current billing period
           const periodTxs = allTransactions.filter((t) => {
@@ -345,6 +395,23 @@ export const DashboardScreen: React.FC = () => {
     navigation.navigate("AddTransaction", {});
   };
 
+  const handleTransferSubmit = async () => {
+    const amt = parseFloat(transferAmount);
+    if (!amt || amt <= 0 || fromWalletId === toWalletId) return;
+    const allTransactions = Object.values(transactions).filter((t) => !t.deleted);
+    const updatedWallets = await walletService.transferBetweenWallets(
+      fromWalletId,
+      toWalletId,
+      amt,
+    );
+    setWallets(updatedWallets);
+    setWalletBalances(
+      walletService.calculateWalletBalances(updatedWallets, allTransactions),
+    );
+    setTransferAmount("");
+    setShowTransferModal(false);
+  };
+
   const { width: SCREEN_WIDTH } = Dimensions.get("window");
   const CARD_WIDTH = SCREEN_WIDTH * 0.85;
 
@@ -383,6 +450,8 @@ export const DashboardScreen: React.FC = () => {
   };
 
   const budgetPercentUsed = totalBudget > 0 ? Math.min(100, Math.round((budgetedExpenses / totalBudget) * 100)) : 0;
+  const remainingBudget = Math.max(0, totalBudget - budgetedExpenses);
+  const dailySafeToSpend = remainingBudget / Math.max(1, daysLeftInPeriod);
   const pieRadius = 24;
   const pieStroke = 6;
   const pieCircumference = 2 * Math.PI * pieRadius;
@@ -393,7 +462,7 @@ export const DashboardScreen: React.FC = () => {
     <SafeAreaView
       style={[styles.container, { backgroundColor: colors.background }]}
       edges={["top"]}>
-      <StatusBar barStyle="light-content" />
+      <StatusBar barStyle={isDark ? "light-content" : "dark-content"} />
 
       {/* Shared App Header */}
       <AppHeader title="Dashboard" />
@@ -463,13 +532,13 @@ export const DashboardScreen: React.FC = () => {
               padding: spacing.xl,
               overflow: "hidden",
               justifyContent: "center",
-              minHeight: 180,
+              minHeight: 185,
             }}>
 
             {/* Absolute Graph Background */}
             <View style={{ position: "absolute", bottom: -5, left: 0, right: 0, height: "60%" }}>
-              <Svg width="100%" height="100%" preserveAspectRatio="none">
-                <Path d={fillPath} fill={colors.onPrimaryContainer} fillOpacity={0.1} />
+              <Svg width="100%" height="100%" viewBox={`0 0 ${CARD_WIDTH} 80`} preserveAspectRatio="none">
+                <Path d={fillPath} fill={colors.onPrimaryContainer} fillOpacity={0.12} />
                 <Path d={strokePath} fill="none" stroke={colors.onPrimaryContainer} strokeWidth={3} strokeOpacity={0.6} />
               </Svg>
             </View>
@@ -478,24 +547,36 @@ export const DashboardScreen: React.FC = () => {
 
               {/* Left Side: Header, Big Number, NET BALANCE */}
               <View style={{ flex: 1, paddingRight: spacing.sm }}>
-                <View style={{ flexDirection: "row", alignItems: "center", justifyContent: 'space-between', marginBottom: spacing.sm, flexWrap: "wrap", gap: spacing.sm }}>
-                  <Text style={[typography.label, { color: colors.onPrimaryContainer, textTransform: "uppercase", letterSpacing: 1, opacity: 0.7 }]}>
-                    TOTAL BALANCE
-                  </Text>
-                  <View style={{ backgroundColor: "rgba(0,0,0,0.1)", paddingHorizontal: 8, paddingVertical: 4, borderRadius: 12 }}>
-                    <Text style={{ fontSize: 10, color: colors.onPrimaryContainer, fontWeight: "bold", opacity: 0.8 }}>
+                <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: spacing.sm, flexWrap: "wrap", gap: spacing.xs }}>
+                  <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                    <Text style={[typography.label, { color: colors.onPrimaryContainer, textTransform: "uppercase", letterSpacing: 1, opacity: 0.75 }]}>
+                      TOTAL BALANCE
+                    </Text>
+                    <TouchableOpacity
+                      onPress={toggleHideBalances}
+                      hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                      style={{ opacity: 0.75 }}>
+                      <Ionicons
+                        name={hideBalances ? "eye-off-outline" : "eye-outline"}
+                        size={16}
+                        color={colors.onPrimaryContainer}
+                      />
+                    </TouchableOpacity>
+                  </View>
+                  <View style={{ backgroundColor: "rgba(0,0,0,0.12)", paddingHorizontal: 8, paddingVertical: 4, borderRadius: 12 }}>
+                    <Text style={{ fontSize: 10, color: colors.onPrimaryContainer, fontWeight: "bold", opacity: 0.85 }}>
                       {balanceChangePct >= 0 ? "↑" : "↓"} {balanceChangePct > 0 ? "+" : ""}{balanceChangePct.toFixed(1)}%
                     </Text>
                   </View>
                 </View>
 
-                <Text style={[typography.h1, { color: colors.onPrimaryContainer, fontSize: 40, fontWeight: "900", marginBottom: spacing.xs }]} numberOfLines={1} adjustsFontSizeToFit>
-                  {balance >= 0 ? "+" : ""}{formatCurrency(balance)}
+                <Text style={[typography.h1, { color: colors.onPrimaryContainer, fontSize: 38, fontWeight: "900", marginBottom: spacing.xs }]} numberOfLines={1} adjustsFontSizeToFit>
+                  {maskCurrency(balance, balance >= 0 ? "+" : "")}
                 </Text>
               </View>
 
               {/* Right Side: Stacked Pills */}
-              <View style={{ width: 120, gap: spacing.sm }}>
+              <View style={{ width: 124, gap: spacing.sm }}>
 
                 {/* Income Pill (stacked) */}
                 <View style={{ backgroundColor: "rgba(0,0,0,0.15)", borderRadius: 16, padding: spacing.sm, flexDirection: "row", alignItems: "center", gap: spacing.xs }}>
@@ -504,7 +585,7 @@ export const DashboardScreen: React.FC = () => {
                   </View>
                   <View style={{ flex: 1, justifyContent: "center" }}>
                     <Text style={[typography.bodySmall, { color: colors.onPrimaryContainer, opacity: 0.8, fontSize: 10, lineHeight: 12 }]} numberOfLines={1} adjustsFontSizeToFit>Income</Text>
-                    <Text style={[typography.label, { color: colors.onPrimaryContainer, fontWeight: "700", fontSize: 12, lineHeight: 14 }]} numberOfLines={1} adjustsFontSizeToFit>+{formatCurrency(totalIncome)}</Text>
+                    <Text style={[typography.label, { color: colors.onPrimaryContainer, fontWeight: "700", fontSize: 12, lineHeight: 14 }]} numberOfLines={1} adjustsFontSizeToFit>{maskCurrency(totalIncome, "+")}</Text>
                   </View>
                 </View>
 
@@ -515,7 +596,7 @@ export const DashboardScreen: React.FC = () => {
                   </View>
                   <View style={{ flex: 1, justifyContent: "center" }}>
                     <Text style={[typography.bodySmall, { color: colors.onPrimaryContainer, opacity: 0.8, fontSize: 10, lineHeight: 12 }]} numberOfLines={1} adjustsFontSizeToFit>Expenses</Text>
-                    <Text style={[typography.label, { color: colors.onPrimaryContainer, fontWeight: "700", fontSize: 12, lineHeight: 14 }]} numberOfLines={1} adjustsFontSizeToFit>-{formatCurrency(totalExpenses)}</Text>
+                    <Text style={[typography.label, { color: colors.onPrimaryContainer, fontWeight: "700", fontSize: 12, lineHeight: 14 }]} numberOfLines={1} adjustsFontSizeToFit>{maskCurrency(totalExpenses, "-")}</Text>
                   </View>
                 </View>
 
@@ -533,39 +614,51 @@ export const DashboardScreen: React.FC = () => {
               borderRadius: 32,
               padding: spacing.xl,
               justifyContent: "space-between",
-              minHeight: 180,
+              minHeight: 185,
             }}>
-            <View>
-              <Text
-                style={[
-                  typography.label,
-                  {
-                    color: colors.onPrimaryContainer,
-                    textTransform: "uppercase",
-                    letterSpacing: 1,
-                    opacity: 0.7,
-                    marginBottom: spacing.sm,
-                  },
-                ]}>
-                BUDGETED SPEND
-              </Text>
-              <Text
-                style={[
-                  typography.h1,
-                  {
-                    color: colors.onPrimaryContainer,
-                    fontSize: 40,
-                    fontWeight: "900",
-                    marginBottom: spacing.xs,
-                  },
-                ]}
-                numberOfLines={1}
-                adjustsFontSizeToFit>
-                {formatCurrency(budgetedExpenses)}
-              </Text>
+            <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start" }}>
+              <View style={{ flex: 1 }}>
+                <Text
+                  style={[
+                    typography.label,
+                    {
+                      color: colors.onPrimaryContainer,
+                      textTransform: "uppercase",
+                      letterSpacing: 1,
+                      opacity: 0.75,
+                      marginBottom: spacing.sm,
+                    },
+                  ]}>
+                  BUDGETED SPEND
+                </Text>
+                <Text
+                  style={[
+                    typography.h1,
+                    {
+                      color: colors.onPrimaryContainer,
+                      fontSize: 38,
+                      fontWeight: "900",
+                      marginBottom: spacing.xs,
+                    },
+                  ]}
+                  numberOfLines={1}
+                  adjustsFontSizeToFit>
+                  {maskCurrency(budgetedExpenses)}
+                </Text>
+              </View>
+              {totalBudget > 0 && (
+                <View style={{ backgroundColor: "rgba(0,0,0,0.14)", paddingHorizontal: 10, paddingVertical: 6, borderRadius: 14, alignItems: "flex-end" }}>
+                  <Text style={{ fontSize: 10, color: colors.onPrimaryContainer, opacity: 0.8, fontWeight: "600" }}>
+                    SAFE DAILY
+                  </Text>
+                  <Text style={{ fontSize: 13, color: colors.onPrimaryContainer, fontWeight: "800", marginTop: 1 }}>
+                    {maskCurrency(dailySafeToSpend)}/d
+                  </Text>
+                </View>
+              )}
             </View>
 
-            <View style={{ flexDirection: "row", alignItems: "center", marginTop: spacing.xl }}>
+            <View style={{ flexDirection: "row", alignItems: "center", marginTop: spacing.md }}>
               <View style={{ width: 48, height: 48, marginRight: spacing.md }}>
                 <Svg width="48" height="48" viewBox="0 0 60 60">
                   <Circle
@@ -593,11 +686,11 @@ export const DashboardScreen: React.FC = () => {
                 </Svg>
               </View>
               <View>
-                <Text style={[typography.bodyMedium, { color: colors.onPrimaryContainer, opacity: 0.7 }]}>
-                  vs. {formatCurrency(totalBudget)} Budget
+                <Text style={[typography.bodyMedium, { color: colors.onPrimaryContainer, opacity: 0.75 }]}>
+                  vs. {maskCurrency(totalBudget)} Budget
                 </Text>
-                <Text style={[typography.label, { color: colors.onPrimaryContainer, opacity: 0.8, marginTop: 2 }]}>
-                  {budgetPercentUsed}% Used
+                <Text style={[typography.label, { color: colors.onPrimaryContainer, opacity: 0.9, marginTop: 2 }]}>
+                  {budgetPercentUsed}% Used • {daysLeftInPeriod}d left
                 </Text>
               </View>
             </View>
@@ -605,6 +698,140 @@ export const DashboardScreen: React.FC = () => {
 
 
         </ScrollView>
+
+        {/* Wallets & Accounts Strip */}
+        <View style={{ marginBottom: spacing.xl }}>
+          <View
+            style={{
+              flexDirection: "row",
+              justifyContent: "space-between",
+              alignItems: "center",
+              paddingHorizontal: spacing.lg,
+              marginBottom: spacing.sm,
+            }}>
+            <TouchableOpacity
+              onPress={() =>
+                (navigation as any).navigate("Settings", {
+                  screen: "WalletManagement",
+                })
+              }
+              style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+              <Text
+                style={[
+                  typography.h3,
+                  {
+                    color: colors.onBackground,
+                    fontSize: 14,
+                    textTransform: "uppercase",
+                  },
+                ]}>
+                WALLETS & ACCOUNTS
+              </Text>
+              <Ionicons
+                name="chevron-forward"
+                size={14}
+                color={colors.onSurfaceVariant}
+              />
+            </TouchableOpacity>
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+              <TouchableOpacity
+                onPress={() => setShowTransferModal(true)}
+                style={{
+                  flexDirection: "row",
+                  alignItems: "center",
+                  gap: 4,
+                  backgroundColor: colors.surface,
+                  paddingHorizontal: 10,
+                  paddingVertical: 5,
+                  borderRadius: 12,
+                }}>
+                <Ionicons name="swap-horizontal" size={14} color={colors.primary} />
+                <Text style={{ fontSize: 12, fontWeight: "700", color: colors.primary }}>
+                  Transfer
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={() =>
+                  (navigation as any).navigate("Settings", {
+                    screen: "WalletManagement",
+                  })
+                }
+                style={{
+                  flexDirection: "row",
+                  alignItems: "center",
+                  gap: 4,
+                  backgroundColor: colors.surface,
+                  paddingHorizontal: 10,
+                  paddingVertical: 5,
+                  borderRadius: 12,
+                }}>
+                <Ionicons name="settings-outline" size={14} color={colors.primary} />
+                <Text style={{ fontSize: 12, fontWeight: "700", color: colors.primary }}>
+                  Manage
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={{
+              paddingHorizontal: spacing.lg,
+              gap: spacing.sm,
+            }}>
+            {wallets.map((w) => {
+              const bal = walletBalances[w.id] || 0;
+              return (
+                <TouchableOpacity
+                  key={w.id}
+                  onPress={() =>
+                    (navigation as any).navigate("Settings", {
+                      screen: "WalletManagement",
+                    })
+                  }
+                  activeOpacity={0.7}
+                  style={{
+                    backgroundColor: colors.surface,
+                    borderRadius: 20,
+                    paddingHorizontal: 14,
+                    paddingVertical: 12,
+                    minWidth: 145,
+                    flexDirection: "row",
+                    alignItems: "center",
+                    gap: 10,
+                  }}>
+                  <IconChip
+                    iconName={(w.icon || "wallet-outline") as any}
+                    colorName={(w.color as any) || "teal"}
+                    size={38}
+                  />
+                  <View style={{ flex: 1 }}>
+                    <Text
+                      style={{
+                        fontSize: 12,
+                        fontWeight: "600",
+                        color: colors.onSurfaceVariant,
+                      }}
+                      numberOfLines={1}>
+                      {w.name}
+                    </Text>
+                    <Text
+                      style={{
+                        fontSize: 15,
+                        fontWeight: "700",
+                        color: colors.onBackground,
+                        marginTop: 2,
+                      }}
+                      numberOfLines={1}>
+                      {maskCurrency(bal)}
+                    </Text>
+                  </View>
+                </TouchableOpacity>
+              );
+            })}
+          </ScrollView>
+        </View>
 
         {/* Quick Add Row */}
         <View style={{ marginBottom: spacing.xl, paddingHorizontal: spacing.lg }}>
@@ -749,25 +976,12 @@ export const DashboardScreen: React.FC = () => {
                       alignItems: "center",
                       flex: 1,
                     }}>
-                    <View
-                      style={{
-                        width: 44,
-                        height: 44,
-                        borderRadius: 22,
-                        backgroundColor: (category?.color || colors.primary) + "20",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        marginRight: 14,
-                      }}>
-                      <Ionicons
-                        name={
-                          (((category as any)?.icon as any) ||
-                            "receipt-outline") as any
-                        }
-                        size={22}
-                        color={category?.color || colors.primary}
-                      />
-                    </View>
+                    <IconChip
+                      iconName={((category as any)?.icon || "receipt-outline") as any}
+                      colorName={(category?.color as any) || "bluegrey"}
+                      size={44}
+                      style={{ marginRight: 14 }}
+                    />
                     <View style={{ flex: 1, justifyContent: "center", marginRight: 10 }}>
                       <Text
                         style={{ fontSize: 15, fontWeight: "600", color: colors.onBackground, marginBottom: 3 }}
@@ -788,8 +1002,7 @@ export const DashboardScreen: React.FC = () => {
                         fontWeight: "700",
                         color: isIncome ? colors.tertiary : colors.onBackground,
                       }}>
-                      {isIncome ? "+" : "-"}
-                      {formatCurrency(tx.amount)}
+                      {maskCurrency(tx.amount, isIncome ? "+" : "-")}
                     </Text>
                   </View>
                 </TouchableOpacity>
@@ -812,6 +1025,165 @@ export const DashboardScreen: React.FC = () => {
           </View>
         </View>
       </ScrollView>
+
+      {/* Wallet-to-Wallet Transfer Modal */}
+      <Modal
+        visible={showTransferModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowTransferModal(false)}>
+        <View
+          style={{
+            flex: 1,
+            backgroundColor: "rgba(0,0,0,0.6)",
+            justifyContent: "center",
+            padding: spacing.lg,
+          }}>
+          <View
+            style={{
+              backgroundColor: colors.surface,
+              borderRadius: 24,
+              padding: spacing.lg,
+            }}>
+            <View
+              style={{
+                flexDirection: "row",
+                justifyContent: "space-between",
+                alignItems: "center",
+                marginBottom: spacing.md,
+              }}>
+              <Text style={[typography.h3, { color: colors.onBackground }]}>
+                Transfer Between Wallets
+              </Text>
+              <TouchableOpacity onPress={() => setShowTransferModal(false)}>
+                <Ionicons name="close" size={22} color={colors.onSurfaceVariant} />
+              </TouchableOpacity>
+            </View>
+
+            <Text
+              style={{
+                fontSize: 12,
+                fontWeight: "600",
+                color: colors.onSurfaceVariant,
+                marginBottom: 6,
+              }}>
+              FROM ACCOUNT
+            </Text>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={{ gap: 8, marginBottom: spacing.md }}>
+              {wallets.map((w) => {
+                const selected = w.id === fromWalletId;
+                return (
+                  <TouchableOpacity
+                    key={`from_${w.id}`}
+                    onPress={() => setFromWalletId(w.id)}
+                    style={{
+                      paddingHorizontal: 14,
+                      paddingVertical: 8,
+                      borderRadius: 14,
+                      backgroundColor: selected
+                        ? colors.primary
+                        : colors.background,
+                    }}>
+                    <Text
+                      style={{
+                        fontSize: 13,
+                        fontWeight: "600",
+                        color: selected ? "#FFFFFF" : colors.onBackground,
+                      }}>
+                      {w.name}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
+
+            <Text
+              style={{
+                fontSize: 12,
+                fontWeight: "600",
+                color: colors.onSurfaceVariant,
+                marginBottom: 6,
+              }}>
+              TO ACCOUNT
+            </Text>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={{ gap: 8, marginBottom: spacing.md }}>
+              {wallets.map((w) => {
+                const selected = w.id === toWalletId;
+                return (
+                  <TouchableOpacity
+                    key={`to_${w.id}`}
+                    onPress={() => setToWalletId(w.id)}
+                    style={{
+                      paddingHorizontal: 14,
+                      paddingVertical: 8,
+                      borderRadius: 14,
+                      backgroundColor: selected
+                        ? colors.primary
+                        : colors.background,
+                    }}>
+                    <Text
+                      style={{
+                        fontSize: 13,
+                        fontWeight: "600",
+                        color: selected ? "#FFFFFF" : colors.onBackground,
+                      }}>
+                      {w.name}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
+
+            <Text
+              style={{
+                fontSize: 12,
+                fontWeight: "600",
+                color: colors.onSurfaceVariant,
+                marginBottom: 6,
+              }}>
+              AMOUNT
+            </Text>
+            <TextInput
+              style={{
+                backgroundColor: colors.background,
+                borderRadius: 14,
+                paddingHorizontal: 14,
+                paddingVertical: 12,
+                color: colors.onBackground,
+                fontSize: 16,
+                fontWeight: "700",
+                marginBottom: spacing.lg,
+              }}
+              value={transferAmount}
+              onChangeText={setTransferAmount}
+              placeholder="0.00"
+              placeholderTextColor={colors.onSurfaceVariant}
+              keyboardType="decimal-pad"
+            />
+
+            <TouchableOpacity
+              onPress={handleTransferSubmit}
+              style={{
+                backgroundColor: colors.primary,
+                borderRadius: 16,
+                paddingVertical: 14,
+                alignItems: "center",
+              }}>
+              <Text style={{ color: "#FFFFFF", fontWeight: "700", fontSize: 15 }}>
+                Confirm Transfer
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
+
     </SafeAreaView>
   );
 };

@@ -15,12 +15,13 @@ const Stack = createStackNavigator();
 
 const AppNavigator: React.FC = () => {
   const { isAuthenticated, loading } = useAuth();
+  const { colors } = useAppTheme();
 
   if (loading) {
     return (
-      <View style={styles.centerContainer}>
-        <ActivityIndicator size="large" color={"#6C5CE7"} />
-        <Text style={styles.loadingText}>Loading...</Text>
+      <View style={[styles.centerContainer, { backgroundColor: colors.background }]}>
+        <ActivityIndicator size="large" color={colors.primary} />
+        <Text style={[styles.loadingText, { color: colors.onSurfaceVariant }]}>Loading...</Text>
       </View>
     );
   }

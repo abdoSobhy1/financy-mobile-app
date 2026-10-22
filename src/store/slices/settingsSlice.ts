@@ -1,6 +1,7 @@
 import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
 import { Settings } from "../../types";
 import { db } from "../../database/queries";
+import { setActiveCurrency } from "../../utils";
 
 // Async thunks for database operations
 export const fetchSettings = createAsyncThunk("settings/fetchSettings", async () => {
@@ -98,6 +99,7 @@ const settingsSlice = createSlice({
       .addCase(fetchSettings.fulfilled, (state, action) => {
         state.loading = false;
         state.data = action.payload;
+        if (action.payload?.currency) setActiveCurrency(action.payload.currency);
       })
       .addCase(fetchSettings.rejected, (state, action) => {
         state.loading = false;
@@ -113,6 +115,7 @@ const settingsSlice = createSlice({
       .addCase(updateSettings.fulfilled, (state, action) => {
         state.loading = false;
         state.data = action.payload;
+        if (action.payload?.currency) setActiveCurrency(action.payload.currency);
       })
       .addCase(updateSettings.rejected, (state, action) => {
         state.loading = false;
@@ -158,6 +161,7 @@ const settingsSlice = createSlice({
     // Update currency
     builder.addCase(updateCurrency.fulfilled, (state, action) => {
       state.data = action.payload;
+      if (action.payload?.currency) setActiveCurrency(action.payload.currency);
     });
 
     // Update theme
@@ -174,6 +178,7 @@ const settingsSlice = createSlice({
       .addCase(resetToDefaults.fulfilled, (state, action) => {
         state.loading = false;
         state.data = action.payload;
+        if (action.payload?.currency) setActiveCurrency(action.payload.currency);
         // Clear billing periods to force refresh
         state.billingPeriods = {
           current: null,

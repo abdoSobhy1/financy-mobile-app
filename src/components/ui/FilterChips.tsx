@@ -14,31 +14,35 @@ export const FilterChips: React.FC<FilterChipsProps> = ({ options, selected, onS
 
   return (
     <ScrollView horizontal showsHorizontalScrollIndicator={false} style={style}>
-      {options.map((f) => (
-        <TouchableOpacity
-          key={f}
-          onPress={() => onSelect(f)}
-          style={[
-            styles.filterChip,
-            {
-              borderColor: selected === f ? colors.primary : colors.outlineVariant,
-              backgroundColor: selected === f ? "rgba(128, 203, 196, 0.15)" : "transparent",
-            },
-          ]}
-        >
-          <Text
+      {options.map((f) => {
+        const isSelected = selected === f;
+        return (
+          <TouchableOpacity
+            key={f}
+            onPress={() => onSelect(f)}
+            activeOpacity={0.75}
             style={[
-              typography.bodyMedium,
+              styles.filterChip,
               {
-                color: selected === f ? colors.primary : colors.onSurfaceVariant,
-                fontWeight: selected === f ? "600" : "400",
+                borderColor: isSelected ? colors.primaryContainer : colors.outlineVariant,
+                backgroundColor: isSelected ? colors.primaryContainer : colors.surface,
               },
             ]}
           >
-            {f}
-          </Text>
-        </TouchableOpacity>
-      ))}
+            <Text
+              style={[
+                typography.bodyMedium,
+                {
+                  color: isSelected ? colors.onPrimaryContainer : colors.onSurfaceVariant,
+                  fontWeight: isSelected ? "700" : "500",
+                },
+              ]}
+            >
+              {f}
+            </Text>
+          </TouchableOpacity>
+        );
+      })}
       <View style={{ width: spacing.lg }} />
     </ScrollView>
   );
@@ -46,11 +50,11 @@ export const FilterChips: React.FC<FilterChipsProps> = ({ options, selected, onS
 
 const styles = StyleSheet.create({
   filterChip: {
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 20,
+    paddingHorizontal: 18,
+    paddingVertical: 9,
+    borderRadius: 22,
     borderWidth: 1,
-    marginRight: 12,
+    marginRight: 10,
     alignItems: "center",
     justifyContent: "center",
   },

@@ -10,17 +10,27 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
+import Svg, { Circle, G } from "react-native-svg";
+import { useNavigation } from "@react-navigation/native";
 import { useAppTheme } from "../../components/ui/ThemeProvider";
 import { useAnalysisData } from "./hooks/useAnalysisData";
 import { AppHeader } from "../../components/ui/AppHeader";
 import { startOfMonth, endOfMonth, subMonths } from "date-fns";
-import { useTabBarHeight, FilterChips } from "../../components/ui";
+import { useTabBarHeight, FilterChips, IconChip } from "../../components/ui";
 import { formatCurrency } from "../../utils";
 
 export const AnalysisScreen: React.FC = () => {
-  const { colors, typography, spacing, radius } = useAppTheme();
+  const {
+    colors,
+    typography,
+    spacing,
+    isDark,
+    resolveCategoryColor,
+  } = useAppTheme();
+  const navigation = useNavigation<any>();
   const [refreshing, setRefreshing] = useState(false);
   const [filter, setFilter] = useState<"This Month" | "Last Month" | "3 Months">("This Month");
+  const [selectedSliceIndex, setSelectedSliceIndex] = useState<number | null>(null);
 
   const getDateRange = () => {
     const now = new Date();
@@ -37,12 +47,12 @@ export const AnalysisScreen: React.FC = () => {
     return {};
   };
 
-  const { data: analyticsData, isLoading } = useAnalysisData(getDateRange());
+  const { data: analyticsData } = useAnalysisData(getDateRange());
   const tabBarHeight = useTabBarHeight();
 
   const onRefresh = () => {
     setRefreshing(true);
-    setTimeout(() => setRefreshing(false), 1000);
+    setTimeout(() => setRefreshing(false), 600);
   };
 
   const { summary, categoryBreakdown, monthlyTrends, budgetUsage } = analyticsData;
@@ -51,76 +61,335 @@ export const AnalysisScreen: React.FC = () => {
     const expenses = categoryBreakdown.filter((item) => item.category.type === "expense");
     const totalExpenses = Math.abs(summary.totalExpenses);
 
+    const donutSize = 188;
+    const strokeWidth = 18;
+    const center = donutSize / 2;
+    const radius = center - strokeWidth;
+    const circumference = 2 * Math.PI * radius;
+
+    let cumulativePct = 0;
+    const activeItem =
+      selectedSliceIndex !== null && expenses[selectedSliceIndex]
+        ? expenses[selectedSliceIndex]
+        : null;
+
     return (
-      <View style={[styles.card, { backgroundColor: colors.surfaceVariant }]}>
+      <View
+        style={[
+          styles.card,
+          {
+            backgroundColor: colors.surface,
+            borderColor: colors.outlineVariant,
+            borderWidth: 1,
+          },
+        ]}>
         <View style={styles.cardHeader}>
-          <Text style={[typography.h3, { color: colors.onBackground }]}>Spending Breakdown</Text>
-          <Ionicons name="pie-chart-outline" size={20} color={colors.onSurfaceVariant} />
-        </View>
-
-        <View style={{ alignItems: "center", marginVertical: 32 }}>
-          <Text style={[typography.label, { color: colors.onSurfaceVariant, marginBottom: 8 }]}>Total</Text>
-          <Text style={[typography.h1, { color: colors.onBackground, fontSize: 36 }]}>
-            {formatCurrency(totalExpenses)}
+          <Text style={[typography.h3, { color: colors.onBackground }]}>
+            Spending Breakdown
           </Text>
+          <Ionicons
+            name="pie-chart-outline"
+            size={20}
+            color={colors.onSurfaceVariant}
+          />
         </View>
 
-        <View style={{ gap: 16 }}>
-          {expenses.map((item, index) => (
-            <View key={index} style={styles.breakdownRow}>
-              <View style={{ flexDirection: "row", alignItems: "center", flex: 1 }}>
-                <View style={[styles.dot, { backgroundColor: (item.category as any).color || colors.primaryContainer }]} />
-                <Text style={[typography.bodyLarge, { color: colors.onBackground, fontWeight: "500" }]}>
-                  {item.category.name}
+        {/* Interactive SVG Donut Chart */}
+        <TouchableOpacity
+          activeOpacity={0.9}
+          onPress={() => setSelectedSliceIndex(null)}
+          style={{
+            alignItems: "center",
+            justifyContent: "center",
+            marginVertical: 24,
+          }}>
+          <View
+            style={{
+              width: donutSize,
+              height: donutSize,
+              alignItems: "center",
+              justifyContent: "center",
+            }}>
+            <Svg width={donutSize} height={donutSize}>
+              <G rotation="-90" origin={`${center}, ${center}`}>
+                <Circle
+                  cx={center}
+                  cy={center}
+                  r={radius}
+                  stroke={colors.surfaceVariant}
+                  strokeWidth={strokeWidth}
+                  fill="transparent"
+                />
+                {totalExpenses > 0 &&
+                  expenses.map((item, idx) => {
+                    const pct = Math.max(0, Math.min(100, item.percentage)) / 100;
+                    const strokeDasharray = `${pct * circumference} ${circumference}`;
+                    const strokeDashoffset = -cumulativePct * circumference;
+                    cumulativePct += pct;
+                    const { iconColor } = resolveCategoryColor(
+                      (item.category as any).color
+                    );
+                    const isDimmed =
+                      selectedSliceIndex !== null && selectedSliceIndex !== idx;
+
+                    return (
+                      <Circle
+                        key={item.category.id || idx}
+                        cx={center}
+                        cy={center}
+                        r={radius}
+                        stroke={iconColor}
+                        strokeWidth={
+                          selectedSliceIndex === idx
+                            ? strokeWidth + 4
+                            : strokeWidth
+                        }
+                        strokeOpacity={isDimmed ? 0.3 : 1}
+                        strokeDasharray={strokeDasharray}
+                        strokeDashoffset={strokeDashoffset}
+                        strokeLinecap={expenses.length === 1 ? "round" : "butt"}
+                        fill="transparent"
+                      />
+                    );
+                  })}
+              </G>
+            </Svg>
+
+            {/* Center Label inside Donut */}
+            <View
+              style={{
+                position: "absolute",
+                alignItems: "center",
+                justifyContent: "center",
+                paddingHorizontal: 24,
+              }}>
+              <Text
+                style={[
+                  typography.label,
+                  {
+                    color: colors.onSurfaceVariant,
+                    marginBottom: 4,
+                    textAlign: "center",
+                  },
+                ]}
+                numberOfLines={1}>
+                {activeItem ? activeItem.category.name : "Total Spent"}
+              </Text>
+              <Text
+                style={[
+                  typography.h2,
+                  {
+                    color: colors.onBackground,
+                    fontSize: 22,
+                    fontWeight: "800",
+                    textAlign: "center",
+                  },
+                ]}
+                numberOfLines={1}
+                adjustsFontSizeToFit>
+                {formatCurrency(
+                  activeItem ? Math.abs(activeItem.amount) : totalExpenses
+                )}
+              </Text>
+              {activeItem && (
+                <Text
+                  style={[
+                    typography.bodySmall,
+                    { color: colors.primary, fontWeight: "700", marginTop: 2 },
+                  ]}>
+                  {Math.round(activeItem.percentage)}% of total
                 </Text>
-              </View>
-              <Text style={[typography.bodyMedium, { color: colors.onSurfaceVariant, width: 50, textAlign: "right" }]}>
-                {Math.round(item.percentage)}%
-              </Text>
-              <Text style={[typography.bodyLarge, { color: colors.onBackground, fontWeight: "600", width: 80, textAlign: "right" }]}>
-                {formatCurrency(Math.abs(item.amount))}
-              </Text>
+              )}
             </View>
-          ))}
-        </View>
+          </View>
+        </TouchableOpacity>
+
+        {expenses.length === 0 ? (
+          <Text
+            style={[
+              typography.bodyMedium,
+              {
+                color: colors.onSurfaceVariant,
+                textAlign: "center",
+                paddingVertical: 12,
+              },
+            ]}>
+            No expenses recorded for this period.
+          </Text>
+        ) : (
+          <View style={{ gap: 10 }}>
+            {expenses.map((item, index) => {
+              const isSelected = selectedSliceIndex === index;
+              const { iconColor, bgColor } = resolveCategoryColor(
+                (item.category as any).color
+              );
+              return (
+                <TouchableOpacity
+                  key={item.category.id || index}
+                  activeOpacity={0.75}
+                  onPress={() =>
+                    setSelectedSliceIndex(isSelected ? null : index)
+                  }
+                  style={[
+                    styles.breakdownRow,
+                    {
+                      backgroundColor: isSelected
+                        ? bgColor
+                        : colors.surfaceVariant,
+                      borderColor: isSelected ? iconColor : "transparent",
+                      borderWidth: 1,
+                      paddingHorizontal: 12,
+                      paddingVertical: 10,
+                      borderRadius: 16,
+                    },
+                  ]}>
+                  <View
+                    style={{
+                      flexDirection: "row",
+                      alignItems: "center",
+                      flex: 1,
+                    }}>
+                    <IconChip
+                      iconName={
+                        ((item.category as any).icon || "pricetag") as any
+                      }
+                      colorName={(item.category as any).color || "bluegrey"}
+                      size={32}
+                      style={{ marginRight: 10 }}
+                    />
+                    <Text
+                      style={[
+                        typography.bodyLarge,
+                        { color: colors.onBackground, fontWeight: "600", flex: 1 },
+                      ]}
+                      numberOfLines={1}>
+                      {item.category.name}
+                    </Text>
+                  </View>
+                  <Text
+                    style={[
+                      typography.bodySmall,
+                      {
+                        color: colors.onSurfaceVariant,
+                        width: 46,
+                        textAlign: "right",
+                        fontWeight: "600",
+                      },
+                    ]}>
+                    {Math.round(item.percentage)}%
+                  </Text>
+                  <Text
+                    style={[
+                      typography.bodyLarge,
+                      {
+                        color: colors.onBackground,
+                        fontWeight: "700",
+                        minWidth: 84,
+                        textAlign: "right",
+                      },
+                    ]}>
+                    {formatCurrency(Math.abs(item.amount))}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+        )}
       </View>
     );
   };
 
   const renderCashFlowTrend = () => {
-    // Always take the last 4 months for the bar chart so it's useful for comparison
     const data = monthlyTrends.slice(-4);
     const maxVal = Math.max(
       ...data.map((d) => Math.max(d.income, d.expenses)),
-      1 // prevent division by zero
+      1
     );
 
     return (
-      <View style={[styles.card, { backgroundColor: colors.surfaceVariant }]}>
+      <View
+        style={[
+          styles.card,
+          {
+            backgroundColor: colors.surface,
+            borderColor: colors.outlineVariant,
+            borderWidth: 1,
+          },
+        ]}>
         <View style={styles.cardHeader}>
-          <Text style={[typography.h3, { color: colors.onBackground }]}>Cash Flow Trend</Text>
-          <Ionicons name="stats-chart" size={20} color={colors.onSurfaceVariant} />
+          <Text style={[typography.h3, { color: colors.onBackground }]}>
+            Cash Flow Trend
+          </Text>
+          <Ionicons
+            name="stats-chart"
+            size={20}
+            color={colors.onSurfaceVariant}
+          />
         </View>
 
-        <Text style={[typography.bodyMedium, { color: colors.onSurfaceVariant, marginBottom: 32 }]}>
-          {summary.balance >= 0 ? "+" : ""}{formatCurrency(summary.balance)} Net Savings
+        <Text
+          style={[
+            typography.bodyMedium,
+            {
+              color: summary.balance >= 0 ? colors.primary : colors.error,
+              fontWeight: "600",
+              marginTop: 4,
+              marginBottom: 28,
+            },
+          ]}>
+          {summary.balance >= 0 ? "+" : ""}
+          {formatCurrency(summary.balance)} Net Cash Flow
         </Text>
 
         {/* Bar Chart Area */}
-        <View style={{ height: 160, flexDirection: "row", alignItems: "flex-end", justifyContent: "space-around" }}>
+        <View
+          style={{
+            height: 150,
+            flexDirection: "row",
+            alignItems: "flex-end",
+            justifyContent: "space-around",
+          }}>
           {data.map((d, i) => {
-            const incomeHeight = (d.income / maxVal) * 140;
-            const expenseHeight = (d.expenses / maxVal) * 140;
+            const incomeHeight = (d.income / maxVal) * 130;
+            const expenseHeight = (d.expenses / maxVal) * 130;
 
             return (
-              <View key={i} style={{ alignItems: "center", width: 50 }}>
-                <View style={{ flexDirection: "row", alignItems: "flex-end", gap: 4 }}>
+              <View key={i} style={{ alignItems: "center", width: 58 }}>
+                <View
+                  style={{
+                    flexDirection: "row",
+                    alignItems: "flex-end",
+                    gap: 6,
+                  }}>
                   {/* Income Bar */}
-                  <View style={{ width: 12, height: Math.max(incomeHeight, 4), backgroundColor: colors.primaryContainer, borderRadius: 2 }} />
+                  <View
+                    style={{
+                      width: 14,
+                      height: Math.max(incomeHeight, 6),
+                      backgroundColor: colors.primary,
+                      borderRadius: 4,
+                    }}
+                  />
                   {/* Expense Bar */}
-                  <View style={{ width: 12, height: Math.max(expenseHeight, 4), backgroundColor: "rgba(255,255,255,0.15)", borderRadius: 2 }} />
+                  <View
+                    style={{
+                      width: 14,
+                      height: Math.max(expenseHeight, 6),
+                      backgroundColor: colors.error,
+                      opacity: 0.75,
+                      borderRadius: 4,
+                    }}
+                  />
                 </View>
-                <Text style={[typography.label, { color: colors.onSurfaceVariant, marginTop: 12, fontSize: 10 }]}>
+                <Text
+                  style={[
+                    typography.label,
+                    {
+                      color: colors.onSurfaceVariant,
+                      marginTop: 10,
+                      fontSize: 11,
+                    },
+                  ]}>
                   {d.month.split(" ")[0]}
                 </Text>
               </View>
@@ -128,14 +397,29 @@ export const AnalysisScreen: React.FC = () => {
           })}
         </View>
 
-        <View style={{ flexDirection: "row", justifyContent: "center", marginTop: 24, gap: 24 }}>
+        <View
+          style={{
+            flexDirection: "row",
+            justifyContent: "center",
+            marginTop: 22,
+            gap: 24,
+          }}>
           <View style={{ flexDirection: "row", alignItems: "center" }}>
-            <View style={[styles.dot, { backgroundColor: colors.primaryContainer }]} />
-            <Text style={[typography.label, { color: colors.onSurfaceVariant }]}>Income</Text>
+            <View style={[styles.dot, { backgroundColor: colors.primary }]} />
+            <Text style={[typography.label, { color: colors.onSurfaceVariant }]}>
+              Income ({formatCurrency(summary.totalIncome)})
+            </Text>
           </View>
           <View style={{ flexDirection: "row", alignItems: "center" }}>
-            <View style={[styles.dot, { backgroundColor: "rgba(255,255,255,0.15)" }]} />
-            <Text style={[typography.label, { color: colors.onSurfaceVariant }]}>Expense</Text>
+            <View
+              style={[
+                styles.dot,
+                { backgroundColor: colors.error, opacity: 0.75 },
+              ]}
+            />
+            <Text style={[typography.label, { color: colors.onSurfaceVariant }]}>
+              Expense ({formatCurrency(Math.abs(summary.totalExpenses))})
+            </Text>
           </View>
         </View>
       </View>
@@ -144,69 +428,166 @@ export const AnalysisScreen: React.FC = () => {
 
   const renderBudgetHealth = () => {
     return (
-      <View style={[styles.card, { backgroundColor: colors.surfaceVariant, marginBottom: spacing.xxl }]}>
-        <View style={[styles.cardHeader, { marginBottom: 24 }]}>
-          <Text style={[typography.h3, { color: colors.onBackground }]}>Budget Health</Text>
-          <TouchableOpacity>
-            <Text style={[typography.label, { color: colors.primaryContainer }]}>Edit Limits</Text>
+      <View
+        style={[
+          styles.card,
+          {
+            backgroundColor: colors.surface,
+            borderColor: colors.outlineVariant,
+            borderWidth: 1,
+            marginBottom: spacing.xxl,
+          },
+        ]}>
+        <View style={[styles.cardHeader, { marginBottom: 20 }]}>
+          <Text style={[typography.h3, { color: colors.onBackground }]}>
+            Budget Health
+          </Text>
+          <TouchableOpacity
+            onPress={() => navigation.navigate("Budgets")}>
+            <Text style={[typography.label, { color: colors.primary }]}>
+              Manage Budgets
+            </Text>
           </TouchableOpacity>
         </View>
 
-        <View style={{ gap: 24 }}>
-          {budgetUsage.map((b, index) => {
-            const isOver = b.status === "over";
-            const progressColor = isOver ? colors.errorContainer : colors.primaryContainer;
-            const trackColor = "rgba(255,255,255,0.05)";
-            const remainingOrOver = isOver ? b.used - b.budget.amount : b.budget.amount - b.used;
+        {budgetUsage.length === 0 ? (
+          <Text
+            style={[
+              typography.bodyMedium,
+              {
+                color: colors.onSurfaceVariant,
+                textAlign: "center",
+                paddingVertical: 12,
+              },
+            ]}>
+            No active budgets configured yet.
+          </Text>
+        ) : (
+          <View style={{ gap: 20 }}>
+            {budgetUsage.map((b, index) => {
+              const isOver = b.status === "over";
+              const progressColor = isOver ? colors.error : colors.primary;
+              const trackColor = colors.surfaceVariant;
+              const remainingOrOver = isOver
+                ? b.used - b.budget.amount
+                : b.budget.amount - b.used;
 
-            return (
-              <View key={index}>
-                <View style={{ flexDirection: "row", justifyContent: "space-between", marginBottom: 8 }}>
-                  <Text style={[typography.bodyLarge, { color: colors.onBackground, fontWeight: "600" }]}>
-                    {b.budget.name} {isOver ? "(Over)" : ""}
-                  </Text>
-                  <View style={{ flexDirection: "row", alignItems: "center" }}>
-                    <Text style={[typography.bodyMedium, { color: isOver ? colors.errorContainer : colors.onBackground, fontWeight: "600" }]}>
-                      {formatCurrency(b.used)}
+              return (
+                <View key={b.budget.id || index}>
+                  <View
+                    style={{
+                      flexDirection: "row",
+                      justifyContent: "space-between",
+                      marginBottom: 8,
+                    }}>
+                    <Text
+                      style={[
+                        typography.bodyLarge,
+                        { color: colors.onBackground, fontWeight: "600" },
+                      ]}>
+                      {b.budget.name} {isOver ? "(Over)" : ""}
                     </Text>
-                    <Text style={[typography.bodySmall, { color: colors.onSurfaceVariant }]}>
-                      {" "}
-                      / {formatCurrency(b.budget.amount)}
-                    </Text>
+                    <View style={{ flexDirection: "row", alignItems: "center" }}>
+                      <Text
+                        style={[
+                          typography.bodyMedium,
+                          {
+                            color: isOver ? colors.error : colors.onBackground,
+                            fontWeight: "700",
+                          },
+                        ]}>
+                        {formatCurrency(b.used)}
+                      </Text>
+                      <Text
+                        style={[
+                          typography.bodySmall,
+                          { color: colors.onSurfaceVariant },
+                        ]}>
+                        {" "}
+                        / {formatCurrency(b.budget.amount)}
+                      </Text>
+                    </View>
                   </View>
-                </View>
 
-                <View style={[styles.progressBar, { backgroundColor: trackColor }]}>
-                  <View style={[styles.progressFill, { width: `${Math.min(b.percentage, 100)}%`, backgroundColor: progressColor }]} />
-                </View>
+                  <View
+                    style={[
+                      styles.progressBar,
+                      { backgroundColor: trackColor },
+                    ]}>
+                    <View
+                      style={[
+                        styles.progressFill,
+                        {
+                          width: `${Math.min(b.percentage, 100)}%`,
+                          backgroundColor: progressColor,
+                        },
+                      ]}
+                    />
+                  </View>
 
-                <Text style={[typography.label, { color: isOver ? colors.errorContainer : colors.onSurfaceVariant, marginTop: 8, fontSize: 11 }]}>
-                  {isOver ? `${formatCurrency(remainingOrOver)} over limit` : `${Math.round(b.percentage)}% spent`}
-                </Text>
-              </View>
-            );
-          })}
-        </View>
+                  <Text
+                    style={[
+                      typography.label,
+                      {
+                        color: isOver
+                          ? colors.error
+                          : colors.onSurfaceVariant,
+                        marginTop: 6,
+                        fontSize: 11,
+                      },
+                    ]}>
+                    {isOver
+                      ? `${formatCurrency(remainingOrOver)} over limit`
+                      : `${Math.round(b.percentage)}% spent • ${formatCurrency(
+                          remainingOrOver
+                        )} left`}
+                  </Text>
+                </View>
+              );
+            })}
+          </View>
+        )}
       </View>
     );
   };
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }} edges={["top"]}>
-      <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
+    <SafeAreaView
+      style={{ flex: 1, backgroundColor: colors.background }}
+      edges={["top"]}>
+      <StatusBar
+        barStyle={isDark ? "light-content" : "dark-content"}
+        backgroundColor="transparent"
+        translucent
+      />
       <AppHeader title="Analytics" />
       <FilterChips
         options={["This Month", "Last Month", "3 Months"]}
         selected={filter}
-        onSelect={(f) => setFilter(f as any)}
-        style={{ marginBottom: spacing.xl, paddingHorizontal: spacing.lg, height: 40 }}
+        onSelect={(f) => {
+          setSelectedSliceIndex(null);
+          setFilter(f as any);
+        }}
+        style={{
+          marginBottom: spacing.lg,
+          paddingHorizontal: spacing.lg,
+          maxHeight: 44,
+        }}
       />
 
       <ScrollView
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />}
-        contentContainerStyle={{ paddingHorizontal: spacing.lg, paddingBottom: tabBarHeight }}
-        showsVerticalScrollIndicator={false}
-      >
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            tintColor={colors.primary}
+          />
+        }
+        contentContainerStyle={{
+          paddingHorizontal: spacing.lg,
+          paddingBottom: tabBarHeight,
+        }}
+        showsVerticalScrollIndicator={false}>
         {renderSpendingBreakdown()}
         {renderCashFlowTrend()}
         {renderBudgetHealth()}

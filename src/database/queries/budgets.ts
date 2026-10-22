@@ -26,10 +26,21 @@ export class BudgetRepository {
     await database.runAsync(
       `
       INSERT INTO budgets (
-        id, name, amount, current_balance, reset_day, category_id, created_at, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        id, name, amount, current_balance, period_type, alerts_enabled, reset_day, category_id, created_at, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `,
-      [id, tableData.name, tableData.amount, tableData.current_balance, tableData.reset_day, tableData.category_id || null, now, now]
+      [
+        id,
+        tableData.name,
+        tableData.amount,
+        tableData.current_balance,
+        tableData.period_type || "monthly",
+        tableData.alerts_enabled ?? 1,
+        tableData.reset_day,
+        tableData.category_id || null,
+        now,
+        now,
+      ]
     );
 
     const newBudget = {
@@ -98,6 +109,16 @@ export class BudgetRepository {
       params.push(updates.categoryId);
     }
 
+    if (updates.period !== undefined) {
+      setParts.push("period_type = ?");
+      params.push(updates.period);
+    }
+
+    if (updates.alertsEnabled !== undefined) {
+      setParts.push("alerts_enabled = ?");
+      params.push(updates.alertsEnabled ? 1 : 0);
+    }
+
     params.push(id);
 
     await database.runAsync(
@@ -126,16 +147,6 @@ export class BudgetRepository {
 
     if (transactionCount && transactionCount.count > 0) {
       throw new Error("Cannot delete budget with associated transactions. Remove budget from transactions first.");
-    }
-
-    // Check if budget has associated bills
-    try {
-      const billCount = (await database.getFirstAsync("SELECT COUNT(*) as count FROM bills WHERE budget_id = ?", [id])) as { count: number } | null;
-      if (billCount && billCount.count > 0) {
-        throw new Error("Cannot delete budget with associated bills. Remove budget from bills first.");
-      }
-    } catch (error) {
-      console.warn("Could not check bills for budget association:", error);
     }
 
     // Check if budget has associated debts

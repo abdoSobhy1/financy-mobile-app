@@ -2,17 +2,32 @@
 
 export type TransactionType = "income" | "expense";
 
+export type DebtDirection = "i_owe" | "owed_to_me";
+
+export type WalletType = "cash" | "bank" | "card" | "wallet";
+
+export interface WalletAccount {
+  id: string;
+  name: string;
+  type: WalletType;
+  icon: string;
+  color: string;
+  initialBalance: number;
+  createdAt: string;
+}
+
 export interface Transaction {
   id: string;
   amount: number;
   type: TransactionType;
   categoryId: string;
   budgetId?: string;
+  accountId?: string;
+  receiptUri?: string;
   description: string;
   date: string; // ISO date string
   note?: string;
-  // Linking fields for bills and debt payments
-  linkedBillId?: string; // ID of associated bill payment
+  // Linking fields for debt payments
   linkedDebtPaymentId?: string; // ID of associated debt payment
   createdAt: string; // ISO date string
   duplicatedAt?: string; // ISO date string for duplicated transactions
@@ -42,6 +57,7 @@ export interface Budget {
   amount: number;
   currentBalance: number;
   categoryId?: string;
+  period?: "weekly" | "monthly";
   resetDay: number; // Day of month (1-31)
   alertsEnabled?: boolean; // Overspending alerts toggle
   createdAt: string;
@@ -52,15 +68,10 @@ export interface Budget {
   syncStatus?: "pending" | "synced" | "error"; // Local sync status
 }
 
-export interface Bill {
-  id: string;
-  name: string;
-  // Bills removed from types; placeholder kept for compatibility
-}
-
 export interface Debt {
   id: string;
   name: string;
+  type?: DebtDirection; // "i_owe" (borrowed) or "owed_to_me" (lent)
   totalAmount: number;
   currentBalance: number;
   interestRate?: number; // Annual percentage rate
@@ -129,6 +140,7 @@ export interface BillingPeriod {
 // Form data types
 export interface DebtFormData {
   name: string;
+  type?: DebtDirection;
   totalAmount: number;
   interestRate?: number;
   minimumPayment?: number;
@@ -154,6 +166,8 @@ export interface TransactionFormData {
   type: TransactionType;
   categoryId: string;
   budgetId?: string;
+  accountId?: string;
+  receiptUri?: string;
   description: string;
   date: Date;
   note?: string;
@@ -176,15 +190,9 @@ export interface BudgetFormData {
   name: string;
   amount: string;
   categoryId?: string;
+  period?: "weekly" | "monthly";
   resetDay: number;
   alertsEnabled?: boolean;
-}
-
-export interface BillFormData {
-  name: string;
-  // Simplified bill data is handled as transactions now; keep minimal shape
-  budgetId?: string;
-  categoryId?: string;
 }
 
 export interface CategoryFormData {
@@ -240,6 +248,8 @@ export type DebtStackParamList = {
 export type SettingsStackParamList = {
   SettingsList: undefined;
   CategoryManagement: undefined;
+  WalletManagement: undefined;
+  SmsSettings: undefined;
   ExportData: undefined;
   BillingPeriodSettings: undefined;
   Import: undefined;

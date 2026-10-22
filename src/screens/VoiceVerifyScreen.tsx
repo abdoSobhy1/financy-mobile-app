@@ -17,9 +17,9 @@ import { Ionicons } from "@expo/vector-icons";
 import { useNavigation, useRoute, RouteProp } from "@react-navigation/native";
 import { StackNavigationProp } from "@react-navigation/stack";
 import { TransactionStackParamList, ParsedTransaction } from "../types";
-import { useAppTheme } from "../components/ui/ThemeProvider";
+import { useAppTheme, resolveCategoryColor } from "../components/ui/ThemeProvider";
 import { formatCurrency } from "../utils";
-import { useToast, Card } from "../components/ui";
+import { useToast, Card, IconChip } from "../components/ui";
 import { useSelector, useDispatch } from "react-redux";
 import { RootState, AppDispatch } from "../store";
 import { addTransaction } from "../store/slices/transactionsSlice";
@@ -30,7 +30,7 @@ type VoiceVerifyRouteProp = RouteProp<TransactionStackParamList, "VoiceVerify">;
 export const VoiceVerifyScreen: React.FC = () => {
   const navigation = useNavigation<NavigationProp>();
   const route = useRoute<VoiceVerifyRouteProp>();
-  const { colors, typography } = useAppTheme();
+  const { colors, typography, isDark } = useAppTheme();
   const dispatch = useDispatch<AppDispatch>();
   const { showSuccess, showError } = useToast();
 
@@ -132,7 +132,7 @@ export const VoiceVerifyScreen: React.FC = () => {
     <SafeAreaView
       style={[styles.container, { backgroundColor: colors.background }]}
       edges={["top", "bottom"]}>
-      <StatusBar barStyle="light-content" />
+      <StatusBar barStyle={isDark ? "light-content" : "dark-content"} />
 
       {/* Header */}
       <View style={styles.header}>
@@ -153,24 +153,23 @@ export const VoiceVerifyScreen: React.FC = () => {
 
         {parsedTransactions.map((tx, index) => {
           const category = tx.categoryId ? categoriesMap[tx.categoryId] : null;
-          const iconColor = category?.color || colors.primaryContainer;
+          const iconColor = category?.color || colors.primary;
 
           return (
-            <Card key={index} variant="elevated" style={styles.card}>
+            <Card key={index} variant="elevated" style={StyleSheet.flatten([styles.card, { backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.outlineVariant }])}>
               <View style={styles.cardTop}>
                 <View style={styles.cardLeft}>
-                  <View style={[styles.iconBox, { backgroundColor: "rgba(255,255,255,0.05)" }]}>
-                    <Ionicons
-                      name={(category as any)?.icon || "help-outline"}
-                      size={20}
-                      color={iconColor}
-                    />
-                  </View>
+                  <IconChip
+                    icon={(category as any)?.icon || "help-outline"}
+                    color={iconColor}
+                    size="md"
+                    style={{ marginRight: 12 }}
+                  />
                   <View>
                     <Text style={[typography.bodyLarge, { color: colors.onSurface, fontWeight: "600" }]}>
                       {tx.description || "Unknown"}
                     </Text>
-                    <View style={[styles.categoryPill, { backgroundColor: "rgba(255,255,255,0.08)" }]}>
+                    <View style={[styles.categoryPill, { backgroundColor: colors.surfaceVariant }]}>
                       <Text style={[typography.label, { color: colors.onSurfaceVariant }]}>
                         {category?.name || "Uncategorized"}
                       </Text>
@@ -201,7 +200,7 @@ export const VoiceVerifyScreen: React.FC = () => {
         <TouchableOpacity
           style={[
             styles.addAnotherBtn,
-            { borderColor: "rgba(255,255,255,0.15)" },
+            { borderColor: colors.outlineVariant },
           ]}
           onPress={handleAddAnother}>
           <Ionicons name="mic" size={18} color={colors.onSurfaceVariant} />
@@ -277,21 +276,22 @@ export const VoiceVerifyScreen: React.FC = () => {
               {categoryIds.map((id) => {
                 const c = categoriesMap[id];
                 const isSelected = editData.categoryId === id;
+                const resolved = resolveCategoryColor(c.color, isDark);
                 return (
                   <TouchableOpacity
                     key={id}
                     onPress={() => setEditData((prev) => ({ ...prev, categoryId: id }))}
                     style={[
                       styles.modalCatPill,
-                      { backgroundColor: isSelected ? c.color : colors.surfaceVariant },
+                      { backgroundColor: isSelected ? resolved.fg : colors.surfaceVariant },
                     ]}>
                     <Ionicons
                       name={(c as any).icon || "pricetag"}
                       size={14}
-                      color={isSelected ? "#111" : colors.onSurfaceVariant}
+                      color={isSelected ? "#0C0E12" : resolved.fg}
                       style={{ marginRight: 4 }}
                     />
-                    <Text style={[typography.label, { color: isSelected ? "#111" : colors.onSurfaceVariant }]}>
+                    <Text style={[typography.label, { color: isSelected ? "#0C0E12" : colors.onSurfaceVariant }]}>
                       {c.name}
                     </Text>
                   </TouchableOpacity>

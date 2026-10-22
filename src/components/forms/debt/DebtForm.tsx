@@ -8,7 +8,7 @@ import { DebtStackParamList } from "../../../navigation/DebtStackNavigator";
 import { useToast, CustomDatePicker } from "../../ui";
 import { AppDispatch } from "../../../store";
 import { addDebt, updateDebt, deleteDebt } from "../../../store/slices/debtsSlice";
-import { Debt } from "../../../types";
+import { Debt, DebtDirection } from "../../../types";
 import { useAppTheme } from "../../ui/ThemeProvider";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
@@ -21,6 +21,7 @@ interface DebtFormProps {
 
 interface FormData {
   name: string;
+  type: DebtDirection;
   totalAmount: string;
   interestRate: string;
   minimumPayment: string;
@@ -35,12 +36,13 @@ export const DebtForm: React.FC<DebtFormProps> = ({ debt, onSuccess, onCancel })
   const dispatch = useDispatch<AppDispatch>();
   const navigation = useNavigation<DebtFormNavigationProp>();
   const { showSuccess, showError } = useToast();
-  const { colors, typography, spacing, radius } = useAppTheme();
+  const { colors, typography, spacing, radius, currencySymbol } = useAppTheme();
 
   const isEditing = !!debt;
 
   const [formData, setFormData] = useState<FormData>({
     name: "",
+    type: "i_owe",
     totalAmount: "",
     interestRate: "",
     minimumPayment: "",
@@ -56,6 +58,7 @@ export const DebtForm: React.FC<DebtFormProps> = ({ debt, onSuccess, onCancel })
     if (debt) {
       setFormData({
         name: debt.name || "",
+        type: debt.type === "owed_to_me" ? "owed_to_me" : "i_owe",
         totalAmount: debt.totalAmount?.toString() || "",
         interestRate: debt.interestRate?.toString() || "",
         minimumPayment: debt.minimumPayment?.toString() || "",
@@ -94,6 +97,7 @@ export const DebtForm: React.FC<DebtFormProps> = ({ debt, onSuccess, onCancel })
     try {
       const debtData = {
         name: formData.name.trim(),
+        type: formData.type,
         totalAmount: Number(formData.totalAmount),
         currentBalance: isEditing ? debt!.currentBalance : Number(formData.totalAmount),
         interestRate: formData.interestRate ? Number(formData.interestRate) : undefined,
@@ -182,9 +186,65 @@ export const DebtForm: React.FC<DebtFormProps> = ({ debt, onSuccess, onCancel })
       </View>
 
       <ScrollView contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 100 }} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+        {/* Direction Selector: I Owe vs Owed to Me */}
+        <View
+          style={{
+            flexDirection: "row",
+            backgroundColor: colors.surfaceVariant,
+            borderRadius: radius.pill,
+            padding: 4,
+            borderWidth: 1,
+            borderColor: colors.outlineVariant,
+          }}
+        >
+          {(
+            [
+              { key: "i_owe", label: "I Owe (Borrowed)", icon: "arrow-up-circle-outline", color: colors.error },
+              { key: "owed_to_me", label: "Owed to Me (Lent)", icon: "arrow-down-circle-outline", color: colors.primary },
+            ] as const
+          ).map((opt) => {
+            const active = formData.type === opt.key;
+            return (
+              <TouchableOpacity
+                key={opt.key}
+                style={{
+                  flex: 1,
+                  flexDirection: "row",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  paddingVertical: 10,
+                  borderRadius: radius.pill,
+                  backgroundColor: active ? colors.surface : "transparent",
+                  gap: 6,
+                }}
+                onPress={() => setFormData((prev) => ({ ...prev, type: opt.key }))}
+              >
+                <Ionicons
+                  name={opt.icon as any}
+                  size={16}
+                  color={active ? opt.color : colors.onSurfaceVariant}
+                />
+                <Text
+                  style={[
+                    typography.label,
+                    {
+                      color: active ? opt.color : colors.onSurfaceVariant,
+                      fontWeight: active ? "700" : "600",
+                    },
+                  ]}
+                >
+                  {opt.label}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+
         {/* Giant Amount Input */}
-        <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "center", marginVertical: 32 }}>
-          <Text style={{ fontSize: 32, fontWeight: "600", marginRight: 8, color: colors.onSurfaceVariant }}>$</Text>
+        <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "center", marginVertical: 28 }}>
+          <Text style={{ fontSize: 32, fontWeight: "600", marginRight: 8, color: colors.onSurfaceVariant }}>
+            {currencySymbol}
+          </Text>
           <TextInput
             style={{ fontSize: 56, fontWeight: "700", textAlign: "center", minWidth: 150, color: formData.totalAmount ? colors.onBackground : colors.onSurfaceVariant }}
             placeholder="0.00"
@@ -198,15 +258,17 @@ export const DebtForm: React.FC<DebtFormProps> = ({ debt, onSuccess, onCancel })
 
         {/* Debt Name */}
         <View style={{ marginBottom: spacing.xl }}>
-          <Text style={[typography.label, { color: colors.onSurfaceVariant, marginBottom: spacing.xs, marginLeft: spacing.sm }]}>Debt Name</Text>
-          <View style={{ borderWidth: 1, borderColor: errors.name ? colors.error : "rgba(255,255,255,0.05)", backgroundColor: colors.surfaceVariant, borderRadius: radius.lg }}>
+          <Text style={[typography.label, { color: colors.onSurfaceVariant, marginBottom: spacing.xs, marginLeft: spacing.sm }]}>
+            {formData.type === "owed_to_me" ? "What did you lend for?" : "Debt Name"}
+          </Text>
+          <View style={{ borderWidth: 1, borderColor: errors.name ? colors.error : colors.outlineVariant, backgroundColor: colors.surfaceVariant, borderRadius: radius.lg }}>
             <TextInput
               style={[typography.bodyMedium, { color: colors.onBackground, padding: spacing.md, textAlign: "center" }]}
-              placeholder="e.g. Student Loan"
-            placeholderTextColor={colors.onSurfaceVariant}
-            value={formData.name}
-            onChangeText={(text) => updateField("name", text)}
-          />
+              placeholder={formData.type === "owed_to_me" ? "e.g. Personal Loan to Ahmed" : "e.g. Student Loan / Credit Card"}
+              placeholderTextColor={colors.onSurfaceVariant}
+              value={formData.name}
+              onChangeText={(text) => updateField("name", text)}
+            />
           </View>
         </View>
 
@@ -214,43 +276,45 @@ export const DebtForm: React.FC<DebtFormProps> = ({ debt, onSuccess, onCancel })
         <View style={{ flexDirection: "row", gap: spacing.md, marginBottom: spacing.xl }}>
           <View style={{ flex: 1 }}>
             <Text style={[typography.label, { color: colors.onSurfaceVariant, marginBottom: spacing.xs, marginLeft: spacing.sm, textAlign: "center" }]}>Min Payment</Text>
-            <View style={{ borderWidth: 1, borderColor: "rgba(255,255,255,0.05)", backgroundColor: colors.surfaceVariant, borderRadius: radius.lg }}>
+            <View style={{ borderWidth: 1, borderColor: colors.outlineVariant, backgroundColor: colors.surfaceVariant, borderRadius: radius.lg }}>
               <TextInput
                 style={[typography.bodyMedium, { color: colors.onBackground, padding: spacing.md, textAlign: "center" }]}
                 placeholder="0.00"
-              placeholderTextColor={colors.onSurfaceVariant}
-              keyboardType="decimal-pad"
-              value={formData.minimumPayment}
-              onChangeText={(text) => updateField("minimumPayment", text)}
-            />
+                placeholderTextColor={colors.onSurfaceVariant}
+                keyboardType="decimal-pad"
+                value={formData.minimumPayment}
+                onChangeText={(text) => updateField("minimumPayment", text)}
+              />
             </View>
           </View>
           <View style={{ flex: 1 }}>
             <Text style={[typography.label, { color: colors.onSurfaceVariant, marginBottom: spacing.xs, marginLeft: spacing.sm, textAlign: "center" }]}>Interest Rate (%)</Text>
-            <View style={{ borderWidth: 1, borderColor: "rgba(255,255,255,0.05)", backgroundColor: colors.surfaceVariant, borderRadius: radius.lg }}>
+            <View style={{ borderWidth: 1, borderColor: colors.outlineVariant, backgroundColor: colors.surfaceVariant, borderRadius: radius.lg }}>
               <TextInput
                 style={[typography.bodyMedium, { color: colors.onBackground, padding: spacing.md, textAlign: "center" }]}
                 placeholder="0"
-              placeholderTextColor={colors.onSurfaceVariant}
-              keyboardType="decimal-pad"
-              value={formData.interestRate}
-              onChangeText={(text) => updateField("interestRate", text)}
-            />
+                placeholderTextColor={colors.onSurfaceVariant}
+                keyboardType="decimal-pad"
+                value={formData.interestRate}
+                onChangeText={(text) => updateField("interestRate", text)}
+              />
             </View>
           </View>
         </View>
 
-        {/* Creditor */}
+        {/* Creditor / Borrower */}
         <View style={{ marginBottom: spacing.xl }}>
-          <Text style={[typography.label, { color: colors.onSurfaceVariant, marginBottom: spacing.xs, marginLeft: spacing.sm }]}>Creditor</Text>
-          <View style={{ borderWidth: 1, borderColor: "rgba(255,255,255,0.05)", backgroundColor: colors.surfaceVariant, borderRadius: radius.lg }}>
+          <Text style={[typography.label, { color: colors.onSurfaceVariant, marginBottom: spacing.xs, marginLeft: spacing.sm }]}>
+            {formData.type === "owed_to_me" ? "Borrower (Who owes you?)" : "Creditor / Lender"}
+          </Text>
+          <View style={{ borderWidth: 1, borderColor: colors.outlineVariant, backgroundColor: colors.surfaceVariant, borderRadius: radius.lg }}>
             <TextInput
               style={[typography.bodyMedium, { color: colors.onBackground, padding: spacing.md, textAlign: "center" }]}
-              placeholder="e.g. Bank of America"
-            placeholderTextColor={colors.onSurfaceVariant}
-            value={formData.creditor}
-            onChangeText={(text) => updateField("creditor", text)}
-          />
+              placeholder={formData.type === "owed_to_me" ? "e.g. Friend / Colleague" : "e.g. CIB Bank"}
+              placeholderTextColor={colors.onSurfaceVariant}
+              value={formData.creditor}
+              onChangeText={(text) => updateField("creditor", text)}
+            />
           </View>
         </View>
 
@@ -266,15 +330,15 @@ export const DebtForm: React.FC<DebtFormProps> = ({ debt, onSuccess, onCancel })
         {/* Description */}
         <View style={{ marginBottom: spacing.xl }}>
           <Text style={[typography.label, { color: colors.onSurfaceVariant, marginBottom: spacing.xs, marginLeft: spacing.sm }]}>Notes (Optional)</Text>
-          <View style={{ borderWidth: 1, borderColor: "rgba(255,255,255,0.05)", backgroundColor: colors.surfaceVariant, borderRadius: radius.lg }}>
+          <View style={{ borderWidth: 1, borderColor: colors.outlineVariant, backgroundColor: colors.surfaceVariant, borderRadius: radius.lg }}>
             <TextInput
               style={[typography.bodyMedium, { color: colors.onBackground, padding: spacing.md, textAlign: "center", minHeight: 80 }]}
               placeholder="Additional Notes..."
-            placeholderTextColor={colors.onSurfaceVariant}
-            value={formData.description}
-            onChangeText={(text) => updateField("description", text)}
-            multiline
-          />
+              placeholderTextColor={colors.onSurfaceVariant}
+              value={formData.description}
+              onChangeText={(text) => updateField("description", text)}
+              multiline
+            />
           </View>
         </View>
       </ScrollView>

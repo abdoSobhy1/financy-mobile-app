@@ -1,24 +1,24 @@
 import React from "react";
-import { View, StyleSheet, TouchableOpacity, Platform } from "react-native";
+import { View, Text, StyleSheet, TouchableOpacity, Platform } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAppTheme } from "./ThemeProvider";
 
-const TAB_ICONS: Record<string, { active: string; inactive: string }> = {
-  Transactions: { active: "wallet", inactive: "wallet-outline" },
-  Budgets: { active: "pie-chart", inactive: "pie-chart-outline" },
-  Debts: { active: "card", inactive: "card-outline" },
-  Analysis: { active: "analytics", inactive: "analytics-outline" },
+const TAB_CONFIG: Record<string, { active: string; inactive: string; label: string }> = {
+  Transactions: { active: "home", inactive: "home-outline", label: "Home" },
+  Budgets: { active: "pie-chart", inactive: "pie-chart-outline", label: "Budgets" },
+  Debts: { active: "card", inactive: "card-outline", label: "Debts" },
+  Analysis: { active: "bar-chart", inactive: "bar-chart-outline", label: "Analytics" },
 };
 
 export const useTabBarHeight = () => {
   const insets = useSafeAreaInsets();
   const { spacing } = useAppTheme();
 
-  // TabBar base height (64) + bottom offset
-  const tabBarHeight = 64 + Math.max(insets.bottom, spacing.md);
+  // TabBar base height (70) + bottom offset
+  const tabBarHeight = 70 + Math.max(insets.bottom, spacing.md);
 
-  // Add spacing.xl (24) for breathing room below content
+  // Add spacing.xl (20) for breathing room below content
   return tabBarHeight + spacing.xl;
 };
 
@@ -49,11 +49,12 @@ export const TabBar = ({ state, descriptors, navigation }: any) => {
         <View style={styles.tabItemsContainer}>
           {state.routes.map((route: any, index: number) => {
             const isFocused = state.index === index;
-            const icons = TAB_ICONS[route.name] || {
+            const cfg = TAB_CONFIG[route.name] || {
               active: "ellipse",
               inactive: "ellipse-outline",
+              label: route.name,
             };
-            const iconName = isFocused ? icons.active : icons.inactive;
+            const iconName = isFocused ? cfg.active : cfg.inactive;
 
             const onPress = () => {
               const event = navigation.emit({
@@ -82,7 +83,7 @@ export const TabBar = ({ state, descriptors, navigation }: any) => {
                   ]}>
                   <Ionicons
                     name={iconName as any}
-                    size={24}
+                    size={20}
                     color={
                       isFocused
                         ? colors.onPrimaryContainer
@@ -90,6 +91,17 @@ export const TabBar = ({ state, descriptors, navigation }: any) => {
                     }
                   />
                 </View>
+                <Text
+                  style={[
+                    styles.tabLabel,
+                    {
+                      color: isFocused ? colors.onSurface : colors.onSurfaceVariant,
+                      fontWeight: isFocused ? "700" : "500",
+                    },
+                  ]}
+                  numberOfLines={1}>
+                  {cfg.label}
+                </Text>
               </TouchableOpacity>
             );
 
@@ -100,7 +112,7 @@ export const TabBar = ({ state, descriptors, navigation }: any) => {
                   {tabItem}
                   <TouchableOpacity
                     key="fab"
-                    activeOpacity={0.8}
+                    activeOpacity={0.85}
                     style={[
                       styles.fabContainer,
                       { backgroundColor: colors.primary, borderRadius: radius.pill },
@@ -140,48 +152,53 @@ const styles = StyleSheet.create({
       ios: {
         shadowColor: "#000",
         shadowOffset: { width: 0, height: -4 },
-        shadowOpacity: 0.15,
+        shadowOpacity: 0.18,
         shadowRadius: 16,
       },
       android: {
-        elevation: 8,
+        elevation: 10,
       },
     }),
   },
   floatingBar: {
     width: "100%",
-    maxWidth: 400,
+    maxWidth: 420,
     borderWidth: 1,
-    borderRadius: 32,
+    borderRadius: 34,
     overflow: "hidden",
   },
   tabItemsContainer: {
     flexDirection: "row",
-    paddingVertical: 8,
-    paddingHorizontal: 6,
+    paddingVertical: 6,
+    paddingHorizontal: 8,
     alignItems: "center",
   },
   tabItem: {
     flex: 1,
     alignItems: "center",
     justifyContent: "center",
-    paddingVertical: 8,
+    paddingVertical: 4,
     position: "relative",
   },
   iconContainer: {
-    width: 64,
-    height: 32,
-    borderRadius: 16,
+    width: 52,
+    height: 28,
+    borderRadius: 14,
     overflow: "hidden",
     alignItems: "center",
     justifyContent: "center",
+  },
+  tabLabel: {
+    fontSize: 11,
+    marginTop: 3,
+    letterSpacing: 0.1,
   },
   fabContainer: {
     width: 48,
     height: 48,
     alignItems: "center",
     justifyContent: "center",
-    marginHorizontal: 8,
+    marginHorizontal: 6,
     ...Platform.select({
       ios: {
         shadowColor: "#000",

@@ -350,11 +350,26 @@ export class DatabaseManager {
 
     // Define missing columns for each table to support cloud data
     const missingColumns = {
-      transactions: ["updated_at TEXT NOT NULL DEFAULT (datetime('now'))", "linked_bill_id TEXT", "linked_debt_payment_id TEXT"],
+      transactions: [
+        "updated_at TEXT NOT NULL DEFAULT (datetime('now'))",
+        "linked_debt_payment_id TEXT",
+        "account_id TEXT DEFAULT 'default_cash'",
+        "receipt_uri TEXT",
+        "recurring_id TEXT",
+      ],
       categories: ["icon TEXT", "updated_at TEXT NOT NULL DEFAULT (datetime('now'))"],
-      budgets: ["period_type TEXT NOT NULL DEFAULT 'monthly'", "period_start INTEGER", "category_id TEXT"],
-      // bills removed
-      debts: ["amount REAL", "monthly_payment REAL CHECK (monthly_payment >= 0)", "budget_id TEXT"],
+      budgets: [
+        "period_type TEXT NOT NULL DEFAULT 'monthly'",
+        "period_start INTEGER",
+        "category_id TEXT",
+        "alerts_enabled INTEGER DEFAULT 1",
+      ],
+      debts: [
+        "amount REAL",
+        "monthly_payment REAL CHECK (monthly_payment >= 0)",
+        "budget_id TEXT",
+        "debt_type TEXT DEFAULT 'i_owe'",
+      ],
       debt_payments: ["date TEXT", "updated_at TEXT NOT NULL DEFAULT (datetime('now'))", "linked_transaction_id TEXT"],
       settings: ["key TEXT", "value TEXT", "updated_at TEXT NOT NULL DEFAULT (datetime('now'))"],
     };

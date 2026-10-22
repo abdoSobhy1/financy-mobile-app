@@ -28,7 +28,7 @@ import { fetchCategories } from "../store/slices/categoriesSlice";
 import { fetchBudgets } from "../store/slices/budgetsSlice";
 import { Transaction, TransactionStackParamList } from "../types";
 import { useAppTheme } from "../components/ui/ThemeProvider";
-import { useTabBarHeight } from "../components/ui";
+import { useTabBarHeight, IconChip } from "../components/ui";
 import { AppHeader } from "../components/ui/AppHeader";
 import { useTransactionActions } from "../hooks/useTransactionActions";
 
@@ -67,7 +67,7 @@ type TypeFilter = "All" | "Income" | "Expense";
 export const TransactionListScreen: React.FC = () => {
   const dispatch = useDispatch<AppDispatch>();
   const navigation = useNavigation<NavigationProp>();
-  const { colors, typography, spacing, radius } = useAppTheme();
+  const { colors, typography, spacing, radius, isDark } = useAppTheme();
   const tabBarHeight = useTabBarHeight();
   const { handleTransactionPress } = useTransactionActions();
 
@@ -278,6 +278,16 @@ export const TransactionListScreen: React.FC = () => {
 
 
 
+  const filteredSummary = useMemo(() => {
+    let income = 0;
+    let expense = 0;
+    filteredTransactions.forEach((t) => {
+      if (t.type === "income") income += t.amount;
+      else expense += t.amount;
+    });
+    return { income, expense, net: income - expense };
+  }, [filteredTransactions]);
+
   const allCategoriesList = useMemo(
     () => Object.values(categories).filter((c) => c && !c.deleted),
     [categories],
@@ -289,7 +299,7 @@ export const TransactionListScreen: React.FC = () => {
     <SafeAreaView
       style={{ flex: 1, backgroundColor: colors.background }}
       edges={["top"]}>
-      <StatusBar barStyle="light-content" />
+      <StatusBar barStyle={isDark ? "light-content" : "dark-content"} />
 
       {/* Standard App Header */}
       <AppHeader title="Transactions" />
@@ -386,6 +396,54 @@ export const TransactionListScreen: React.FC = () => {
             );
           })}
         </ScrollView>
+
+        {/* Filtered Period Summary Strip */}
+        {filteredTransactions.length > 0 && (
+          <View
+            style={{
+              flexDirection: "row",
+              backgroundColor: colors.surface,
+              borderRadius: 16,
+              paddingVertical: 10,
+              paddingHorizontal: 14,
+              marginTop: 4,
+              borderWidth: 1,
+              borderColor: colors.outlineVariant,
+              justifyContent: "space-between",
+            }}>
+            <View>
+              <Text style={{ fontSize: 10, fontWeight: "700", color: colors.onSurfaceVariant }}>
+                INCOME
+              </Text>
+              <Text style={{ fontSize: 13, fontWeight: "700", color: colors.primary, marginTop: 2 }}>
+                +{formatCurrency(filteredSummary.income)}
+              </Text>
+            </View>
+            <View style={{ alignItems: "center" }}>
+              <Text style={{ fontSize: 10, fontWeight: "700", color: colors.onSurfaceVariant }}>
+                EXPENSES
+              </Text>
+              <Text style={{ fontSize: 13, fontWeight: "700", color: colors.error, marginTop: 2 }}>
+                -{formatCurrency(filteredSummary.expense)}
+              </Text>
+            </View>
+            <View style={{ alignItems: "flex-end" }}>
+              <Text style={{ fontSize: 10, fontWeight: "700", color: colors.onSurfaceVariant }}>
+                NET ({filteredTransactions.length})
+              </Text>
+              <Text
+                style={{
+                  fontSize: 13,
+                  fontWeight: "700",
+                  color: filteredSummary.net >= 0 ? colors.primary : colors.error,
+                  marginTop: 2,
+                }}>
+                {filteredSummary.net >= 0 ? "+" : "-"}
+                {formatCurrency(Math.abs(filteredSummary.net))}
+              </Text>
+            </View>
+          </View>
+        )}
       </View>
 
       {/* Transaction Groups List */}
@@ -420,28 +478,33 @@ export const TransactionListScreen: React.FC = () => {
                     style={styles.txRow}
                     onPress={() => handleTransactionPress(tx)}
                     activeOpacity={0.7}>
-                    <View
-                      style={[
-                        styles.iconBadge,
-                        {
-                          backgroundColor:
-                            (cat?.color || colors.primary) + "20",
-                        },
-                      ]}>
-                      <Ionicons
-                        name={
-                          (((cat as any)?.icon as any) ||
-                            "receipt-outline") as any
-                        }
-                        size={22}
-                        color={cat?.color || colors.primary}
-                      />
-                    </View>
+                    <IconChip
+                      icon={(((cat as any)?.icon as any) || "receipt-outline") as any}
+                      color={cat?.color || colors.primary}
+                      size="md"
+                      style={{ marginRight: 14 }}
+                    />
 
                     <View style={styles.txCenterCol}>
-                      <Text style={styles.txTitleText} numberOfLines={1}>
-                        {tx.description || cat?.name || "Transaction"}
-                      </Text>
+                      <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                        <Text style={[styles.txTitleText, { flexShrink: 1 }]} numberOfLines={1}>
+                          {tx.description || cat?.name || "Transaction"}
+                        </Text>
+                        {Boolean(tx.receiptUri) && (
+                          <Ionicons
+                            name="attach-outline"
+                            size={15}
+                            color={colors.primary}
+                          />
+                        )}
+                        {Boolean(tx.recurringId) && (
+                          <Ionicons
+                            name="repeat-outline"
+                            size={14}
+                            color={colors.primary}
+                          />
+                        )}
+                      </View>
                       <Text style={styles.txSubtitleText} numberOfLines={1}>
                         {cat?.name || "Uncategorized"} •{" "}
                         {format(new Date(tx.date), "hh:mm a")}

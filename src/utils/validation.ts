@@ -29,6 +29,9 @@ export const cleanTransactionData = (transaction: any): any => {
   const cleaned = {
     ...transaction,
     budgetId: transaction.budgetId || null,
+    accountId: transaction.accountId || "default_cash",
+    receiptUri: transaction.receiptUri || null,
+    recurringId: transaction.recurringId || null,
     note: transaction.note?.trim() || null,
     // Ensure numbers are properly typed
     amount: Number(transaction.amount),
@@ -79,6 +82,8 @@ export const cleanBudgetData = (budget: any): any => {
     name: budget.name?.trim() || "",
     amount: Number(budget.amount),
     currentBalance: Number(budget.currentBalance) || Number(budget.amount),
+    period: budget.period === "weekly" ? "weekly" : "monthly",
+    alertsEnabled: budget.alertsEnabled === false ? false : true,
     resetDay: Number(budget.resetDay) || 1,
   };
 
@@ -193,84 +198,6 @@ export const cleanCategoryData = (category: any): any => {
 };
 
 /**
- * Validates bill data
- */
-export const validateBillData = (bill: any): void => {
-  if (!bill.name?.trim()) {
-    throw new Error("Bill name is required");
-  }
-
-  // Amount: allow zero for bills (amount may be recorded at payment time). If provided, it must be >= 0
-  if (bill.amount !== undefined && (isNaN(Number(bill.amount)) || Number(bill.amount) < 0)) {
-    throw new Error("Bill amount must be a number >= 0");
-  }
-
-  // Due date is optional for minimal bill records; require it only if an explicit non-empty value is provided and it's invalid
-  if (bill.dueDate !== undefined && bill.dueDate !== null && !safeParseDate(bill.dueDate)) {
-    throw new Error("Bill due date is invalid");
-  }
-
-  // CategoryId is optional for bills
-  // if (!bill.categoryId) {
-  //   throw new Error('Bill category is required');
-  // }
-};
-
-/**
- * Cleans bill data
- */
-export const cleanBillData = (bill: any): any => {
-  const cleaned: any = {};
-
-  // Only clean fields that are actually provided
-  if (bill.name !== undefined) {
-    cleaned.name = bill.name?.trim() || "";
-  }
-
-  if (bill.amount !== undefined) {
-    cleaned.amount = Number(bill.amount);
-  }
-
-  if (bill.dueDate !== undefined) {
-    const parsedDueDate = safeParseDate(bill.dueDate);
-    cleaned.dueDate = parsedDueDate ? new Date(parsedDueDate) : new Date();
-  }
-
-  if (bill.paid !== undefined) {
-    cleaned.paid = Boolean(bill.paid);
-  }
-
-  if (bill.budgetId !== undefined) {
-    cleaned.budgetId = bill.budgetId || null;
-  }
-
-  if (bill.categoryId !== undefined) {
-    cleaned.categoryId = bill.categoryId;
-  }
-
-  if (bill.recurring !== undefined) {
-    cleaned.recurring = Boolean(bill.recurring);
-  }
-
-  if (bill.recurringType !== undefined) {
-    cleaned.recurringType = bill.recurringType || null;
-  }
-
-  // Handle sync date fields safely
-  if (bill.createdAt !== undefined) {
-    const parsedCreatedAt = safeParseDate(bill.createdAt);
-    cleaned.createdAt = parsedCreatedAt || new Date().toISOString();
-  }
-
-  if (bill.updatedAt !== undefined) {
-    const parsedUpdatedAt = safeParseDate(bill.updatedAt);
-    cleaned.updatedAt = parsedUpdatedAt || new Date().toISOString();
-  }
-
-  return cleaned;
-};
-
-/**
  * Generic function to clean any data for Firestore
  */
 export const cleanDataForFirestore = (data: any): any => {
@@ -347,6 +274,7 @@ export const cleanSettingsData = (settings: any): any => {
 export const cleanDebtData = (debt: any): any => {
   const cleaned = {
     ...debt,
+    type: debt.type === "owed_to_me" || debt.debt_type === "owed_to_me" ? "owed_to_me" : "i_owe",
     // Ensure required numeric fields are properly typed and have valid values
     totalAmount: Number(debt.totalAmount || debt.total_amount || debt.amount || 0),
     currentBalance: Number(debt.currentBalance || debt.current_balance || debt.totalAmount || debt.total_amount || debt.amount || 0),

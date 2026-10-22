@@ -41,7 +41,7 @@ export const VoiceInputScreen: React.FC = () => {
   const navigation = useNavigation<NavigationProp>();
   const route = useRoute<VoiceInputRouteProp>();
   const existingTransactions = (route.params as any)?.existingTransactions || [];
-  const { colors, typography } = useAppTheme();
+  const { colors, typography, isDark } = useAppTheme();
   
   const [isListening, setIsListening] = useState(false);
   const [transcript, setTranscript] = useState("");
@@ -125,6 +125,23 @@ export const VoiceInputScreen: React.FC = () => {
 
   useSpeechRecognitionEvent("error", (event) => {
     console.warn("Speech recognition error:", event.error, event.message);
+    // If online recognition failed due to network, fallback to on-device offline recognition
+    if (event.error === "network" && !isOffline) {
+      setIsOffline(true);
+      try {
+        ExpoSpeechRecognitionModule.start({
+          lang: "ar-EG",
+          interimResults: true,
+          maxAlternatives: 1,
+          continuous: true,
+          requiresOnDeviceRecognition: true,
+          addsPunctuation: true,
+        });
+        return;
+      } catch (err) {
+        console.warn("Fallback on-device speech recognition failed:", err);
+      }
+    }
     setIsListening(false);
     clearSilenceTimeout();
   });
@@ -166,10 +183,8 @@ export const VoiceInputScreen: React.FC = () => {
   const startListening = useCallback(async () => {
     try {
       const netInfo = await NetInfo.fetch();
-      if (!netInfo.isConnected) {
-        setIsOffline(true);
-        return;
-      }
+      const offline = !netInfo.isConnected;
+      setIsOffline(offline);
 
       const result = await ExpoSpeechRecognitionModule.requestPermissionsAsync();
       if (!result.granted) {
@@ -178,7 +193,6 @@ export const VoiceInputScreen: React.FC = () => {
 
       setTranscript("");
       transcriptRef.current = "";
-      setIsOffline(false);
       
       startAnimations();
 
@@ -187,7 +201,7 @@ export const VoiceInputScreen: React.FC = () => {
         interimResults: true,
         maxAlternatives: 1,
         continuous: true,
-        requiresOnDeviceRecognition: false,
+        requiresOnDeviceRecognition: offline,
         addsPunctuation: true,
       });
     } catch (error) {
@@ -217,7 +231,7 @@ export const VoiceInputScreen: React.FC = () => {
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
-      <StatusBar barStyle="light-content" />
+      <StatusBar barStyle={isDark ? "light-content" : "dark-content"} />
       
       {/* Header */}
       <View style={styles.header}>
@@ -250,8 +264,11 @@ export const VoiceInputScreen: React.FC = () => {
           </View>
         </View>
 
-        <Text style={[typography.h3, { color: colors.onBackground, marginBottom: 24 }]}>
-          {isOffline ? "Offline" : "Listening..."}
+        <Text style={[typography.h3, { color: colors.onBackground, marginBottom: 8 }]}>
+          {isOffline ? "Listening (Offline • العربية)" : "Listening (العربية)..."}
+        </Text>
+        <Text style={[typography.caption, { color: colors.onSurfaceVariant, marginBottom: 20 }]}>
+          {isOffline ? "On-device Arabic speech recognition active" : "Speak your transaction in Arabic (e.g. صرفت 150 قهوة)"}
         </Text>
         
         {transcript ? (

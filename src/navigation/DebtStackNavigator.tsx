@@ -26,15 +26,16 @@ export type DebtStackParamList = {
 const Stack = createStackNavigator<DebtStackParamList>();
 
 const DebtStackNavigator: React.FC = () => {
+  const { colors } = useAppTheme();
   return (
     <Stack.Navigator
       screenOptions={{
         headerStyle: {
-          backgroundColor: "#1A1A2E",
-          borderBottomColor: "rgba(255,255,255,0.1)",
+          backgroundColor: colors.surface,
+          borderBottomColor: colors.outlineVariant,
           borderBottomWidth: 1,
         },
-        headerTintColor: "#FFFFFF",
+        headerTintColor: colors.onSurface,
         headerTitleStyle: {
           fontWeight: "600",
           fontSize: 18,

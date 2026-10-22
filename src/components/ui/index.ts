@@ -23,4 +23,6 @@ export { Badge } from "./Badge";
 export { ListRow } from "./ListRow";
 export { AppHeader } from "./AppHeader";
 export { FilterChips } from "./FilterChips";
+export { IconChip } from "./IconChip";
+export { resolveCategoryColor } from "./ThemeProvider";
 export * from "./CustomKeypad";

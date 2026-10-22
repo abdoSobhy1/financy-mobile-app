@@ -10,6 +10,7 @@ import { AnalysisStackParamList } from "../types";
 const Stack = createStackNavigator<AnalysisStackParamList>();
 
 const AnalysisStackNavigator: React.FC = () => {
+  const { colors } = useAppTheme();
   return (
     <Stack.Navigator
       screenOptions={{
@@ -29,9 +30,9 @@ const AnalysisStackNavigator: React.FC = () => {
           title: route.params?.isEditing ? "Edit Chart" : "Create Chart",
           presentation: "modal",
           headerStyle: {
-            backgroundColor: "#0B0B1E",
+            backgroundColor: colors.surface,
           },
-          headerTintColor: "#FFFFFF",
+          headerTintColor: colors.onSurface,
           headerTitleStyle: {
             fontWeight: "600",
           },

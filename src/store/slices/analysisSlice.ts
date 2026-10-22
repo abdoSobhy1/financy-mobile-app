@@ -1,7 +1,7 @@
 import { createSlice, PayloadAction } from "@reduxjs/toolkit";
 
 export type ChartType = "pie" | "line" | "bar";
-export type DataSource = "transactions" | "budgets" | "bills" | "debts";
+export type DataSource = "transactions" | "budgets" | "debts";
 export type ColorTheme = "default" | "blue" | "green" | "purple" | "orange" | "red";
 
 export interface ChartFilter {

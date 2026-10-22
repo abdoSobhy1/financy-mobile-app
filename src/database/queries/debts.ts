@@ -25,14 +25,15 @@ export class DebtRepository {
       await database.runAsync(
         `
         INSERT INTO debts (
-          id, name, amount, total_amount, current_balance, interest_rate, 
+          id, name, debt_type, amount, total_amount, current_balance, interest_rate, 
           minimum_payment, due_date, creditor, description, category_id, budget_id,
           created_at, updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `,
         [
-          cleanedDebt.id, // Use cleaned id
+          cleanedDebt.id,
           debtData.name,
+          debtData.debt_type || "i_owe",
           debtData.amount,
           debtData.total_amount,
           debtData.current_balance,
@@ -43,8 +44,8 @@ export class DebtRepository {
           debtData.description,
           debtData.category_id,
           debtData.budget_id,
-          cleanedDebt.createdAt, // Use cleaned createdAt
-          cleanedDebt.updatedAt, // Use cleaned updatedAt
+          cleanedDebt.createdAt,
+          cleanedDebt.updatedAt,
         ]
       );
 
@@ -147,6 +148,10 @@ export class DebtRepository {
       updateFields.push("name = ?");
       values.push(updates.name);
     }
+    if (updates.type !== undefined) {
+      updateFields.push("debt_type = ?");
+      values.push(updates.type);
+    }
     if (updates.totalAmount !== undefined) {
       updateFields.push("total_amount = ?");
       values.push(updates.totalAmount);
@@ -226,26 +231,31 @@ export class DebtRepository {
       throw new Error("Debt not found");
     }
 
-    // Use the default "Bills & Utilities" category if debt doesn't have one
+    // Determine transaction direction based on whether debt is owed to me or I owe
+    const isOwedToMe = debt.type === "owed_to_me";
+    const txType = isOwedToMe ? "income" : "expense";
+    const txDescription = isOwedToMe
+      ? `Repayment Received: ${debt.name}`
+      : `Debt Payment: ${debt.name}`;
+
+    // Use the debt's category or fallback to an appropriate category
     let categoryId = debt.categoryId;
     if (!categoryId) {
-      const existingCategory = (await database.getFirstAsync("SELECT id FROM categories WHERE name = ? AND type = ?", [
-        "Bills & Utilities",
-        "expense",
+      const existingCategory = (await database.getFirstAsync("SELECT id FROM categories WHERE type = ? ORDER BY name LIMIT 1", [
+        txType,
       ])) as { id: string } | null;
 
       if (existingCategory) {
         categoryId = existingCategory.id;
       } else {
-        // Fallback to any expense category if Bills & Utilities doesn't exist
-        const fallbackCategory = (await database.getFirstAsync("SELECT id FROM categories WHERE type = ? ORDER BY name LIMIT 1", ["expense"])) as {
+        const fallbackCategory = (await database.getFirstAsync("SELECT id FROM categories ORDER BY name LIMIT 1")) as {
           id: string;
         } | null;
 
         if (fallbackCategory) {
           categoryId = fallbackCategory.id;
         } else {
-          throw new Error("No expense category found for debt payment");
+          throw new Error("No category found for debt payment");
         }
       }
     }
@@ -258,12 +268,12 @@ export class DebtRepository {
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         transactionId,
-        `Debt Payment: ${debt.name}`,
+        txDescription,
         payment.amount,
         payment.date || payment.paymentDate, // Use date field, fallback to paymentDate
-        "expense",
+        txType,
         categoryId,
-        debt.budgetId || null,
+        isOwedToMe ? null : (debt.budgetId || null),
         paymentId, // Link to the debt payment we're about to create
         now,
         Date.now(),

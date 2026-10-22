@@ -13,6 +13,7 @@ import {
   Share,
   Alert,
   DeviceEventEmitter,
+  TextInput,
 } from "react-native";
 import { useAppTheme } from "../components/ui/ThemeProvider";
 import { LinearGradient } from "expo-linear-gradient";
@@ -20,7 +21,12 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { useNavigation } from "@react-navigation/native";
 import { StackNavigationProp } from "@react-navigation/stack";
-import { SettingsStackParamList } from "../types";
+import {
+  RecurringFrequency,
+  RecurringTransaction,
+  SettingsStackParamList,
+  TransactionType,
+} from "../types";
 import { useDispatch, useSelector } from "react-redux";
 import { RootState, AppDispatch, store } from "../store";
 import {
@@ -36,11 +42,19 @@ import {
 } from "../components/ui";
 import { runSyncApplyTest, runAllSyncApplyTests } from "../debug/runSyncTest";
 import { UI } from "../constants";
-import NotificationService from "../services/notificationService";
+import NotificationService, {
+  NotificationSettings,
+} from "../services/notificationService";
+import { securityService, LocalUserProfile } from "../services/securityService";
+import { recurringService } from "../services/recurringService";
+import { formatCurrency } from "../utils";
 import {
   fetchSettings,
   updateBillingPeriodStartDay,
+  updateCurrency,
+  updateTheme,
 } from "../store/slices/settingsSlice";
+import { CURRENCY_METADATA, formatRelativeTime } from "../utils";
 import {
   fetchCategories,
   addCategory,
@@ -122,7 +136,7 @@ const GlassCard = ({
 // MAIN SCREEN
 // ═══════════════════════════════════════════════════════════════════
 export const SettingsScreen: React.FC = () => {
-  const { colors, typography, spacing, radius } = useAppTheme();
+  const { colors, typography, spacing, radius, isDark, currencyCode, currencySymbol } = useAppTheme();
   const styles = React.useMemo(() => getStyles(colors), [colors]);
   const tabBarHeight = useTabBarHeight();
   const dispatch = useDispatch<AppDispatch>();
@@ -141,6 +155,8 @@ export const SettingsScreen: React.FC = () => {
 
   // ── UI state ────────────────────────────────────────────────────
   const [showBillingDayPicker, setShowBillingDayPicker] = useState(false);
+  const [showCurrencyPicker, setShowCurrencyPicker] = useState(false);
+  const [showThemePicker, setShowThemePicker] = useState(false);
   const [selectedBillingDay, setSelectedBillingDay] = useState(1);
   const [debugClickCount, setDebugClickCount] = useState(0);
   const [showDebugSection, setShowDebugSection] = useState(false);
@@ -154,6 +170,35 @@ export const SettingsScreen: React.FC = () => {
   const { showAlert, AlertComponent } = useCustomAlert();
   const { showSuccess, showError } = useToast();
   const [smsEnabled, setSmsEnabled] = useState(true);
+
+  // ── Profile, Security, Notifications & Recurring State ──────────
+  const [localProfile, setLocalProfile] = useState<LocalUserProfile>({
+    displayName: "Financy User",
+    email: "",
+    avatarColor: "#10B981",
+  });
+  const [showProfileModal, setShowProfileModal] = useState(false);
+  const [profileNameInput, setProfileNameInput] = useState("");
+  const [profileEmailInput, setProfileEmailInput] = useState("");
+
+  const [appLockEnabled, setAppLockEnabled] = useState(false);
+  const [showSecurityModal, setShowSecurityModal] = useState(false);
+  const [pinInput, setPinInput] = useState("");
+  const [confirmPinInput, setConfirmPinInput] = useState("");
+
+  const [showNotificationsModal, setShowNotificationsModal] = useState(false);
+  const [notifSettings, setNotifSettings] = useState<NotificationSettings>({
+    transactionReminders: true,
+    morningReminderTime: "09:00",
+    eveningReminderTime: "20:00",
+  });
+
+  const [showRecurringModal, setShowRecurringModal] = useState(false);
+  const [recurringList, setRecurringList] = useState<RecurringTransaction[]>([]);
+  const [newRecTitle, setNewRecTitle] = useState("");
+  const [newRecAmount, setNewRecAmount] = useState("");
+  const [newRecType, setNewRecType] = useState<TransactionType>("expense");
+  const [newRecFreq, setNewRecFreq] = useState<RecurringFrequency>("monthly");
 
   const currentBillingDay = settings.data?.billingPeriodStartDay || 28;
 
@@ -172,7 +217,132 @@ export const SettingsScreen: React.FC = () => {
     if (Platform.OS === "android") {
       getSmsDetectionEnabled().then(setSmsEnabled);
     }
+    // Load local profile, PIN security, notifications & recurring rules
+    securityService.getProfile().then((prof) => {
+      setLocalProfile(prof);
+      setProfileNameInput(prof.displayName);
+      setProfileEmailInput(prof.email);
+    });
+    securityService.isAppLockEnabled().then(setAppLockEnabled);
+    NotificationService.getInstance()
+      .getNotificationSettings()
+      .then(setNotifSettings)
+      .catch(() => {});
+    recurringService.getRecurringList().then(setRecurringList).catch(() => {});
   }, [dispatch]);
+
+  const handleSaveProfile = async () => {
+    try {
+      const updated = await securityService.saveProfile({
+        displayName: profileNameInput.trim() || "Financy User",
+        email: profileEmailInput.trim(),
+      });
+      setLocalProfile(updated);
+      setShowProfileModal(false);
+      showSuccess("Profile updated");
+    } catch {
+      showError("Failed to update profile");
+    }
+  };
+
+  const handleSavePinLock = async () => {
+    const cleanPin = pinInput.trim();
+    if (!/^\d{4}$/.test(cleanPin)) {
+      showError("Please enter a 4-digit numeric PIN");
+      return;
+    }
+    if (cleanPin !== confirmPinInput.trim()) {
+      showError("PIN codes do not match");
+      return;
+    }
+    try {
+      await securityService.setAppLockPin(cleanPin);
+      setAppLockEnabled(true);
+      setPinInput("");
+      setConfirmPinInput("");
+      setShowSecurityModal(false);
+      showSuccess("4-digit App Lock PIN enabled");
+    } catch {
+      showError("Failed to set App Lock PIN");
+    }
+  };
+
+  const handleDisablePinLock = async () => {
+    try {
+      await securityService.disableAppLock();
+      setAppLockEnabled(false);
+      setPinInput("");
+      setConfirmPinInput("");
+      setShowSecurityModal(false);
+      showSuccess("App Lock disabled");
+    } catch {
+      showError("Failed to disable App Lock");
+    }
+  };
+
+  const handleSaveNotifications = async () => {
+    const timeRegex = /^([01]\d|2[0-3]):([0-5]\d)$/;
+    if (
+      !timeRegex.test(notifSettings.morningReminderTime) ||
+      !timeRegex.test(notifSettings.eveningReminderTime)
+    ) {
+      showError("Please enter valid times in HH:MM format (e.g. 09:00, 20:00)");
+      return;
+    }
+    try {
+      await NotificationService.getInstance().saveSettings(
+        notifSettings,
+      );
+      setShowNotificationsModal(false);
+      showSuccess("Daily reminder settings saved");
+    } catch {
+      showError("Failed to save notification settings");
+    }
+  };
+
+  const handleTestNotification = async () => {
+    try {
+      await NotificationService.getInstance().scheduleTestNotification();
+      showSuccess("Test notification sent!");
+    } catch {
+      showError("Could not send test notification");
+    }
+  };
+
+  const handleAddRecurringRule = async () => {
+    const amt = parseFloat(newRecAmount);
+    if (!newRecTitle.trim() || !amt || amt <= 0) {
+      showError("Please enter a title and valid amount");
+      return;
+    }
+    const matchingCat =
+      Object.values(categories).find(
+        (c) => c && !c.deleted && c.type === newRecType,
+      )?.id || "default";
+
+    const updated = await recurringService.addRecurring({
+      title: newRecTitle.trim(),
+      amount: amt,
+      type: newRecType,
+      categoryId: matchingCat,
+      frequency: newRecFreq,
+      autoLog: true,
+    });
+    setRecurringList(updated);
+    setNewRecTitle("");
+    setNewRecAmount("");
+    showSuccess("Recurring rule added");
+  };
+
+  const handleToggleRecurringRule = async (id: string) => {
+    const updated = await recurringService.toggleRecurring(id);
+    setRecurringList(updated);
+  };
+
+  const handleDeleteRecurringRule = async (id: string) => {
+    const updated = await recurringService.deleteRecurring(id);
+    setRecurringList(updated);
+  };
 
   const handleSmsToggle = async (value: boolean) => {
     setSmsEnabled(value);
@@ -209,6 +379,35 @@ export const SettingsScreen: React.FC = () => {
       showError("Failed to update billing period");
     }
   };
+
+  const handleSelectCurrency = async (code: string) => {
+    try {
+      await dispatch(updateCurrency(code)).unwrap();
+      setShowCurrencyPicker(false);
+      showSuccess(`Currency updated to ${code}`);
+    } catch {
+      showError("Failed to update currency");
+    }
+  };
+
+  const handleSelectTheme = async (themeMode: "dark" | "light") => {
+    try {
+      await dispatch(updateTheme(themeMode)).unwrap();
+      setShowThemePicker(false);
+      showSuccess(`Switched to ${themeMode === "dark" ? "Dark" : "Light"} theme`);
+    } catch {
+      showError("Failed to update theme");
+    }
+  };
+
+  const lastSyncSubtitle = React.useMemo(() => {
+    if (syncing || newSyncState?.isSyncing) return "Syncing with cloud…";
+    if (!isAuthenticated) return "Sign in to enable cloud backup";
+    if (syncState.lastSync) {
+      return `Last synced: ${formatRelativeTime(new Date(syncState.lastSync).toISOString())}`;
+    }
+    return "Tap to sync your data with cloud";
+  }, [syncing, newSyncState?.isSyncing, isAuthenticated, syncState.lastSync]);
 
   const handleComingSoon = (feature: string) => {
     AlertService.alert("Coming Soon", `The ${feature} feature is not yet available. Stay tuned!`, [{ text: "OK" }]);
@@ -436,7 +635,7 @@ export const SettingsScreen: React.FC = () => {
   // ═══════════════════════════════════════════════════════════════
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }} edges={["top"]}>
-      <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
+      <StatusBar barStyle={isDark ? "light-content" : "dark-content"} backgroundColor="transparent" translucent />
 
       {/* Top Header */}
       <AppHeader title="Settings" showSettings={false} />
@@ -444,17 +643,108 @@ export const SettingsScreen: React.FC = () => {
       <ScrollView contentContainerStyle={{ paddingHorizontal: spacing.lg, paddingBottom: tabBarHeight + 100 }} showsVerticalScrollIndicator={false}>
         <SectionLabel text="ACCOUNT" />
         <GlassCard>
-          <SettingRow icon="person-outline" title="Profile Information" subtitle="Update your name, email, and avatar" onPress={() => handleComingSoon("Profile")} />
-          <SettingRow icon="shield-checkmark-outline" title="Security" subtitle="Password, 2FA, and linked devices" onPress={() => handleComingSoon("Security")} />
+          <SettingRow
+            icon="person-outline"
+            title={user?.displayName || localProfile.displayName || "Profile Information"}
+            subtitle={
+              user?.email
+                ? `Signed in as ${user.email}`
+                : localProfile.email
+                  ? localProfile.email
+                  : "Tap to customize your profile"
+            }
+            onPress={() => {
+              setProfileNameInput(user?.displayName || localProfile.displayName);
+              setProfileEmailInput(user?.email || localProfile.email);
+              setShowProfileModal(true);
+            }}
+          />
+          <SettingRow
+            icon="shield-checkmark-outline"
+            title="Security & App Lock"
+            subtitle={
+              appLockEnabled
+                ? "4-digit PIN lock is active on startup & resume"
+                : "Protect Financy with a 4-digit PIN lock"
+            }
+            rightElement={
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                <Text
+                  style={{
+                    fontSize: 12,
+                    fontWeight: "700",
+                    color: appLockEnabled ? colors.primary : colors.onSurfaceVariant,
+                  }}>
+                  {appLockEnabled ? "Enabled" : "Off"}
+                </Text>
+                <Ionicons name="chevron-forward" size={16} color={colors.onSurfaceVariant} />
+              </View>
+            }
+            onPress={() => setShowSecurityModal(true)}
+          />
         </GlassCard>
 
         <SectionLabel text="PREFERENCES" />
         <GlassCard>
-          <SettingRow icon="cash-outline" title="Currency" subtitle="Base currency for display (USD)" rightElement={<View style={{ flexDirection: "row", alignItems: "center" }}><Text style={[typography.bodyLarge, { color: colors.onSurfaceVariant, marginRight: 8 }]}>USD</Text><Ionicons name="chevron-forward" size={16} color={colors.onSurfaceVariant} /></View>} onPress={() => handleComingSoon("Currency")} />
+          <SettingRow
+            icon="cash-outline"
+            title="Currency"
+            subtitle={`Base currency for display (${currencyCode} • ${currencySymbol})`}
+            rightElement={
+              <View style={{ flexDirection: "row", alignItems: "center" }}>
+                <Text style={[typography.bodyLarge, { color: colors.primary, fontWeight: "700", marginRight: 8 }]}>
+                  {currencyCode}
+                </Text>
+                <Ionicons name="chevron-forward" size={16} color={colors.onSurfaceVariant} />
+              </View>
+            }
+            onPress={() => setShowCurrencyPicker(true)}
+          />
           <SettingRow icon="calendar-outline" title="Billing Cycle" subtitle={`Starts on day ${currentBillingDay}`} onPress={() => setShowBillingDayPicker(true)} />
-          <SettingRow icon="globe-outline" title="Language" subtitle="English (US)" rightElement={<Ionicons name="chevron-forward" size={16} color={colors.onSurfaceVariant} />} onPress={() => handleComingSoon("Language")} />
-          <SettingRow icon="moon-outline" title="Theme" subtitle="Dark mode" rightElement={<Ionicons name="chevron-forward" size={16} color={colors.onSurfaceVariant} />} onPress={() => handleComingSoon("Theme")} />
+          <SettingRow
+            icon={isDark ? "moon-outline" : "sunny-outline"}
+            title="Theme"
+            subtitle={isDark ? "Dark mode (Matte Slate)" : "Light mode (Crisp Alabaster)"}
+            rightElement={
+              <View style={{ flexDirection: "row", alignItems: "center" }}>
+                <Text style={[typography.bodyMedium, { color: colors.onSurfaceVariant, marginRight: 8 }]}>
+                  {isDark ? "Dark" : "Light"}
+                </Text>
+                <Ionicons name="chevron-forward" size={16} color={colors.onSurfaceVariant} />
+              </View>
+            }
+            onPress={() => setShowThemePicker(true)}
+          />
           <SettingRow icon="apps-outline" title="Categories" subtitle="Manage transaction categories and icons" onPress={() => navigation.navigate("CategoryManagement")} />
+          <SettingRow
+            icon="wallet-outline"
+            title="Wallets & Accounts"
+            subtitle="Manage accounts, custom icons, and balances"
+            onPress={() => navigation.navigate("WalletManagement")}
+          />
+          <SettingRow
+            icon="repeat-outline"
+            title="Recurring & Subscriptions"
+            subtitle={
+              recurringList.length > 0
+                ? `${recurringList.filter((r) => r.active).length} active recurring rules`
+                : "Auto-log recurring bills, subscriptions & salary"
+            }
+            onPress={() => {
+              recurringService.getRecurringList().then(setRecurringList).catch(() => {});
+              setShowRecurringModal(true);
+            }}
+          />
+          <SettingRow
+            icon="notifications-outline"
+            title="Daily Reminders & Alerts"
+            subtitle={
+              notifSettings.transactionReminders
+                ? `Active at ${notifSettings.morningReminderTime} & ${notifSettings.eveningReminderTime}`
+                : "Reminders paused"
+            }
+            onPress={() => setShowNotificationsModal(true)}
+          />
           {Platform.OS === "android" && (
             <>
               <SettingRow
@@ -471,15 +761,15 @@ export const SettingsScreen: React.FC = () => {
                 }
                 onPress={() => handleSmsToggle(!smsEnabled)}
               />
-
             </>
           )}
         </GlassCard>
 
         <SectionLabel text="DATA" />
         <GlassCard>
-          <SettingRow icon="download-outline" title="Export Data" subtitle="Download your transaction history (CSV/PDF)" onPress={handleExportData} />
-          <SettingRow icon="cloud-upload-outline" title="Backup & Sync" subtitle="Last synced: Today, 10:42 AM" onPress={handleSyncNow} />
+          <SettingRow icon="download-outline" title="Export Data" subtitle="Download your transaction history (CSV/Excel)" onPress={handleExportData} />
+          <SettingRow icon="document-attach-outline" title="Import Data" subtitle="Import transactions from CSV or Excel" onPress={() => navigation.navigate("Import")} />
+          <SettingRow icon="cloud-upload-outline" title="Backup & Sync" subtitle={lastSyncSubtitle} onPress={handleSyncNow} />
           <SettingRow icon="trash-outline" title="Cleanup Database" subtitle="Remove orphaned or invalid records" destructive onPress={() => setShowFirebaseCleanup(true)} />
         </GlassCard>
 
@@ -490,20 +780,148 @@ export const SettingsScreen: React.FC = () => {
             style={{ flexDirection: "row", alignItems: "center", paddingVertical: 12, paddingHorizontal: 16 }}
             onPress={() => dispatch(signOut())}
           >
-            <View style={{ width: 32, height: 32, borderRadius: 16, alignItems: "center", justifyContent: "center", backgroundColor: "rgba(255,107,107,0.1)", marginRight: 16 }}>
-              <Ionicons name="log-out-outline" size={16} color="#FF6B6B" />
+            <View style={{ width: 32, height: 32, borderRadius: 16, alignItems: "center", justifyContent: "center", backgroundColor: colors.errorContainer, marginRight: 16 }}>
+              <Ionicons name="log-out-outline" size={16} color={colors.error} />
             </View>
-            <Text style={[typography.bodyLarge, { color: "#FF6B6B", fontWeight: "600" }]}>Sign Out</Text>
+            <Text style={[typography.bodyLarge, { color: colors.error, fontWeight: "600" }]}>Sign Out</Text>
           </TouchableOpacity>
         </GlassCard>
 
       </ScrollView>
 
-      {/* Category modal removed – navigate to CategoriesScreen instead */}
+      {/* Currency Picker Modal */}
+      <Modal visible={showCurrencyPicker} transparent animationType="fade" onRequestClose={() => setShowCurrencyPicker(false)}>
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalCard, { backgroundColor: colors.surface, borderColor: colors.outlineVariant }]}>
+            <Text style={[styles.modalTitle, { color: colors.onSurface }]}>Select Currency</Text>
+            <Text style={[styles.modalSubtitle, { color: colors.onSurfaceVariant }]}>
+              Choose your primary display currency across all screens.
+            </Text>
+            <ScrollView style={{ maxHeight: 320 }}>
+              {Object.entries(CURRENCY_METADATA).map(([code, meta]) => {
+                const isSelected = currencyCode === code;
+                return (
+                  <TouchableOpacity
+                    key={code}
+                    style={[
+                      styles.dayOption,
+                      isSelected && styles.dayOptionActive,
+                    ]}
+                    onPress={() => handleSelectCurrency(code)}
+                  >
+                    <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
+                      <View
+                        style={{
+                          width: 36,
+                          height: 36,
+                          borderRadius: 18,
+                          backgroundColor: isSelected ? colors.primary : colors.surfaceVariant,
+                          alignItems: "center",
+                          justifyContent: "center",
+                        }}
+                      >
+                        <Text
+                          style={{
+                            color: isSelected ? colors.onPrimary : colors.onSurface,
+                            fontWeight: "700",
+                            fontSize: 13,
+                          }}
+                        >
+                          {meta.symbol}
+                        </Text>
+                      </View>
+                      <View>
+                        <Text style={[styles.dayText, isSelected && styles.dayTextActive]}>
+                          {code}
+                        </Text>
+                        <Text style={{ fontSize: 12, color: colors.onSurfaceVariant }}>
+                          {code === "EGP"
+                            ? "Egyptian Pound"
+                            : code === "USD"
+                            ? "US Dollar"
+                            : code === "EUR"
+                            ? "Euro"
+                            : code === "GBP"
+                            ? "British Pound"
+                            : code === "SAR"
+                            ? "Saudi Riyal"
+                            : "UAE Dirham"}
+                        </Text>
+                      </View>
+                    </View>
+                    {isSelected && <Ionicons name="checkmark-circle" size={22} color={colors.primary} />}
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
+            <View style={styles.modalActions}>
+              <TouchableOpacity style={styles.modalCancelBtn} onPress={() => setShowCurrencyPicker(false)}>
+                <Text style={styles.modalCancelText}>Close</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Theme Picker Modal */}
+      <Modal visible={showThemePicker} transparent animationType="fade" onRequestClose={() => setShowThemePicker(false)}>
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalCard, { backgroundColor: colors.surface, borderColor: colors.outlineVariant }]}>
+            <Text style={[styles.modalTitle, { color: colors.onSurface }]}>Appearance</Text>
+            <Text style={[styles.modalSubtitle, { color: colors.onSurfaceVariant }]}>
+              Choose your preferred color theme.
+            </Text>
+            {(
+              [
+                { key: "dark", label: "Dark Mode", desc: "Matte Slate with pastel emerald accents", icon: "moon" },
+                { key: "light", label: "Light Mode", desc: "Crisp Alabaster with high-contrast text", icon: "sunny" },
+              ] as const
+            ).map((opt) => {
+              const selected = (isDark ? "dark" : "light") === opt.key;
+              return (
+                <TouchableOpacity
+                  key={opt.key}
+                  style={[styles.dayOption, selected && styles.dayOptionActive]}
+                  onPress={() => handleSelectTheme(opt.key)}
+                >
+                  <View style={{ flexDirection: "row", alignItems: "center", gap: 12, flex: 1 }}>
+                    <View
+                      style={{
+                        width: 36,
+                        height: 36,
+                        borderRadius: 18,
+                        backgroundColor: selected ? colors.primary : colors.surfaceVariant,
+                        alignItems: "center",
+                        justifyContent: "center",
+                      }}
+                    >
+                      <Ionicons
+                        name={opt.icon as any}
+                        size={18}
+                        color={selected ? colors.onPrimary : colors.onSurface}
+                      />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={[styles.dayText, selected && styles.dayTextActive]}>{opt.label}</Text>
+                      <Text style={{ fontSize: 12, color: colors.onSurfaceVariant }}>{opt.desc}</Text>
+                    </View>
+                  </View>
+                  {selected && <Ionicons name="checkmark-circle" size={22} color={colors.primary} />}
+                </TouchableOpacity>
+              );
+            })}
+            <View style={styles.modalActions}>
+              <TouchableOpacity style={styles.modalCancelBtn} onPress={() => setShowThemePicker(false)}>
+                <Text style={styles.modalCancelText}>Close</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
 
       <Modal visible={showBillingDayPicker} transparent animationType="fade" onRequestClose={() => setShowBillingDayPicker(false)}>
         <View style={styles.modalOverlay}>
-          <View style={[styles.modalCard, { backgroundColor: colors.surface }]}>
+          <View style={[styles.modalCard, { backgroundColor: colors.surface, borderColor: colors.outlineVariant }]}>
             <Text style={[styles.modalTitle, { color: colors.onSurface }]}>Billing Cycle Start</Text>
             <Text style={[styles.modalSubtitle, { color: colors.onSurfaceVariant }]}>Select the day of the month your billing cycle starts.</Text>
             <ScrollView style={{ maxHeight: 300 }}>
@@ -516,7 +934,7 @@ export const SettingsScreen: React.FC = () => {
                   ]}
                   onPress={() => setSelectedBillingDay(day)}>
                   <Text style={[styles.dayText, selectedBillingDay === day && styles.dayTextActive]}>Day {day}</Text>
-                  {selectedBillingDay === day && <Ionicons name="checkmark" size={20} color={colors.primaryContainer} />}
+                  {selectedBillingDay === day && <Ionicons name="checkmark" size={20} color={colors.primary} />}
                 </TouchableOpacity>
               ))}
             </ScrollView>
@@ -524,8 +942,598 @@ export const SettingsScreen: React.FC = () => {
               <TouchableOpacity style={styles.modalCancelBtn} onPress={() => setShowBillingDayPicker(false)}>
                 <Text style={styles.modalCancelText}>Cancel</Text>
               </TouchableOpacity>
-              <TouchableOpacity style={[styles.modalSaveBtn, { backgroundColor: colors.primaryContainer }]} onPress={saveBillingDay}>
-                <Text style={styles.modalSaveText}>Save</Text>
+              <TouchableOpacity style={[styles.modalSaveBtn, { backgroundColor: colors.primary }]} onPress={saveBillingDay}>
+                <Text style={[styles.modalSaveText, { color: colors.onPrimary }]}>Save</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Profile Information Modal */}
+      <Modal
+        visible={showProfileModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowProfileModal(false)}>
+        <View style={styles.modalOverlay}>
+          <View
+            style={[
+              styles.modalCard,
+              { backgroundColor: colors.surface, borderColor: colors.outlineVariant },
+            ]}>
+            <Text style={[styles.modalTitle, { color: colors.onSurface }]}>
+              Profile Information
+            </Text>
+            <Text style={[styles.modalSubtitle, { color: colors.onSurfaceVariant }]}>
+              Customize your display name and contact info.
+            </Text>
+
+            <Text
+              style={{
+                fontSize: 12,
+                fontWeight: "600",
+                color: colors.onSurfaceVariant,
+                marginBottom: 6,
+              }}>
+              DISPLAY NAME
+            </Text>
+            <TextInput
+              style={{
+                backgroundColor: colors.surfaceVariant,
+                borderRadius: 12,
+                paddingHorizontal: 14,
+                paddingVertical: 12,
+                color: colors.onSurface,
+                fontSize: 15,
+                marginBottom: 14,
+              }}
+              value={profileNameInput}
+              onChangeText={setProfileNameInput}
+              placeholder="Your Name"
+              placeholderTextColor={colors.onSurfaceVariant}
+            />
+
+            <Text
+              style={{
+                fontSize: 12,
+                fontWeight: "600",
+                color: colors.onSurfaceVariant,
+                marginBottom: 6,
+              }}>
+              EMAIL ADDRESS (OPTIONAL)
+            </Text>
+            <TextInput
+              style={{
+                backgroundColor: colors.surfaceVariant,
+                borderRadius: 12,
+                paddingHorizontal: 14,
+                paddingVertical: 12,
+                color: colors.onSurface,
+                fontSize: 15,
+                marginBottom: 8,
+              }}
+              value={profileEmailInput}
+              onChangeText={setProfileEmailInput}
+              placeholder="name@example.com"
+              placeholderTextColor={colors.onSurfaceVariant}
+              keyboardType="email-address"
+              autoCapitalize="none"
+            />
+
+            <View style={styles.modalActions}>
+              <TouchableOpacity
+                style={styles.modalCancelBtn}
+                onPress={() => setShowProfileModal(false)}>
+                <Text style={styles.modalCancelText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.modalSaveBtn, { backgroundColor: colors.primary }]}
+                onPress={handleSaveProfile}>
+                <Text style={[styles.modalSaveText, { color: colors.onPrimary }]}>
+                  Save
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Security & App Lock Modal */}
+      <Modal
+        visible={showSecurityModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowSecurityModal(false)}>
+        <View style={styles.modalOverlay}>
+          <View
+            style={[
+              styles.modalCard,
+              { backgroundColor: colors.surface, borderColor: colors.outlineVariant },
+            ]}>
+            <Text style={[styles.modalTitle, { color: colors.onSurface }]}>
+              App Lock (PIN Security)
+            </Text>
+            <Text style={[styles.modalSubtitle, { color: colors.onSurfaceVariant }]}>
+              {appLockEnabled
+                ? "Enter a new 4-digit PIN to update your lock code, or disable App Lock below."
+                : "Set a 4-digit numeric PIN to lock Financy when launched or resumed."}
+            </Text>
+
+            <Text
+              style={{
+                fontSize: 12,
+                fontWeight: "600",
+                color: colors.onSurfaceVariant,
+                marginBottom: 6,
+              }}>
+              4-DIGIT PIN
+            </Text>
+            <TextInput
+              style={{
+                backgroundColor: colors.surfaceVariant,
+                borderRadius: 12,
+                paddingHorizontal: 14,
+                paddingVertical: 12,
+                color: colors.onSurface,
+                fontSize: 18,
+                fontWeight: "700",
+                letterSpacing: 8,
+                textAlign: "center",
+                marginBottom: 14,
+              }}
+              value={pinInput}
+              onChangeText={(t) => setPinInput(t.replace(/\D/g, "").slice(0, 4))}
+              placeholder="••••"
+              placeholderTextColor={colors.onSurfaceVariant}
+              keyboardType="number-pad"
+              maxLength={4}
+              secureTextEntry
+            />
+
+            <Text
+              style={{
+                fontSize: 12,
+                fontWeight: "600",
+                color: colors.onSurfaceVariant,
+                marginBottom: 6,
+              }}>
+              CONFIRM 4-DIGIT PIN
+            </Text>
+            <TextInput
+              style={{
+                backgroundColor: colors.surfaceVariant,
+                borderRadius: 12,
+                paddingHorizontal: 14,
+                paddingVertical: 12,
+                color: colors.onSurface,
+                fontSize: 18,
+                fontWeight: "700",
+                letterSpacing: 8,
+                textAlign: "center",
+                marginBottom: 10,
+              }}
+              value={confirmPinInput}
+              onChangeText={(t) =>
+                setConfirmPinInput(t.replace(/\D/g, "").slice(0, 4))
+              }
+              placeholder="••••"
+              placeholderTextColor={colors.onSurfaceVariant}
+              keyboardType="number-pad"
+              maxLength={4}
+              secureTextEntry
+            />
+
+            {appLockEnabled && (
+              <TouchableOpacity
+                onPress={handleDisablePinLock}
+                style={{
+                  paddingVertical: 10,
+                  alignItems: "center",
+                  marginBottom: 4,
+                }}>
+                <Text
+                  style={{
+                    color: colors.error,
+                    fontWeight: "700",
+                    fontSize: 14,
+                  }}>
+                  Disable App Lock
+                </Text>
+              </TouchableOpacity>
+            )}
+
+            <View style={styles.modalActions}>
+              <TouchableOpacity
+                style={styles.modalCancelBtn}
+                onPress={() => setShowSecurityModal(false)}>
+                <Text style={styles.modalCancelText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.modalSaveBtn, { backgroundColor: colors.primary }]}
+                onPress={handleSavePinLock}>
+                <Text style={[styles.modalSaveText, { color: colors.onPrimary }]}>
+                  {appLockEnabled ? "Update PIN" : "Enable Lock"}
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Daily Notifications & Reminders Modal */}
+      <Modal
+        visible={showNotificationsModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowNotificationsModal(false)}>
+        <View style={styles.modalOverlay}>
+          <View
+            style={[
+              styles.modalCard,
+              { backgroundColor: colors.surface, borderColor: colors.outlineVariant },
+            ]}>
+            <Text style={[styles.modalTitle, { color: colors.onSurface }]}>
+              Daily Reminders
+            </Text>
+            <Text style={[styles.modalSubtitle, { color: colors.onSurfaceVariant }]}>
+              Schedule morning & evening reminders to log your daily expenses.
+            </Text>
+
+            <View
+              style={{
+                flexDirection: "row",
+                justifyContent: "space-between",
+                alignItems: "center",
+                marginBottom: 16,
+                backgroundColor: colors.surfaceVariant,
+                padding: 12,
+                borderRadius: 12,
+              }}>
+              <Text
+                style={{
+                  fontSize: 15,
+                  fontWeight: "600",
+                  color: colors.onSurface,
+                }}>
+                Enable Daily Reminders
+              </Text>
+              <Switch
+                value={notifSettings.transactionReminders}
+                onValueChange={(v) =>
+                  setNotifSettings((prev) => ({
+                    ...prev,
+                    transactionReminders: v,
+                  }))
+                }
+                trackColor={{
+                  false: colors.outlineVariant,
+                  true: colors.primaryContainer,
+                }}
+                thumbColor={
+                  notifSettings.transactionReminders
+                    ? colors.primary
+                    : colors.onSurfaceVariant
+                }
+              />
+            </View>
+
+            <Text
+              style={{
+                fontSize: 12,
+                fontWeight: "600",
+                color: colors.onSurfaceVariant,
+                marginBottom: 6,
+              }}>
+              MORNING REMINDER (24H HH:MM)
+            </Text>
+            <TextInput
+              style={{
+                backgroundColor: colors.surfaceVariant,
+                borderRadius: 12,
+                paddingHorizontal: 14,
+                paddingVertical: 10,
+                color: colors.onSurface,
+                fontSize: 15,
+                marginBottom: 14,
+              }}
+              value={notifSettings.morningReminderTime}
+              onChangeText={(t) =>
+                setNotifSettings((prev) => ({
+                  ...prev,
+                  morningReminderTime: t,
+                }))
+              }
+              placeholder="09:00"
+              placeholderTextColor={colors.onSurfaceVariant}
+            />
+
+            <Text
+              style={{
+                fontSize: 12,
+                fontWeight: "600",
+                color: colors.onSurfaceVariant,
+                marginBottom: 6,
+              }}>
+              EVENING REMINDER (24H HH:MM)
+            </Text>
+            <TextInput
+              style={{
+                backgroundColor: colors.surfaceVariant,
+                borderRadius: 12,
+                paddingHorizontal: 14,
+                paddingVertical: 10,
+                color: colors.onSurface,
+                fontSize: 15,
+                marginBottom: 14,
+              }}
+              value={notifSettings.eveningReminderTime}
+              onChangeText={(t) =>
+                setNotifSettings((prev) => ({
+                  ...prev,
+                  eveningReminderTime: t,
+                }))
+              }
+              placeholder="20:00"
+              placeholderTextColor={colors.onSurfaceVariant}
+            />
+
+            <TouchableOpacity
+              onPress={handleTestNotification}
+              style={{
+                paddingVertical: 10,
+                borderRadius: 12,
+                backgroundColor: colors.secondaryContainer,
+                alignItems: "center",
+                marginBottom: 4,
+              }}>
+              <Text
+                style={{
+                  color: colors.onSecondaryContainer,
+                  fontWeight: "700",
+                  fontSize: 13,
+                }}>
+                Send Test Notification
+              </Text>
+            </TouchableOpacity>
+
+            <View style={styles.modalActions}>
+              <TouchableOpacity
+                style={styles.modalCancelBtn}
+                onPress={() => setShowNotificationsModal(false)}>
+                <Text style={styles.modalCancelText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.modalSaveBtn, { backgroundColor: colors.primary }]}
+                onPress={handleSaveNotifications}>
+                <Text style={[styles.modalSaveText, { color: colors.onPrimary }]}>
+                  Save
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Recurring & Subscriptions Modal */}
+      <Modal
+        visible={showRecurringModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowRecurringModal(false)}>
+        <View style={styles.modalOverlay}>
+          <View
+            style={[
+              styles.modalCard,
+              {
+                backgroundColor: colors.surface,
+                borderColor: colors.outlineVariant,
+                maxHeight: "86%",
+              },
+            ]}>
+            <Text style={[styles.modalTitle, { color: colors.onSurface }]}>
+              Recurring & Subscriptions
+            </Text>
+            <Text style={[styles.modalSubtitle, { color: colors.onSurfaceVariant }]}>
+              Automatically log recurring bills, subscriptions, or salary.
+            </Text>
+
+            {/* Quick Add Recurring Rule */}
+            <View
+              style={{
+                backgroundColor: colors.surfaceVariant,
+                borderRadius: 14,
+                padding: 12,
+                marginBottom: 14,
+              }}>
+              <View style={{ flexDirection: "row", gap: 8, marginBottom: 8 }}>
+                <TextInput
+                  style={{
+                    flex: 1.4,
+                    backgroundColor: colors.surface,
+                    borderRadius: 10,
+                    paddingHorizontal: 10,
+                    paddingVertical: 8,
+                    color: colors.onSurface,
+                    fontSize: 13,
+                  }}
+                  value={newRecTitle}
+                  onChangeText={setNewRecTitle}
+                  placeholder="Title (e.g. Netflix, Rent)"
+                  placeholderTextColor={colors.onSurfaceVariant}
+                />
+                <TextInput
+                  style={{
+                    flex: 1,
+                    backgroundColor: colors.surface,
+                    borderRadius: 10,
+                    paddingHorizontal: 10,
+                    paddingVertical: 8,
+                    color: colors.onSurface,
+                    fontSize: 13,
+                  }}
+                  value={newRecAmount}
+                  onChangeText={setNewRecAmount}
+                  placeholder="Amount"
+                  placeholderTextColor={colors.onSurfaceVariant}
+                  keyboardType="decimal-pad"
+                />
+              </View>
+
+              <View
+                style={{
+                  flexDirection: "row",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                  gap: 6,
+                }}>
+                {(["monthly", "weekly", "yearly"] as RecurringFrequency[]).map(
+                  (freq) => {
+                    const active = newRecFreq === freq;
+                    return (
+                      <TouchableOpacity
+                        key={freq}
+                        onPress={() => setNewRecFreq(freq)}
+                        style={{
+                          paddingHorizontal: 10,
+                          paddingVertical: 6,
+                          borderRadius: 8,
+                          backgroundColor: active
+                            ? colors.primary
+                            : colors.surface,
+                        }}>
+                        <Text
+                          style={{
+                            fontSize: 11,
+                            fontWeight: "700",
+                            textTransform: "capitalize",
+                            color: active ? "#FFFFFF" : colors.onSurface,
+                          }}>
+                          {freq}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  },
+                )}
+                <TouchableOpacity
+                  onPress={() =>
+                    setNewRecType(
+                      newRecType === "expense" ? "income" : "expense",
+                    )
+                  }
+                  style={{
+                    paddingHorizontal: 10,
+                    paddingVertical: 6,
+                    borderRadius: 8,
+                    backgroundColor: colors.surface,
+                  }}>
+                  <Text
+                    style={{
+                      fontSize: 11,
+                      fontWeight: "700",
+                      textTransform: "capitalize",
+                      color:
+                        newRecType === "income" ? colors.primary : colors.error,
+                    }}>
+                    {newRecType}
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  onPress={handleAddRecurringRule}
+                  style={{
+                    paddingHorizontal: 12,
+                    paddingVertical: 6,
+                    borderRadius: 8,
+                    backgroundColor: colors.primary,
+                  }}>
+                  <Ionicons name="add" size={16} color="#FFFFFF" />
+                </TouchableOpacity>
+              </View>
+            </View>
+
+            <ScrollView style={{ maxHeight: 260 }}>
+              {recurringList.length === 0 ? (
+                <Text
+                  style={{
+                    textAlign: "center",
+                    color: colors.onSurfaceVariant,
+                    paddingVertical: 20,
+                    fontSize: 13,
+                  }}>
+                  No recurring transactions yet. Add one above or when creating a
+                  transaction.
+                </Text>
+              ) : (
+                recurringList.map((item) => (
+                  <View
+                    key={item.id}
+                    style={{
+                      flexDirection: "row",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                      backgroundColor: colors.surfaceVariant,
+                      borderRadius: 12,
+                      padding: 12,
+                      marginBottom: 8,
+                      opacity: item.active ? 1 : 0.55,
+                    }}>
+                    <View style={{ flex: 1, marginRight: 8 }}>
+                      <Text
+                        style={{
+                          fontSize: 14,
+                          fontWeight: "700",
+                          color: colors.onSurface,
+                        }}
+                        numberOfLines={1}>
+                        {item.title}
+                      </Text>
+                      <Text
+                        style={{
+                          fontSize: 12,
+                          color: colors.onSurfaceVariant,
+                          marginTop: 2,
+                        }}>
+                        {formatCurrency(item.amount)} • {item.frequency} • Next:{" "}
+                        {new Date(item.nextDueDate).toLocaleDateString()}
+                      </Text>
+                    </View>
+                    <View
+                      style={{
+                        flexDirection: "row",
+                        alignItems: "center",
+                        gap: 10,
+                      }}>
+                      <TouchableOpacity
+                        onPress={() => handleToggleRecurringRule(item.id)}>
+                        <Ionicons
+                          name={
+                            item.active
+                              ? "pause-circle-outline"
+                              : "play-circle-outline"
+                          }
+                          size={22}
+                          color={colors.primary}
+                        />
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        onPress={() => handleDeleteRecurringRule(item.id)}>
+                        <Ionicons
+                          name="trash-outline"
+                          size={20}
+                          color={colors.error}
+                        />
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                ))
+              )}
+            </ScrollView>
+
+            <View style={styles.modalActions}>
+              <TouchableOpacity
+                style={styles.modalCancelBtn}
+                onPress={() => setShowRecurringModal(false)}>
+                <Text style={styles.modalCancelText}>Done</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -705,11 +1713,11 @@ const getStyles = (colors: any) => StyleSheet.create({
     width: "88%",
     maxWidth: 380,
     maxHeight: "80%",
-    backgroundColor: "#161638",
+    backgroundColor: colors.surface,
     borderRadius: 22,
     padding: 24,
     borderWidth: 1,
-    borderColor: "rgba(108,92,231,0.2)",
+    borderColor: colors.outlineVariant,
   },
   modalTitle: {
     fontSize: 18,
@@ -731,21 +1739,22 @@ const getStyles = (colors: any) => StyleSheet.create({
     paddingVertical: 12,
     paddingHorizontal: 16,
     borderRadius: 12,
-    marginBottom: 4,
-    backgroundColor: "rgba(255,255,255,0.03)",
+    marginBottom: 6,
+    backgroundColor: colors.surfaceVariant,
+    borderWidth: 1,
+    borderColor: "transparent",
   },
   dayOptionActive: {
-    backgroundColor: "rgba(108,92,231,0.12)",
-    borderWidth: 1,
-    borderColor: "rgba(108,92,231,0.3)",
+    backgroundColor: colors.primaryContainer,
+    borderColor: colors.primary,
   },
   dayText: {
     fontSize: 15,
     color: colors.onBackground,
   },
   dayTextActive: {
-    color: colors.primaryContainer,
-    fontWeight: "600",
+    color: colors.primary,
+    fontWeight: "700",
   },
   modalActions: {
     flexDirection: "row",
@@ -759,7 +1768,7 @@ const getStyles = (colors: any) => StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     borderWidth: 1,
-    borderColor: "rgba(108,92,231,0.2)",
+    borderColor: colors.outlineVariant,
   },
   modalCancelText: {
     fontSize: 15,

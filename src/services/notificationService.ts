@@ -4,7 +4,6 @@ import { Platform } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
 const TRANSACTION_REMINDER_TASK = "TRANSACTION_REMINDER";
-const BILL_REMINDER_TASK = "BILL_REMINDER";
 
 // Configure notifications
 Notifications.setNotificationHandler({
@@ -18,18 +17,14 @@ Notifications.setNotificationHandler({
 
 export interface NotificationSettings {
   transactionReminders: boolean;
-  billReminders: boolean;
   morningReminderTime: string; // "09:00"
   eveningReminderTime: string; // "20:00"
-  billReminderDays: number; // Days before due date
 }
 
 const DEFAULT_SETTINGS: NotificationSettings = {
   transactionReminders: true,
-  billReminders: true,
-  morningReminderTime: "12:03",
-  eveningReminderTime: "19:19",
-  billReminderDays: 3,
+  morningReminderTime: "09:00",
+  eveningReminderTime: "20:00",
 };
 
 class NotificationService {
@@ -142,12 +137,6 @@ class NotificationService {
       await this.sendTransactionReminder();
       return { success: true };
     });
-
-    // Register bill reminder task
-    TaskManager.defineTask(BILL_REMINDER_TASK, async () => {
-      await this.checkUpcomingBills();
-      return { success: true };
-    });
   }
 
   async scheduleAllNotifications() {
@@ -170,11 +159,6 @@ class NotificationService {
         await this.scheduleTransactionReminders();
       }
 
-      if (this.settings.billReminders) {
-        console.log("📅 Scheduling bill reminders...");
-        await this.scheduleBillCheckReminders();
-      }
-
       // Debug: Check what notifications were actually scheduled
       await this.logScheduledNotifications();
     } catch (error) {
@@ -183,8 +167,6 @@ class NotificationService {
   }
 
   private async scheduleTransactionReminders() {
-    const now = new Date();
-
     // Schedule morning reminder
     const morningTime = this.parseTimeString(this.settings.morningReminderTime);
     await this.scheduleRepeatingNotification(
@@ -205,18 +187,6 @@ class NotificationService {
       eveningTime.hour,
       eveningTime.minute,
       true
-    );
-  }
-
-  private async scheduleBillCheckReminders() {
-    // Schedule daily bill check at 9 AM
-    await this.scheduleRepeatingNotification(
-      "bill-check-daily",
-      "Bill Reminders",
-      "Check your upcoming bills and payment deadlines",
-      9,
-      0,
-      true // Show this notification
     );
   }
 
@@ -361,62 +331,40 @@ class NotificationService {
     };
   }
 
-  async checkUpcomingBills() {
+  async sendBudgetAlertNotification(
+    budgetName: string,
+    spentFormatted: string,
+    limitFormatted: string,
+    percentageUsed: number
+  ) {
     try {
-      // This would need to access the bills from your store
-      // For now, we'll create a method that can be called from components
-      const upcomingBills = await this.getUpcomingBills();
-
-      for (const bill of upcomingBills) {
-        await this.sendBillReminder(bill);
+      if (!this.initialized) {
+        await this.initialize();
       }
-    } catch (error) {
-      console.error("Error checking upcoming bills:", error);
-    }
-  }
-
-  private async getUpcomingBills(): Promise<any[]> {
-    // This method should be implemented to fetch bills from your store
-    // You can call this from components that have access to the store
-    return [];
-  }
-
-  async sendBillReminder(bill: any) {
-    const daysUntilDue = Math.ceil((new Date(bill.dueDate).getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24));
-
-    if (daysUntilDue <= this.settings.billReminderDays && daysUntilDue >= 0) {
-      const dayText = daysUntilDue === 0 ? "today" : daysUntilDue === 1 ? "tomorrow" : `in ${daysUntilDue} days`;
+      const isOver = percentageUsed >= 100;
+      const title = isOver
+        ? `🚨 Over Budget: ${budgetName}`
+        : `⚠️ Budget Alert: ${budgetName}`;
+      const body = isOver
+        ? `You have spent ${spentFormatted} (${Math.round(percentageUsed)}% of your ${limitFormatted} limit).`
+        : `You have reached ${Math.round(percentageUsed)}% of your ${budgetName} budget (${spentFormatted} / ${limitFormatted}).`;
 
       await Notifications.scheduleNotificationAsync({
         content: {
-          title: "Bill Reminder",
-          body: `${bill.name} is due ${dayText} - $${bill.amount.toFixed(2)}`,
+          title,
+          body,
           sound: true,
           badge: 1,
           data: {
-            type: "bill_reminder",
-            billId: bill.id,
+            type: "budget_alert",
+            budgetName,
           },
         },
         trigger: null,
       });
+    } catch (error) {
+      console.error("Failed to send budget alert notification:", error);
     }
-  }
-
-  async sendBillDueNotification(bill: any) {
-    await Notifications.scheduleNotificationAsync({
-      content: {
-        title: "Bill Due Today!",
-        body: `${bill.name} - $${bill.amount.toFixed(2)} is due today`,
-        sound: true,
-        badge: 1,
-        data: {
-          type: "bill_due",
-          billId: bill.id,
-        },
-      },
-      trigger: null,
-    });
   }
 
   async showSyncNotification(message: string = "Syncing data..."): Promise<string | null> {
@@ -522,10 +470,6 @@ class NotificationService {
       if (this.settings.transactionReminders) {
         expectedNotifications.push("transaction-reminder-morning");
         expectedNotifications.push("transaction-reminder-evening");
-      }
-
-      if (this.settings.billReminders) {
-        expectedNotifications.push("bill-check-daily");
       }
 
       const scheduledIdentifiers = scheduledNotifications.map((n) => n.identifier);

@@ -32,7 +32,7 @@ type AddPaymentScreenNavigationProp = StackNavigationProp<
 type AddPaymentScreenRouteProp = RouteProp<DebtStackParamList, "AddPayment">;
 
 const AddPaymentScreen: React.FC = () => {
-  const { colors, typography, spacing, radius } = useAppTheme();
+  const { colors, typography, spacing, radius, currencySymbol } = useAppTheme();
   const dispatch = useDispatch<AppDispatch>();
   const navigation = useNavigation<AddPaymentScreenNavigationProp>();
   const route = useRoute<AddPaymentScreenRouteProp>();
@@ -228,7 +228,7 @@ const AddPaymentScreen: React.FC = () => {
 
       {/* Giant Amount Input */}
       <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "center", marginVertical: 32 }}>
-        <Text style={{ fontSize: 32, fontWeight: "600", marginRight: 8, color: colors.onSurfaceVariant }}>$</Text>
+        <Text style={{ fontSize: 32, fontWeight: "600", marginRight: 8, color: colors.onSurfaceVariant }}>{currencySymbol}</Text>
         <TextInput
           style={{ fontSize: 56, fontWeight: "700", textAlign: "center", minWidth: 150, color: paymentData.amount ? colors.onBackground : colors.onSurfaceVariant }}
           placeholder="0.00"
