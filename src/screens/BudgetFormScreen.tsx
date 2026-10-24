@@ -8,8 +8,8 @@ import {
   ScrollView,
   KeyboardAvoidingView,
   Platform,
-  Switch,
 } from "react-native";
+import { Switch } from "../components/ui";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useRoute, useNavigation, RouteProp } from "@react-navigation/native";
 import { StackNavigationProp } from "@react-navigation/stack";
@@ -270,8 +270,6 @@ const BudgetFormScreen: React.FC = () => {
             <Switch
               value={alertsEnabled}
               onValueChange={setAlertsEnabled}
-              trackColor={{ false: colors.outlineVariant, true: colors.primary }}
-              thumbColor={colors.onPrimary}
             />
           </View>
 

@@ -65,8 +65,8 @@ export class SettingsRepository {
   }
 
   async updateBillingPeriodStartDay(day: number, options?: { skipSync?: boolean }): Promise<void> {
-    if (day < 1 || day > 31) {
-      throw new Error("Billing period start day must be between 1 and 31");
+    if (day < 1 || day > 30) {
+      throw new Error("Billing period start day must be between 1 and 30");
     }
 
     const database = this.db.getDatabase();

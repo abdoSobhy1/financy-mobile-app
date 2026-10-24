@@ -7,14 +7,12 @@ export interface SyncTrackingData {
     transactions: Set<string>;
     categories: Set<string>;
     budgets: Set<string>;
-    bills: Set<string>;
     debts: Set<string>;
   };
   pendingSyncItems: {
     transactions: Set<string>;
     categories: Set<string>;
     budgets: Set<string>;
-    bills: Set<string>;
     debts: Set<string>;
   };
 }
@@ -28,14 +26,12 @@ class SyncTracker {
       transactions: new Set(),
       categories: new Set(),
       budgets: new Set(),
-      bills: new Set(),
       debts: new Set(),
     },
     pendingSyncItems: {
       transactions: new Set(),
       categories: new Set(),
       budgets: new Set(),
-      bills: new Set(),
       debts: new Set(),
     },
   };
@@ -59,14 +55,12 @@ class SyncTracker {
             transactions: this.syncData.syncedItemIds.transactions.size,
             categories: this.syncData.syncedItemIds.categories.size,
             budgets: this.syncData.syncedItemIds.budgets.size,
-            bills: this.syncData.syncedItemIds.bills.size,
             debts: this.syncData.syncedItemIds.debts.size,
           },
           pendingCounts: {
             transactions: this.syncData.pendingSyncItems.transactions.size,
             categories: this.syncData.pendingSyncItems.categories.size,
             budgets: this.syncData.pendingSyncItems.budgets.size,
-            bills: this.syncData.pendingSyncItems.bills.size,
             debts: this.syncData.pendingSyncItems.debts.size,
           },
         });
@@ -165,14 +159,12 @@ class SyncTracker {
         transactions: new Set(),
         categories: new Set(),
         budgets: new Set(),
-        bills: new Set(),
         debts: new Set(),
       },
       pendingSyncItems: {
         transactions: new Set(),
         categories: new Set(),
         budgets: new Set(),
-        bills: new Set(),
         debts: new Set(),
       },
     };

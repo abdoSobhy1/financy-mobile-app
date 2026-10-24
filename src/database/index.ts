@@ -127,9 +127,12 @@ export class DatabaseManager {
       CREATE TABLE IF NOT EXISTS transactions (
         id TEXT PRIMARY KEY,
         amount REAL NOT NULL CHECK (amount > 0),
-        type TEXT NOT NULL CHECK (type IN ('income', 'expense', 'debt')),
-        category_id TEXT NOT NULL,
+        type TEXT NOT NULL CHECK (type IN ('income', 'expense', 'debt', 'transfer')),
+        category_id TEXT,
         budget_id TEXT,
+        account_id TEXT DEFAULT 'default_cash',
+        to_account_id TEXT,
+        receipt_uri TEXT,
         description TEXT NOT NULL,
         date TEXT NOT NULL,
         note TEXT,
@@ -234,6 +237,25 @@ export class DatabaseManager {
       );
     `);
 
+    // Wallets table
+    await this.db.execAsync(`
+      CREATE TABLE IF NOT EXISTS wallets (
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL,
+        type TEXT NOT NULL,
+        icon TEXT,
+        color TEXT,
+        initial_balance REAL NOT NULL DEFAULT 0,
+        is_secret INTEGER NOT NULL DEFAULT 0,
+        archived INTEGER NOT NULL DEFAULT 0,
+        created_at TEXT NOT NULL DEFAULT (datetime('now')),
+        updated_at INTEGER NOT NULL DEFAULT 0,
+        sync_updated_at INTEGER NOT NULL DEFAULT 0,
+        deleted INTEGER NOT NULL DEFAULT 0 CHECK (deleted IN (0, 1)),
+        sync_status TEXT NOT NULL DEFAULT 'pending' CHECK (sync_status IN ('pending', 'synced', 'error'))
+      );
+    `);
+
     // Bill payments table
     // Bill payments removed
 
@@ -277,6 +299,10 @@ export class DatabaseManager {
       CREATE INDEX IF NOT EXISTS idx_sync_log_processed ON sync_log (is_processed);
       CREATE INDEX IF NOT EXISTS idx_sync_log_created ON sync_log (created_at);
       CREATE INDEX IF NOT EXISTS idx_sync_log_table ON sync_log (table_name);
+      CREATE INDEX IF NOT EXISTS idx_wallets_updated_at ON wallets (updated_at);
+      CREATE INDEX IF NOT EXISTS idx_wallets_deleted ON wallets (deleted);
+      CREATE INDEX IF NOT EXISTS idx_wallets_archived ON wallets (archived);
+      CREATE INDEX IF NOT EXISTS idx_transactions_to_account ON transactions (to_account_id);
     `);
   }
 
@@ -293,6 +319,99 @@ export class DatabaseManager {
         console.log("Dropped legacy bills tables if they existed");
       } catch (err) {
         console.warn("Failed to drop legacy bills tables (non-fatal):", err);
+      }
+
+      // Ensure wallets table exists and has proper schema for existing databases
+      try {
+        await this.db.execAsync(`
+          CREATE TABLE IF NOT EXISTS wallets (
+            id TEXT PRIMARY KEY,
+            name TEXT NOT NULL,
+            type TEXT NOT NULL,
+            icon TEXT,
+            color TEXT,
+            initial_balance REAL NOT NULL DEFAULT 0,
+            is_secret INTEGER NOT NULL DEFAULT 0,
+            archived INTEGER NOT NULL DEFAULT 0,
+            created_at TEXT NOT NULL DEFAULT (datetime('now')),
+            updated_at INTEGER NOT NULL DEFAULT 0,
+            sync_updated_at INTEGER NOT NULL DEFAULT 0,
+            deleted INTEGER NOT NULL DEFAULT 0 CHECK (deleted IN (0, 1)),
+            sync_status TEXT NOT NULL DEFAULT 'pending' CHECK (sync_status IN ('pending', 'synced', 'error'))
+          );
+          CREATE INDEX IF NOT EXISTS idx_wallets_updated_at ON wallets (updated_at);
+          CREATE INDEX IF NOT EXISTS idx_wallets_deleted ON wallets (deleted);
+          CREATE INDEX IF NOT EXISTS idx_wallets_archived ON wallets (archived);
+        `);
+        console.log("Wallets table verified/created in migrations");
+      } catch (err) {
+        console.warn("Failed to ensure wallets table in migrations:", err);
+      }
+
+      // Ensure transactions table supports transfers and nullable category_id
+      try {
+        const tableInfo = await this.db.getFirstAsync<{ sql: string }>(
+          "SELECT sql FROM sqlite_master WHERE type='table' AND name='transactions'",
+        );
+        if (
+          tableInfo?.sql &&
+          (!tableInfo.sql.includes("'transfer'") ||
+            tableInfo.sql.includes("category_id TEXT NOT NULL"))
+        ) {
+          console.log(
+            "Migrating transactions table to allow transfers and nullable category_id...",
+          );
+          await this.db.execAsync(`
+            CREATE TABLE IF NOT EXISTS transactions_new (
+              id TEXT PRIMARY KEY,
+              amount REAL NOT NULL CHECK (amount > 0),
+              type TEXT NOT NULL CHECK (type IN ('income', 'expense', 'debt', 'transfer')),
+              category_id TEXT,
+              budget_id TEXT,
+              account_id TEXT DEFAULT 'default_cash',
+              to_account_id TEXT,
+              receipt_uri TEXT,
+              description TEXT NOT NULL,
+              date TEXT NOT NULL,
+              note TEXT,
+              linked_debt_payment_id TEXT,
+              created_at TEXT NOT NULL DEFAULT (datetime('now')),
+              updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+              duplicated_at TEXT,
+              sync_updated_at INTEGER DEFAULT 0,
+              deleted INTEGER DEFAULT 0 CHECK (deleted IN (0, 1)),
+              sync_status TEXT DEFAULT 'pending' CHECK (sync_status IN ('pending', 'synced', 'error')),
+              FOREIGN KEY (category_id) REFERENCES categories (id) ON DELETE RESTRICT,
+              FOREIGN KEY (budget_id) REFERENCES budgets (id) ON DELETE SET NULL
+            );
+
+            INSERT INTO transactions_new (
+              id, amount, type, category_id, budget_id, account_id, receipt_uri, description,
+              date, note, linked_debt_payment_id, created_at, updated_at, duplicated_at,
+              sync_updated_at, deleted, sync_status
+            )
+            SELECT 
+              id, amount, type, category_id, budget_id, 
+              COALESCE(account_id, 'default_cash'), receipt_uri, description,
+              date, note, linked_debt_payment_id, created_at, updated_at, duplicated_at,
+              COALESCE(sync_updated_at, 0), COALESCE(deleted, 0), COALESCE(sync_status, 'pending')
+            FROM transactions;
+
+            DROP TABLE transactions;
+
+            ALTER TABLE transactions_new RENAME TO transactions;
+
+            CREATE INDEX IF NOT EXISTS idx_transactions_date ON transactions (date);
+            CREATE INDEX IF NOT EXISTS idx_transactions_category ON transactions (category_id);
+            CREATE INDEX IF NOT EXISTS idx_transactions_budget ON transactions (budget_id);
+            CREATE INDEX IF NOT EXISTS idx_transactions_type ON transactions (type);
+            CREATE INDEX IF NOT EXISTS idx_transactions_sync_updated ON transactions (sync_updated_at);
+            CREATE INDEX IF NOT EXISTS idx_transactions_to_account ON transactions (to_account_id);
+          `);
+          console.log("Transactions table migration for transfers completed successfully");
+        }
+      } catch (err) {
+        console.warn("Transactions table check/migration non-fatal error:", err);
       }
 
       // Migrations completed
@@ -354,6 +473,7 @@ export class DatabaseManager {
         "updated_at TEXT NOT NULL DEFAULT (datetime('now'))",
         "linked_debt_payment_id TEXT",
         "account_id TEXT DEFAULT 'default_cash'",
+        "to_account_id TEXT",
         "receipt_uri TEXT",
         "recurring_id TEXT",
       ],
@@ -482,6 +602,7 @@ export class DatabaseManager {
     if (!this.db) return;
 
     await this.db.execAsync(`
+      DROP TABLE IF EXISTS wallets;
       DROP TABLE IF EXISTS transactions;
       DROP TABLE IF EXISTS budgets;
       DROP TABLE IF EXISTS categories;
@@ -516,10 +637,15 @@ export class DatabaseManager {
 
   private async recalculateEntryCounts(): Promise<void> {
     try {
-      // Import here to avoid circular dependency
-      const { CategoryRepository } = await import("./queries/categories");
-      const categoryRepo = new CategoryRepository();
-      await categoryRepo.recalculateAllEntryCounts();
+      if (!this.db) return;
+      await this.db.runAsync(`
+        UPDATE categories 
+        SET entry_count = (
+          SELECT COUNT(*) 
+          FROM transactions 
+          WHERE transactions.category_id = categories.id
+        )
+      `);
       console.log("Entry counts recalculated successfully");
     } catch (error) {
       console.warn("Error recalculating entry counts:", error);

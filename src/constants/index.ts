@@ -80,11 +80,6 @@ export const VALIDATION = {
     MAX_AMOUNT: 999999.99,
     MAX_NAME_LENGTH: 50,
   },
-  BILL: {
-    MIN_AMOUNT: 0.01,
-    MAX_AMOUNT: 999999.99,
-    MAX_NAME_LENGTH: 50,
-  },
   CATEGORY: {
     MAX_NAME_LENGTH: 30,
     MIN_NAME_LENGTH: 1,
@@ -100,7 +95,6 @@ export const EXPORT = {
 export const SCREENS = {
   TRANSACTIONS: "Transactions",
   BUDGETS: "Budgets",
-  BILLS: "Bills",
   SETTINGS: "Settings",
 } as const;
 

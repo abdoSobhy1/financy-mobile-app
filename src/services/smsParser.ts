@@ -14,31 +14,22 @@
 
 import { ParsedTransaction, TransactionType, Budget } from "../types";
 import { findMatchingBudgetForCategory } from "../utils/budgetMatching";
+import {
+  SmsDetectorConfig,
+  getCachedConfig,
+  DEFAULT_SMS_CONFIG,
+} from "./smsConfigService";
 
-export const KNOWN_BANK_SENDERS = [
-  "BANK-ALAHLY",
-  "BANKALAHLY",
-  "ALAHLY",
-  "AHLY",
-  "NBE",
-  "NBE-SMS",
-  "NBE-ALERT",
-  "CIB",
-  "CIBEGYPT",
-  "BANQUEMISR",
-  "BM",
-  "QNB",
-  "HSBC",
-  "ALEXBANK",
-  "BDC",
-  "EGBANK",
-];
+export const KNOWN_BANK_SENDERS = DEFAULT_SMS_CONFIG.bankSenders;
 
-export function isBankSender(sender: string): boolean {
+export function isBankSender(sender: string, config?: SmsDetectorConfig): boolean {
   if (!sender) return false;
+  const activeConfig = config || getCachedConfig();
   const cleanSender = sender.replace(/[^A-Za-z0-9]/g, "").toUpperCase();
-  return KNOWN_BANK_SENDERS.some((bank) => {
+
+  return activeConfig.bankSenders.some((bank) => {
     const cleanBank = bank.replace(/[^A-Za-z0-9]/g, "").toUpperCase();
+    if (!cleanBank) return false;
     return (
       cleanSender.includes(cleanBank) ||
       (cleanSender.length >= 3 && cleanBank.includes(cleanSender))
@@ -49,11 +40,24 @@ export function isBankSender(sender: string): boolean {
 /**
  * Detects if the SMS text represents an ATM cash withdrawal.
  * ATM cash withdrawals transfer money from bank/card to cash in pocket,
- * so they are not tracked as expenses.
+ * so they are not tracked as expenses (if ignoreAtmWithdrawals is enabled).
  */
-export function isAtmWithdrawal(text: string): boolean {
+export function isAtmWithdrawal(text: string, config?: SmsDetectorConfig): boolean {
   if (!text) return false;
+  const activeConfig = config || getCachedConfig();
 
+  if (!activeConfig.ignoreAtmWithdrawals) {
+    return false;
+  }
+
+  const lowerText = text.toLowerCase();
+  for (const kw of activeConfig.atmKeywords) {
+    if (kw && lowerText.includes(kw.toLowerCase())) {
+      return true;
+    }
+  }
+
+  // Fallback explicit regex patterns:
   // 1. Matches "ATM", "ATM186", "ATM491", "ATM-123", etc. (excluding words like ATMOSPHERE)
   if (/(?:^|[^a-zA-Z])ATM(?:\d+|\b|[-_\s])/i.test(text)) return true;
 
@@ -76,23 +80,34 @@ function cleanWhitespace(str: string): string {
   return str.replace(/\s+/g, " ").trim();
 }
 
+function escapeRegex(str: string): string {
+  return str.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
 // ── Amount extraction ──────────────────────────────────────────────────
-function extractSmsAmount(text: string): number | undefined {
+function extractSmsAmount(text: string, config?: SmsDetectorConfig): number | undefined {
+  const activeConfig = config || getCachedConfig();
+  const currencyPattern =
+    activeConfig.currencyKeywords.length > 0
+      ? activeConfig.currencyKeywords.map(escapeRegex).join("|")
+      : "EGP|LE|جم|جنيه|USD";
+
   // Strip the available-balance suffix (المتاح...) before parsing
   // so we never accidentally grab the post-transaction balance
-  const stripped = text.replace(/المتاح\s*[\d.,]+\s*(?:EGP|LE|جم|جنيه)?/gi, "");
+  const balanceRegex = new RegExp(`المتاح\\s*[\\d.,]+\\s*(?:${currencyPattern})?`, "gi");
+  const stripped = text.replace(balanceRegex, "");
 
   const amountPatterns = [
     // "بمبلغ 7400.00 جم" or "بمبلغ 468.30 EGP" — most explicit, try first
-    /بمبلغ\s*([\d,]+(?:\.\d{1,2})?)\s*(?:جم|جنيه|EGP|LE)?/i,
+    new RegExp(`بمبلغ\\s*([\\d,]+(?:\\.\\d{1,2})?)\\s*(?:${currencyPattern})?`, "i"),
     // "تم خصم 4000 EGP" or "تم خصم مبلغ 468.30 جم"
-    /(?:تم\s+خصم|خصم)\s+(?:مبلغ\s+)?([\d,]+(?:\.\d{1,2})?)\s*(?:EGP|LE|جم|جنيه)/i,
+    new RegExp(`(?:تم\\s+خصم|خصم)\\s+(?:مبلغ\\s+)?([\\d,]+(?:\\.\\d{1,2})?)\\s*(?:${currencyPattern})?`, "i"),
     // English: "Purchase of EGP 450.00" / "Amount: 450.00 EGP"
-    /(?:Purchase|Withdrawal|Payment|Transfer|Deposit|Amount|EGP|LE)\s*(?:of|is|was|:)?\s*(?:EGP|LE)?\s*([\d,]+(?:\.\d{1,2})?)/i,
+    new RegExp(`(?:Purchase|Withdrawal|Payment|Transfer|Deposit|Amount|${currencyPattern})\\s*(?:of|is|was|:)?\\s*(?:${currencyPattern})?\\s*([\\d,]+(?:\\.\\d{1,2})?)`, "i"),
     // Currency prefix: "EGP 450.50"
-    /(?:EGP|LE|جم|جنيه)\s*([\d,]+(?:\.\d{1,2})?)/i,
+    new RegExp(`(?:${currencyPattern})\\s*([\\d,]+(?:\\.\\d{1,2})?)`, "i"),
     // Currency suffix: "450.00 EGP"
-    /([\d,]+(?:\.\d{1,2})?)\s*(?:EGP|LE|جم|جنيه)/i,
+    new RegExp(`([\\d,]+(?:\\.\\d{1,2})?)\\s*(?:${currencyPattern})`, "i"),
   ];
 
   for (const regex of amountPatterns) {
@@ -106,16 +121,30 @@ function extractSmsAmount(text: string): number | undefined {
 }
 
 // ── Transaction Type extraction ─────────────────────────────────────────
-function extractSmsType(text: string): TransactionType {
-  // INCOME patterns — explicit incoming transfer
+function extractSmsType(text: string, config?: SmsDetectorConfig): TransactionType {
+  const activeConfig = config || getCachedConfig();
+  const lowerText = text.toLowerCase();
+
+  // 1. Check user configured income keywords first
+  for (const kw of activeConfig.incomeKeywords) {
+    if (kw && lowerText.includes(kw.toLowerCase())) {
+      return "income";
+    }
+  }
+
+  // 2. Check user configured expense keywords
+  for (const kw of activeConfig.expenseKeywords) {
+    if (kw && lowerText.includes(kw.toLowerCase())) {
+      return "expense";
+    }
+  }
+
+  // 3. Fallback explicit regex patterns
   if (/تم\s+إضافة\s+تحويل/i.test(text)) return "income";
   if (/تحويل\s+وارد/i.test(text)) return "income";
   if (/credited|deposit|received|income|salary|إيداع|وارد/i.test(text)) return "income";
 
-  // EXPENSE patterns — outgoing/debit
-  // "تم تنفيذ تحويل لحظي من حسابكم/بطاقتكم" = money leaving
   if (/تم\s+تنفيذ\s+تحويل/i.test(text)) return "expense";
-  // "تم خصم" = debit
   if (/تم\s+خصم/i.test(text)) return "expense";
 
   return "expense";
@@ -244,19 +273,22 @@ export function parseSmsTransaction(
   smsText: string,
   categories: { id: string; name: string }[] = [],
   budgets?: Record<string, Budget> | Budget[] | null,
-  defaultCategoryId?: string
+  defaultCategoryId?: string,
+  config?: SmsDetectorConfig
 ): ParsedTransaction | null {
   if (!smsText || !smsText.trim()) return null;
 
-  // Ignore ATM cash withdrawals (money moved from bank/card to cash, not an expense)
-  if (isAtmWithdrawal(smsText)) {
+  const activeConfig = config || getCachedConfig();
+
+  // Ignore ATM cash withdrawals if enabled
+  if (isAtmWithdrawal(smsText, activeConfig)) {
     return null;
   }
 
-  const amount = extractSmsAmount(smsText);
+  const amount = extractSmsAmount(smsText, activeConfig);
   if (amount === undefined || isNaN(amount) || amount <= 0) return null;
 
-  const type = extractSmsType(smsText);
+  const type = extractSmsType(smsText, activeConfig);
   const description = extractSmsMerchant(smsText, type);
 
   const { categoryId, categoryHint } = matchSmsCategory(

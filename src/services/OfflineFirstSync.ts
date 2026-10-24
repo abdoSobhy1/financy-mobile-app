@@ -5,11 +5,13 @@ import NetInfo from "@react-native-community/netinfo";
 import { getDeviceId } from "../utils/deviceId";
 import { addDeviceTracking } from "../utils/deviceTracking";
 import NotificationService from "./notificationService";
-import { store } from "../store";
-import { markSynced as markTransactionSynced } from "../store/slices/transactionsSlice";
-import { markSynced as markBudgetSynced } from "../store/slices/budgetsSlice";
-import { markSynced as markCategorySynced } from "../store/slices/categoriesSlice";
-import { markSynced as markDebtSynced } from "../store/slices/debtsSlice";
+
+export type SyncDispatchListener = (tableName: string, recordId: string) => void;
+let syncDispatchListener: SyncDispatchListener | null = null;
+
+export function registerSyncDispatchListener(listener: SyncDispatchListener | null): void {
+  syncDispatchListener = listener;
+}
 
 export interface SyncLogEntry {
   log_id?: number;
@@ -48,6 +50,7 @@ class OfflineFirstSync {
     debts: COLLECTIONS.DEBTS,
     debt_payments: COLLECTIONS.DEBT_PAYMENTS,
     settings: COLLECTIONS.SETTINGS,
+    wallets: COLLECTIONS.WALLETS,
   };
 
   /**
@@ -171,11 +174,10 @@ class OfflineFirstSync {
       // Read last sync attempt marker so we only process recent operations
       let since = 0;
       try {
-        const settingsRepo = new (
-          await import("../database/queries/settings")
-        ).SettingsRepository();
-        const settings = await settingsRepo.getSettings();
-        since = settings.syncUpdatedAt || 0;
+        const row = await database.getFirstAsync<{ sync_updated_at: number }>(
+          "SELECT sync_updated_at FROM settings WHERE id = 'default' LIMIT 1",
+        );
+        since = row?.sync_updated_at || 0;
         console.log(
           `🔁 Processing only sync_log entries created after ${new Date(since).toISOString()} (since=${since})`,
         );
@@ -363,24 +365,8 @@ class OfflineFirstSync {
     // Dispatch to Redux so in-memory state reflects the change immediately
     // without requiring a full data re-fetch from SQLite
     try {
-      switch (tableName) {
-        case "transactions":
-          store.dispatch(markTransactionSynced(recordId));
-          break;
-        case "budgets":
-          store.dispatch(markBudgetSynced(recordId));
-          break;
-        case "categories":
-          store.dispatch(markCategorySynced(recordId));
-          break;
-        case "debts":
-        case "debt_payments":
-          store.dispatch(markDebtSynced(recordId));
-          break;
-        default:
-          // bills and settings don't have dedicated Redux slices with syncStatus —
-          // they will reflect the updated value on the next natural fetch
-          break;
+      if (syncDispatchListener) {
+        syncDispatchListener(tableName, recordId);
       }
     } catch (dispatchError) {
       // Non-fatal: SQLite is already updated; Redux will catch up on next fetch
@@ -754,11 +740,11 @@ class OfflineFirstSync {
 
       // Pull data in dependency order to minimize foreign key constraint failures
       // Phase 1: Independent collections (no foreign key dependencies)
-      const independentCollections = ["categories", "settings"];
+      const independentCollections = ["categories", "settings", "wallets"];
       let totalPulled = 0;
 
       console.log(
-        "☁️ Phase 1: Syncing independent collections (categories, settings)",
+        "☁️ Phase 1: Syncing independent collections (categories, settings, wallets)",
       );
       for (const tableName of independentCollections) {
         const collectionName = this.TABLE_TO_COLLECTION[tableName];
@@ -775,13 +761,12 @@ class OfflineFirstSync {
       const dependentCollections = [
         "budgets",
         "transactions",
-        "bills",
         "debts",
         "debt_payments",
       ];
 
       console.log(
-        "☁️ Phase 2: Syncing dependent collections (budgets, transactions, bills, debts, debt_payments)",
+        "☁️ Phase 2: Syncing dependent collections (budgets, transactions, debts, debt_payments)",
       );
       for (const tableName of dependentCollections) {
         const collectionName = this.TABLE_TO_COLLECTION[tableName];
@@ -856,11 +841,10 @@ class OfflineFirstSync {
       };
 
       // Process collections in dependency order
-      const independentCollections = ["categories", "settings"];
+      const independentCollections = ["categories", "settings", "wallets"];
       const dependentCollections = [
         "budgets",
         "transactions",
-        "bills",
         "debts",
         "debt_payments",
       ];
@@ -870,7 +854,7 @@ class OfflineFirstSync {
       ];
 
       console.log(
-        "☁️ Phase 1: Syncing independent collections (categories, settings)",
+        "☁️ Phase 1: Syncing independent collections (categories, settings, wallets)",
       );
       for (const tableName of independentCollections) {
         const collectionName = this.TABLE_TO_COLLECTION[tableName];
@@ -891,7 +875,7 @@ class OfflineFirstSync {
       }
 
       console.log(
-        "☁️ Phase 2: Syncing dependent collections (budgets, transactions, bills, debts, debt_payments)",
+        "☁️ Phase 2: Syncing dependent collections (budgets, transactions, debts, debt_payments)",
       );
       for (const tableName of dependentCollections) {
         const collectionName = this.TABLE_TO_COLLECTION[tableName];
@@ -1086,10 +1070,6 @@ class OfflineFirstSync {
         return await database.getAllAsync(
           "SELECT * FROM budgets WHERE deleted = 0 OR deleted IS NULL",
         );
-      case "bills":
-        return await database.getAllAsync(
-          "SELECT * FROM bills WHERE deleted = 0 OR deleted IS NULL",
-        );
       case "debts":
         return await database.getAllAsync(
           "SELECT * FROM debts WHERE deleted = 0 OR deleted IS NULL",
@@ -1101,6 +1081,10 @@ class OfflineFirstSync {
       case "settings":
         return await database.getAllAsync(
           "SELECT * FROM settings WHERE deleted = 0 OR deleted IS NULL",
+        );
+      case "wallets":
+        return await database.getAllAsync(
+          "SELECT * FROM wallets WHERE deleted = 0 OR deleted IS NULL",
         );
       default:
         return [];
@@ -1165,26 +1149,6 @@ class OfflineFirstSync {
             localData.periodStart,
             localData.categoryId,
             localData.resetDay,
-            localData.updatedAt,
-            localData.id,
-          ],
-        );
-        break;
-
-      case "bills":
-        await database.runAsync(
-          `UPDATE bills SET 
-           name = ?, amount = ?, due_date = ?, category_id = ?, budget_id = ?, is_recurring = ?, recurring = ?, paid = ?, updated_at = ?
-           WHERE id = ?`,
-          [
-            localData.name,
-            localData.amount,
-            localData.dueDate,
-            localData.categoryId,
-            localData.budgetId,
-            localData.isRecurring,
-            localData.recurring,
-            localData.paid,
             localData.updatedAt,
             localData.id,
           ],
@@ -1283,6 +1247,24 @@ class OfflineFirstSync {
           );
         }
         break;
+
+      case "wallets":
+        await database.runAsync(
+          `UPDATE wallets SET name = ?, type = ?, icon = ?, color = ?, initial_balance = ?, is_secret = ?, archived = ?, updated_at = ?, sync_updated_at = ? WHERE id = ?`,
+          [
+            localData.name,
+            localData.type,
+            localData.icon || null,
+            localData.color || null,
+            localData.initialBalance ?? localData.initial_balance ?? 0,
+            localData.isSecret || localData.is_secret ? 1 : 0,
+            localData.archived ? 1 : 0,
+            localData.updatedAt || localData.updated_at || Date.now(),
+            localData.updatedAt || localData.updated_at || Date.now(),
+            localData.id,
+          ],
+        );
+        break;
     }
   }
 
@@ -1333,13 +1315,14 @@ class OfflineFirstSync {
       };
 
       // Read last sync attempt marker so we only push local items updated since then
-      const settingsRepo = new (
-        await import("../database/queries/settings")
-      ).SettingsRepository();
       let since = 0;
       try {
-        const settings = await settingsRepo.getSettings();
-        since = settings.syncUpdatedAt || 0;
+        await this.db.ensureInitialized();
+        const database = this.db.getDatabase();
+        const row = await database.getFirstAsync<{ sync_updated_at: number }>(
+          "SELECT sync_updated_at FROM settings WHERE id = 'default' LIMIT 1",
+        );
+        since = row?.sync_updated_at || 0;
         console.log(
           `⬆️ Pushing only local items updated after ${new Date(since).toISOString()}`,
         );
@@ -1356,7 +1339,6 @@ class OfflineFirstSync {
         "categories",
         "budgets",
         "transactions",
-        "bills",
         "debts",
         "debt_payments",
         "settings",
@@ -1811,14 +1793,16 @@ class OfflineFirstSync {
     switch (tableName) {
       case "transactions":
         await database.runAsync(
-          `INSERT OR REPLACE INTO transactions (id, amount, type, category_id, budget_id, description, date, note, updated_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          `INSERT OR REPLACE INTO transactions (id, amount, type, category_id, budget_id, account_id, to_account_id, description, date, note, updated_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
           [
             localData.id,
             localData.amount,
             localData.type,
-            localData.categoryId,
-            localData.budgetId,
+            localData.categoryId || null,
+            localData.budgetId || null,
+            localData.accountId || "default_cash",
+            localData.toAccountId || null,
             localData.description,
             localData.date,
             localData.note,
@@ -1854,25 +1838,6 @@ class OfflineFirstSync {
             localData.periodStart,
             localData.categoryId,
             localData.resetDay,
-            localData.updatedAt,
-          ],
-        );
-        break;
-
-      case "bills":
-        await database.runAsync(
-          `INSERT OR REPLACE INTO bills (id, name, amount, due_date, category_id, budget_id, is_recurring, recurring, paid, updated_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-          [
-            localData.id,
-            localData.name,
-            localData.amount,
-            localData.dueDate,
-            localData.categoryId,
-            localData.budgetId,
-            localData.isRecurring,
-            localData.recurring,
-            localData.paid,
             localData.updatedAt,
           ],
         );
@@ -1960,6 +1925,28 @@ class OfflineFirstSync {
           );
         }
         break;
+
+      case "wallets":
+        await database.runAsync(
+          `INSERT OR REPLACE INTO wallets (id, name, type, icon, color, initial_balance, is_secret, archived, created_at, updated_at, sync_updated_at, deleted, sync_status)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          [
+            localData.id,
+            localData.name,
+            localData.type,
+            localData.icon || null,
+            localData.color || null,
+            localData.initialBalance ?? localData.initial_balance ?? 0,
+            localData.isSecret || localData.is_secret ? 1 : 0,
+            localData.archived ? 1 : 0,
+            localData.createdAt || new Date().toISOString(),
+            localData.updatedAt || localData.updated_at || Date.now(),
+            localData.updatedAt || localData.updated_at || Date.now(),
+            localData.deleted ? 1 : 0,
+            "synced",
+          ],
+        );
+        break;
     }
   }
 
@@ -1999,8 +1986,10 @@ class OfflineFirstSync {
           ...baseFields,
           amount: document.amount,
           description: document.description || document.note || "",
-          categoryId: document.category_id || document.categoryId,
+          categoryId: document.category_id || document.categoryId || null,
           budgetId: document.budget_id || document.budgetId || null,
+          accountId: document.account_id || document.accountId || "default_cash",
+          toAccountId: document.to_account_id || document.toAccountId || null,
           type: document.type,
           date: document.date,
           note: document.note || null,
@@ -2025,23 +2014,6 @@ class OfflineFirstSync {
           amount: document.amount,
           period: document.period || "monthly",
           name: document.name || "",
-        };
-
-      case "bills":
-        return {
-          ...baseFields,
-          name: document.name,
-          amount: document.amount,
-          categoryId: document.category_id || document.categoryId || null,
-          budgetId: document.budget_id || document.budgetId || null,
-          dueDay: document.due_day || document.dueDay,
-          isRecurring:
-            document.is_recurring !== undefined
-              ? Boolean(document.is_recurring)
-              : document.isRecurring !== undefined
-                ? document.isRecurring
-                : true,
-          note: document.note || null,
         };
 
       case "debts":
@@ -2076,6 +2048,27 @@ class OfflineFirstSync {
           principal: document.principal || 0,
           interest: document.interest || 0,
           note: document.note || null,
+        };
+
+      case "wallets":
+        return {
+          ...baseFields,
+          name: document.name || "Wallet",
+          type: document.type || "cash",
+          icon: document.icon || "wallet-outline",
+          color: document.color || "teal",
+          initialBalance:
+            document.initial_balance !== undefined
+              ? document.initial_balance
+              : document.initialBalance || 0,
+          isSecret:
+            document.is_secret !== undefined
+              ? Boolean(document.is_secret)
+              : Boolean(document.isSecret),
+          archived:
+            document.archived !== undefined
+              ? Boolean(document.archived)
+              : Boolean(document.archived),
         };
 
       default:
@@ -2138,6 +2131,8 @@ class OfflineFirstSync {
           type: ensureValue(getValue("type"), "expense"),
           categoryId: getValue("categoryId", "category_id") || null, // Allow null since no default categories
           budgetId: getValue("budgetId", "budget_id") || null,
+          accountId: getValue("accountId", "account_id") || "default_cash",
+          toAccountId: getValue("toAccountId", "to_account_id") || null,
           description: ensureValue(
             getValue("description"),
             "Imported transaction",
@@ -2167,22 +2162,6 @@ class OfflineFirstSync {
           periodStart: getValue("periodStart", "period_start") || null,
           categoryId: getValue("categoryId", "category_id") || null,
           resetDay: ensureValue(getValue("resetDay", "reset_day"), 1), // Required NOT NULL field
-        };
-
-      case "bills":
-        return {
-          ...baseFields,
-          name: ensureValue(getValue("name"), "Imported Bill"),
-          amount: Math.max(ensureValue(getValue("amount"), 1), 0.01), // Must be > 0 due to CHECK constraint
-          dueDate: ensureValue(
-            getValue("dueDate", "due_date"),
-            new Date().toISOString(),
-          ),
-          categoryId: getValue("categoryId", "category_id") || null, // Allow null since no default categories
-          budgetId: getValue("budgetId", "budget_id") || null,
-          isRecurring: getValue("isRecurring", "is_recurring") ? 1 : 0,
-          recurring: getValue("recurring") ? 1 : 0,
-          paid: getValue("paid") ? 1 : 0,
         };
 
       case "debts":
@@ -2278,6 +2257,19 @@ class OfflineFirstSync {
             ),
           };
         }
+
+      case "wallets":
+        return {
+          ...baseFields,
+          name: ensureValue(getValue("name"), "Wallet"),
+          type: ensureValue(getValue("type"), "cash"),
+          icon: getValue("icon") || "wallet-outline",
+          color: getValue("color") || "teal",
+          initialBalance:
+            Number(getValue("initialBalance", "initial_balance")) || 0,
+          isSecret: Boolean(getValue("isSecret", "is_secret")),
+          archived: Boolean(getValue("archived")),
+        };
 
       default:
         return document;

@@ -36,7 +36,7 @@ export const SyncProvider: React.FC<SyncProviderProps> = ({ children }) => {
         try {
           if (notification && typeof notification === "object" && notification.message && notification.type) {
             showToast(notification.message, notification.type);
-          } else {
+          } else if (notification != null) {
             console.warn("Invalid notification object:", notification);
           }
         } catch (toastError) {

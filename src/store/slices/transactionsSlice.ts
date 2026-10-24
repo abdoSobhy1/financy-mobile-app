@@ -71,7 +71,6 @@ export const addTransaction = createAsyncThunk(
       budgetId: transactionData.budgetId,
       accountId: transactionData.accountId || "default_cash",
       receiptUri: transactionData.receiptUri,
-      recurringId: transactionData.recurringId,
       description: transactionData.description,
       date: transactionData.date.toISOString(),
       note: transactionData.note,

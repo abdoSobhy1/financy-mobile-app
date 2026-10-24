@@ -59,11 +59,14 @@ const FIELD_MAPPINGS: Record<string, string> = {
   category_id: "categoryId",
   budget_id: "budgetId",
   debt_id: "debtId",
+  account_id: "accountId",
+  to_account_id: "toAccountId",
 
   // Standardize boolean fields
   is_default: "isDefault",
   is_recurring: "isRecurring",
   firebase_sync: "firebaseSync",
+  is_secret: "isSecret",
 
   // Standardize numeric fields
   billing_period_start_day: "billingPeriodStartDay",
@@ -72,6 +75,7 @@ const FIELD_MAPPINGS: Record<string, string> = {
   minimum_payment: "minimumPayment",
   interest_rate: "interestRate",
   due_day: "dueDay",
+  initial_balance: "initialBalance",
 };
 
 /**
@@ -100,6 +104,8 @@ const getValidFields = (collectionName: CollectionName): Set<string> => {
         "type",
         "categoryId",
         "budgetId",
+        "accountId",
+        "toAccountId",
         "description",
         "date",
         "note",
@@ -109,6 +115,8 @@ const getValidFields = (collectionName: CollectionName): Set<string> => {
         // Legacy snake_case fields (will be converted)
         "category_id",
         "budget_id",
+        "account_id",
+        "to_account_id",
         "linked_bill_id",
         "linked_debt_payment_id",
         "duplicated_at",
@@ -173,6 +181,21 @@ const getValidFields = (collectionName: CollectionName): Set<string> => {
         "debt_id",
         "payment_date",
         "linked_transaction_id",
+      ]);
+
+    case "wallets":
+      return new Set([
+        ...commonFields,
+        "name",
+        "type",
+        "icon",
+        "color",
+        "initialBalance",
+        "isSecret",
+        "archived",
+        // Legacy snake_case fields
+        "initial_balance",
+        "is_secret",
       ]);
 
     default:

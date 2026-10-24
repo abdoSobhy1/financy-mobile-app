@@ -13,6 +13,7 @@ import {
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useAppTheme } from "../ui/ThemeProvider";
+import { DEFAULT_ICONS } from "./IconPicker";
 
 // ─── Data ─────────────────────────────────────────────────────────────────────
 
@@ -38,41 +39,7 @@ const PREDEFINED_COLORS = [
   "#10B981",
 ];
 
-// Curated subset of Ionicons that make sense for finance categories
-const CATEGORY_ICONS: string[] = [
-  "shapes-outline",
-  "bag-handle-outline",
-  "airplane-outline",
-  "medkit-outline",
-  "paw-outline",
-  "fast-food-outline",
-  "home-outline",
-  "car-outline",
-  "flash-outline",
-  "fitness-outline",
-  "game-controller-outline",
-  "book-outline",
-  "restaurant-outline",
-  "cart-outline",
-  "cafe-outline",
-  "bus-outline",
-  "train-outline",
-  "bicycle-outline",
-  "medical-outline",
-  "school-outline",
-  "shirt-outline",
-  "cash-outline",
-  "card-outline",
-  "wallet-outline",
-  "business-outline",
-  "construct-outline",
-  "cut-outline",
-  "flower-outline",
-  "gift-outline",
-  "hardware-chip-outline",
-  "headset-outline",
-  "heart-outline",
-];
+const CATEGORY_ICONS = DEFAULT_ICONS;
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
 
@@ -203,7 +170,7 @@ export const CategoryCreationModal: React.FC<CategoryCreationModalProps> = ({
             <ScrollView
               horizontal
               showsHorizontalScrollIndicator={false}
-              contentContainerStyle={styles.scrollContent}
+              contentContainerStyle={styles.iconScrollContent}
             >
               {CATEGORY_ICONS.map((ic) => {
                 const isSelected = icon === ic;
@@ -329,6 +296,14 @@ const styles = StyleSheet.create({
   scrollContent: {
     paddingHorizontal: 24,
     gap: 12,
+  },
+  iconScrollContent: {
+    paddingHorizontal: 24,
+    gap: 12,
+    flexDirection: "column",
+    flexWrap: "wrap",
+    height: 200,
+    alignContent: "flex-start",
   },
   iconCircle: {
     width: 52,

@@ -22,6 +22,7 @@ import * as Notifications from "expo-notifications";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { ParsedTransaction, Budget } from "../types";
 import { isBankSender, parseSmsTransaction } from "./smsParser";
+import { getSmsConfig } from "./smsConfigService";
 
 // AsyncStorage key prefix — each notification gets its own entry
 export const SMS_TX_KEY_PREFIX = "sms_tx_";
@@ -130,75 +131,8 @@ class SmsService {
     categories: { id: string; name: string }[] = [],
     budgets?: Record<string, Budget> | Budget[] | null
   ): void {
-    if (Platform.OS !== "android" || this.isListening) return;
-    this.isListening = true;
-
-    this.subscription = DeviceEventEmitter.addListener(
-      "onSMSReceived",
-      async (message: SmsMessage) => {
-        try {
-          if (!message?.originatingAddress || !message?.body) return;
-
-          // Check feature toggle
-          const enabled = await getSmsDetectionEnabled();
-          if (!enabled) return;
-
-          // Filter non-bank senders
-          if (!isBankSender(message.originatingAddress)) return;
-
-          console.log(
-            `💬 [SmsService] Bank SMS from: ${message.originatingAddress}`
-          );
-
-          const parsed = parseSmsTransaction(
-            message.body,
-            categories,
-            budgets
-          );
-
-          if (!parsed) return;
-
-          console.log(
-            "✅ [SmsService] Parsed:",
-            parsed.type,
-            parsed.amount,
-            parsed.description
-          );
-
-          // Schedule notification — get back the notif identifier
-          const notifId = await Notifications.scheduleNotificationAsync({
-            content: {
-              title:
-                parsed.type === "income"
-                  ? "💰 Income Detected"
-                  : "💳 Expense Detected",
-              body: `${parsed.type === "income" ? "+" : "-"}${parsed.amount} EGP — ${parsed.description}. Tap to log it.`,
-              data: {
-                type: "sms-transaction",
-                // The actual tx is stored in AsyncStorage; we pass the key
-                smsNotifId: "pending", // will be replaced below
-              },
-              sound: true,
-            },
-            trigger: null, // immediate
-          });
-
-          // Store the transaction keyed by the notification identifier
-          await storeSmsTransaction(notifId, parsed);
-
-          // Update the data payload so the tap handler can look it up
-          // (expo-notifications doesn't let us update after scheduling,
-          //  so we write the notifId into AsyncStorage as well as a
-          //  'latest' pointer for convenience)
-          await AsyncStorage.setItem(
-            `${SMS_TX_KEY_PREFIX}${notifId}`,
-            JSON.stringify({ ...parsed, _notifId: notifId })
-          );
-        } catch (error) {
-          console.error("[SmsService] Error processing SMS:", error);
-        }
-      }
-    );
+    // Native Headless JS task handles SMS parsing now.
+    // No foreground JS listener needed.
   }
 
   public stopListening(): void {
@@ -222,7 +156,9 @@ class SmsService {
       return { success: false, reason: "Empty SMS message or sender" };
     }
 
-    if (!isBankSender(message.originatingAddress)) {
+    const config = await getSmsConfig();
+
+    if (!isBankSender(message.originatingAddress, config)) {
       return {
         success: false,
         reason: `Sender "${message.originatingAddress}" is not a recognized bank`,
@@ -232,7 +168,9 @@ class SmsService {
     const parsed = parseSmsTransaction(
       message.body,
       categories,
-      budgets
+      budgets,
+      undefined,
+      config
     );
 
     if (!parsed) {

@@ -14,6 +14,7 @@ import { LinearGradient } from "expo-linear-gradient";
 import { useSelector } from "react-redux";
 import { RootState } from "../../store";
 import { useAppTheme } from "../ui/ThemeProvider";
+import { WalletAccount } from "../../types";
 
 export type FilterPeriod =
   | "all"
@@ -29,9 +30,11 @@ export type FilterType =
   | "all"
   | "income"
   | "expense"
+  | "transfer"
   | "All"
   | "Income"
-  | "Expense";
+  | "Expense"
+  | "Transfer";
 
 // ─── Filter Modal ──────────────────────────────────────────────────────────────
 
@@ -41,10 +44,13 @@ export interface TransactionFilterModalProps {
   filterPeriod: FilterPeriod;
   selectedCategoryIds?: Set<string>;
   selectedBudgetIds?: Set<string>;
+  selectedWalletIds?: Set<string>;
+  wallets?: WalletAccount[];
   onFilterTypeChange: (type: FilterType) => void;
   onFilterPeriodChange: (period: FilterPeriod) => void;
   onCategoryToggle?: (id: string) => void;
   onBudgetToggle?: (id: string) => void;
+  onWalletToggle?: (id: string) => void;
   onOpenCustomDate?: () => void;
   onReset?: () => void;
   onApply?: () => void;
@@ -59,10 +65,13 @@ export const TransactionFilterModal: React.FC<TransactionFilterModalProps> = ({
   filterPeriod,
   selectedCategoryIds = new Set(),
   selectedBudgetIds = new Set(),
+  selectedWalletIds = new Set(),
+  wallets = [],
   onFilterTypeChange,
   onFilterPeriodChange,
   onCategoryToggle,
   onBudgetToggle,
+  onWalletToggle,
   onOpenCustomDate,
   onReset,
   onApply,
@@ -220,7 +229,7 @@ export const TransactionFilterModal: React.FC<TransactionFilterModalProps> = ({
               TRANSACTION TYPE
             </Text>
             <View style={styles.chipRow}>
-              {(["All", "Income", "Expense"] as const).map((t) => {
+              {(["All", "Income", "Expense", "Transfer"] as const).map((t) => {
                 const isActive =
                   filterType === t ||
                   filterType.toLowerCase() === t.toLowerCase();
@@ -236,7 +245,7 @@ export const TransactionFilterModal: React.FC<TransactionFilterModalProps> = ({
                         borderColor: isActive
                           ? colors.primary
                           : "transparent",
-                        paddingHorizontal: 20,
+                        paddingHorizontal: 16,
                         flexDirection: "row",
                         alignItems: "center",
                         gap: 6,
@@ -268,6 +277,65 @@ export const TransactionFilterModal: React.FC<TransactionFilterModalProps> = ({
               })}
             </View>
 
+            {/* WALLETS & ACCOUNTS */}
+            {onWalletToggle && wallets.length > 0 && (
+              <>
+                <Text
+                  style={[
+                    styles.sectionLabel,
+                    { color: colors.onSurfaceVariant, marginTop: 28 },
+                  ]}>
+                  WALLETS & ACCOUNTS
+                </Text>
+                <View style={styles.cardGrid}>
+                  {wallets.map((w) => {
+                    const isSelected = selectedWalletIds.has(w.id);
+                    return (
+                      <TouchableOpacity
+                        key={w.id}
+                        style={[
+                          styles.card,
+                          {
+                            backgroundColor: isSelected
+                              ? colors.primaryContainer
+                              : colors.surfaceVariant,
+                            borderColor: isSelected
+                              ? colors.primary
+                              : "transparent",
+                            borderWidth: 1,
+                          },
+                        ]}
+                        onPress={() => onWalletToggle(w.id)}
+                        activeOpacity={0.8}>
+                        <Ionicons
+                          name={(w.icon || "wallet-outline") as any}
+                          size={24}
+                          color={
+                            isSelected
+                              ? colors.onPrimaryContainer
+                              : colors.primary
+                          }
+                        />
+                        <Text
+                          style={[
+                            styles.cardText,
+                            {
+                              color: isSelected
+                                ? colors.onPrimaryContainer
+                                : colors.onSurface,
+                              fontWeight: isSelected ? "700" : "600",
+                            },
+                          ]}
+                          numberOfLines={2}>
+                          {w.name}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+              </>
+            )}
+
             {/* BUDGETS */}
             {onBudgetToggle && allBudgetsList.length > 0 && (
               <>
@@ -279,6 +347,45 @@ export const TransactionFilterModal: React.FC<TransactionFilterModalProps> = ({
                   BUDGETS
                 </Text>
                 <View style={styles.cardGrid}>
+                  <TouchableOpacity
+                    key="unbudgeted"
+                    style={[
+                      styles.card,
+                      {
+                        backgroundColor: selectedBudgetIds.has("unbudgeted")
+                          ? colors.primaryContainer
+                          : colors.surfaceVariant,
+                        borderColor: selectedBudgetIds.has("unbudgeted")
+                          ? colors.primary
+                          : "transparent",
+                        borderWidth: 1,
+                      },
+                    ]}
+                    onPress={() => onBudgetToggle("unbudgeted")}
+                    activeOpacity={0.8}>
+                    <Ionicons
+                      name="wallet-outline"
+                      size={24}
+                      color={
+                        selectedBudgetIds.has("unbudgeted")
+                          ? colors.onPrimaryContainer
+                          : colors.primary
+                      }
+                    />
+                    <Text
+                      style={[
+                        styles.cardText,
+                        {
+                          color: selectedBudgetIds.has("unbudgeted")
+                            ? colors.onPrimaryContainer
+                            : colors.onSurface,
+                          fontWeight: selectedBudgetIds.has("unbudgeted") ? "700" : "600",
+                        },
+                      ]}
+                      numberOfLines={2}>
+                      Unbudgeted
+                    </Text>
+                  </TouchableOpacity>
                   {allBudgetsList.map((b) => {
                     const isSelected = selectedBudgetIds.has(b.id);
                     return (

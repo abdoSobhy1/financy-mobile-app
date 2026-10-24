@@ -37,6 +37,13 @@ type DataChangeCallback = (
   docId: string,
 ) => void;
 
+export type DeltaSyncListener = (timestamp: number) => void;
+let deltaSyncListener: DeltaSyncListener | null = null;
+
+export function registerDeltaSyncListener(listener: DeltaSyncListener | null): void {
+  deltaSyncListener = listener;
+}
+
 export class SyncService {
   private static instance: SyncService;
   private db?: Firestore;
@@ -1279,6 +1286,11 @@ export class SyncService {
               dataWithId.linked_debt_payment_id,
             categoryId: dataWithId.categoryId || dataWithId.category_id,
             budgetId: dataWithId.budgetId || dataWithId.budget_id,
+            accountId:
+              dataWithId.accountId ||
+              dataWithId.account_id ||
+              "default_cash",
+            toAccountId: dataWithId.toAccountId || dataWithId.to_account_id || null,
           };
 
           console.log(
@@ -1350,6 +1362,29 @@ export class SyncService {
             });
           }
           console.log(`✅ Category insertion completed successfully`);
+          break;
+
+        case "wallets":
+          console.log(`👛 Processing wallet for local insertion:`);
+          const walletRepo = new (
+            await import("../database/queries/wallets")
+          ).WalletRepository();
+          await walletRepo.createWallet(
+            {
+              name: dataWithId.name || "Wallet",
+              type: dataWithId.type || "cash",
+              icon: dataWithId.icon,
+              color: dataWithId.color,
+              initialBalance: Number(dataWithId.initialBalance) || 0,
+              isSecret: Boolean(dataWithId.isSecret),
+              archived: Boolean(dataWithId.archived),
+            },
+            {
+              skipSync: true,
+              useProvidedId: dataWithId.id,
+            },
+          );
+          console.log(`✅ Wallet insertion completed successfully`);
           break;
 
         case "debts":
@@ -1488,6 +1523,8 @@ export class SyncService {
               cleanData.linkedDebtPaymentId || cleanData.linked_debt_payment_id,
             categoryId: cleanData.categoryId || cleanData.category_id,
             budgetId: cleanData.budgetId || cleanData.budget_id,
+            accountId: cleanData.accountId || cleanData.account_id,
+            toAccountId: cleanData.toAccountId || cleanData.to_account_id || null,
           };
 
           console.log(
@@ -1565,6 +1602,15 @@ export class SyncService {
           }
           break;
 
+        case "wallets":
+          const walletUpdateRepo = new (
+            await import("../database/queries/wallets")
+          ).WalletRepository();
+          await walletUpdateRepo.updateWallet(doc.id, doc.data as any, {
+            skipSync: true,
+          });
+          break;
+
         default:
           console.warn(`Unknown collection for update: ${collectionName}`);
       }
@@ -1629,6 +1675,13 @@ export class SyncService {
           await debtPaymentRepo.deletePayment(docId, { skipSync: true });
           break;
 
+        case "wallets":
+          const walletDeleteRepo = new (
+            await import("../database/queries/wallets")
+          ).WalletRepository();
+          await walletDeleteRepo.deleteWallet(docId, { skipSync: true });
+          break;
+
         default:
           console.warn(`Unknown collection for delete: ${collectionName}`);
           return;
@@ -1690,6 +1743,7 @@ export class SyncService {
       [COLLECTIONS.DEBTS]: "debts",
       [COLLECTIONS.DEBT_PAYMENTS]: "debt_payments",
       [COLLECTIONS.SETTINGS]: "settings",
+      [COLLECTIONS.WALLETS]: "wallets",
     };
 
     return mapping[collectionName];
@@ -1952,11 +2006,9 @@ export class SyncService {
 
       // Update Redux slice if available
       try {
-        // Lazy import to avoid circular deps at module load
-        const storeModule = await import("../store/index");
-        const { store } = storeModule as any;
-        const { setLastSync } = await import("../store/slices/syncSlice");
-        store.dispatch(setLastSync(now));
+        if (deltaSyncListener) {
+          deltaSyncListener(now);
+        }
       } catch (reduxErr) {
         // Not critical - just log
         console.warn("Could not dispatch lastSync to Redux store:", reduxErr);

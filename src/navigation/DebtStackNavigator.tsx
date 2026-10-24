@@ -6,22 +6,9 @@ import AddPaymentScreen from "../screens/AddPaymentScreen";
 import DebtPaymentsScreen from "../screens/DebtPaymentsScreen";
 import { UI } from "../constants";
 import { useAppTheme } from "../components/ui/ThemeProvider";
+import { DebtStackParamList } from "../types";
 
-
-export type DebtStackParamList = {
-  DebtsList: undefined;
-  DebtForm: { debtId?: string }; // Unified form for both add and edit
-  AddPayment: {
-    debtId: string;
-    debtName: string;
-    currentBalance: number;
-    minimumPayment?: number;
-    interestRate?: number;
-  };
-  PaymentHistory: { debtId: string };
-  DebtPayments: { debtId: string; debtName: string };
-  EditPayment: { debtId: string; debtName: string; payment: any };
-};
+export type { DebtStackParamList };
 
 const Stack = createStackNavigator<DebtStackParamList>();
 

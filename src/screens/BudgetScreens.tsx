@@ -12,7 +12,7 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useAppTheme } from "../components/ui/ThemeProvider";
 import { Ionicons } from "@expo/vector-icons";
-import { useTabBarHeight, IconChip, Screen, AppHeader } from "../components/ui";
+import { useTabBarHeight, IconChip, Screen, AppHeader, Shimmer } from "../components/ui";
 import { useDispatch, useSelector } from "react-redux";
 import { useNavigation, useRoute, RouteProp } from "@react-navigation/native";
 import { StackNavigationProp } from "@react-navigation/stack";
@@ -116,69 +116,180 @@ export const BudgetListScreen: React.FC = () => {
   };
 
   const totalBudget = ids.reduce((sum, id) => sum + (budgets[id]?.amount || 0), 0);
-  let totalSpent = 0;
-  if (progressLoaded) {
-    totalSpent = ids.reduce((sum, id) => {
-      const p = budgetProgressMap[id];
-      return sum + (p ? p.spent : 0);
-    }, 0);
-  } else {
-    const allTxs = Object.values(transactions).filter((t) => !t.deleted && t.type === "expense");
-    totalSpent = ids.reduce((sum, id) => {
-      const budgetTxs = allTxs.filter((t) => t.budgetId === id);
-      const bSpent = budgetTxs.reduce((s, t) => s + t.amount, 0);
-      return sum + bSpent;
-    }, 0);
-  }
+  const totalSpent = progressLoaded
+    ? ids.reduce((sum, id) => {
+        const p = budgetProgressMap[id];
+        return sum + (p ? p.spent : 0);
+      }, 0)
+    : 0;
 
   const totalRemaining = totalBudget - totalSpent;
   const totalProgressPercentage = totalBudget > 0 ? percentage(totalSpent, totalBudget) : 0;
   const isTotalOver = totalSpent > totalBudget;
 
-  const renderHeader = () => (
-    <View style={{ marginBottom: spacing.lg }}>
-      <View style={[styles.heroCard, { backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.outlineVariant }]}>
-        <View style={styles.heroRow}>
-          <View>
-            <Text style={[typography.label, { color: colors.onSurfaceVariant, textTransform: "uppercase" }]}>Total Monthly Budget</Text>
-            <Text style={[typography.h1, { color: colors.onSurface, fontSize: 32, marginTop: 4 }]}>
-              {formatCurrency(totalBudget)}
-            </Text>
-          </View>
-          <View style={{ alignItems: "flex-end" }}>
-            <Text style={[typography.label, { color: colors.onSurfaceVariant, textTransform: "uppercase" }]}>Remaining</Text>
-            <Text style={[typography.h2, { color: isTotalOver ? colors.error : colors.primary, fontSize: 20, marginTop: 4 }]}>
-              {formatCurrency(totalRemaining)}
-            </Text>
-          </View>
-        </View>
-
-        {/* Total Progress Bar */}
-        <View style={[styles.progressBarContainer, { backgroundColor: colors.surfaceVariant, marginVertical: 16 }]}>
+  const renderHeader = () => {
+    if (!progressLoaded) {
+      return (
+        <View style={{ marginBottom: spacing.lg }}>
           <View
             style={[
-              styles.progressBarFill,
+              styles.heroCard,
               {
-                backgroundColor: isTotalOver ? colors.error : colors.primary,
-                width: `${Math.min(100, Math.max(0, totalProgressPercentage))}%`,
+                backgroundColor: colors.surface,
+                borderWidth: 1,
+                borderColor: colors.outlineVariant,
               },
             ]}
-          />
-        </View>
+          >
+            <View style={styles.heroRow}>
+              <View>
+                <Text
+                  style={[
+                    typography.label,
+                    { color: colors.onSurfaceVariant, textTransform: "uppercase" },
+                  ]}
+                >
+                  Total Monthly Budget
+                </Text>
+                <View style={{ marginTop: 8 }}>
+                  <Shimmer width={150} height={32} borderRadius={6} />
+                </View>
+              </View>
+              <View style={{ alignItems: "flex-end" }}>
+                <Text
+                  style={[
+                    typography.label,
+                    { color: colors.onSurfaceVariant, textTransform: "uppercase" },
+                  ]}
+                >
+                  Remaining
+                </Text>
+                <View style={{ marginTop: 8 }}>
+                  <Shimmer width={100} height={24} borderRadius={6} />
+                </View>
+              </View>
+            </View>
 
-        <View style={styles.heroRow}>
-          <Text style={[typography.label, { color: colors.onSurfaceVariant }]}>{formatCurrency(totalSpent)} spent</Text>
-          <Text style={[typography.label, { color: colors.onSurfaceVariant }]}>{totalProgressPercentage.toFixed(0)}% used</Text>
+            {/* Total Progress Bar Shimmer */}
+            <View style={{ marginVertical: 18 }}>
+              <Shimmer height={8} borderRadius={4} width="100%" />
+            </View>
+
+            <View style={styles.heroRow}>
+              <Shimmer width={90} height={14} borderRadius={4} />
+              <Shimmer width={60} height={14} borderRadius={4} />
+            </View>
+          </View>
+        </View>
+      );
+    }
+
+    return (
+      <View style={{ marginBottom: spacing.lg }}>
+        <View
+          style={[
+            styles.heroCard,
+            {
+              backgroundColor: colors.surface,
+              borderWidth: 1,
+              borderColor: colors.outlineVariant,
+            },
+          ]}
+        >
+          <View style={styles.heroRow}>
+            <View>
+              <Text
+                style={[
+                  typography.label,
+                  { color: colors.onSurfaceVariant, textTransform: "uppercase" },
+                ]}
+              >
+                Total Monthly Budget
+              </Text>
+              <Text
+                style={[
+                  typography.h1,
+                  { color: colors.onSurface, fontSize: 32, marginTop: 4 },
+                ]}
+              >
+                {formatCurrency(totalBudget)}
+              </Text>
+            </View>
+            <View style={{ alignItems: "flex-end" }}>
+              <Text
+                style={[
+                  typography.label,
+                  { color: colors.onSurfaceVariant, textTransform: "uppercase" },
+                ]}
+              >
+                Remaining
+              </Text>
+              <Text
+                style={[
+                  typography.h2,
+                  {
+                    color: isTotalOver ? colors.error : colors.primary,
+                    fontSize: 20,
+                    marginTop: 4,
+                  },
+                ]}
+              >
+                {formatCurrency(totalRemaining)}
+              </Text>
+            </View>
+          </View>
+
+          {/* Total Progress Bar */}
+          <View
+            style={[
+              styles.progressBarContainer,
+              { backgroundColor: colors.surfaceVariant, marginVertical: 16 },
+            ]}
+          >
+            <View
+              style={[
+                styles.progressBarFill,
+                {
+                  backgroundColor: isTotalOver ? colors.error : colors.primary,
+                  width: `${Math.min(100, Math.max(0, totalProgressPercentage))}%`,
+                },
+              ]}
+            />
+          </View>
+
+          <View style={styles.heroRow}>
+            <Text style={[typography.label, { color: colors.onSurfaceVariant }]}>
+              {formatCurrency(totalSpent)} spent
+            </Text>
+            <Text style={[typography.label, { color: colors.onSurfaceVariant }]}>
+              {totalProgressPercentage.toFixed(0)}% used
+            </Text>
+          </View>
         </View>
       </View>
-    </View>
-  );
+    );
+  };
 
   const renderSkeletonCard = () => (
-    <View style={[styles.budgetCard, { backgroundColor: colors.surface }]}>
-      <View style={{ height: 24, backgroundColor: colors.surfaceVariant, width: 120, borderRadius: 4, marginBottom: 8 }} />
-      <View style={{ height: 16, backgroundColor: colors.surfaceVariant, width: 80, borderRadius: 4, marginBottom: 16 }} />
-      <View style={[styles.progressBarContainer, { backgroundColor: colors.surfaceVariant }]} />
+    <View
+      style={[
+        styles.budgetCard,
+        {
+          backgroundColor: colors.surface,
+          borderColor: colors.outlineVariant,
+          borderWidth: 1,
+        },
+      ]}
+    >
+      <View style={{ flexDirection: "row", alignItems: "center", marginBottom: 16 }}>
+        <Shimmer width={40} height={40} borderRadius={20} />
+        <View style={{ marginLeft: 12, flex: 1, gap: 6 }}>
+          <Shimmer width={130} height={18} borderRadius={4} />
+          <Shimmer width={180} height={12} borderRadius={4} />
+        </View>
+        <Shimmer width={70} height={18} borderRadius={4} />
+      </View>
+      <Shimmer height={8} borderRadius={4} width="100%" />
     </View>
   );
 
@@ -416,7 +527,7 @@ export const BudgetDetailsScreen: React.FC = () => {
   };
 
   const renderTransactionItem = ({ item: tx }: { item: Transaction }) => {
-    const cat = categoriesMap[tx.categoryId];
+    const cat = tx.categoryId ? categoriesMap[tx.categoryId] : null;
     return (
       <TouchableOpacity
         style={[

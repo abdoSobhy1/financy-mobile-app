@@ -266,7 +266,6 @@ export const exportDatabaseToJSON = async (): Promise<void> => {
               transactions: transactions.length,
               categories: categories.length,
               budgets: budgets.length,
-              bills: 0,
               debts: debts.length,
               total: transactions.length + categories.length + budgets.length + debts.length,
             },
@@ -313,7 +312,6 @@ export const getDatabaseStats = async () => {
       transactions: transactions.length,
       categories: categories.length,
       budgets: budgets.length,
-      bills: 0,
       debts: debts.length,
       totalRecords: transactions.length + categories.length + budgets.length + debts.length,
     };
@@ -323,7 +321,6 @@ export const getDatabaseStats = async () => {
       transactions: 0,
       categories: 0,
       budgets: 0,
-      bills: 0,
       debts: 0,
       totalRecords: 0,
     };

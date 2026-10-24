@@ -1,4 +1,4 @@
-﻿# Financy — Backend Architecture Reference
+# Financy — Backend Architecture Reference
 
 > **Purpose:** A developer (or new AI session with zero context) can read this document and fully reimplement the entire backend layer — database, sync, state, services — into a new app shell without reading any original source files.
 >
@@ -314,7 +314,6 @@ CREATE TABLE IF NOT EXISTS bills (
 |---|---|
 | billPaymentsMigration.ts | Adds linked_bill_id, linked_debt_payment_id to transactions; adds linked_transaction_id to debt_payments; creates bills table |
 | categoriesIconMigration.ts | Adds icon TEXT column to categories |
-| walletsMigration.ts | Historical no-op (wallets removed from schema) |
 
 All use ALTER TABLE ... ADD COLUMN wrapped in try/catch.
 

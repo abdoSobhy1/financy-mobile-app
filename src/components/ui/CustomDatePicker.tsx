@@ -729,7 +729,7 @@ export const CustomDatePicker: React.FC<CustomDatePickerProps> = ({
             style={[
               modalStyles.card,
               {
-                backgroundColor: colors.background,
+                backgroundColor: colors.surface,
                 borderColor: colors.outlineVariant,
               },
             ]}>

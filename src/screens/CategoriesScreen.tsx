@@ -123,7 +123,7 @@ export const CategoriesScreen: React.FC = () => {
         key={cat.id}
         style={[
           styles.categoryCard,
-          { backgroundColor: colors.surfaceVariant, borderColor: resolved.fg + "40" },
+          { backgroundColor: colors.surface, borderColor: colors.outlineVariant },
         ]}
         onPress={() => handleCardPress(cat)}
         activeOpacity={0.7}>
@@ -155,7 +155,7 @@ export const CategoriesScreen: React.FC = () => {
     return (
       <TouchableOpacity
         key={cat.id}
-        style={[styles.listRow, { backgroundColor: colors.surfaceVariant, borderColor: colors.outlineVariant }]}
+        style={[styles.listRow, { backgroundColor: colors.surface, borderColor: colors.outlineVariant }]}
         onPress={() => handleCardPress(cat)}
         activeOpacity={0.7}>
         <View style={[styles.listIconBox, { backgroundColor: resolved.bg }]}>
@@ -178,7 +178,7 @@ export const CategoriesScreen: React.FC = () => {
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }} edges={["top"]}>
       <StatusBar barStyle={isDark ? "light-content" : "dark-content"} backgroundColor="transparent" translucent />
-      <AppHeader title="Categories" />
+      <AppHeader title="Categories" showBack={true} showSettings={false} />
 
       <ScrollView contentContainerStyle={{ padding: spacing.lg, paddingBottom: 100 }}>
 

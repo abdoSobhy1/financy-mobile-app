@@ -1,6 +1,6 @@
 // Global TypeScript types for the Finance Management App
 
-export type TransactionType = "income" | "expense";
+export type TransactionType = "income" | "expense" | "transfer";
 
 export type DebtDirection = "i_owe" | "owed_to_me";
 
@@ -13,16 +13,23 @@ export interface WalletAccount {
   icon: string;
   color: string;
   initialBalance: number;
+  isSecret?: boolean;
+  archived?: boolean;
   createdAt: string;
+  // Sync fields
+  updatedAt?: number;
+  deleted?: boolean;
+  syncStatus?: "pending" | "synced" | "error";
 }
 
 export interface Transaction {
   id: string;
   amount: number;
   type: TransactionType;
-  categoryId: string;
+  categoryId?: string;
   budgetId?: string;
   accountId?: string;
+  toAccountId?: string; // destination account for transfers
   receiptUri?: string;
   description: string;
   date: string; // ISO date string
@@ -184,6 +191,8 @@ export interface ParsedTransaction {
   rawText: string; // original voice/OCR text
   categoryId?: string;
   budgetId?: string;
+  quantity?: number;
+  unitPrice?: number;
 }
 
 export interface BudgetFormData {
@@ -229,7 +238,21 @@ export type TransactionStackParamList = {
   AddTransaction: { editTransaction?: Transaction; prefilledData?: ParsedTransaction; categoryId?: string };
   Dashboard: undefined;
   VoiceInput: { existingTransactions?: ParsedTransaction[] } | undefined;
-  VoiceVerify: { parsedTransactions: ParsedTransaction[] };
+  VoiceVerify: {
+    parsedTransactions: ParsedTransaction[];
+    source?: "voice" | "ocr";
+    ocrReport?: any;
+    receiptSummary?: {
+      merchant?: string;
+      totalAmount?: number;
+      itemsSum?: number;
+      discount?: number;
+      date?: Date;
+      unrecognizedLines?: string[];
+    };
+    rawText?: string;
+    imageUri?: string;
+  };
 };
 
 export type BudgetStackParamList = {
@@ -241,8 +264,18 @@ export type BudgetStackParamList = {
 // Bill navigation stack removed
 
 export type DebtStackParamList = {
-  DebtList: undefined;
+  DebtsList: undefined;
   DebtForm: { debtId?: string };
+  AddPayment: {
+    debtId: string;
+    debtName: string;
+    currentBalance: number;
+    minimumPayment?: number;
+    interestRate?: number;
+  };
+  PaymentHistory: { debtId: string };
+  DebtPayments: { debtId: string; debtName: string };
+  EditPayment: { debtId: string; debtName: string; payment: any };
 };
 
 export type SettingsStackParamList = {
@@ -313,6 +346,7 @@ export const COLLECTIONS = {
   DEBTS: "debts",
   DEBT_PAYMENTS: "debt_payments",
   SETTINGS: "settings",
+  WALLETS: "wallets",
 } as const;
 
 export type CollectionName = (typeof COLLECTIONS)[keyof typeof COLLECTIONS];
@@ -324,7 +358,8 @@ export type SyncableEntity =
   | Budget
   | Debt
   | DebtPayment
-  | Settings;
+  | Settings
+  | WalletAccount;
 
 // Generic sync document type
 export interface SyncDocument {

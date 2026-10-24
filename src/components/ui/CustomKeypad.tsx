@@ -9,6 +9,7 @@ interface CustomKeypadProps {
   onClear?: () => void;
   onEvaluate?: () => void;
   onSubmit?: () => void;
+  onClose?: () => void;
   hasOperator?: boolean;
 }
 
@@ -18,6 +19,7 @@ export const CustomKeypad: React.FC<CustomKeypadProps> = ({
   onClear,
   onEvaluate,
   onSubmit,
+  onClose,
   hasOperator = false,
 }) => {
   const { colors } = useAppTheme();
@@ -38,6 +40,27 @@ export const CustomKeypad: React.FC<CustomKeypadProps> = ({
           borderTopColor: colors.outlineVariant,
         },
       ]}>
+      {onClose && (
+        <View style={styles.headerBar}>
+          <View
+            style={[
+              styles.dragHandle,
+              { backgroundColor: colors.outlineVariant },
+            ]}
+          />
+          <TouchableOpacity
+            style={styles.closeBtn}
+            onPress={onClose}
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+            activeOpacity={0.7}>
+            <Ionicons
+              name="chevron-down"
+              size={20}
+              color={colors.onSurfaceVariant}
+            />
+          </TouchableOpacity>
+        </View>
+      )}
       {keys.map((row, rowIndex) => (
         <View key={rowIndex} style={styles.row}>
           {row.map((key) => {
@@ -144,11 +167,38 @@ export const CustomKeypad: React.FC<CustomKeypadProps> = ({
 const styles = StyleSheet.create({
   container: {
     paddingHorizontal: 14,
-    paddingTop: 14,
+    paddingTop: 8,
     paddingBottom: 18,
     borderTopLeftRadius: 28,
     borderTopRightRadius: 28,
     borderTopWidth: 1,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: -4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 10,
+    elevation: 12,
+  },
+  headerBar: {
+    height: 24,
+    justifyContent: "center",
+    alignItems: "center",
+    marginBottom: 6,
+    position: "relative",
+  },
+  dragHandle: {
+    width: 36,
+    height: 4,
+    borderRadius: 2,
+  },
+  closeBtn: {
+    position: "absolute",
+    right: 4,
+    top: 0,
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    alignItems: "center",
+    justifyContent: "center",
   },
   row: {
     flexDirection: "row",

@@ -1,4 +1,4 @@
-import { format, parseISO, startOfDay, endOfDay, isValid } from "date-fns";
+import { format, parseISO, startOfDay, endOfDay, isValid, subDays } from "date-fns";
 import { CURRENCY, DATE_FORMATS } from "../constants";
 
 // Export date utilities
@@ -153,23 +153,50 @@ export const isDateUpcoming = (dueDate: Date | string, days: number = 7): boolea
 };
 
 // Date range utilities
-export const getDateRangeForBillingPeriod = (startDay: number, referenceDate: Date = new Date()): { start: Date; end: Date } => {
+
+/**
+ * Safely computes the start day of a billing cycle for a given month,
+ * clamping for shorter months (e.g. February has 28 days or 29 in leap years).
+ * If startDay is 30, in February it clamps to Feb 28 (or Feb 29 in leap years).
+ */
+export const getBillingCycleStartForMonth = (
+  year: number,
+  month: number,
+  targetDay: number
+): Date => {
+  // Day 0 of next month is the last day of current month
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const clampedDay = Math.min(Math.max(1, targetDay), daysInMonth);
+  return new Date(year, month, clampedDay);
+};
+
+export const getDateRangeForBillingPeriod = (
+  startDay: number,
+  referenceDate: Date = new Date()
+): { start: Date; end: Date } => {
   const year = referenceDate.getFullYear();
   const month = referenceDate.getMonth();
-  const currentDay = referenceDate.getDate();
+
+  // The cycle start date for this month (clamped if needed, e.g. Feb 28 for targetDay 30)
+  const thisMonthCycleStart = getBillingCycleStartForMonth(year, month, startDay);
+  const refStart = startOfDay(referenceDate);
 
   let periodStart: Date;
-  let periodEnd: Date;
+  let nextCycleStart: Date;
 
-  if (currentDay >= startDay) {
+  if (refStart >= startOfDay(thisMonthCycleStart)) {
     // Current period started this month
-    periodStart = new Date(year, month, startDay);
-    periodEnd = new Date(year, month + 1, startDay - 1);
+    periodStart = thisMonthCycleStart;
+    // Next period starts next month (clamped for February / shorter months)
+    nextCycleStart = getBillingCycleStartForMonth(year, month + 1, startDay);
   } else {
     // Current period started last month
-    periodStart = new Date(year, month - 1, startDay);
-    periodEnd = new Date(year, month, startDay - 1);
+    periodStart = getBillingCycleStartForMonth(year, month - 1, startDay);
+    nextCycleStart = thisMonthCycleStart;
   }
+
+  // End date is 23:59:59.999 of the day before the next cycle begins
+  const periodEnd = subDays(nextCycleStart, 1);
 
   return {
     start: startOfDay(periodStart),

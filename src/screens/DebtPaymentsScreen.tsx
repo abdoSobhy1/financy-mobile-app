@@ -22,7 +22,7 @@ import { AppDispatch, RootState } from "../store";
 import { DebtPayment } from "../types";
 import { formatCurrency, formatDate } from "../utils";
 import { UI } from "../constants";
-import { DebtStackParamList } from "../navigation/DebtStackNavigator";
+import { DebtStackParamList } from "../types";
 import { db } from "../database/queries";
 
 type DebtPaymentsScreenNavigationProp = StackNavigationProp<
@@ -35,7 +35,7 @@ type DebtPaymentsScreenRouteProp = RouteProp<
 >;
 
 const DebtPaymentsScreen: React.FC = () => {
-  const { colors, typography, spacing, radius } = useAppTheme();
+  const { colors, typography, spacing, radius, isDark } = useAppTheme();
   const dispatch = useDispatch<AppDispatch>();
   const navigation = useNavigation<DebtPaymentsScreenNavigationProp>();
   const route = useRoute<DebtPaymentsScreenRouteProp>();
@@ -222,10 +222,10 @@ const DebtPaymentsScreen: React.FC = () => {
   return (
     <SafeAreaView style={[styles.safeArea, { backgroundColor: colors.background }]} edges={["top"]}>
       <StatusBar
-          barStyle="light-content"
-          backgroundColor="transparent"
-          translucent
-        />
+        barStyle={isDark ? "light-content" : "dark-content"}
+        backgroundColor="transparent"
+        translucent
+      />
 
         {loading ? (
           <View style={styles.centered}>
@@ -284,12 +284,10 @@ const styles = StyleSheet.create({
   navTitle: {
     fontSize: 18,
     fontWeight: "700",
-    color: UI.COLORS.TEXT_PRIMARY,
     letterSpacing: 0.2,
   },
   navSubtitle: {
     fontSize: 12,
-    color: UI.COLORS.TEXT_MUTED,
     marginTop: 2,
   },
   placeholder: { width: 38 },
@@ -383,12 +381,10 @@ const styles = StyleSheet.create({
   quickStatValue: {
     fontSize: 16,
     fontWeight: "800",
-    color: UI.COLORS.TEXT_PRIMARY,
   },
   quickStatLabel: {
     fontSize: 11,
     fontWeight: "600",
-    color: UI.COLORS.TEXT_MUTED,
     textTransform: "uppercase",
     letterSpacing: 0.5,
   },
@@ -397,7 +393,6 @@ const styles = StyleSheet.create({
   sectionLabel: {
     fontSize: 13,
     fontWeight: "600",
-    color: UI.COLORS.PRIMARY_LIGHT,
     letterSpacing: 0.5,
     textTransform: "uppercase",
     marginTop: 20,
@@ -423,9 +418,6 @@ const styles = StyleSheet.create({
     width: 80,
     height: 80,
     borderRadius: 40,
-    backgroundColor: "rgba(108,92,231,0.1)",
-    borderWidth: 1,
-    borderColor: "rgba(108,92,231,0.2)",
     alignItems: "center",
     justifyContent: "center",
     marginBottom: 20,
@@ -433,13 +425,11 @@ const styles = StyleSheet.create({
   emptyTitle: {
     fontSize: 22,
     fontWeight: "700",
-    color: UI.COLORS.TEXT_PRIMARY,
     marginBottom: 8,
     textAlign: "center",
   },
   emptySubtitle: {
     fontSize: 14,
-    color: UI.COLORS.TEXT_MUTED,
     textAlign: "center",
     lineHeight: 20,
     marginBottom: 28,
@@ -451,11 +441,7 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
     borderRadius: 25,
     gap: 8,
-    shadowColor: UI.COLORS.PRIMARY,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.35,
-    shadowRadius: 10,
-    elevation: 6,
+    elevation: 4,
   },
   emptyButtonText: {
     fontSize: 15,

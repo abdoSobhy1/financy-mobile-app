@@ -1,28 +1,36 @@
-import { useMemo } from "react";
+import { useMemo, useState, useEffect } from "react";
 import { useSelector } from "react-redux";
 import { createSelector } from "@reduxjs/toolkit";
 import { RootState } from "../../../store";
 import { format, parseISO, subDays, subMonths, startOfMonth, endOfMonth } from "date-fns";
 import { Transaction, Category, Budget, Debt } from "../../../types";
+import { walletService } from "../../../services/walletService";
+
+const EMPTY_RECORD: Record<string, any> = {};
 
 // Stable selectors that only use memoization when actually transforming data
-const selectTransactionsArray = createSelector([(state: RootState) => (state.transactions ? state.transactions.items : {})], (items) =>
-  Object.values(items || {})
+const selectTransactionsArray = createSelector(
+  [(state: RootState) => state.transactions?.items || EMPTY_RECORD],
+  (items) => Object.values(items || {})
 );
 
-const selectCategoriesArray = createSelector([(state: RootState) => (state.categories ? state.categories.items : {})], (items) =>
-  Object.values(items || {})
+const selectCategoriesArray = createSelector(
+  [(state: RootState) => state.categories?.items || EMPTY_RECORD],
+  (items) => Object.values(items || {})
 );
 
-const selectBudgetsArray = createSelector([(state: RootState) => (state.budgets ? state.budgets.items : {})], (items) => Object.values(items || {}));
+const selectBudgetsArray = createSelector(
+  [(state: RootState) => state.budgets?.items || EMPTY_RECORD],
+  (items) => Object.values(items || {})
+);
 
-// Bills slice removed; default to empty array
-const selectBillsArray = createSelector([() => ({})], () => [] as any[]);
-
-const selectDebtsArray = createSelector([(state: RootState) => (state.debts ? state.debts.items : {})], (items) => Object.values(items || {}));
+const selectDebtsArray = createSelector(
+  [(state: RootState) => state.debts?.items || EMPTY_RECORD],
+  (items) => Object.values(items || {})
+);
 
 const selectDebtPaymentsArray = createSelector(
-  [(state: RootState) => (state.debts && (state.debts as any).payments ? (state.debts as any).payments : {})],
+  [(state: RootState) => (state.debts && (state.debts as any).payments ? (state.debts as any).payments : EMPTY_RECORD)],
   (payments) => Object.values(payments || {}) as any[]
 );
 
@@ -81,6 +89,7 @@ export interface UseAnalysisDataOptions {
   startDate?: Date;
   endDate?: Date;
   categoryIds?: string[];
+  walletIds?: string[];
   transactionType?: "income" | "expense" | "both";
 }
 
@@ -94,18 +103,54 @@ export const useAnalysisData = (
   const transactions = useSelector(selectTransactionsArray);
   const categories = useSelector(selectCategoriesArray);
   const budgets = useSelector(selectBudgetsArray);
-  const bills = useSelector(selectBillsArray);
   const debts = useSelector(selectDebtsArray);
   const debtPayments = useSelector(selectDebtPaymentsArray);
 
   const isLoading = useSelector(selectLoadingState);
+  const [secretWalletIds, setSecretWalletIds] = useState<Set<string>>(new Set());
+
+  useEffect(() => {
+    walletService
+      .getWallets()
+      .then((wallets) => setSecretWalletIds(walletService.getSecretWalletIds(wallets)))
+      .catch(() => {});
+  }, []);
 
   const data = useMemo(() => {
-    const { startDate = subMonths(new Date(), 12), endDate = new Date(), categoryIds, transactionType = "both" } = options;
+    const {
+      startDate = subMonths(new Date(), 12),
+      endDate = new Date(),
+      categoryIds,
+      walletIds,
+      transactionType = "both",
+    } = options;
 
     // Filter transactions based on options
     const filteredTransactions = transactions.filter((transaction) => {
+      // Exclude secret wallet transactions from analysis totals (unless they had a budget)
+      if (walletService.isSecretTransactionExcluded(transaction, secretWalletIds)) {
+        return false;
+      }
+
       const transactionDate = parseISO(transaction.date);
+
+      // Exclude pure transfers (without a budget) and balance adjustments from income/expense analysis
+      if (
+        (transaction.type === "transfer" && !transaction.budgetId) ||
+        transaction.description === "Balance adjustment"
+      ) {
+        return false;
+      }
+
+      // Wallet filter
+      if (walletIds && walletIds.length > 0) {
+        const matches =
+          (transaction.accountId && walletIds.includes(transaction.accountId)) ||
+          (transaction.toAccountId && walletIds.includes(transaction.toAccountId));
+        if (!matches) {
+          return false;
+        }
+      }
 
       // Date filter
       if (transactionDate < startDate || transactionDate > endDate) {
@@ -135,7 +180,10 @@ export const useAnalysisData = (
       (acc, transaction) => {
         if (transaction.type === "income") {
           acc.totalIncome += transaction.amount;
-        } else {
+        } else if (
+          transaction.type === "expense" ||
+          (transaction.type === "transfer" && Boolean(transaction.budgetId))
+        ) {
           acc.totalExpenses += transaction.amount;
         }
         acc.transactionCount++;
@@ -176,8 +224,21 @@ export const useAnalysisData = (
 
     // Filter for trends: ignore startDate/endDate, but keep other filters
     const trendTransactions = transactions.filter((transaction) => {
+      if (walletService.isSecretTransactionExcluded(transaction, secretWalletIds)) return false;
+      if (
+        (transaction.type === "transfer" && !transaction.budgetId) ||
+        transaction.description === "Balance adjustment"
+      ) {
+        return false;
+      }
       if (categoryIds && categoryIds.length > 0 && transaction.categoryId) {
         if (!categoryIds.includes(transaction.categoryId)) return false;
+      }
+      if (walletIds && walletIds.length > 0) {
+        const matches =
+          (transaction.accountId && walletIds.includes(transaction.accountId)) ||
+          (transaction.toAccountId && walletIds.includes(transaction.toAccountId));
+        if (!matches) return false;
       }
       if (transactionType !== "both" && transaction.type !== transactionType) {
         return false;
@@ -205,7 +266,10 @@ export const useAnalysisData = (
         (acc, transaction) => {
           if (transaction.type === "income") {
             acc.income += transaction.amount;
-          } else {
+          } else if (
+            transaction.type === "expense" ||
+            (transaction.type === "transfer" && Boolean(transaction.budgetId))
+          ) {
             acc.expenses += transaction.amount;
           }
           return acc;
@@ -287,9 +351,9 @@ export const useAnalysisData = (
     transactions,
     categories,
     budgets,
-    bills,
     debts,
     debtPayments,
+    secretWalletIds,
     options.startDate?.getTime(),
     options.endDate?.getTime(),
     options.categoryIds?.join(","),

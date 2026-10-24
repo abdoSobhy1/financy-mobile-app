@@ -34,6 +34,8 @@ import { fetchTransactions } from "../store/slices/transactionsSlice";
 import { fetchBudgets } from "../store/slices/budgetsSlice";
 import { useTransactionActions } from "../hooks/useTransactionActions";
 import { walletService } from "../services/walletService";
+import { ReceiptScanModal } from "../components/receipt/ReceiptScanModal";
+import { OcrReceiptResult } from "../services/ocrService";
 
 type DashboardNavigationProp = StackNavigationProp<any, "Dashboard">;
 
@@ -44,6 +46,13 @@ interface QuickAddSlot {
   isFallback: boolean;
   iconName: string;
 }
+
+const getAlphaColor = (color: string, hexAlpha: string = "1F") => {
+  if (color && color.startsWith("#") && color.length === 7) {
+    return `${color}${hexAlpha}`;
+  }
+  return color;
+};
 
 export const DashboardScreen: React.FC = () => {
   const navigation = useNavigation<DashboardNavigationProp>();
@@ -79,12 +88,16 @@ export const DashboardScreen: React.FC = () => {
   const [hideBalances, setHideBalances] = useState(false);
 
   // Multi-Wallet State
-  const [wallets, setWallets] = useState<WalletAccount[]>([]);
+  const [wallets, setWallets] = useState<WalletAccount[]>(() =>
+    walletService.getCachedWallets()
+  );
   const [walletBalances, setWalletBalances] = useState<Record<string, number>>({});
   const [showTransferModal, setShowTransferModal] = useState(false);
+  const [showScanModal, setShowScanModal] = useState(false);
   const [fromWalletId, setFromWalletId] = useState<string>("default_cash");
   const [toWalletId, setToWalletId] = useState<string>("default_bank");
   const [transferAmount, setTransferAmount] = useState<string>("");
+  const [transferBudgetId, setTransferBudgetId] = useState<string>("");
 
   useEffect(() => {
     dispatch(fetchTransactions());
@@ -154,18 +167,13 @@ export const DashboardScreen: React.FC = () => {
             (t) => !t.deleted,
           );
 
-          // Load Wallets & Compute Live Balances
+          // Load Wallets & Compute Live Balances (Current Period Values)
           const loadedWallets = await walletService.getWallets();
-          if (isActive) {
-            setWallets(loadedWallets);
-            setWalletBalances(
-              walletService.calculateWalletBalances(loadedWallets, allTransactions),
-            );
-            if (loadedWallets.length >= 2) {
-              setFromWalletId((prev) => prev || loadedWallets[0].id);
-              setToWalletId((prev) => prev || loadedWallets[1].id);
-            }
-          }
+          const secretWalletIds = walletService.getSecretWalletIds(loadedWallets);
+          const fallbackWallet =
+            loadedWallets.find((w) => !walletService.isSecretWallet(w)) ||
+            loadedWallets[0];
+          const fallbackWalletId = fallbackWallet?.id || "default_cash";
 
           // 1. Transactions in current billing period
           const periodTxs = allTransactions.filter((t) => {
@@ -173,34 +181,80 @@ export const DashboardScreen: React.FC = () => {
             return d >= start && d <= end;
           });
 
-          const income = periodTxs
-            .filter((t) => t.type === "income")
+          if (isActive) {
+            setWallets(loadedWallets);
+            // Wallets only show current period values:
+            const computedBalances = walletService.calculateWalletBalances(
+              loadedWallets,
+              periodTxs,
+              { periodOnly: true },
+            );
+            setWalletBalances(computedBalances);
+            const visibleWallets = walletService.getVisibleWallets(loadedWallets);
+            if (visibleWallets.length >= 2) {
+              setFromWalletId((prev) =>
+                visibleWallets.some((w) => w.id === prev) ? prev : visibleWallets[0].id,
+              );
+              setToWalletId((prev) =>
+                visibleWallets.some((w) => w.id === prev) ? prev : visibleWallets[1].id,
+              );
+            } else if (visibleWallets.length === 1) {
+              setFromWalletId(visibleWallets[0].id);
+              setToWalletId(visibleWallets[0].id);
+            }
+          }
+
+          const isSecretExcluded = (t: Transaction) =>
+            walletService.isSecretTransactionExcluded(t, secretWalletIds);
+          const isAdjustment = (t: Transaction) =>
+            t.description === "Balance adjustment";
+
+          // Filter out secret wallet transactions from totals (unless they had a budget)
+          const publicPeriodTxs = periodTxs.filter((t) => !isSecretExcluded(t));
+
+          const income = publicPeriodTxs
+            .filter((t) => t.type === "income" && !isAdjustment(t))
             .reduce((sum, t) => sum + t.amount, 0);
-          const expenses = periodTxs
-            .filter((t) => t.type === "expense")
+          const expenses = publicPeriodTxs
+            .filter(
+              (t) =>
+                !isAdjustment(t) &&
+                (t.type === "expense" || (t.type === "transfer" && Boolean(t.budgetId))),
+            )
             .reduce((sum, t) => sum + t.amount, 0);
           // Only count transactions that are assigned to a budget
-          const budgeted = periodTxs
-            .filter((t) => t.type === "expense" && !!t.budgetId)
+          const budgeted = publicPeriodTxs
+            .filter(
+              (t) =>
+                !isAdjustment(t) &&
+                Boolean(t.budgetId) &&
+                (t.type === "expense" || t.type === "transfer"),
+            )
             .reduce((sum, t) => sum + t.amount, 0);
 
           setTotalIncome(income);
           setTotalExpenses(expenses);
           setBudgetedExpenses(budgeted);
           const currentBalance = income - expenses;
+          // Net balance ONLY shows current period value:
           setBalance(currentBalance);
 
-          // Calculate previous period balance
+          // Calculate previous period balance (excluding secret wallet and adjustments)
           const { start: prevStart, end: prevEnd } = await getPreviousBillingPeriod();
           const prevPeriodTxs = allTransactions.filter((t) => {
             const d = new Date(t.date);
             return d >= prevStart && d <= prevEnd;
           });
-          const prevIncome = prevPeriodTxs
-            .filter((t) => t.type === "income")
+          const prevPublicPeriodTxs = prevPeriodTxs.filter((t) => !isSecretExcluded(t));
+          const prevIncome = prevPublicPeriodTxs
+            .filter((t) => t.type === "income" && !isAdjustment(t))
             .reduce((sum, t) => sum + t.amount, 0);
-          const prevExpenses = prevPeriodTxs
-            .filter((t) => t.type === "expense")
+          const prevExpenses = prevPublicPeriodTxs
+            .filter(
+              (t) =>
+                !isAdjustment(t) &&
+                (t.type === "expense" || (t.type === "transfer" && Boolean(t.budgetId))),
+            )
             .reduce((sum, t) => sum + t.amount, 0);
           const previousBalance = prevIncome - prevExpenses;
 
@@ -222,8 +276,13 @@ export const DashboardScreen: React.FC = () => {
           const overspent: { id: string; name: string; excess: number }[] = [];
           activeBudgets.forEach((b) => {
             if (b.alertsEnabled) {
-              const spent = periodTxs
-                .filter((t) => t.budgetId === b.id && t.type === "expense")
+              const spent = publicPeriodTxs
+                .filter(
+                  (t) =>
+                    t.budgetId === b.id &&
+                    (t.type === "expense" || t.type === "transfer") &&
+                    !isAdjustment(t),
+                )
                 .reduce((sum, t) => sum + t.amount, 0);
               if (spent > b.amount) {
                 overspent.push({ id: b.id, name: b.name, excess: spent - b.amount });
@@ -232,21 +291,34 @@ export const DashboardScreen: React.FC = () => {
           });
           setOverspentBudgets(overspent);
 
-          // Calculate balance history for graph
-          const sortedPeriodTxs = [...periodTxs].sort(
-            (a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()
-          );
+          // Calculate balance history for graph (tracks period progression from 0 to currentBalance)
+          const sortedPeriodTxs = [...publicPeriodTxs]
+            .filter(
+              (t) =>
+                !isAdjustment(t) &&
+                (t.type !== "transfer" || Boolean(t.budgetId)),
+            )
+            .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
           let runningBalance = 0;
           const history = [0];
           sortedPeriodTxs.forEach((t) => {
-            runningBalance += t.type === "income" ? t.amount : -t.amount;
-            history.push(runningBalance);
+            if (t.type === "income") {
+              runningBalance += t.amount;
+              history.push(runningBalance);
+            } else if (
+              t.type === "expense" ||
+              (t.type === "transfer" && Boolean(t.budgetId))
+            ) {
+              runningBalance -= t.amount;
+              history.push(runningBalance);
+            }
           });
           if (history.length < 2) history.push(runningBalance);
           setBalanceHistory(history);
 
-          // 2. Recent transactions preview
-          const sortedRecent = [...allTransactions]
+          // 2. Recent transactions preview (exclude secret transactions without a budget)
+          const nonSecretTransactions = allTransactions.filter((t) => !isSecretExcluded(t));
+          const sortedRecent = [...nonSecretTransactions]
             .sort(
               (a, b) =>
                 new Date(b.date).getTime() - new Date(a.date).getTime() ||
@@ -256,9 +328,9 @@ export const DashboardScreen: React.FC = () => {
             .slice(0, 5);
           setRecentTransactions(sortedRecent);
 
-          // 3. Compute ranked quick add categories
+          // 3. Compute ranked quick add categories (exclude secret transactions)
           const topSlots = computeTopExpenseCategories(
-            allTransactions,
+            nonSecretTransactions,
             categoriesMap,
             start,
             end,
@@ -355,6 +427,57 @@ export const DashboardScreen: React.FC = () => {
     return slots;
   };
 
+  const handleScanComplete = (ocrResult: OcrReceiptResult, assetUri: string) => {
+    const parsedItems: ParsedTransaction[] =
+      ocrResult.items && ocrResult.items.length > 0
+        ? ocrResult.items.map((it) => ({
+            amount: it.price,
+            type: ocrResult.type || "expense",
+            description:
+              it.quantity && it.quantity > 1
+                ? `${it.quantity}x ${it.name}`
+                : it.name,
+            date: ocrResult.date || new Date(),
+            note: ocrResult.description
+              ? `From: ${ocrResult.description}`
+              : undefined,
+            confidence: 0.9,
+            rawText: `${it.name} ${it.price}`,
+            categoryId: it.categoryId || ocrResult.categoryId,
+            quantity: it.quantity,
+            unitPrice: it.unitPrice,
+          }))
+        : ocrResult.amount
+        ? [
+            {
+              amount: ocrResult.amount,
+              type: ocrResult.type || "expense",
+              description: ocrResult.description || "Receipt Purchase",
+              date: ocrResult.date || new Date(),
+              confidence: ocrResult.confidence || 0.8,
+              rawText: ocrResult.rawText?.slice(0, 50) || "",
+              categoryId: ocrResult.categoryId,
+            },
+          ]
+        : [];
+
+    navigation.navigate("VoiceVerify", {
+      parsedTransactions: parsedItems,
+      source: "ocr",
+      ocrReport: ocrResult.debugReport,
+      receiptSummary: {
+        merchant: ocrResult.description,
+        totalAmount: ocrResult.amount,
+        itemsSum: ocrResult.itemsSum,
+        discount: ocrResult.discount,
+        date: ocrResult.date,
+        unrecognizedLines: ocrResult.debugReport?.unrecognizedLines,
+      },
+      rawText: ocrResult.rawText,
+      imageUri: assetUri,
+    });
+  };
+
   const handleVoiceResult = (parsed: ParsedTransaction[]) => {
     // Navigate to AddTransaction with pre-filled data
     if (parsed && parsed.length > 0) {
@@ -398,17 +521,28 @@ export const DashboardScreen: React.FC = () => {
   const handleTransferSubmit = async () => {
     const amt = parseFloat(transferAmount);
     if (!amt || amt <= 0 || fromWalletId === toWalletId) return;
+    const { start, end } = await getCurrentBillingPeriod();
     const allTransactions = Object.values(transactions).filter((t) => !t.deleted);
+    const periodTxs = allTransactions.filter((t) => {
+      const d = new Date(t.date);
+      return d >= start && d <= end;
+    });
     const updatedWallets = await walletService.transferBetweenWallets(
       fromWalletId,
       toWalletId,
       amt,
+      transferBudgetId || undefined,
     );
+    await dispatch(fetchTransactions());
     setWallets(updatedWallets);
     setWalletBalances(
-      walletService.calculateWalletBalances(updatedWallets, allTransactions),
+      walletService.calculateWalletBalances(updatedWallets, periodTxs, {
+        periodOnly: true,
+      }),
     );
     setTransferAmount("");
+    setTransferBudgetId("");
+    setShowTransferModal(false);
     setShowTransferModal(false);
   };
 
@@ -538,8 +672,8 @@ export const DashboardScreen: React.FC = () => {
             {/* Absolute Graph Background */}
             <View style={{ position: "absolute", bottom: -5, left: 0, right: 0, height: "60%" }}>
               <Svg width="100%" height="100%" viewBox={`0 0 ${CARD_WIDTH} 80`} preserveAspectRatio="none">
-                <Path d={fillPath} fill={colors.onPrimaryContainer} fillOpacity={0.12} />
-                <Path d={strokePath} fill="none" stroke={colors.onPrimaryContainer} strokeWidth={3} strokeOpacity={0.6} />
+                <Path d={fillPath} fill={colors.onPrimaryContainer} fillOpacity={isDark ? 0.12 : 0.08} />
+                <Path d={strokePath} fill="none" stroke={colors.onPrimaryContainer} strokeWidth={3} strokeOpacity={isDark ? 0.6 : 0.45} />
               </Svg>
             </View>
 
@@ -550,8 +684,20 @@ export const DashboardScreen: React.FC = () => {
                 <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: spacing.sm, flexWrap: "wrap", gap: spacing.xs }}>
                   <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
                     <Text style={[typography.label, { color: colors.onPrimaryContainer, textTransform: "uppercase", letterSpacing: 1, opacity: 0.75 }]}>
-                      TOTAL BALANCE
+                      NET BALANCE
                     </Text>
+                    <View style={{
+                      backgroundColor: isDark ? "rgba(0,0,0,0.12)" : "rgba(255,255,255,0.75)",
+                      paddingHorizontal: 6,
+                      paddingVertical: 2,
+                      borderRadius: 6,
+                      borderWidth: isDark ? 0 : 1,
+                      borderColor: isDark ? "transparent" : getAlphaColor(colors.onPrimaryContainer, "1F"),
+                    }}>
+                      <Text style={{ fontSize: 9, color: colors.onPrimaryContainer, fontWeight: "700" }}>
+                        THIS PERIOD
+                      </Text>
+                    </View>
                     <TouchableOpacity
                       onPress={toggleHideBalances}
                       hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
@@ -563,7 +709,14 @@ export const DashboardScreen: React.FC = () => {
                       />
                     </TouchableOpacity>
                   </View>
-                  <View style={{ backgroundColor: "rgba(0,0,0,0.12)", paddingHorizontal: 8, paddingVertical: 4, borderRadius: 12 }}>
+                  <View style={{
+                    backgroundColor: isDark ? "rgba(0,0,0,0.12)" : "rgba(255,255,255,0.75)",
+                    paddingHorizontal: 8,
+                    paddingVertical: 4,
+                    borderRadius: 12,
+                    borderWidth: isDark ? 0 : 1,
+                    borderColor: isDark ? "transparent" : getAlphaColor(colors.onPrimaryContainer, "1F"),
+                  }}>
                     <Text style={{ fontSize: 10, color: colors.onPrimaryContainer, fontWeight: "bold", opacity: 0.85 }}>
                       {balanceChangePct >= 0 ? "↑" : "↓"} {balanceChangePct > 0 ? "+" : ""}{balanceChangePct.toFixed(1)}%
                     </Text>
@@ -579,8 +732,17 @@ export const DashboardScreen: React.FC = () => {
               <View style={{ width: 124, gap: spacing.sm }}>
 
                 {/* Income Pill (stacked) */}
-                <View style={{ backgroundColor: "rgba(0,0,0,0.15)", borderRadius: 16, padding: spacing.sm, flexDirection: "row", alignItems: "center", gap: spacing.xs }}>
-                  <View style={{ width: 24, height: 24, borderRadius: 12, backgroundColor: "rgba(255,255,255,0.2)", alignItems: "center", justifyContent: "center" }}>
+                <View style={{
+                  backgroundColor: isDark ? "rgba(0,0,0,0.15)" : "rgba(255,255,255,0.75)",
+                  borderRadius: 16,
+                  padding: spacing.sm,
+                  flexDirection: "row",
+                  alignItems: "center",
+                  gap: spacing.xs,
+                  borderWidth: isDark ? 0 : 1,
+                  borderColor: isDark ? "transparent" : getAlphaColor(colors.onPrimaryContainer, "1F"),
+                }}>
+                  <View style={{ width: 24, height: 24, borderRadius: 12, backgroundColor: isDark ? "rgba(255,255,255,0.2)" : getAlphaColor(colors.onPrimaryContainer, "1F"), alignItems: "center", justifyContent: "center" }}>
                     <Ionicons name="arrow-down" size={12} color={colors.onPrimaryContainer} />
                   </View>
                   <View style={{ flex: 1, justifyContent: "center" }}>
@@ -590,8 +752,17 @@ export const DashboardScreen: React.FC = () => {
                 </View>
 
                 {/* Expenses Pill (stacked) */}
-                <View style={{ backgroundColor: "rgba(0,0,0,0.15)", borderRadius: 16, padding: spacing.sm, flexDirection: "row", alignItems: "center", gap: spacing.xs }}>
-                  <View style={{ width: 24, height: 24, borderRadius: 12, backgroundColor: "rgba(255,255,255,0.2)", alignItems: "center", justifyContent: "center" }}>
+                <View style={{
+                  backgroundColor: isDark ? "rgba(0,0,0,0.15)" : "rgba(255,255,255,0.75)",
+                  borderRadius: 16,
+                  padding: spacing.sm,
+                  flexDirection: "row",
+                  alignItems: "center",
+                  gap: spacing.xs,
+                  borderWidth: isDark ? 0 : 1,
+                  borderColor: isDark ? "transparent" : getAlphaColor(colors.onPrimaryContainer, "1F"),
+                }}>
+                  <View style={{ width: 24, height: 24, borderRadius: 12, backgroundColor: isDark ? "rgba(255,255,255,0.2)" : getAlphaColor(colors.onPrimaryContainer, "1F"), alignItems: "center", justifyContent: "center" }}>
                     <Ionicons name="arrow-up" size={12} color={colors.onPrimaryContainer} />
                   </View>
                   <View style={{ flex: 1, justifyContent: "center" }}>
@@ -647,7 +818,15 @@ export const DashboardScreen: React.FC = () => {
                 </Text>
               </View>
               {totalBudget > 0 && (
-                <View style={{ backgroundColor: "rgba(0,0,0,0.14)", paddingHorizontal: 10, paddingVertical: 6, borderRadius: 14, alignItems: "flex-end" }}>
+                <View style={{
+                  backgroundColor: isDark ? "rgba(0,0,0,0.14)" : "rgba(255,255,255,0.75)",
+                  paddingHorizontal: 10,
+                  paddingVertical: 6,
+                  borderRadius: 14,
+                  alignItems: "flex-end",
+                  borderWidth: isDark ? 0 : 1,
+                  borderColor: isDark ? "transparent" : getAlphaColor(colors.onPrimaryContainer, "1F"),
+                }}>
                   <Text style={{ fontSize: 10, color: colors.onPrimaryContainer, opacity: 0.8, fontWeight: "600" }}>
                     SAFE DAILY
                   </Text>
@@ -744,6 +923,8 @@ export const DashboardScreen: React.FC = () => {
                   paddingHorizontal: 10,
                   paddingVertical: 5,
                   borderRadius: 12,
+                  borderWidth: 1,
+                  borderColor: colors.outlineVariant,
                 }}>
                 <Ionicons name="swap-horizontal" size={14} color={colors.primary} />
                 <Text style={{ fontSize: 12, fontWeight: "700", color: colors.primary }}>
@@ -764,6 +945,8 @@ export const DashboardScreen: React.FC = () => {
                   paddingHorizontal: 10,
                   paddingVertical: 5,
                   borderRadius: 12,
+                  borderWidth: 1,
+                  borderColor: colors.outlineVariant,
                 }}>
                 <Ionicons name="settings-outline" size={14} color={colors.primary} />
                 <Text style={{ fontSize: 12, fontWeight: "700", color: colors.primary }}>
@@ -780,7 +963,10 @@ export const DashboardScreen: React.FC = () => {
               paddingHorizontal: spacing.lg,
               gap: spacing.sm,
             }}>
-            {wallets.map((w) => {
+            {(walletService.getVisibleWallets(wallets).length > 0
+              ? walletService.getVisibleWallets(wallets)
+              : walletService.getVisibleWallets(walletService.getCachedWallets())
+            ).map((w) => {
               const bal = walletBalances[w.id] || 0;
               return (
                 <TouchableOpacity
@@ -800,6 +986,8 @@ export const DashboardScreen: React.FC = () => {
                     flexDirection: "row",
                     alignItems: "center",
                     gap: 10,
+                    borderWidth: 1,
+                    borderColor: colors.outlineVariant,
                   }}>
                   <IconChip
                     iconName={(w.icon || "wallet-outline") as any}
@@ -886,6 +1074,39 @@ export const DashboardScreen: React.FC = () => {
               ))}
             </ScrollView>
 
+            {/* Scan Receipt / OCR chip */}
+            <TouchableOpacity
+              style={{ alignItems: "center", width: 64 }}
+              onPress={() => setShowScanModal(true)}>
+              <View
+                style={[
+                  styles.moreChip,
+                  {
+                    backgroundColor: colors.surfaceVariant,
+                    borderRadius: 28,
+                  },
+                ]}>
+                <Ionicons
+                  name="scan-outline"
+                  size={26}
+                  color={colors.primary}
+                />
+              </View>
+              <Text
+                style={[
+                  typography.bodySmall,
+                  {
+                    color: colors.onBackground,
+                    marginTop: spacing.xs,
+                    textAlign: "center",
+                    fontWeight: "600",
+                  },
+                ]}
+                numberOfLines={1}>
+                Scan
+              </Text>
+            </TouchableOpacity>
+
             {/* Voice / More chip */}
             <TouchableOpacity
               style={{ alignItems: "center", width: 64 }}
@@ -929,6 +1150,8 @@ export const DashboardScreen: React.FC = () => {
             padding: spacing.lg,
             paddingBottom: spacing.xxl,
             marginHorizontal: spacing.lg,
+            borderWidth: 1,
+            borderColor: colors.outlineVariant,
           }}>
           <View
             style={{
@@ -958,6 +1181,14 @@ export const DashboardScreen: React.FC = () => {
                 ? categoriesMap[tx.categoryId]
                 : null;
               const isIncome = tx.type === "income";
+              const isTransfer = tx.type === "transfer";
+              const isAdjustment = tx.description === "Balance adjustment";
+              const fromWallet = tx.accountId
+                ? wallets.find((w) => w.id === tx.accountId)
+                : null;
+              const toWallet = tx.toAccountId
+                ? wallets.find((w) => w.id === tx.toAccountId)
+                : null;
 
               return (
                 <TouchableOpacity
@@ -977,8 +1208,18 @@ export const DashboardScreen: React.FC = () => {
                       flex: 1,
                     }}>
                     <IconChip
-                      iconName={((category as any)?.icon || "receipt-outline") as any}
-                      colorName={(category?.color as any) || "bluegrey"}
+                      iconName={
+                        isTransfer
+                          ? ("swap-horizontal-outline" as any)
+                          : isAdjustment
+                          ? ("build-outline" as any)
+                          : (((category as any)?.icon || "receipt-outline") as any)
+                      }
+                      colorName={
+                        isTransfer || isAdjustment
+                          ? "bluegrey"
+                          : (category?.color as any) || "bluegrey"
+                      }
                       size={44}
                       style={{ marginRight: 14 }}
                     />
@@ -986,12 +1227,20 @@ export const DashboardScreen: React.FC = () => {
                       <Text
                         style={{ fontSize: 15, fontWeight: "600", color: colors.onBackground, marginBottom: 3 }}
                         numberOfLines={1}>
-                        {tx.description || category?.name || "Transaction"}
+                        {isTransfer
+                          ? tx.description || `${fromWallet?.name || "Wallet"} → ${toWallet?.name || "Wallet"}`
+                          : isAdjustment
+                          ? "Balance adjustment"
+                          : tx.description || category?.name || "Transaction"}
                       </Text>
                       <Text
                         style={{ fontSize: 13, color: colors.onSurfaceVariant }}
                         numberOfLines={1}>
-                        {category?.name || "Uncategorized"} • {formatDate(tx.date)}
+                        {isTransfer
+                          ? `${fromWallet?.name || "Wallet"} → ${toWallet?.name || "Wallet"} • ${formatDate(tx.date)}`
+                          : isAdjustment
+                          ? `${fromWallet?.name || "Wallet"} • Reconcile • ${formatDate(tx.date)}`
+                          : `${category?.name || "Uncategorized"} • ${formatDate(tx.date)}`}
                       </Text>
                     </View>
                   </View>
@@ -1000,9 +1249,16 @@ export const DashboardScreen: React.FC = () => {
                       style={{
                         fontSize: 16,
                         fontWeight: "700",
-                        color: isIncome ? colors.tertiary : colors.onBackground,
+                        color:
+                          isTransfer || isAdjustment
+                            ? colors.onSurface
+                            : isIncome
+                            ? colors.tertiary
+                            : colors.onBackground,
                       }}>
-                      {maskCurrency(tx.amount, isIncome ? "+" : "-")}
+                      {isTransfer || isAdjustment
+                        ? maskCurrency(tx.amount)
+                        : maskCurrency(tx.amount, isIncome ? "+" : "-")}
                     </Text>
                   </View>
                 </TouchableOpacity>
@@ -1073,7 +1329,7 @@ export const DashboardScreen: React.FC = () => {
               horizontal
               showsHorizontalScrollIndicator={false}
               contentContainerStyle={{ gap: 8, marginBottom: spacing.md }}>
-              {wallets.map((w) => {
+              {walletService.getVisibleWallets(wallets).map((w) => {
                 const selected = w.id === fromWalletId;
                 return (
                   <TouchableOpacity
@@ -1113,7 +1369,7 @@ export const DashboardScreen: React.FC = () => {
               horizontal
               showsHorizontalScrollIndicator={false}
               contentContainerStyle={{ gap: 8, marginBottom: spacing.md }}>
-              {wallets.map((w) => {
+              {walletService.getVisibleWallets(wallets).map((w) => {
                 const selected = w.id === toWalletId;
                 return (
                   <TouchableOpacity
@@ -1139,6 +1395,71 @@ export const DashboardScreen: React.FC = () => {
                 );
               })}
             </ScrollView>
+
+            {Object.values(budgetsMap).some((b) => !b.deleted) && (
+              <>
+                <Text
+                  style={{
+                    fontSize: 12,
+                    fontWeight: "600",
+                    color: colors.onSurfaceVariant,
+                    marginBottom: 6,
+                  }}>
+                  ASSIGN TO BUDGET (OPTIONAL)
+                </Text>
+                <ScrollView
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  contentContainerStyle={{ gap: 8, marginBottom: spacing.md }}>
+                  <TouchableOpacity
+                    onPress={() => setTransferBudgetId("")}
+                    style={{
+                      paddingHorizontal: 14,
+                      paddingVertical: 8,
+                      borderRadius: 14,
+                      backgroundColor: !transferBudgetId
+                        ? colors.primary
+                        : colors.background,
+                    }}>
+                    <Text
+                      style={{
+                        fontSize: 13,
+                        fontWeight: "600",
+                        color: !transferBudgetId ? "#FFFFFF" : colors.onBackground,
+                      }}>
+                      None
+                    </Text>
+                  </TouchableOpacity>
+                  {Object.values(budgetsMap)
+                    .filter((b) => !b.deleted)
+                    .map((b) => {
+                      const selected = b.id === transferBudgetId;
+                      return (
+                        <TouchableOpacity
+                          key={`transfer_b_${b.id}`}
+                          onPress={() => setTransferBudgetId(b.id)}
+                          style={{
+                            paddingHorizontal: 14,
+                            paddingVertical: 8,
+                            borderRadius: 14,
+                            backgroundColor: selected
+                              ? colors.primary
+                              : colors.background,
+                          }}>
+                          <Text
+                            style={{
+                              fontSize: 13,
+                              fontWeight: "600",
+                              color: selected ? "#FFFFFF" : colors.onBackground,
+                            }}>
+                            {b.name}
+                          </Text>
+                        </TouchableOpacity>
+                      );
+                    })}
+                </ScrollView>
+              </>
+            )}
 
             <Text
               style={{
@@ -1183,6 +1504,12 @@ export const DashboardScreen: React.FC = () => {
         </View>
       </Modal>
 
+      <ReceiptScanModal
+        visible={showScanModal}
+        onClose={() => setShowScanModal(false)}
+        categories={categoriesMap}
+        onScanComplete={handleScanComplete}
+      />
 
     </SafeAreaView>
   );

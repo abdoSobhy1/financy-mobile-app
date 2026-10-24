@@ -11,11 +11,11 @@ interface CardProps {
 }
 
 const Card: React.FC<CardProps> = ({ children, style, onPress, variant = "default", padding = "medium" }) => {
-  const { colors, radius, spacing } = useAppTheme();
+  const { colors, radius, spacing, isDark } = useAppTheme();
 
   let bgColor = colors.surface;
-  let borderColor = "transparent";
-  let borderWidth = 0;
+  let borderColor = colors.outlineVariant;
+  let borderWidth = 1;
   let shadowStyle = {};
 
   if (variant === "outlined") {
@@ -23,16 +23,20 @@ const Card: React.FC<CardProps> = ({ children, style, onPress, variant = "defaul
     borderWidth = 1;
   } else if (variant === "elevated") {
     bgColor = colors.surface;
+    borderColor = colors.outlineVariant;
+    borderWidth = 1;
     shadowStyle = {
       shadowColor: "#000",
       shadowOffset: { width: 0, height: 2 },
-      shadowOpacity: 0.1,
-      shadowRadius: 4,
-      elevation: 4,
+      shadowOpacity: isDark ? 0.3 : 0.05,
+      shadowRadius: 6,
+      elevation: 3,
     };
   } else {
     // default
-    bgColor = colors.surfaceVariant;
+    bgColor = colors.surface;
+    borderColor = colors.outlineVariant;
+    borderWidth = 1;
   }
 
   let paddingValue = spacing.md;

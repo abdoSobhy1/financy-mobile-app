@@ -1,16 +1,31 @@
-import { Transaction, Category, Budget, Settings, Debt, DebtPayment } from "../../types";
+import { Transaction, Category, Budget, Settings, Debt, DebtPayment, WalletAccount, WalletType } from "../../types";
 import { DateUtils } from "../../utils/dateUtils";
 
 // Database table schemas
+export interface WalletTable {
+  id: string;
+  name: string;
+  type: string;
+  icon?: string;
+  color?: string;
+  initial_balance: number;
+  is_secret: number;
+  archived: number;
+  created_at: string;
+  updated_at: number; // ms timestamp
+  deleted: number;
+  sync_status: string;
+}
+
 export interface TransactionTable {
   id: string;
   amount: number;
   type: string;
-  category_id: string;
+  category_id?: string | null;
   budget_id?: string;
   account_id?: string;
+  to_account_id?: string | null;
   receipt_uri?: string;
-  recurring_id?: string;
   description: string;
   date: string;
   note?: string;
@@ -112,11 +127,11 @@ export const transformTransaction = (row: TransactionTable): Transaction => ({
   id: row.id,
   amount: row.amount,
   type: row.type as Transaction["type"],
-  categoryId: row.category_id,
+  categoryId: row.category_id || undefined,
   budgetId: row.budget_id,
   accountId: row.account_id || undefined,
+  toAccountId: row.to_account_id || undefined,
   receiptUri: row.receipt_uri || undefined,
-  recurringId: row.recurring_id || undefined,
   description: row.description,
   date: row.date,
   note: row.note,
@@ -178,11 +193,11 @@ export const transformSettings = (row: SettingsTable): Settings => ({
 export const toTransactionTable = (transaction: Omit<Transaction, "id" | "createdAt">): Omit<TransactionTable, "id" | "created_at"> => ({
   amount: transaction.amount,
   type: transaction.type,
-  category_id: transaction.categoryId,
+  category_id: transaction.categoryId || null,
   budget_id: transaction.budgetId,
   account_id: transaction.accountId,
+  to_account_id: transaction.toAccountId || null,
   receipt_uri: transaction.receiptUri,
-  recurring_id: transaction.recurringId,
   description: transaction.description,
   date: transaction.date,
   note: transaction.note,
@@ -304,4 +319,34 @@ export const fromDebtPaymentTable = (row: DebtPaymentTable): DebtPayment => ({
   updatedAt: typeof row.updated_at === "string" ? Date.parse(row.updated_at) : row.updated_at,
   deleted: Boolean(row.deleted),
   syncStatus: row.sync_status as "pending" | "synced" | "error",
+});
+
+export const transformWallet = (row: WalletTable): WalletAccount => ({
+  id: row.id,
+  name: row.name,
+  type: row.type as WalletType,
+  icon: row.icon || "wallet-outline",
+  color: row.color || "teal",
+  initialBalance: row.initial_balance ?? 0,
+  isSecret: Boolean(row.is_secret),
+  archived: Boolean(row.archived),
+  createdAt: row.created_at,
+  updatedAt: row.updated_at,
+  deleted: Boolean(row.deleted),
+  syncStatus: row.sync_status as "pending" | "synced" | "error",
+});
+
+export const toWalletTable = (
+  wallet: Omit<WalletAccount, "id" | "createdAt">,
+): Omit<WalletTable, "id" | "created_at"> => ({
+  name: wallet.name,
+  type: wallet.type,
+  icon: wallet.icon || "wallet-outline",
+  color: wallet.color || "teal",
+  initial_balance: wallet.initialBalance ?? 0,
+  is_secret: wallet.isSecret ? 1 : 0,
+  archived: wallet.archived ? 1 : 0,
+  updated_at: wallet.updatedAt || Date.now(),
+  deleted: wallet.deleted ? 1 : 0,
+  sync_status: wallet.syncStatus || "pending",
 });

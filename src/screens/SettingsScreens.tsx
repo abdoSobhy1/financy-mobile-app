@@ -5,7 +5,6 @@ import {
   Text,
   StyleSheet,
   ScrollView,
-  Switch,
   TouchableOpacity,
   Modal,
   ActivityIndicator,
@@ -14,7 +13,17 @@ import {
   Alert,
   DeviceEventEmitter,
   TextInput,
+  KeyboardAvoidingView,
+  Platform,
+  Linking,
 } from "react-native";
+import {
+  getAIConfig,
+  saveAIConfig,
+  testAIConnection,
+  AIConfig,
+  AIProvider,
+} from "../services/aiConfigService";
 import { useAppTheme } from "../components/ui/ThemeProvider";
 import { LinearGradient } from "expo-linear-gradient";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -22,8 +31,6 @@ import { Ionicons } from "@expo/vector-icons";
 import { useNavigation } from "@react-navigation/native";
 import { StackNavigationProp } from "@react-navigation/stack";
 import {
-  RecurringFrequency,
-  RecurringTransaction,
   SettingsStackParamList,
   TransactionType,
 } from "../types";
@@ -39,6 +46,7 @@ import {
   ListRow,
   Card,
   AppHeader,
+  Switch,
 } from "../components/ui";
 import { runSyncApplyTest, runAllSyncApplyTests } from "../debug/runSyncTest";
 import { UI } from "../constants";
@@ -46,7 +54,6 @@ import NotificationService, {
   NotificationSettings,
 } from "../services/notificationService";
 import { securityService, LocalUserProfile } from "../services/securityService";
-import { recurringService } from "../services/recurringService";
 import { formatCurrency } from "../utils";
 import {
   fetchSettings,
@@ -54,7 +61,7 @@ import {
   updateCurrency,
   updateTheme,
 } from "../store/slices/settingsSlice";
-import { CURRENCY_METADATA, formatRelativeTime } from "../utils";
+import { CURRENCY_METADATA, formatRelativeTime, getDateRangeForBillingPeriod } from "../utils";
 import {
   fetchCategories,
   addCategory,
@@ -76,7 +83,6 @@ import {
   setSmsDetectionEnabled,
   smsService,
 } from "../services/smsService";
-import { Platform } from "react-native";
 
 type SettingsScreenNavigationProp = StackNavigationProp<SettingsStackParamList>;
 
@@ -157,7 +163,8 @@ export const SettingsScreen: React.FC = () => {
   const [showBillingDayPicker, setShowBillingDayPicker] = useState(false);
   const [showCurrencyPicker, setShowCurrencyPicker] = useState(false);
   const [showThemePicker, setShowThemePicker] = useState(false);
-  const [selectedBillingDay, setSelectedBillingDay] = useState(1);
+  const [selectedBillingDay, setSelectedBillingDay] = useState(28);
+  const [billingDayInput, setBillingDayInput] = useState<string>("28");
   const [debugClickCount, setDebugClickCount] = useState(0);
   const [showDebugSection, setShowDebugSection] = useState(false);
   const [debugLoggingEnabled, setDebugLoggingEnabled] =
@@ -181,31 +188,28 @@ export const SettingsScreen: React.FC = () => {
   const [profileNameInput, setProfileNameInput] = useState("");
   const [profileEmailInput, setProfileEmailInput] = useState("");
 
-  const [appLockEnabled, setAppLockEnabled] = useState(false);
-  const [showSecurityModal, setShowSecurityModal] = useState(false);
-  const [pinInput, setPinInput] = useState("");
-  const [confirmPinInput, setConfirmPinInput] = useState("");
-
-  const [showNotificationsModal, setShowNotificationsModal] = useState(false);
   const [notifSettings, setNotifSettings] = useState<NotificationSettings>({
     transactionReminders: true,
     morningReminderTime: "09:00",
     eveningReminderTime: "20:00",
   });
 
-  const [showRecurringModal, setShowRecurringModal] = useState(false);
-  const [recurringList, setRecurringList] = useState<RecurringTransaction[]>([]);
-  const [newRecTitle, setNewRecTitle] = useState("");
-  const [newRecAmount, setNewRecAmount] = useState("");
-  const [newRecType, setNewRecType] = useState<TransactionType>("expense");
-  const [newRecFreq, setNewRecFreq] = useState<RecurringFrequency>("monthly");
+  // ── AI Configuration State ──────────────────────────────────────
+  const [showAiModal, setShowAiModal] = useState(false);
+  const [aiConfig, setAiConfig] = useState<AIConfig>({ provider: "gemini", apiKey: "" });
+  const [aiKeyInput, setAiKeyInput] = useState("");
+  const [selectedAiProvider, setSelectedAiProvider] = useState<AIProvider>("gemini");
+  const [isTestingAi, setIsTestingAi] = useState(false);
+  const [showAiKeySecret, setShowAiKeySecret] = useState(false);
 
   const currentBillingDay = settings.data?.billingPeriodStartDay || 28;
 
   // ── Effects ─────────────────────────────────────────────────────
   useEffect(() => {
-    if (settings.data)
+    if (settings.data) {
       setSelectedBillingDay(settings.data.billingPeriodStartDay);
+      setBillingDayInput(String(settings.data.billingPeriodStartDay));
+    }
   }, [settings.data]);
 
   useEffect(() => {
@@ -217,19 +221,47 @@ export const SettingsScreen: React.FC = () => {
     if (Platform.OS === "android") {
       getSmsDetectionEnabled().then(setSmsEnabled);
     }
-    // Load local profile, PIN security, notifications & recurring rules
+    // Load local profile, notifications & recurring rules
     securityService.getProfile().then((prof) => {
       setLocalProfile(prof);
       setProfileNameInput(prof.displayName);
       setProfileEmailInput(prof.email);
     });
-    securityService.isAppLockEnabled().then(setAppLockEnabled);
     NotificationService.getInstance()
       .getNotificationSettings()
       .then(setNotifSettings)
       .catch(() => {});
-    recurringService.getRecurringList().then(setRecurringList).catch(() => {});
+    getAIConfig().then((cfg) => {
+      setAiConfig(cfg);
+      setAiKeyInput(cfg.apiKey || "");
+      setSelectedAiProvider(cfg.provider);
+    });
   }, [dispatch]);
+
+  const handleSaveAiConfig = async () => {
+    const updated: AIConfig = {
+      provider: selectedAiProvider,
+      apiKey: aiKeyInput.trim(),
+    };
+    await saveAIConfig(updated);
+    setAiConfig(updated);
+    setShowAiModal(false);
+    showSuccess("AI configuration saved!");
+  };
+
+  const handleTestAi = async () => {
+    setIsTestingAi(true);
+    const res = await testAIConnection({
+      provider: selectedAiProvider,
+      apiKey: aiKeyInput.trim(),
+    });
+    setIsTestingAi(false);
+    if (res.success) {
+      showSuccess(res.message);
+    } else {
+      showError(res.message);
+    }
+  };
 
   const handleSaveProfile = async () => {
     try {
@@ -245,103 +277,19 @@ export const SettingsScreen: React.FC = () => {
     }
   };
 
-  const handleSavePinLock = async () => {
-    const cleanPin = pinInput.trim();
-    if (!/^\d{4}$/.test(cleanPin)) {
-      showError("Please enter a 4-digit numeric PIN");
-      return;
-    }
-    if (cleanPin !== confirmPinInput.trim()) {
-      showError("PIN codes do not match");
-      return;
-    }
+  const handleReminderToggle = async (value: boolean) => {
     try {
-      await securityService.setAppLockPin(cleanPin);
-      setAppLockEnabled(true);
-      setPinInput("");
-      setConfirmPinInput("");
-      setShowSecurityModal(false);
-      showSuccess("4-digit App Lock PIN enabled");
+      setNotifSettings((prev) => ({
+        ...prev,
+        transactionReminders: value,
+      }));
+      await NotificationService.getInstance().saveSettings({
+        transactionReminders: value,
+      });
+      showSuccess(value ? "Daily reminders enabled" : "Daily reminders disabled");
     } catch {
-      showError("Failed to set App Lock PIN");
+      showError("Failed to update reminder settings");
     }
-  };
-
-  const handleDisablePinLock = async () => {
-    try {
-      await securityService.disableAppLock();
-      setAppLockEnabled(false);
-      setPinInput("");
-      setConfirmPinInput("");
-      setShowSecurityModal(false);
-      showSuccess("App Lock disabled");
-    } catch {
-      showError("Failed to disable App Lock");
-    }
-  };
-
-  const handleSaveNotifications = async () => {
-    const timeRegex = /^([01]\d|2[0-3]):([0-5]\d)$/;
-    if (
-      !timeRegex.test(notifSettings.morningReminderTime) ||
-      !timeRegex.test(notifSettings.eveningReminderTime)
-    ) {
-      showError("Please enter valid times in HH:MM format (e.g. 09:00, 20:00)");
-      return;
-    }
-    try {
-      await NotificationService.getInstance().saveSettings(
-        notifSettings,
-      );
-      setShowNotificationsModal(false);
-      showSuccess("Daily reminder settings saved");
-    } catch {
-      showError("Failed to save notification settings");
-    }
-  };
-
-  const handleTestNotification = async () => {
-    try {
-      await NotificationService.getInstance().scheduleTestNotification();
-      showSuccess("Test notification sent!");
-    } catch {
-      showError("Could not send test notification");
-    }
-  };
-
-  const handleAddRecurringRule = async () => {
-    const amt = parseFloat(newRecAmount);
-    if (!newRecTitle.trim() || !amt || amt <= 0) {
-      showError("Please enter a title and valid amount");
-      return;
-    }
-    const matchingCat =
-      Object.values(categories).find(
-        (c) => c && !c.deleted && c.type === newRecType,
-      )?.id || "default";
-
-    const updated = await recurringService.addRecurring({
-      title: newRecTitle.trim(),
-      amount: amt,
-      type: newRecType,
-      categoryId: matchingCat,
-      frequency: newRecFreq,
-      autoLog: true,
-    });
-    setRecurringList(updated);
-    setNewRecTitle("");
-    setNewRecAmount("");
-    showSuccess("Recurring rule added");
-  };
-
-  const handleToggleRecurringRule = async (id: string) => {
-    const updated = await recurringService.toggleRecurring(id);
-    setRecurringList(updated);
-  };
-
-  const handleDeleteRecurringRule = async (id: string) => {
-    const updated = await recurringService.deleteRecurring(id);
-    setRecurringList(updated);
   };
 
   const handleSmsToggle = async (value: boolean) => {
@@ -370,11 +318,30 @@ export const SettingsScreen: React.FC = () => {
 
   // ── Handlers ────────────────────────────────────────────────────
 
+  const parsedBillingDay = parseInt(billingDayInput.trim(), 10);
+  const isBillingDayNumeric = /^\d+$/.test(billingDayInput.trim());
+  const isBillingDayValid = isBillingDayNumeric && parsedBillingDay >= 1 && parsedBillingDay <= 30;
+
+  const getBillingDayError = (): string | null => {
+    const trimmed = billingDayInput.trim();
+    if (!trimmed) return "Please enter a day number.";
+    if (!isBillingDayNumeric) return "Day must be a whole number.";
+    if (parsedBillingDay < 1) return "Day must be at least 1 (valid range: 1–30).";
+    if (parsedBillingDay > 30) return "Day cannot exceed 30 (valid range: 1–30).";
+    return null;
+  };
+
   const saveBillingDay = async () => {
+    const error = getBillingDayError();
+    if (error) {
+      showError(error);
+      return;
+    }
     try {
-      await dispatch(updateBillingPeriodStartDay(selectedBillingDay)).unwrap();
+      await dispatch(updateBillingPeriodStartDay(parsedBillingDay)).unwrap();
+      setSelectedBillingDay(parsedBillingDay);
       setShowBillingDayPicker(false);
-      showSuccess(`Billing period starts on day ${selectedBillingDay}`);
+      showSuccess(`Billing cycle starts on day ${parsedBillingDay}`);
     } catch {
       showError("Failed to update billing period");
     }
@@ -390,11 +357,11 @@ export const SettingsScreen: React.FC = () => {
     }
   };
 
-  const handleSelectTheme = async (themeMode: "dark" | "light") => {
+  const handleToggleTheme = async (enableDark: boolean) => {
+    const themeMode = enableDark ? "dark" : "light";
     try {
       await dispatch(updateTheme(themeMode)).unwrap();
-      setShowThemePicker(false);
-      showSuccess(`Switched to ${themeMode === "dark" ? "Dark" : "Light"} theme`);
+      showSuccess(`Switched to ${themeMode === "dark" ? "Dark" : "Light"} mode`);
     } catch {
       showError("Failed to update theme");
     }
@@ -537,40 +504,20 @@ export const SettingsScreen: React.FC = () => {
       const buds = budgets || {};
       const now = new Date();
 
-      const getBillingStart = (ref: Date, day: number) => {
-        const c = new Date(ref.getFullYear(), ref.getMonth(), day);
-        return ref >= c
-          ? c
-          : new Date(ref.getFullYear(), ref.getMonth() - 1, day);
-      };
-
       let filtered = list;
       if (period === "month") {
-        const s = getBillingStart(now, currentBillingDay);
-        const e = new Date(
-          s.getFullYear(),
-          s.getMonth() + 1,
-          currentBillingDay,
-        );
+        const { start, end } = getDateRangeForBillingPeriod(currentBillingDay, now);
         filtered = list.filter((t) => {
           const d = new Date(t.date);
-          return d >= s && d < e;
+          return d >= start && d <= end;
         });
       } else if (period === "quarter") {
-        const cs = getBillingStart(now, currentBillingDay);
-        const s = new Date(
-          cs.getFullYear(),
-          cs.getMonth() - 2,
-          currentBillingDay,
-        );
-        const e = new Date(
-          cs.getFullYear(),
-          cs.getMonth() + 1,
-          currentBillingDay,
-        );
+        const { start: currentStart, end: currentEnd } = getDateRangeForBillingPeriod(currentBillingDay, now);
+        const quarterStart = new Date(currentStart);
+        quarterStart.setMonth(quarterStart.getMonth() - 2);
         filtered = list.filter((t) => {
           const d = new Date(t.date);
-          return d >= s && d < e;
+          return d >= quarterStart && d <= currentEnd;
         });
       }
 
@@ -659,29 +606,6 @@ export const SettingsScreen: React.FC = () => {
               setShowProfileModal(true);
             }}
           />
-          <SettingRow
-            icon="shield-checkmark-outline"
-            title="Security & App Lock"
-            subtitle={
-              appLockEnabled
-                ? "4-digit PIN lock is active on startup & resume"
-                : "Protect Financy with a 4-digit PIN lock"
-            }
-            rightElement={
-              <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
-                <Text
-                  style={{
-                    fontSize: 12,
-                    fontWeight: "700",
-                    color: appLockEnabled ? colors.primary : colors.onSurfaceVariant,
-                  }}>
-                  {appLockEnabled ? "Enabled" : "Off"}
-                </Text>
-                <Ionicons name="chevron-forward" size={16} color={colors.onSurfaceVariant} />
-              </View>
-            }
-            onPress={() => setShowSecurityModal(true)}
-          />
         </GlassCard>
 
         <SectionLabel text="PREFERENCES" />
@@ -700,20 +624,26 @@ export const SettingsScreen: React.FC = () => {
             }
             onPress={() => setShowCurrencyPicker(true)}
           />
-          <SettingRow icon="calendar-outline" title="Billing Cycle" subtitle={`Starts on day ${currentBillingDay}`} onPress={() => setShowBillingDayPicker(true)} />
+          <SettingRow
+            icon="calendar-outline"
+            title="Billing Cycle"
+            subtitle={`Starts on day ${currentBillingDay} of each month`}
+            onPress={() => {
+              setBillingDayInput(String(currentBillingDay));
+              setShowBillingDayPicker(true);
+            }}
+          />
           <SettingRow
             icon={isDark ? "moon-outline" : "sunny-outline"}
-            title="Theme"
-            subtitle={isDark ? "Dark mode (Matte Slate)" : "Light mode (Crisp Alabaster)"}
+            title="Dark Mode"
+            subtitle={isDark ? "Active — Matte Slate dark theme" : "Disabled — Crisp Alabaster light theme"}
             rightElement={
-              <View style={{ flexDirection: "row", alignItems: "center" }}>
-                <Text style={[typography.bodyMedium, { color: colors.onSurfaceVariant, marginRight: 8 }]}>
-                  {isDark ? "Dark" : "Light"}
-                </Text>
-                <Ionicons name="chevron-forward" size={16} color={colors.onSurfaceVariant} />
-              </View>
+              <Switch
+                value={isDark}
+                onValueChange={handleToggleTheme}
+              />
             }
-            onPress={() => setShowThemePicker(true)}
+            onPress={() => handleToggleTheme(!isDark)}
           />
           <SettingRow icon="apps-outline" title="Categories" subtitle="Manage transaction categories and icons" onPress={() => navigation.navigate("CategoryManagement")} />
           <SettingRow
@@ -723,46 +653,59 @@ export const SettingsScreen: React.FC = () => {
             onPress={() => navigation.navigate("WalletManagement")}
           />
           <SettingRow
-            icon="repeat-outline"
-            title="Recurring & Subscriptions"
-            subtitle={
-              recurringList.length > 0
-                ? `${recurringList.filter((r) => r.active).length} active recurring rules`
-                : "Auto-log recurring bills, subscriptions & salary"
-            }
-            onPress={() => {
-              recurringService.getRecurringList().then(setRecurringList).catch(() => {});
-              setShowRecurringModal(true);
-            }}
-          />
-          <SettingRow
             icon="notifications-outline"
-            title="Daily Reminders & Alerts"
+            title="Daily Reminders"
             subtitle={
               notifSettings.transactionReminders
-                ? `Active at ${notifSettings.morningReminderTime} & ${notifSettings.eveningReminderTime}`
-                : "Reminders paused"
+                ? "Active — morning & evening reminders"
+                : "Disabled — tap to enable"
             }
-            onPress={() => setShowNotificationsModal(true)}
+            rightElement={
+              <Switch
+                value={notifSettings.transactionReminders}
+                onValueChange={handleReminderToggle}
+              />
+            }
+            onPress={() => handleReminderToggle(!notifSettings.transactionReminders)}
           />
           {Platform.OS === "android" && (
             <>
               <SettingRow
                 icon="chatbubble-outline"
                 title="SMS Transaction Detection"
-                subtitle={smsEnabled ? "Detects bank SMS and notifies you" : "Disabled — tap to enable"}
+                subtitle={smsEnabled ? "Active — listening for bank SMS" : "Disabled — tap to enable"}
                 rightElement={
                   <Switch
                     value={smsEnabled}
                     onValueChange={handleSmsToggle}
-                    trackColor={{ false: colors.surfaceVariant, true: colors.primaryContainer }}
-                    thumbColor={smsEnabled ? colors.primary : colors.onSurfaceVariant}
                   />
                 }
                 onPress={() => handleSmsToggle(!smsEnabled)}
               />
+              {smsEnabled && (
+                <SettingRow
+                  icon="code-working-outline"
+                  title="SMS Detector Customization"
+                  subtitle="Customize bank senders, keywords & parsing rules"
+                  onPress={() => navigation.navigate("SmsSettings")}
+                />
+              )}
             </>
           )}
+        </GlassCard>
+
+        <SectionLabel text="AI ASSISTANT" />
+        <GlassCard>
+          <SettingRow
+            icon="sparkles-outline"
+            title="Cloud AI Assistant"
+            subtitle={
+              aiConfig?.apiKey
+                ? `${aiConfig.provider === "gemini" ? "Google Gemini" : aiConfig.provider === "groq" ? "Groq Llama 3.3" : "OpenAI"} Active`
+                : "Configure free Google Gemini or Groq key"
+            }
+            onPress={() => setShowAiModal(true)}
+          />
         </GlassCard>
 
         <SectionLabel text="DATA" />
@@ -863,91 +806,142 @@ export const SettingsScreen: React.FC = () => {
         </View>
       </Modal>
 
-      {/* Theme Picker Modal */}
-      <Modal visible={showThemePicker} transparent animationType="fade" onRequestClose={() => setShowThemePicker(false)}>
-        <View style={styles.modalOverlay}>
-          <View style={[styles.modalCard, { backgroundColor: colors.surface, borderColor: colors.outlineVariant }]}>
-            <Text style={[styles.modalTitle, { color: colors.onSurface }]}>Appearance</Text>
-            <Text style={[styles.modalSubtitle, { color: colors.onSurfaceVariant }]}>
-              Choose your preferred color theme.
-            </Text>
-            {(
-              [
-                { key: "dark", label: "Dark Mode", desc: "Matte Slate with pastel emerald accents", icon: "moon" },
-                { key: "light", label: "Light Mode", desc: "Crisp Alabaster with high-contrast text", icon: "sunny" },
-              ] as const
-            ).map((opt) => {
-              const selected = (isDark ? "dark" : "light") === opt.key;
-              return (
-                <TouchableOpacity
-                  key={opt.key}
-                  style={[styles.dayOption, selected && styles.dayOptionActive]}
-                  onPress={() => handleSelectTheme(opt.key)}
-                >
-                  <View style={{ flexDirection: "row", alignItems: "center", gap: 12, flex: 1 }}>
-                    <View
-                      style={{
-                        width: 36,
-                        height: 36,
-                        borderRadius: 18,
-                        backgroundColor: selected ? colors.primary : colors.surfaceVariant,
-                        alignItems: "center",
-                        justifyContent: "center",
-                      }}
-                    >
-                      <Ionicons
-                        name={opt.icon as any}
-                        size={18}
-                        color={selected ? colors.onPrimary : colors.onSurface}
-                      />
-                    </View>
-                    <View style={{ flex: 1 }}>
-                      <Text style={[styles.dayText, selected && styles.dayTextActive]}>{opt.label}</Text>
-                      <Text style={{ fontSize: 12, color: colors.onSurfaceVariant }}>{opt.desc}</Text>
-                    </View>
-                  </View>
-                  {selected && <Ionicons name="checkmark-circle" size={22} color={colors.primary} />}
-                </TouchableOpacity>
-              );
-            })}
-            <View style={styles.modalActions}>
-              <TouchableOpacity style={styles.modalCancelBtn} onPress={() => setShowThemePicker(false)}>
-                <Text style={styles.modalCancelText}>Close</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-      </Modal>
-
       <Modal visible={showBillingDayPicker} transparent animationType="fade" onRequestClose={() => setShowBillingDayPicker(false)}>
-        <View style={styles.modalOverlay}>
+        <KeyboardAvoidingView
+          behavior={Platform.OS === "ios" ? "padding" : undefined}
+          style={styles.modalOverlay}
+        >
           <View style={[styles.modalCard, { backgroundColor: colors.surface, borderColor: colors.outlineVariant }]}>
             <Text style={[styles.modalTitle, { color: colors.onSurface }]}>Billing Cycle Start</Text>
-            <Text style={[styles.modalSubtitle, { color: colors.onSurfaceVariant }]}>Select the day of the month your billing cycle starts.</Text>
-            <ScrollView style={{ maxHeight: 300 }}>
-              {Array.from({ length: 28 }, (_, i) => i + 1).map((day) => (
-                <TouchableOpacity
-                  key={day}
-                  style={[
-                    styles.dayOption,
-                    selectedBillingDay === day && styles.dayOptionActive,
-                  ]}
-                  onPress={() => setSelectedBillingDay(day)}>
-                  <Text style={[styles.dayText, selectedBillingDay === day && styles.dayTextActive]}>Day {day}</Text>
-                  {selectedBillingDay === day && <Ionicons name="checkmark" size={20} color={colors.primary} />}
-                </TouchableOpacity>
-              ))}
-            </ScrollView>
+            <Text style={[styles.modalSubtitle, { color: colors.onSurfaceVariant }]}>
+              Enter the day of the month your billing cycle starts (1 to 30 inclusive).
+            </Text>
+
+            <View style={{ marginBottom: 14 }}>
+              <Text style={[styles.inputLabel, { color: colors.onSurfaceVariant, marginBottom: 8 }]}>
+                Start Day of Month (1–30)
+              </Text>
+              <TextInput
+                style={[
+                  styles.billingNumberInput,
+                  {
+                    backgroundColor: colors.surfaceVariant,
+                    color: colors.onSurface,
+                    borderColor: !isBillingDayValid && billingDayInput.length > 0 ? colors.error : colors.outlineVariant,
+                  },
+                ]}
+                value={billingDayInput}
+                onChangeText={(text) => setBillingDayInput(text.replace(/[^0-9]/g, ""))}
+                placeholder="e.g. 28"
+                placeholderTextColor={colors.onSurfaceVariant}
+                keyboardType="number-pad"
+                maxLength={2}
+                autoFocus
+              />
+
+              {/* Quick Presets */}
+              <View style={styles.quickPresetRow}>
+                <Text style={[styles.quickPresetLabel, { color: colors.onSurfaceVariant }]}>Common:</Text>
+                {[1, 5, 15, 25, 28, 30].map((presetDay) => (
+                  <TouchableOpacity
+                    key={presetDay}
+                    style={[
+                      styles.quickPresetChip,
+                      {
+                        backgroundColor:
+                          parsedBillingDay === presetDay
+                            ? colors.primary
+                            : colors.surfaceVariant,
+                      },
+                    ]}
+                    onPress={() => setBillingDayInput(String(presetDay))}
+                  >
+                    <Text
+                      style={[
+                        styles.quickPresetChipText,
+                        {
+                          color:
+                            parsedBillingDay === presetDay
+                              ? colors.onPrimary
+                              : colors.onSurfaceVariant,
+                        },
+                      ]}
+                    >
+                      {presetDay}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </View>
+
+            {/* Validation Feedback & February Handling Note */}
+            {!isBillingDayValid && billingDayInput.length > 0 && (
+              <View style={[styles.billingNoticeCard, { backgroundColor: colors.errorContainer, borderColor: colors.error }]}>
+                <Ionicons name="alert-circle" size={18} color={colors.onErrorContainer} />
+                <Text style={[styles.billingNoticeText, { color: colors.onErrorContainer, marginLeft: 8, flex: 1 }]}>
+                  {getBillingDayError()}
+                </Text>
+              </View>
+            )}
+
+            {isBillingDayValid && parsedBillingDay >= 29 && (
+              <View style={[styles.billingNoticeCard, { backgroundColor: colors.secondaryContainer, borderColor: colors.secondary }]}>
+                <Ionicons name="information-circle" size={18} color={colors.onSecondaryContainer} />
+                <View style={{ flex: 1, marginLeft: 8 }}>
+                  <Text style={[styles.billingNoticeTitle, { color: colors.onSecondaryContainer }]}>
+                    February Handling
+                  </Text>
+                  <Text style={[styles.billingNoticeText, { color: colors.onSecondaryContainer }]}>
+                    February has 28 days (29 in leap years). For February, your cycle automatically starts on the final day of the month (Feb 28/29).
+                  </Text>
+                </View>
+              </View>
+            )}
+
+            {isBillingDayValid && parsedBillingDay === 1 && (
+              <View style={[styles.billingNoticeCard, { backgroundColor: colors.surfaceVariant, borderColor: colors.outlineVariant }]}>
+                <Ionicons name="checkmark-circle" size={18} color="#22C55E" />
+                <View style={{ flex: 1, marginLeft: 8 }}>
+                  <Text style={[styles.billingNoticeText, { color: colors.onSurface }]}>
+                    Cycle aligns with standard calendar months (1st to the last day of each month).
+                  </Text>
+                </View>
+              </View>
+            )}
+
+            {isBillingDayValid && parsedBillingDay > 1 && parsedBillingDay < 29 && (
+              <View style={[styles.billingNoticeCard, { backgroundColor: colors.surfaceVariant, borderColor: colors.outlineVariant }]}>
+                <Ionicons name="checkmark-circle" size={18} color="#22C55E" />
+                <View style={{ flex: 1, marginLeft: 8 }}>
+                  <Text style={[styles.billingNoticeText, { color: colors.onSurface }]}>
+                    Cycle runs from Day {parsedBillingDay} of each month to Day {parsedBillingDay - 1} of the next month.
+                  </Text>
+                </View>
+              </View>
+            )}
+
             <View style={styles.modalActions}>
               <TouchableOpacity style={styles.modalCancelBtn} onPress={() => setShowBillingDayPicker(false)}>
                 <Text style={styles.modalCancelText}>Cancel</Text>
               </TouchableOpacity>
-              <TouchableOpacity style={[styles.modalSaveBtn, { backgroundColor: colors.primary }]} onPress={saveBillingDay}>
-                <Text style={[styles.modalSaveText, { color: colors.onPrimary }]}>Save</Text>
+              <TouchableOpacity
+                style={[
+                  styles.modalSaveBtn,
+                  {
+                    backgroundColor: isBillingDayValid ? colors.primary : colors.surfaceVariant,
+                    opacity: isBillingDayValid ? 1 : 0.6,
+                  },
+                ]}
+                disabled={!isBillingDayValid}
+                onPress={saveBillingDay}
+              >
+                <Text style={[styles.modalSaveText, { color: isBillingDayValid ? colors.onPrimary : colors.onSurfaceVariant }]}>
+                  Save
+                </Text>
               </TouchableOpacity>
             </View>
           </View>
-        </View>
+        </KeyboardAvoidingView>
       </Modal>
 
       {/* Profile Information Modal */}
@@ -1039,505 +1033,235 @@ export const SettingsScreen: React.FC = () => {
         </View>
       </Modal>
 
-      {/* Security & App Lock Modal */}
+      {/* ── AI Configuration Modal ── */}
       <Modal
-        visible={showSecurityModal}
+        visible={showAiModal}
         transparent
         animationType="fade"
-        onRequestClose={() => setShowSecurityModal(false)}>
-        <View style={styles.modalOverlay}>
+        onRequestClose={() => setShowAiModal(false)}>
+        <KeyboardAvoidingView
+          behavior={Platform.OS === "ios" ? "padding" : undefined}
+          style={styles.modalOverlay}>
           <View
             style={[
               styles.modalCard,
-              { backgroundColor: colors.surface, borderColor: colors.outlineVariant },
+              { backgroundColor: colors.surface, borderColor: colors.outlineVariant, maxWidth: 440 },
             ]}>
-            <Text style={[styles.modalTitle, { color: colors.onSurface }]}>
-              App Lock (PIN Security)
-            </Text>
-            <Text style={[styles.modalSubtitle, { color: colors.onSurfaceVariant }]}>
-              {appLockEnabled
-                ? "Enter a new 4-digit PIN to update your lock code, or disable App Lock below."
-                : "Set a 4-digit numeric PIN to lock Financy when launched or resumed."}
-            </Text>
-
-            <Text
-              style={{
-                fontSize: 12,
-                fontWeight: "600",
-                color: colors.onSurfaceVariant,
-                marginBottom: 6,
-              }}>
-              4-DIGIT PIN
-            </Text>
-            <TextInput
-              style={{
-                backgroundColor: colors.surfaceVariant,
-                borderRadius: 12,
-                paddingHorizontal: 14,
-                paddingVertical: 12,
-                color: colors.onSurface,
-                fontSize: 18,
-                fontWeight: "700",
-                letterSpacing: 8,
-                textAlign: "center",
-                marginBottom: 14,
-              }}
-              value={pinInput}
-              onChangeText={(t) => setPinInput(t.replace(/\D/g, "").slice(0, 4))}
-              placeholder="••••"
-              placeholderTextColor={colors.onSurfaceVariant}
-              keyboardType="number-pad"
-              maxLength={4}
-              secureTextEntry
-            />
-
-            <Text
-              style={{
-                fontSize: 12,
-                fontWeight: "600",
-                color: colors.onSurfaceVariant,
-                marginBottom: 6,
-              }}>
-              CONFIRM 4-DIGIT PIN
-            </Text>
-            <TextInput
-              style={{
-                backgroundColor: colors.surfaceVariant,
-                borderRadius: 12,
-                paddingHorizontal: 14,
-                paddingVertical: 12,
-                color: colors.onSurface,
-                fontSize: 18,
-                fontWeight: "700",
-                letterSpacing: 8,
-                textAlign: "center",
-                marginBottom: 10,
-              }}
-              value={confirmPinInput}
-              onChangeText={(t) =>
-                setConfirmPinInput(t.replace(/\D/g, "").slice(0, 4))
-              }
-              placeholder="••••"
-              placeholderTextColor={colors.onSurfaceVariant}
-              keyboardType="number-pad"
-              maxLength={4}
-              secureTextEntry
-            />
-
-            {appLockEnabled && (
-              <TouchableOpacity
-                onPress={handleDisablePinLock}
+            <View style={{ flexDirection: "row", alignItems: "center", marginBottom: 12 }}>
+              <View
                 style={{
-                  paddingVertical: 10,
+                  width: 36,
+                  height: 36,
+                  borderRadius: 18,
+                  backgroundColor: colors.primaryContainer,
                   alignItems: "center",
-                  marginBottom: 4,
+                  justifyContent: "center",
+                  marginRight: 10,
                 }}>
-                <Text
-                  style={{
-                    color: colors.error,
-                    fontWeight: "700",
-                    fontSize: 14,
-                  }}>
-                  Disable App Lock
+                <Ionicons name="sparkles" size={20} color={colors.onPrimaryContainer} />
+              </View>
+              <View>
+                <Text style={[styles.modalTitle, { color: colors.onSurface, marginBottom: 2 }]}>
+                  Cloud AI Assistant
                 </Text>
-              </TouchableOpacity>
-            )}
-
-            <View style={styles.modalActions}>
-              <TouchableOpacity
-                style={styles.modalCancelBtn}
-                onPress={() => setShowSecurityModal(false)}>
-                <Text style={styles.modalCancelText}>Cancel</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.modalSaveBtn, { backgroundColor: colors.primary }]}
-                onPress={handleSavePinLock}>
-                <Text style={[styles.modalSaveText, { color: colors.onPrimary }]}>
-                  {appLockEnabled ? "Update PIN" : "Enable Lock"}
+                <Text style={{ fontSize: 13, color: colors.onSurfaceVariant }}>
+                  Intelligent receipt & voice understanding
                 </Text>
-              </TouchableOpacity>
+              </View>
             </View>
-          </View>
-        </View>
-      </Modal>
 
-      {/* Daily Notifications & Reminders Modal */}
-      <Modal
-        visible={showNotificationsModal}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setShowNotificationsModal(false)}>
-        <View style={styles.modalOverlay}>
-          <View
-            style={[
-              styles.modalCard,
-              { backgroundColor: colors.surface, borderColor: colors.outlineVariant },
-            ]}>
-            <Text style={[styles.modalTitle, { color: colors.onSurface }]}>
-              Daily Reminders
-            </Text>
-            <Text style={[styles.modalSubtitle, { color: colors.onSurfaceVariant }]}>
-              Schedule morning & evening reminders to log your daily expenses.
+            {/* Provider Selection */}
+            <Text
+              style={{
+                fontSize: 12,
+                fontWeight: "700",
+                color: colors.onSurfaceVariant,
+                marginBottom: 8,
+                marginTop: 6,
+                letterSpacing: 0.5,
+              }}>
+              SELECT PROVIDER
             </Text>
 
+            <View style={{ flexDirection: "row", gap: 8, marginBottom: 14 }}>
+              {[
+                { id: "gemini" as const, label: "Google Gemini", tag: "Free" },
+                { id: "groq" as const, label: "Groq Llama", tag: "Fast" },
+                { id: "openai" as const, label: "OpenAI", tag: "" },
+              ].map((p) => {
+                const isSelected = selectedAiProvider === p.id;
+                return (
+                  <TouchableOpacity
+                    key={p.id}
+                    onPress={() => setSelectedAiProvider(p.id)}
+                    style={{
+                      flex: 1,
+                      paddingVertical: 10,
+                      paddingHorizontal: 8,
+                      borderRadius: 12,
+                      backgroundColor: isSelected ? colors.primaryContainer : colors.surfaceVariant,
+                      borderWidth: 1.5,
+                      borderColor: isSelected ? colors.primary : "transparent",
+                      alignItems: "center",
+                    }}>
+                    <Text
+                      style={{
+                        fontSize: 13,
+                        fontWeight: isSelected ? "700" : "500",
+                        color: isSelected ? colors.onPrimaryContainer : colors.onSurfaceVariant,
+                      }}>
+                      {p.label}
+                    </Text>
+                    {p.tag ? (
+                      <Text
+                        style={{
+                          fontSize: 10,
+                          fontWeight: "700",
+                          color: colors.primary,
+                          marginTop: 2,
+                        }}>
+                        {p.tag}
+                      </Text>
+                    ) : null}
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+
+            {/* API Key Input */}
+            <Text
+              style={{
+                fontSize: 12,
+                fontWeight: "700",
+                color: colors.onSurfaceVariant,
+                marginBottom: 6,
+                letterSpacing: 0.5,
+              }}>
+              {selectedAiProvider.toUpperCase()} API KEY
+            </Text>
             <View
               style={{
                 flexDirection: "row",
-                justifyContent: "space-between",
                 alignItems: "center",
-                marginBottom: 16,
                 backgroundColor: colors.surfaceVariant,
-                padding: 12,
                 borderRadius: 12,
+                paddingHorizontal: 12,
+                marginBottom: 10,
               }}>
-              <Text
+              <TextInput
                 style={{
-                  fontSize: 15,
-                  fontWeight: "600",
+                  flex: 1,
+                  paddingVertical: 12,
                   color: colors.onSurface,
-                }}>
-                Enable Daily Reminders
-              </Text>
-              <Switch
-                value={notifSettings.transactionReminders}
-                onValueChange={(v) =>
-                  setNotifSettings((prev) => ({
-                    ...prev,
-                    transactionReminders: v,
-                  }))
-                }
-                trackColor={{
-                  false: colors.outlineVariant,
-                  true: colors.primaryContainer,
+                  fontSize: 14,
                 }}
-                thumbColor={
-                  notifSettings.transactionReminders
-                    ? colors.primary
-                    : colors.onSurfaceVariant
+                value={aiKeyInput}
+                onChangeText={setAiKeyInput}
+                placeholder={
+                  selectedAiProvider === "gemini"
+                    ? "AIzaSy..."
+                    : selectedAiProvider === "groq"
+                    ? "gsk_..."
+                    : "sk-..."
                 }
+                placeholderTextColor={colors.onSurfaceVariant}
+                secureTextEntry={!showAiKeySecret}
+                autoCapitalize="none"
+                autoCorrect={false}
               />
+              <TouchableOpacity
+                onPress={() => setShowAiKeySecret(!showAiKeySecret)}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                <Ionicons
+                  name={showAiKeySecret ? "eye-off-outline" : "eye-outline"}
+                  size={20}
+                  color={colors.onSurfaceVariant}
+                />
+              </TouchableOpacity>
             </View>
 
-            <Text
-              style={{
-                fontSize: 12,
-                fontWeight: "600",
-                color: colors.onSurfaceVariant,
-                marginBottom: 6,
-              }}>
-              MORNING REMINDER (24H HH:MM)
-            </Text>
-            <TextInput
-              style={{
-                backgroundColor: colors.surfaceVariant,
-                borderRadius: 12,
-                paddingHorizontal: 14,
-                paddingVertical: 10,
-                color: colors.onSurface,
-                fontSize: 15,
-                marginBottom: 14,
-              }}
-              value={notifSettings.morningReminderTime}
-              onChangeText={(t) =>
-                setNotifSettings((prev) => ({
-                  ...prev,
-                  morningReminderTime: t,
-                }))
-              }
-              placeholder="09:00"
-              placeholderTextColor={colors.onSurfaceVariant}
-            />
-
-            <Text
-              style={{
-                fontSize: 12,
-                fontWeight: "600",
-                color: colors.onSurfaceVariant,
-                marginBottom: 6,
-              }}>
-              EVENING REMINDER (24H HH:MM)
-            </Text>
-            <TextInput
-              style={{
-                backgroundColor: colors.surfaceVariant,
-                borderRadius: 12,
-                paddingHorizontal: 14,
-                paddingVertical: 10,
-                color: colors.onSurface,
-                fontSize: 15,
-                marginBottom: 14,
-              }}
-              value={notifSettings.eveningReminderTime}
-              onChangeText={(t) =>
-                setNotifSettings((prev) => ({
-                  ...prev,
-                  eveningReminderTime: t,
-                }))
-              }
-              placeholder="20:00"
-              placeholderTextColor={colors.onSurfaceVariant}
-            />
-
+            {/* Helpful link to get key */}
             <TouchableOpacity
-              onPress={handleTestNotification}
+              onPress={() => {
+                if (selectedAiProvider === "gemini") {
+                  Linking.openURL("https://aistudio.google.com/app/apikey");
+                } else if (selectedAiProvider === "groq") {
+                  Linking.openURL("https://console.groq.com/keys");
+                } else {
+                  Linking.openURL("https://platform.openai.com/api-keys");
+                }
+              }}
               style={{
-                paddingVertical: 10,
-                borderRadius: 12,
-                backgroundColor: colors.secondaryContainer,
+                flexDirection: "row",
                 alignItems: "center",
-                marginBottom: 4,
+                paddingVertical: 6,
+                marginBottom: 16,
               }}>
+              <Ionicons name="open-outline" size={14} color={colors.primary} />
               <Text
                 style={{
-                  color: colors.onSecondaryContainer,
-                  fontWeight: "700",
-                  fontSize: 13,
+                  fontSize: 12,
+                  color: colors.primary,
+                  fontWeight: "600",
+                  marginLeft: 6,
+                  textDecorationLine: "underline",
                 }}>
-                Send Test Notification
+                {selectedAiProvider === "gemini"
+                  ? "Get 100% Free Gemini API Key (No card required)"
+                  : selectedAiProvider === "groq"
+                  ? "Get Free Groq API Key (console.groq.com)"
+                  : "Get OpenAI API Key"}
               </Text>
             </TouchableOpacity>
 
+            {/* Test Connection Button */}
+            <TouchableOpacity
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                justifyContent: "center",
+                paddingVertical: 10,
+                borderRadius: 10,
+                backgroundColor: colors.surfaceVariant,
+                borderWidth: 1,
+                borderColor: colors.outlineVariant,
+                marginBottom: 16,
+              }}
+              onPress={handleTestAi}
+              disabled={isTestingAi}>
+              {isTestingAi ? (
+                <ActivityIndicator size="small" color={colors.primary} />
+              ) : (
+                <Ionicons name="flash-outline" size={16} color={colors.primary} />
+              )}
+              <Text
+                style={{
+                  color: colors.primary,
+                  fontWeight: "600",
+                  fontSize: 13,
+                  marginLeft: 6,
+                }}>
+                {isTestingAi ? "Testing Connection..." : "Test API Key"}
+              </Text>
+            </TouchableOpacity>
+
+            {/* Action Buttons */}
             <View style={styles.modalActions}>
               <TouchableOpacity
                 style={styles.modalCancelBtn}
-                onPress={() => setShowNotificationsModal(false)}>
+                onPress={() => setShowAiModal(false)}>
                 <Text style={styles.modalCancelText}>Cancel</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={[styles.modalSaveBtn, { backgroundColor: colors.primary }]}
-                onPress={handleSaveNotifications}>
+                onPress={handleSaveAiConfig}>
                 <Text style={[styles.modalSaveText, { color: colors.onPrimary }]}>
-                  Save
+                  Save Key
                 </Text>
               </TouchableOpacity>
             </View>
           </View>
-        </View>
-      </Modal>
-
-      {/* Recurring & Subscriptions Modal */}
-      <Modal
-        visible={showRecurringModal}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setShowRecurringModal(false)}>
-        <View style={styles.modalOverlay}>
-          <View
-            style={[
-              styles.modalCard,
-              {
-                backgroundColor: colors.surface,
-                borderColor: colors.outlineVariant,
-                maxHeight: "86%",
-              },
-            ]}>
-            <Text style={[styles.modalTitle, { color: colors.onSurface }]}>
-              Recurring & Subscriptions
-            </Text>
-            <Text style={[styles.modalSubtitle, { color: colors.onSurfaceVariant }]}>
-              Automatically log recurring bills, subscriptions, or salary.
-            </Text>
-
-            {/* Quick Add Recurring Rule */}
-            <View
-              style={{
-                backgroundColor: colors.surfaceVariant,
-                borderRadius: 14,
-                padding: 12,
-                marginBottom: 14,
-              }}>
-              <View style={{ flexDirection: "row", gap: 8, marginBottom: 8 }}>
-                <TextInput
-                  style={{
-                    flex: 1.4,
-                    backgroundColor: colors.surface,
-                    borderRadius: 10,
-                    paddingHorizontal: 10,
-                    paddingVertical: 8,
-                    color: colors.onSurface,
-                    fontSize: 13,
-                  }}
-                  value={newRecTitle}
-                  onChangeText={setNewRecTitle}
-                  placeholder="Title (e.g. Netflix, Rent)"
-                  placeholderTextColor={colors.onSurfaceVariant}
-                />
-                <TextInput
-                  style={{
-                    flex: 1,
-                    backgroundColor: colors.surface,
-                    borderRadius: 10,
-                    paddingHorizontal: 10,
-                    paddingVertical: 8,
-                    color: colors.onSurface,
-                    fontSize: 13,
-                  }}
-                  value={newRecAmount}
-                  onChangeText={setNewRecAmount}
-                  placeholder="Amount"
-                  placeholderTextColor={colors.onSurfaceVariant}
-                  keyboardType="decimal-pad"
-                />
-              </View>
-
-              <View
-                style={{
-                  flexDirection: "row",
-                  justifyContent: "space-between",
-                  alignItems: "center",
-                  gap: 6,
-                }}>
-                {(["monthly", "weekly", "yearly"] as RecurringFrequency[]).map(
-                  (freq) => {
-                    const active = newRecFreq === freq;
-                    return (
-                      <TouchableOpacity
-                        key={freq}
-                        onPress={() => setNewRecFreq(freq)}
-                        style={{
-                          paddingHorizontal: 10,
-                          paddingVertical: 6,
-                          borderRadius: 8,
-                          backgroundColor: active
-                            ? colors.primary
-                            : colors.surface,
-                        }}>
-                        <Text
-                          style={{
-                            fontSize: 11,
-                            fontWeight: "700",
-                            textTransform: "capitalize",
-                            color: active ? "#FFFFFF" : colors.onSurface,
-                          }}>
-                          {freq}
-                        </Text>
-                      </TouchableOpacity>
-                    );
-                  },
-                )}
-                <TouchableOpacity
-                  onPress={() =>
-                    setNewRecType(
-                      newRecType === "expense" ? "income" : "expense",
-                    )
-                  }
-                  style={{
-                    paddingHorizontal: 10,
-                    paddingVertical: 6,
-                    borderRadius: 8,
-                    backgroundColor: colors.surface,
-                  }}>
-                  <Text
-                    style={{
-                      fontSize: 11,
-                      fontWeight: "700",
-                      textTransform: "capitalize",
-                      color:
-                        newRecType === "income" ? colors.primary : colors.error,
-                    }}>
-                    {newRecType}
-                  </Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  onPress={handleAddRecurringRule}
-                  style={{
-                    paddingHorizontal: 12,
-                    paddingVertical: 6,
-                    borderRadius: 8,
-                    backgroundColor: colors.primary,
-                  }}>
-                  <Ionicons name="add" size={16} color="#FFFFFF" />
-                </TouchableOpacity>
-              </View>
-            </View>
-
-            <ScrollView style={{ maxHeight: 260 }}>
-              {recurringList.length === 0 ? (
-                <Text
-                  style={{
-                    textAlign: "center",
-                    color: colors.onSurfaceVariant,
-                    paddingVertical: 20,
-                    fontSize: 13,
-                  }}>
-                  No recurring transactions yet. Add one above or when creating a
-                  transaction.
-                </Text>
-              ) : (
-                recurringList.map((item) => (
-                  <View
-                    key={item.id}
-                    style={{
-                      flexDirection: "row",
-                      alignItems: "center",
-                      justifyContent: "space-between",
-                      backgroundColor: colors.surfaceVariant,
-                      borderRadius: 12,
-                      padding: 12,
-                      marginBottom: 8,
-                      opacity: item.active ? 1 : 0.55,
-                    }}>
-                    <View style={{ flex: 1, marginRight: 8 }}>
-                      <Text
-                        style={{
-                          fontSize: 14,
-                          fontWeight: "700",
-                          color: colors.onSurface,
-                        }}
-                        numberOfLines={1}>
-                        {item.title}
-                      </Text>
-                      <Text
-                        style={{
-                          fontSize: 12,
-                          color: colors.onSurfaceVariant,
-                          marginTop: 2,
-                        }}>
-                        {formatCurrency(item.amount)} • {item.frequency} • Next:{" "}
-                        {new Date(item.nextDueDate).toLocaleDateString()}
-                      </Text>
-                    </View>
-                    <View
-                      style={{
-                        flexDirection: "row",
-                        alignItems: "center",
-                        gap: 10,
-                      }}>
-                      <TouchableOpacity
-                        onPress={() => handleToggleRecurringRule(item.id)}>
-                        <Ionicons
-                          name={
-                            item.active
-                              ? "pause-circle-outline"
-                              : "play-circle-outline"
-                          }
-                          size={22}
-                          color={colors.primary}
-                        />
-                      </TouchableOpacity>
-                      <TouchableOpacity
-                        onPress={() => handleDeleteRecurringRule(item.id)}>
-                        <Ionicons
-                          name="trash-outline"
-                          size={20}
-                          color={colors.error}
-                        />
-                      </TouchableOpacity>
-                    </View>
-                  </View>
-                ))
-              )}
-            </ScrollView>
-
-            <View style={styles.modalActions}>
-              <TouchableOpacity
-                style={styles.modalCancelBtn}
-                onPress={() => setShowRecurringModal(false)}>
-                <Text style={styles.modalCancelText}>Done</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
+        </KeyboardAvoidingView>
       </Modal>
 
       <FirebaseCleanupModal
@@ -1620,7 +1344,7 @@ const getStyles = (colors: any) => StyleSheet.create({
   },
   separator: {
     height: 1,
-    backgroundColor: "rgba(108,92,231,0.08)",
+    backgroundColor: colors.outlineVariant,
     marginHorizontal: 16,
   },
 
@@ -1666,7 +1390,7 @@ const getStyles = (colors: any) => StyleSheet.create({
     justifyContent: "space-between",
     paddingVertical: 10,
     paddingHorizontal: 12,
-    backgroundColor: "rgba(255,255,255,0.03)",
+    backgroundColor: colors.surfaceVariant,
     borderRadius: 10,
     marginBottom: 4,
   },
@@ -1693,13 +1417,13 @@ const getStyles = (colors: any) => StyleSheet.create({
     marginTop: 6,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: "rgba(108,92,231,0.2)",
+    borderColor: colors.outlineVariant,
     borderStyle: "dashed",
   },
   addCatText: {
     fontSize: 14,
     fontWeight: "600",
-    color: colors.primaryContainer,
+    color: colors.primary,
   },
 
   // ── Modal ───────────────────────────────────────────
@@ -1787,5 +1511,56 @@ const getStyles = (colors: any) => StyleSheet.create({
     fontSize: 15,
     fontWeight: "700",
     color: "#fff",
+  },
+  billingNumberInput: {
+    height: 52,
+    borderRadius: 14,
+    borderWidth: 1.5,
+    paddingHorizontal: 16,
+    fontSize: 22,
+    fontWeight: "700",
+    textAlign: "center",
+  },
+  quickPresetRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginTop: 10,
+    flexWrap: "wrap",
+    gap: 6,
+  },
+  quickPresetLabel: {
+    fontSize: 12,
+    fontWeight: "600",
+    marginRight: 4,
+  },
+  quickPresetChip: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 12,
+  },
+  quickPresetChipText: {
+    fontSize: 13,
+    fontWeight: "700",
+  },
+  billingNoticeCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    padding: 12,
+    borderRadius: 12,
+    borderWidth: 1,
+    marginBottom: 8,
+  },
+  billingNoticeTitle: {
+    fontSize: 12,
+    fontWeight: "700",
+    marginBottom: 2,
+  },
+  billingNoticeText: {
+    fontSize: 12,
+    lineHeight: 16,
+  },
+  inputLabel: {
+    fontSize: 13,
+    fontWeight: "600",
   },
 });

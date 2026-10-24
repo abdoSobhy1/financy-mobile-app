@@ -5,6 +5,7 @@ import { SettingsScreen } from "../screens/SettingsScreens";
 import { ImportScreen } from "../screens/ImportScreen";
 import { CategoriesScreen } from "../screens/CategoriesScreen";
 import { WalletManagementScreen } from "../screens/WalletManagementScreen";
+import { SmsDetectorSettingsScreen } from "../screens/SmsDetectorSettingsScreen";
 
 const Stack = createStackNavigator<SettingsStackParamList>();
 
@@ -17,6 +18,7 @@ const SettingsStackNavigator: React.FC = () => {
       <Stack.Screen name="SettingsList" component={SettingsScreen} />
       <Stack.Screen name="CategoryManagement" component={CategoriesScreen} />
       <Stack.Screen name="WalletManagement" component={WalletManagementScreen} />
+      <Stack.Screen name="SmsSettings" component={SmsDetectorSettingsScreen} />
       <Stack.Screen
         name="Import"
         component={ImportScreen}

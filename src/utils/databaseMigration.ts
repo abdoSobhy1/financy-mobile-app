@@ -46,9 +46,6 @@ export class DatabaseMigration {
       { table: "budgets", column: "period_start", definition: "INTEGER" },
       { table: "budgets", column: "category_id", definition: "TEXT" },
 
-      // Bills table
-      { table: "bills", column: "is_recurring", definition: "INTEGER NOT NULL DEFAULT 0 CHECK (is_recurring IN (0, 1))" },
-
       // Debts table
       { table: "debts", column: "amount", definition: "REAL" },
       { table: "debts", column: "monthly_payment", definition: "REAL CHECK (monthly_payment >= 0)" },
@@ -95,7 +92,7 @@ export class DatabaseMigration {
 
       // Set default updated_at for tables that don't have it
       const now = new Date().toISOString();
-      const tables = ["transactions", "categories", "budgets", "bills", "debts", "debt_payments", "settings"];
+      const tables = ["transactions", "categories", "budgets", "debts", "debt_payments", "settings"];
 
       for (const table of tables) {
         try {
@@ -151,7 +148,6 @@ export class DatabaseMigration {
         { table: "transactions", column: "updated_at" },
         { table: "categories", column: "icon" },
         { table: "budgets", column: "period_type" },
-        { table: "bills", column: "is_recurring" },
       ];
 
       for (const check of checkColumns) {

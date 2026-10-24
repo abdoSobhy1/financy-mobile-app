@@ -19,7 +19,7 @@ import { useTabBarHeight, FilterChips } from "../components/ui";
 import { formatCurrency, formatDate } from "../utils";
 import { RootState, AppDispatch } from "../store";
 import { fetchDebts } from "../store/slices/debtsSlice";
-import { DebtStackParamList } from "../navigation/DebtStackNavigator";
+import { DebtStackParamList } from "../types";
 
 type DebtsScreenNavigationProp = StackNavigationProp<
   DebtStackParamList,

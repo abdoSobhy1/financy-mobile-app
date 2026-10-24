@@ -126,7 +126,7 @@ export const SignInScreen: React.FC = () => {
               <Text style={[typography.label, { color: colors.onSurfaceVariant, marginBottom: 8 }]}>Name</Text>
               <View style={[
                 styles.inputContainer, 
-                { backgroundColor: "rgba(255,255,255,0.02)", borderColor: focusedField === "name" ? colors.primaryContainer : "rgba(255,255,255,0.05)" }
+                { backgroundColor: colors.surfaceVariant, borderColor: focusedField === "name" ? colors.primary : colors.outlineVariant }
               ]}>
                 <Ionicons name="person-outline" size={20} color={colors.onSurfaceVariant} style={styles.inputIcon} />
                 <TextInput
@@ -146,7 +146,7 @@ export const SignInScreen: React.FC = () => {
             <Text style={[typography.label, { color: colors.onSurfaceVariant, marginBottom: 8 }]}>Email</Text>
             <View style={[
               styles.inputContainer, 
-              { backgroundColor: "rgba(255,255,255,0.02)", borderColor: focusedField === "email" ? colors.primaryContainer : "rgba(255,255,255,0.05)" }
+              { backgroundColor: colors.surfaceVariant, borderColor: focusedField === "email" ? colors.primary : colors.outlineVariant }
             ]}>
               <Ionicons name="mail-outline" size={20} color={colors.onSurfaceVariant} style={styles.inputIcon} />
               <TextInput
@@ -167,7 +167,7 @@ export const SignInScreen: React.FC = () => {
             <Text style={[typography.label, { color: colors.onSurfaceVariant, marginBottom: 8 }]}>Password</Text>
             <View style={[
               styles.inputContainer, 
-              { backgroundColor: "rgba(255,255,255,0.02)", borderColor: focusedField === "password" ? colors.primaryContainer : "rgba(255,255,255,0.05)" }
+              { backgroundColor: colors.surfaceVariant, borderColor: focusedField === "password" ? colors.primary : colors.outlineVariant }
             ]}>
               <Ionicons name="lock-closed-outline" size={20} color={colors.onSurfaceVariant} style={styles.inputIcon} />
               <TextInput
@@ -188,19 +188,19 @@ export const SignInScreen: React.FC = () => {
 
           {!isSignUp && (
             <TouchableOpacity onPress={handleForgotPassword} style={{ alignSelf: "flex-end" }}>
-              <Text style={[typography.label, { color: colors.primaryContainer, fontWeight: "600" }]}>Forgot Password?</Text>
+              <Text style={[typography.label, { color: colors.primary, fontWeight: "600" }]}>Forgot Password?</Text>
             </TouchableOpacity>
           )}
 
           <TouchableOpacity
-            style={[styles.primaryButton, { backgroundColor: colors.primaryContainer }]}
+            style={[styles.primaryButton, { backgroundColor: colors.primary }]}
             onPress={isSignUp ? handleSignUp : handleSignIn}
             disabled={loading}
           >
             {loading ? (
-              <ActivityIndicator color={colors.onPrimaryContainer} />
+              <ActivityIndicator color={colors.onPrimary} />
             ) : (
-              <Text style={[typography.bodyLarge, { color: colors.onPrimaryContainer, fontWeight: "600" }]}>
+              <Text style={[typography.bodyLarge, { color: colors.onPrimary, fontWeight: "600" }]}>
                 {isSignUp ? "Sign Up" : "Sign In"}
               </Text>
             )}

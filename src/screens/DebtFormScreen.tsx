@@ -6,7 +6,7 @@ import { useAppTheme } from "../components/ui/ThemeProvider";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { RootState } from "../store";
 import { DebtForm } from "../components/forms/debt/DebtForm";
-import { DebtStackParamList } from "../navigation/DebtStackNavigator";
+import { DebtStackParamList } from "../types";
 
 type DebtFormScreenRouteProp = RouteProp<DebtStackParamList, "DebtForm">;
 type DebtFormScreenNavigationProp = StackNavigationProp<DebtStackParamList, "DebtForm">;

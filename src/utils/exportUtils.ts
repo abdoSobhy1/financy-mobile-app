@@ -36,7 +36,7 @@ export const exportToExcel = async (data: ExportData): Promise<void> => {
       Description: transaction.description,
       Amount: transaction.amount,
       Type: transaction.type.toUpperCase(),
-      Category: data.categories[transaction.categoryId]?.name || "Unknown",
+      Category: (transaction.categoryId && data.categories[transaction.categoryId]?.name) || (transaction.type === "transfer" ? "Transfer" : "Unknown"),
       Budget: transaction.budgetId ? data.budgets[transaction.budgetId]?.name || "None" : "None",
       Note: transaction.note || "",
     }));
@@ -66,7 +66,7 @@ export const exportToExcel = async (data: ExportData): Promise<void> => {
         Description: transaction.description,
         Amount: transaction.amount,
         Type: transaction.type.toUpperCase(),
-        Category: data.categories[transaction.categoryId]?.name || "Unknown",
+        Category: (transaction.categoryId && data.categories[transaction.categoryId]?.name) || (transaction.type === "transfer" ? "Transfer" : "Unknown"),
         Note: transaction.note || "",
       }));
 
@@ -74,7 +74,7 @@ export const exportToExcel = async (data: ExportData): Promise<void> => {
       const totalsMap: Record<string, number> = {};
       txForBudget.forEach((t) => {
         if (t.type !== "expense") return;
-        const catName = data.categories[t.categoryId]?.name || "Unknown";
+        const catName = (t.categoryId && data.categories[t.categoryId]?.name) || "Unknown";
         totalsMap[catName] = (totalsMap[catName] || 0) + t.amount;
       });
 
@@ -115,7 +115,7 @@ export const exportToExcel = async (data: ExportData): Promise<void> => {
       Description: transaction.description,
       Amount: transaction.amount,
       Type: transaction.type.toUpperCase(),
-      Category: data.categories[transaction.categoryId]?.name || "Unknown",
+      Category: (transaction.categoryId && data.categories[transaction.categoryId]?.name) || (transaction.type === "transfer" ? "Transfer" : "Unknown"),
       Note: transaction.note || "",
     }));
 
@@ -123,7 +123,7 @@ export const exportToExcel = async (data: ExportData): Promise<void> => {
     const unTotalsMap: Record<string, number> = {};
     txUnbudgeted.forEach((t) => {
       if (t.type !== "expense") return;
-      const catName = data.categories[t.categoryId]?.name || "Unknown";
+      const catName = (t.categoryId && data.categories[t.categoryId]?.name) || "Unknown";
       unTotalsMap[catName] = (unTotalsMap[catName] || 0) + t.amount;
     });
 
@@ -190,13 +190,15 @@ export const exportToCSV = async (data: ExportData): Promise<void> => {
     const headers = ["Date", "Description", "Amount", "Type", "Category", "Budget", "Note"];
     const csvRows = [headers.join(",")];
     data.transactions.forEach((transaction) => {
-      const category = data.categories[transaction.categoryId];
+      const category = transaction.categoryId
+        ? data.categories[transaction.categoryId]
+        : null;
       const row = [
         formatDate(transaction.date),
         `"${transaction.description.replace(/"/g, '""')}"`,
         transaction.amount.toString(),
         transaction.type.toUpperCase(),
-        `"${category?.name || "Unknown"}"`,
+        `"${category?.name || (transaction.type === "transfer" ? "Transfer" : "Unknown")}"`,
         transaction.budgetId || "None",
         `"${(transaction.note || "").replace(/"/g, '""')}"`,
       ];

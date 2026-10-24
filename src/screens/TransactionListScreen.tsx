@@ -26,7 +26,8 @@ import {
 } from "../store/slices/transactionsSlice";
 import { fetchCategories } from "../store/slices/categoriesSlice";
 import { fetchBudgets } from "../store/slices/budgetsSlice";
-import { Transaction, TransactionStackParamList } from "../types";
+import { Transaction, TransactionStackParamList, WalletAccount } from "../types";
+import { walletService } from "../services/walletService";
 import { useAppTheme } from "../components/ui/ThemeProvider";
 import { useTabBarHeight, IconChip } from "../components/ui";
 import { AppHeader } from "../components/ui/AppHeader";
@@ -62,7 +63,7 @@ type TimeFilter =
   | "Year"
   | "All Time"
   | "custom";
-type TypeFilter = "All" | "Income" | "Expense";
+type TypeFilter = "All" | "Income" | "Expense" | "Transfer";
 
 export const TransactionListScreen: React.FC = () => {
   const dispatch = useDispatch<AppDispatch>();
@@ -88,6 +89,9 @@ export const TransactionListScreen: React.FC = () => {
   const [selectedBudgetIds, setSelectedBudgetIds] = useState<Set<string>>(
     new Set(),
   );
+  const [selectedWalletIds, setSelectedWalletIds] = useState<Set<string>>(
+    new Set(),
+  );
 
   // Filter Modal state
   const [showFilterModal, setShowFilterModal] = useState(false);
@@ -98,6 +102,9 @@ export const TransactionListScreen: React.FC = () => {
     new Set(),
   );
   const [tempBudgetIds, setTempBudgetIds] = useState<Set<string>>(
+    new Set(),
+  );
+  const [tempWalletIds, setTempWalletIds] = useState<Set<string>>(
     new Set(),
   );
 
@@ -113,17 +120,41 @@ export const TransactionListScreen: React.FC = () => {
     useState<Date>(customStartDate);
   const [tempCustomEndDate, setTempCustomEndDate] =
     useState<Date>(customEndDate);
+  const [wallets, setWallets] = useState<WalletAccount[]>([]);
+  const [secretWalletIds, setSecretWalletIds] = useState<Set<string>>(new Set());
+
+  const walletsMap = useMemo(() => {
+    const map: Record<string, WalletAccount> = {};
+    wallets.forEach((w) => {
+      map[w.id] = w;
+    });
+    return map;
+  }, [wallets]);
+
+  const loadSecretWalletIds = async () => {
+    try {
+      const loadedWallets = await walletService.getWallets();
+      setWallets(loadedWallets);
+      setSecretWalletIds(walletService.getSecretWalletIds(loadedWallets));
+    } catch {
+      // ignore
+    }
+  };
 
   useEffect(() => {
     dispatch(fetchTransactions());
     dispatch(fetchCategories());
     dispatch(fetchBudgets());
+    loadSecretWalletIds();
   }, [dispatch]);
 
   const handleRefresh = async () => {
     setRefreshing(true);
-    await dispatch(fetchTransactions());
-    await dispatch(fetchBudgets());
+    await Promise.all([
+      dispatch(fetchTransactions()),
+      dispatch(fetchBudgets()),
+      loadSecretWalletIds(),
+    ]);
     setRefreshing(false);
   };
 
@@ -132,6 +163,7 @@ export const TransactionListScreen: React.FC = () => {
     setTempTypeFilter(typeFilter);
     setTempCategoryIds(new Set(selectedCategoryIds));
     setTempBudgetIds(new Set(selectedBudgetIds));
+    setTempWalletIds(new Set(selectedWalletIds));
     setShowFilterModal(true);
   };
 
@@ -140,6 +172,7 @@ export const TransactionListScreen: React.FC = () => {
     setTypeFilter(tempTypeFilter);
     setSelectedCategoryIds(new Set(tempCategoryIds));
     setSelectedBudgetIds(new Set(tempBudgetIds));
+    setSelectedWalletIds(new Set(tempWalletIds));
     setShowFilterModal(false);
   };
 
@@ -148,6 +181,7 @@ export const TransactionListScreen: React.FC = () => {
     setTempTypeFilter("All");
     setTempCategoryIds(new Set());
     setTempBudgetIds(new Set());
+    setTempWalletIds(new Set());
   };
 
   const toggleCategorySelection = (catId: string) => {
@@ -169,6 +203,18 @@ export const TransactionListScreen: React.FC = () => {
         next.delete(budgetId);
       } else {
         next.add(budgetId);
+      }
+      return next;
+    });
+  };
+
+  const toggleWalletSelection = (walletId: string) => {
+    setTempWalletIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(walletId)) {
+        next.delete(walletId);
+      } else {
+        next.add(walletId);
       }
       return next;
     });
@@ -224,8 +270,16 @@ export const TransactionListScreen: React.FC = () => {
       })
       .filter((t) => {
         if (selectedBudgetIds.size === 0) return true;
+        if (selectedBudgetIds.has("unbudgeted") && !t.budgetId) return true;
         if (t.budgetId && selectedBudgetIds.has(t.budgetId)) return true;
         return false;
+      })
+      .filter((t) => {
+        if (selectedWalletIds.size === 0) return true;
+        return (
+          (t.accountId && selectedWalletIds.has(t.accountId)) ||
+          (t.toAccountId && selectedWalletIds.has(t.toAccountId))
+        );
       })
       .filter((t) => {
         if (!searchQuery.trim()) return true;
@@ -243,6 +297,7 @@ export const TransactionListScreen: React.FC = () => {
     typeFilter,
     selectedCategoryIds,
     selectedBudgetIds,
+    selectedWalletIds,
     searchQuery,
     categories,
   ]);
@@ -264,7 +319,11 @@ export const TransactionListScreen: React.FC = () => {
     return Object.keys(groups).map((title) => {
       const data = groups[title];
       const dailyTotal = data.reduce((sum, t) => {
-        return t.type === "income" ? sum + t.amount : sum - t.amount;
+        if (walletService.isSecretTransactionExcluded(t, secretWalletIds)) return sum;
+        if (t.description === "Balance adjustment") return sum;
+        if (t.type === "income") return sum + t.amount;
+        if (t.type === "expense" || (t.type === "transfer" && Boolean(t.budgetId))) return sum - t.amount;
+        return sum;
       }, 0);
 
       return {
@@ -274,19 +333,17 @@ export const TransactionListScreen: React.FC = () => {
         data: [{ id: title, items: data }],
       };
     });
-  }, [filteredTransactions]);
+  }, [filteredTransactions, secretWalletIds]);
 
 
 
-  const filteredSummary = useMemo(() => {
-    let income = 0;
-    let expense = 0;
-    filteredTransactions.forEach((t) => {
-      if (t.type === "income") income += t.amount;
-      else expense += t.amount;
-    });
-    return { income, expense, net: income - expense };
-  }, [filteredTransactions]);
+  const totalAmount = useMemo(() => {
+    return filteredTransactions.reduce((sum, t) => {
+      if (walletService.isSecretTransactionExcluded(t, secretWalletIds)) return sum;
+      if (t.description === "Balance adjustment") return sum;
+      return t.type === "income" ? sum + t.amount : sum - t.amount;
+    }, 0);
+  }, [filteredTransactions, secretWalletIds]);
 
   const allCategoriesList = useMemo(
     () => Object.values(categories).filter((c) => c && !c.deleted),
@@ -337,7 +394,10 @@ export const TransactionListScreen: React.FC = () => {
               size={24}
               color={colors.onBackground}
             />
-            {(selectedCategoryIds.size > 0 || selectedBudgetIds.size > 0) && (
+            {(selectedCategoryIds.size > 0 ||
+              selectedBudgetIds.size > 0 ||
+              selectedWalletIds.size > 0 ||
+              typeFilter === "Transfer") && (
               <View
                 style={[
                   styles.filterBadge,
@@ -348,9 +408,9 @@ export const TransactionListScreen: React.FC = () => {
           </TouchableOpacity>
         </View>
 
-        {/* Segmented Control for Transaction Type (All | Income | Expense) */}
+        {/* Segmented Control for Transaction Type (All | Income | Expense | Transfer) */}
         <View style={styles.segmentedControl}>
-          {(["All", "Income", "Expense"] as const).map((t) => {
+          {(["All", "Income", "Expense", "Transfer"] as const).map((t) => {
             const isActive = typeFilter === t;
             return (
               <TouchableOpacity
@@ -397,53 +457,28 @@ export const TransactionListScreen: React.FC = () => {
           })}
         </ScrollView>
 
-        {/* Filtered Period Summary Strip */}
-        {filteredTransactions.length > 0 && (
-          <View
-            style={{
-              flexDirection: "row",
-              backgroundColor: colors.surface,
-              borderRadius: 16,
-              paddingVertical: 10,
-              paddingHorizontal: 14,
-              marginTop: 4,
-              borderWidth: 1,
-              borderColor: colors.outlineVariant,
-              justifyContent: "space-between",
-            }}>
-            <View>
-              <Text style={{ fontSize: 10, fontWeight: "700", color: colors.onSurfaceVariant }}>
-                INCOME
-              </Text>
-              <Text style={{ fontSize: 13, fontWeight: "700", color: colors.primary, marginTop: 2 }}>
-                +{formatCurrency(filteredSummary.income)}
-              </Text>
-            </View>
-            <View style={{ alignItems: "center" }}>
-              <Text style={{ fontSize: 10, fontWeight: "700", color: colors.onSurfaceVariant }}>
-                EXPENSES
-              </Text>
-              <Text style={{ fontSize: 13, fontWeight: "700", color: colors.error, marginTop: 2 }}>
-                -{formatCurrency(filteredSummary.expense)}
-              </Text>
-            </View>
-            <View style={{ alignItems: "flex-end" }}>
-              <Text style={{ fontSize: 10, fontWeight: "700", color: colors.onSurfaceVariant }}>
-                NET ({filteredTransactions.length})
-              </Text>
-              <Text
-                style={{
-                  fontSize: 13,
-                  fontWeight: "700",
-                  color: filteredSummary.net >= 0 ? colors.primary : colors.error,
-                  marginTop: 2,
-                }}>
-                {filteredSummary.net >= 0 ? "+" : "-"}
-                {formatCurrency(Math.abs(filteredSummary.net))}
-              </Text>
-            </View>
-          </View>
-        )}
+        {/* Total Summary */}
+        <View style={{
+          flexDirection: "row",
+          justifyContent: "space-between",
+          alignItems: "center",
+          marginBottom: spacing.md,
+          backgroundColor: colors.surfaceVariant,
+          padding: spacing.md,
+          borderRadius: radius.md,
+          marginTop: 6,
+        }}>
+          <Text style={[typography.bodyLarge, { color: colors.onSurfaceVariant }]}>
+            Total
+          </Text>
+          <Text
+            style={[
+              typography.h3,
+              { color: totalAmount >= 0 ? colors.primary : colors.error },
+            ]}>
+            {totalAmount > 0 ? "+" : ""}{formatCurrency(totalAmount)}
+          </Text>
+        </View>
       </View>
 
       {/* Transaction Groups List */}
@@ -470,6 +505,10 @@ export const TransactionListScreen: React.FC = () => {
             {item.items.map((tx, idx) => {
               const cat = tx.categoryId ? categories[tx.categoryId] : null;
               const isIncome = tx.type === "income";
+              const isTransfer = tx.type === "transfer";
+              const isAdjustment = tx.description === "Balance adjustment";
+              const fromWallet = tx.accountId ? walletsMap[tx.accountId] : null;
+              const toWallet = tx.toAccountId ? walletsMap[tx.toAccountId] : null;
               const isLast = idx === item.items.length - 1;
 
               return (
@@ -479,8 +518,18 @@ export const TransactionListScreen: React.FC = () => {
                     onPress={() => handleTransactionPress(tx)}
                     activeOpacity={0.7}>
                     <IconChip
-                      icon={(((cat as any)?.icon as any) || "receipt-outline") as any}
-                      color={cat?.color || colors.primary}
+                      icon={
+                        isTransfer
+                          ? ("swap-horizontal-outline" as any)
+                          : isAdjustment
+                          ? ("build-outline" as any)
+                          : ((((cat as any)?.icon as any) || "receipt-outline") as any)
+                      }
+                      color={
+                        isTransfer || isAdjustment
+                          ? colors.onSurfaceVariant
+                          : cat?.color || colors.primary
+                      }
                       size="md"
                       style={{ marginRight: 14 }}
                     />
@@ -488,7 +537,11 @@ export const TransactionListScreen: React.FC = () => {
                     <View style={styles.txCenterCol}>
                       <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
                         <Text style={[styles.txTitleText, { flexShrink: 1 }]} numberOfLines={1}>
-                          {tx.description || cat?.name || "Transaction"}
+                          {isTransfer
+                            ? tx.description || `${fromWallet?.name || "Wallet"} → ${toWallet?.name || "Wallet"}`
+                            : isAdjustment
+                            ? "Balance adjustment"
+                            : tx.description || cat?.name || "Transaction"}
                         </Text>
                         {Boolean(tx.receiptUri) && (
                           <Ionicons
@@ -499,8 +552,14 @@ export const TransactionListScreen: React.FC = () => {
                         )}
                       </View>
                       <Text style={styles.txSubtitleText} numberOfLines={1}>
-                        {cat?.name || "Uncategorized"} •{" "}
-                        {format(new Date(tx.date), "hh:mm a")}
+                        {isTransfer
+                          ? `${fromWallet?.name || "Wallet"} → ${toWallet?.name || "Wallet"} • ${format(new Date(tx.date), "hh:mm a")}`
+                          : isAdjustment
+                          ? `${fromWallet?.name || "Wallet"} • Reconcile • ${format(new Date(tx.date), "hh:mm a")}`
+                          : `${cat?.name || "Uncategorized"} • ${format(new Date(tx.date), "hh:mm a")}`}
+                        {walletService.isSecretTransaction(tx, secretWalletIds)
+                          ? " • 🔒 Secret"
+                          : ""}
                       </Text>
                     </View>
 
@@ -508,9 +567,10 @@ export const TransactionListScreen: React.FC = () => {
                       <Text
                         style={[
                           styles.txAmountText,
-                          isIncome && styles.txAmountIncome,
+                          isIncome && !isAdjustment && styles.txAmountIncome,
+                          (isTransfer || isAdjustment) && { color: colors.onSurface },
                         ]}>
-                        {isIncome ? "+" : "-"}
+                        {isTransfer || isAdjustment ? "" : isIncome ? "+" : "-"}
                         {formatCurrency(tx.amount)}
                       </Text>
                     </View>
@@ -558,10 +618,13 @@ export const TransactionListScreen: React.FC = () => {
         filterPeriod={tempTimeFilter}
         selectedCategoryIds={tempCategoryIds}
         selectedBudgetIds={tempBudgetIds}
+        selectedWalletIds={tempWalletIds}
+        wallets={wallets}
         onFilterTypeChange={(t) => setTempTypeFilter(t as any)}
         onFilterPeriodChange={(p) => setTempTimeFilter(p as any)}
         onCategoryToggle={toggleCategorySelection}
         onBudgetToggle={toggleBudgetSelection}
+        onWalletToggle={toggleWalletSelection}
         onOpenCustomDate={() => setShowCustomDateModal(true)}
         onReset={resetModalFilters}
         onApply={applyModalFilters}
@@ -680,10 +743,10 @@ const createStyles = (colors: any) =>
       borderRadius: 20,
       backgroundColor: colors.surface,
       borderWidth: 1,
-      borderColor: "transparent",
+      borderColor: colors.outlineVariant,
     },
     timeChipActive: {
-      backgroundColor: colors.secondaryContainer,
+      backgroundColor: colors.primaryContainer,
       borderColor: colors.primary,
     },
     timeChipText: {
@@ -692,7 +755,7 @@ const createStyles = (colors: any) =>
       color: colors.onSurfaceVariant,
     },
     timeChipTextActive: {
-      color: colors.onBackground,
+      color: colors.onPrimaryContainer,
       fontWeight: "700",
     },
     sectionHeader: {
@@ -715,7 +778,7 @@ const createStyles = (colors: any) =>
       color: colors.onBackground,
     },
     cardGroupContainer: {
-      backgroundColor: colors.surfaceVariant,
+      backgroundColor: colors.surface,
       borderRadius: 24,
       marginHorizontal: 20,
       marginBottom: 8,

@@ -23,7 +23,7 @@ import { useToast } from "../components/ui";
 import { AppDispatch } from "../store";
 import { makeDebtPayment } from "../store/slices/debtsSlice";
 import { formatCurrency } from "../utils";
-import { DebtStackParamList } from "../navigation/DebtStackNavigator";
+import { DebtStackParamList } from "../types";
 
 type AddPaymentScreenNavigationProp = StackNavigationProp<
   DebtStackParamList,

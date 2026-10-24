@@ -20,13 +20,21 @@ import { fetchTransactions } from "../store/slices/transactionsSlice";
 import { useAppTheme } from "../components/ui/ThemeProvider";
 import { AppHeader } from "../components/ui/AppHeader";
 import { IconChip } from "../components/ui/IconChip";
-import { Card, useToast } from "../components/ui";
+import { Card, useToast, Switch } from "../components/ui";
 import { formatCurrency } from "../utils";
+import { getCurrentBillingPeriod } from "../utils/billingPeriod";
 import { AlertService } from "../services/AlertService";
 
 const { width } = Dimensions.get("window");
 const CARD_MARGIN = 8;
 const CARD_WIDTH = (width - 40 - CARD_MARGIN * 2) / 2;
+
+const getAlphaColor = (color: string, hexAlpha: string = "1F") => {
+  if (color && color.startsWith("#") && color.length === 7) {
+    return `${color}${hexAlpha}`;
+  }
+  return color;
+};
 
 const WALLET_ICONS = [
   "cash-outline",
@@ -35,7 +43,7 @@ const WALLET_ICONS = [
   "card-outline",
   "phone-portrait-outline",
   "briefcase-outline",
-  "vault-outline",
+  "lock-closed-outline",
   "globe-outline",
   "diamond-outline",
   "cart-outline",
@@ -72,8 +80,14 @@ export const WalletManagementScreen: React.FC = () => {
 
   const [wallets, setWallets] = useState<WalletAccount[]>([]);
   const [walletBalances, setWalletBalances] = useState<Record<string, number>>({});
-  const [activeType, setActiveType] = useState<"all" | WalletType>("all");
+  const [activeType, setActiveType] = useState<"all" | WalletType | "secret" | "archived">("all");
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
+  const [periodMode, setPeriodMode] = useState<"period" | "allTime">("period");
+
+  // Move Modal state
+  const [showMoveModal, setShowMoveModal] = useState(false);
+  const [walletToMove, setWalletToMove] = useState<WalletAccount | null>(null);
+  const [destinationWalletId, setDestinationWalletId] = useState("");
 
   // Add / Edit Modal state
   const [showEditorModal, setShowEditorModal] = useState(false);
@@ -83,6 +97,7 @@ export const WalletManagementScreen: React.FC = () => {
   const [formIcon, setFormIcon] = useState("business-outline");
   const [formColor, setFormColor] = useState("blue");
   const [formInitialBalance, setFormInitialBalance] = useState("");
+  const [formIsSecret, setFormIsSecret] = useState(false);
 
   // Transfer Modal state
   const [showTransferModal, setShowTransferModal] = useState(false);
@@ -92,18 +107,31 @@ export const WalletManagementScreen: React.FC = () => {
 
   const loadWallets = useCallback(async () => {
     try {
-      const list = await walletService.getWallets();
+      const list = await walletService.getWallets({ includeArchived: true });
       const allTx = Object.values(transactions).filter((t) => !t.deleted);
+      const { start, end } = await getCurrentBillingPeriod();
+      const periodTxs = allTx.filter((t) => {
+        const d = new Date(t.date);
+        return d >= start && d <= end;
+      });
+
       setWallets(list);
-      setWalletBalances(walletService.calculateWalletBalances(list, allTx));
-      if (list.length >= 2) {
-        setFromWalletId(list[0].id);
-        setToWalletId(list[1].id);
+      setWalletBalances(
+        walletService.calculateWalletBalances(
+          list,
+          periodMode === "period" ? periodTxs : allTx,
+          { periodOnly: periodMode === "period" },
+        ),
+      );
+      const activeList = list.filter((w) => !w.archived);
+      if (activeList.length >= 2) {
+        setFromWalletId((prev) => prev || activeList[0].id);
+        setToWalletId((prev) => prev || activeList[1].id);
       }
     } catch (e) {
       console.warn("Failed to load wallets:", e);
     }
-  }, [transactions]);
+  }, [transactions, periodMode]);
 
   useEffect(() => {
     dispatch(fetchTransactions());
@@ -111,12 +139,21 @@ export const WalletManagementScreen: React.FC = () => {
   }, [dispatch, loadWallets]);
 
   const totalNetWorth = useMemo(() => {
-    return Object.values(walletBalances).reduce((sum, b) => sum + b, 0);
-  }, [walletBalances]);
+    return wallets
+      .filter((w) => !walletService.isSecretWallet(w))
+      .reduce((sum, w) => sum + (walletBalances[w.id] || 0), 0);
+  }, [wallets, walletBalances]);
 
   const filteredWallets = useMemo(() => {
-    if (activeType === "all") return wallets;
-    return wallets.filter((w) => w.type === activeType);
+    if (activeType === "archived") {
+      return wallets.filter((w) => w.archived);
+    }
+    const nonArchived = wallets.filter((w) => !w.archived);
+    if (activeType === "all") return nonArchived;
+    if (activeType === "secret") {
+      return nonArchived.filter((w) => walletService.isSecretWallet(w));
+    }
+    return nonArchived.filter((w) => w.type === activeType);
   }, [wallets, activeType]);
 
   const openAddModal = () => {
@@ -126,6 +163,7 @@ export const WalletManagementScreen: React.FC = () => {
     setFormIcon("business-outline");
     setFormColor("blue");
     setFormInitialBalance("");
+    setFormIsSecret(false);
     setShowEditorModal(true);
   };
 
@@ -135,7 +173,9 @@ export const WalletManagementScreen: React.FC = () => {
     setFormType(wallet.type);
     setFormIcon(wallet.icon || "wallet-outline");
     setFormColor(wallet.color || "teal");
-    setFormInitialBalance(wallet.initialBalance?.toString() || "0");
+    const currentBal = walletBalances[wallet.id] || 0;
+    setFormInitialBalance(currentBal.toString());
+    setFormIsSecret(walletService.isSecretWallet(wallet));
     setShowEditorModal(true);
   };
 
@@ -148,28 +188,42 @@ export const WalletManagementScreen: React.FC = () => {
     const initBal = parseFloat(formInitialBalance) || 0;
     try {
       if (editingWallet) {
-        const updated = await walletService.updateWallet(editingWallet.id, {
+        const enteredBal = parseFloat(formInitialBalance) || 0;
+        const currentBal = walletBalances[editingWallet.id] || 0;
+        const diff = enteredBal - currentBal;
+
+        if (Math.abs(diff) > 0.001) {
+          const { db } = await import("../database/queries");
+          await db.transactions.createTransaction({
+            amount: Math.abs(diff),
+            type: diff > 0 ? "income" : "expense",
+            description: "Balance adjustment",
+            accountId: editingWallet.id,
+            date: new Date().toISOString(),
+            updatedAt: Date.now(),
+          });
+          await dispatch(fetchTransactions());
+        }
+
+        await walletService.updateWallet(editingWallet.id, {
           name: formName.trim(),
           type: formType,
           icon: formIcon,
           color: formColor,
-          initialBalance: initBal,
+          isSecret: formIsSecret,
         });
-        const allTx = Object.values(transactions).filter((t) => !t.deleted);
-        setWallets(updated);
-        setWalletBalances(walletService.calculateWalletBalances(updated, allTx));
-        showSuccess(`Updated "${formName.trim()}"`);
+        await loadWallets();
+        showSuccess(`Reconciled and updated "${formName.trim()}"`);
       } else {
-        const updated = await walletService.addWallet({
+        await walletService.addWallet({
           name: formName.trim(),
           type: formType,
           icon: formIcon,
           color: formColor,
           initialBalance: initBal,
+          isSecret: formIsSecret,
         });
-        const allTx = Object.values(transactions).filter((t) => !t.deleted);
-        setWallets(updated);
-        setWalletBalances(walletService.calculateWalletBalances(updated, allTx));
+        await loadWallets();
         showSuccess(`Created "${formName.trim()}"`);
       }
       setShowEditorModal(false);
@@ -178,30 +232,74 @@ export const WalletManagementScreen: React.FC = () => {
     }
   };
 
-  const handleDeleteWallet = (wallet: WalletAccount) => {
-    if (wallets.length <= 1) {
-      showError("You must keep at least one account");
+  const handleDeleteWallet = async (wallet: WalletAccount) => {
+    const activeWallets = wallets.filter((w) => !w.archived);
+    if (activeWallets.length <= 1 && !wallet.archived) {
+      showError("You must keep at least one active account");
       return;
     }
 
-    AlertService.alert(
-      `Delete "${wallet.name}"?`,
-      "Transactions linked to this wallet will remain in your history.",
-      [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Delete",
-          style: "destructive",
-          onPress: async () => {
-            const updated = await walletService.deleteWallet(wallet.id);
-            const allTx = Object.values(transactions).filter((t) => !t.deleted);
-            setWallets(updated);
-            setWalletBalances(walletService.calculateWalletBalances(updated, allTx));
-            showSuccess(`Deleted "${wallet.name}"`);
+    const txCount = await walletService.countTransactionsForWallet(wallet.id);
+
+    if (txCount === 0) {
+      AlertService.alert(
+        `Delete "${wallet.name}"?`,
+        "This account has no transactions. Would you like to permanently delete it or archive it?",
+        [
+          { text: "Cancel", style: "cancel" },
+          {
+            text: "Archive",
+            onPress: async () => {
+              await walletService.archiveWallet(wallet.id);
+              await loadWallets();
+              showSuccess(`Archived "${wallet.name}"`);
+            },
           },
-        },
-      ],
-    );
+          {
+            text: "Delete",
+            style: "destructive",
+            onPress: async () => {
+              const { db } = await import("../database/queries");
+              await db.wallets.hardDeleteWallet(wallet.id);
+              await loadWallets();
+              showSuccess(`Permanently deleted "${wallet.name}"`);
+            },
+          },
+        ],
+      );
+    } else {
+      AlertService.alert(
+        `"${wallet.name}" has ${txCount} transaction${txCount > 1 ? "s" : ""}`,
+        "You can archive it (keeps history and balance math) or move all its transactions to another wallet and delete it.",
+        [
+          { text: "Cancel", style: "cancel" },
+          {
+            text: "Archive",
+            onPress: async () => {
+              await walletService.archiveWallet(wallet.id);
+              await loadWallets();
+              showSuccess(`Archived "${wallet.name}"`);
+            },
+          },
+          {
+            text: "Move & Delete",
+            style: "destructive",
+            onPress: () => {
+              const otherWallets = wallets.filter(
+                (w) => w.id !== wallet.id && !w.archived,
+              );
+              if (otherWallets.length === 0) {
+                showError("No other active account available to receive transactions.");
+                return;
+              }
+              setWalletToMove(wallet);
+              setDestinationWalletId(otherWallets[0].id);
+              setShowMoveModal(true);
+            },
+          },
+        ],
+      );
+    }
   };
 
   const handleTransferSubmit = async () => {
@@ -215,14 +313,27 @@ export const WalletManagementScreen: React.FC = () => {
       return;
     }
 
+    const { start, end } = await getCurrentBillingPeriod();
     const allTx = Object.values(transactions).filter((t) => !t.deleted);
+    const periodTxs = allTx.filter((t) => {
+      const d = new Date(t.date);
+      return d >= start && d <= end;
+    });
+
     const updated = await walletService.transferBetweenWallets(
       fromWalletId,
       toWalletId,
       amt,
     );
+    await dispatch(fetchTransactions());
     setWallets(updated);
-    setWalletBalances(walletService.calculateWalletBalances(updated, allTx));
+    setWalletBalances(
+      walletService.calculateWalletBalances(
+        updated,
+        periodMode === "period" ? periodTxs : allTx,
+        { periodOnly: periodMode === "period" },
+      ),
+    );
     setTransferAmount("");
     setShowTransferModal(false);
     showSuccess("Transfer completed successfully");
@@ -238,7 +349,7 @@ export const WalletManagementScreen: React.FC = () => {
         backgroundColor="transparent"
         translucent
       />
-      <AppHeader title="Wallets & Accounts" showBack={true} />
+      <AppHeader title="Wallets & Accounts" showBack={true} showSettings={false} />
 
       <ScrollView
         contentContainerStyle={{
@@ -272,14 +383,18 @@ export const WalletManagementScreen: React.FC = () => {
                   opacity: 0.8,
                 },
               ]}>
-              TOTAL BALANCE ACROSS WALLETS
+              {periodMode === "period"
+                ? "CURRENT PERIOD BALANCE"
+                : "TOTAL BALANCE (ALL TIME)"}
             </Text>
             <View
               style={{
-                backgroundColor: "rgba(0,0,0,0.12)",
+                backgroundColor: isDark ? "rgba(0,0,0,0.12)" : "rgba(255,255,255,0.75)",
                 paddingHorizontal: 10,
                 paddingVertical: 4,
                 borderRadius: 12,
+                borderWidth: isDark ? 0 : 1,
+                borderColor: isDark ? "transparent" : getAlphaColor(colors.onPrimaryContainer, "1F"),
               }}>
               <Text
                 style={{
@@ -298,11 +413,67 @@ export const WalletManagementScreen: React.FC = () => {
                 color: colors.onPrimaryContainer,
                 fontSize: 34,
                 fontWeight: "900",
-                marginBottom: spacing.md,
+                marginBottom: spacing.xs,
               },
             ]}>
             {formatCurrency(totalNetWorth)}
           </Text>
+
+          {/* Period Mode Toggle Selector */}
+          <View
+            style={{
+              flexDirection: "row",
+              backgroundColor: isDark ? "rgba(0,0,0,0.12)" : "rgba(255,255,255,0.75)",
+              borderRadius: 14,
+              padding: 3,
+              marginBottom: spacing.md,
+              alignSelf: "flex-start",
+              borderWidth: isDark ? 0 : 1,
+              borderColor: isDark ? "transparent" : getAlphaColor(colors.onPrimaryContainer, "1F"),
+            }}>
+            <TouchableOpacity
+              onPress={() => setPeriodMode("period")}
+              style={{
+                paddingHorizontal: 12,
+                paddingVertical: 6,
+                borderRadius: 11,
+                backgroundColor:
+                  periodMode === "period" ? colors.primary : "transparent",
+              }}>
+              <Text
+                style={{
+                  fontSize: 12,
+                  fontWeight: "700",
+                  color:
+                    periodMode === "period"
+                      ? colors.onPrimary
+                      : colors.onPrimaryContainer,
+                }}>
+                This Period
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              onPress={() => setPeriodMode("allTime")}
+              style={{
+                paddingHorizontal: 12,
+                paddingVertical: 6,
+                borderRadius: 11,
+                backgroundColor:
+                  periodMode === "allTime" ? colors.primary : "transparent",
+              }}>
+              <Text
+                style={{
+                  fontSize: 12,
+                  fontWeight: "700",
+                  color:
+                    periodMode === "allTime"
+                      ? colors.onPrimary
+                      : colors.onPrimaryContainer,
+                }}>
+                All Time
+              </Text>
+            </TouchableOpacity>
+          </View>
 
           {/* Transfer & Add Action Buttons inside Header Card */}
           <View style={{ flexDirection: "row", gap: spacing.sm }}>
@@ -337,9 +508,11 @@ export const WalletManagementScreen: React.FC = () => {
                 alignItems: "center",
                 justifyContent: "center",
                 gap: 6,
-                backgroundColor: "rgba(0,0,0,0.12)",
+                backgroundColor: isDark ? "rgba(0,0,0,0.12)" : "rgba(255,255,255,0.75)",
                 paddingVertical: 10,
                 borderRadius: 16,
+                borderWidth: isDark ? 0 : 1,
+                borderColor: isDark ? "transparent" : getAlphaColor(colors.onPrimaryContainer, "1F"),
               }}>
               <Ionicons
                 name="add-circle-outline"
@@ -364,7 +537,7 @@ export const WalletManagementScreen: React.FC = () => {
             horizontal
             showsHorizontalScrollIndicator={false}
             contentContainerStyle={{ gap: 8 }}>
-            {(["all", "cash", "bank", "card", "wallet"] as const).map((t) => {
+            {(["all", "cash", "bank", "card", "wallet", "secret", "archived"] as const).map((t) => {
               const active = activeType === t;
               return (
                 <TouchableOpacity
@@ -417,22 +590,27 @@ export const WalletManagementScreen: React.FC = () => {
             }}>
             {filteredWallets.map((wallet) => {
               const bal = walletBalances[wallet.id] || 0;
+              const isSecret = walletService.isSecretWallet(wallet);
               return (
                 <TouchableOpacity
                   key={wallet.id}
                   style={[
                     styles.walletCard,
                     {
-                      backgroundColor: colors.surfaceVariant,
-                      borderColor: colors.outlineVariant,
+                      backgroundColor: colors.surface,
+                      borderColor: isSecret ? colors.error : colors.outlineVariant,
+                      borderWidth: isSecret ? 1.5 : 1,
                     },
                   ]}
                   onPress={() => openEditModal(wallet)}
                   activeOpacity={0.75}>
                   <View style={{ alignItems: "center", marginBottom: 10 }}>
                     <IconChip
-                      iconName={(wallet.icon || "wallet-outline") as any}
-                      colorName={(wallet.color as any) || "teal"}
+                      iconName={
+                        (wallet.icon ||
+                          (isSecret ? "lock-closed-outline" : "wallet-outline")) as any
+                      }
+                      colorName={(wallet.color as any) || (isSecret ? "gray" : "teal")}
                       size={48}
                     />
                   </View>
@@ -458,6 +636,60 @@ export const WalletManagementScreen: React.FC = () => {
                     }}>
                     {wallet.type}
                   </Text>
+                  {isSecret && (
+                    <View
+                      style={{
+                        flexDirection: "row",
+                        alignItems: "center",
+                        gap: 3,
+                        backgroundColor: "rgba(239, 68, 68, 0.15)",
+                        paddingHorizontal: 6,
+                        paddingVertical: 2,
+                        borderRadius: 6,
+                        marginTop: 4,
+                      }}>
+                      <Ionicons
+                        name="lock-closed"
+                        size={10}
+                        color={colors.error}
+                      />
+                      <Text
+                        style={{
+                          fontSize: 9,
+                          fontWeight: "700",
+                          color: colors.error,
+                        }}>
+                        Secret · Excluded
+                      </Text>
+                    </View>
+                  )}
+                  {Boolean(wallet.archived) && (
+                    <View
+                      style={{
+                        flexDirection: "row",
+                        alignItems: "center",
+                        gap: 3,
+                        backgroundColor: colors.surfaceVariant,
+                        paddingHorizontal: 6,
+                        paddingVertical: 2,
+                        borderRadius: 6,
+                        marginTop: 4,
+                      }}>
+                      <Ionicons
+                        name="archive-outline"
+                        size={10}
+                        color={colors.onSurfaceVariant}
+                      />
+                      <Text
+                        style={{
+                          fontSize: 9,
+                          fontWeight: "700",
+                          color: colors.onSurfaceVariant,
+                        }}>
+                        Archived
+                      </Text>
+                    </View>
+                  )}
                   <Text
                     style={{
                       fontSize: 16,
@@ -479,36 +711,63 @@ export const WalletManagementScreen: React.FC = () => {
                       borderTopWidth: 1,
                       borderTopColor: colors.outlineVariant,
                     }}>
-                    <TouchableOpacity
-                      onPress={() => openEditModal(wallet)}
-                      hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-                      <Ionicons
-                        name="pencil-outline"
-                        size={16}
-                        color={colors.primary}
-                      />
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                      onPress={() => {
-                        setFromWalletId(wallet.id);
-                        setShowTransferModal(true);
-                      }}
-                      hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-                      <Ionicons
-                        name="swap-horizontal"
-                        size={16}
-                        color={colors.primary}
-                      />
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                      onPress={() => handleDeleteWallet(wallet)}
-                      hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-                      <Ionicons
-                        name="trash-outline"
-                        size={16}
-                        color={colors.error}
-                      />
-                    </TouchableOpacity>
+                    {wallet.archived ? (
+                      <TouchableOpacity
+                        onPress={async () => {
+                          await walletService.unarchiveWallet(wallet.id);
+                          await loadWallets();
+                          showSuccess(`Unarchived "${wallet.name}"`);
+                        }}
+                        style={{ flexDirection: "row", alignItems: "center", gap: 4 }}
+                        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                        <Ionicons
+                          name="arrow-undo-outline"
+                          size={16}
+                          color={colors.primary}
+                        />
+                        <Text
+                          style={{
+                            fontSize: 12,
+                            fontWeight: "700",
+                            color: colors.primary,
+                          }}>
+                          Restore
+                        </Text>
+                      </TouchableOpacity>
+                    ) : (
+                      <>
+                        <TouchableOpacity
+                          onPress={() => openEditModal(wallet)}
+                          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                          <Ionicons
+                            name="pencil-outline"
+                            size={16}
+                            color={colors.primary}
+                          />
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                          onPress={() => {
+                            setFromWalletId(wallet.id);
+                            setShowTransferModal(true);
+                          }}
+                          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                          <Ionicons
+                            name="swap-horizontal"
+                            size={16}
+                            color={colors.primary}
+                          />
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                          onPress={() => handleDeleteWallet(wallet)}
+                          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                          <Ionicons
+                            name="trash-outline"
+                            size={16}
+                            color={colors.error}
+                          />
+                        </TouchableOpacity>
+                      </>
+                    )}
                   </View>
                 </TouchableOpacity>
               );
@@ -550,31 +809,90 @@ export const WalletManagementScreen: React.FC = () => {
           <View style={{ gap: 10 }}>
             {filteredWallets.map((wallet) => {
               const bal = walletBalances[wallet.id] || 0;
+              const isSecret = walletService.isSecretWallet(wallet);
               return (
                 <TouchableOpacity
                   key={wallet.id}
                   style={[
                     styles.walletRow,
                     {
-                      backgroundColor: colors.surfaceVariant,
-                      borderColor: colors.outlineVariant,
+                      backgroundColor: colors.surface,
+                      borderColor: isSecret ? colors.error : colors.outlineVariant,
+                      borderWidth: isSecret ? 1.5 : 1,
                     },
                   ]}
                   onPress={() => openEditModal(wallet)}
                   activeOpacity={0.75}>
                   <IconChip
-                    iconName={(wallet.icon || "wallet-outline") as any}
-                    colorName={(wallet.color as any) || "teal"}
+                    iconName={
+                      (wallet.icon ||
+                        (isSecret ? "lock-closed-outline" : "wallet-outline")) as any
+                    }
+                    colorName={(wallet.color as any) || (isSecret ? "gray" : "teal")}
                     size={40}
                   />
                   <View style={{ flex: 1, marginLeft: 12 }}>
-                    <Text
-                      style={[
-                        typography.label,
-                        { color: colors.onBackground, fontSize: 15 },
-                      ]}>
-                      {wallet.name}
-                    </Text>
+                    <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                      <Text
+                        style={[
+                          typography.label,
+                          { color: colors.onBackground, fontSize: 15 },
+                        ]}>
+                        {wallet.name}
+                      </Text>
+                      {isSecret && (
+                        <View
+                          style={{
+                            flexDirection: "row",
+                            alignItems: "center",
+                            gap: 3,
+                            backgroundColor: "rgba(239, 68, 68, 0.15)",
+                            paddingHorizontal: 6,
+                            paddingVertical: 2,
+                            borderRadius: 6,
+                          }}>
+                          <Ionicons
+                            name="lock-closed"
+                            size={10}
+                            color={colors.error}
+                          />
+                          <Text
+                            style={{
+                              fontSize: 9,
+                              fontWeight: "700",
+                              color: colors.error,
+                            }}>
+                            Secret · Excluded
+                          </Text>
+                        </View>
+                      )}
+                      {Boolean(wallet.archived) && (
+                        <View
+                          style={{
+                            flexDirection: "row",
+                            alignItems: "center",
+                            gap: 3,
+                            backgroundColor: colors.surfaceVariant,
+                            paddingHorizontal: 6,
+                            paddingVertical: 2,
+                            borderRadius: 6,
+                          }}>
+                          <Ionicons
+                            name="archive-outline"
+                            size={10}
+                            color={colors.onSurfaceVariant}
+                          />
+                          <Text
+                            style={{
+                              fontSize: 9,
+                              fontWeight: "700",
+                              color: colors.onSurfaceVariant,
+                            }}>
+                            Archived
+                          </Text>
+                        </View>
+                      )}
+                    </View>
                     <Text
                       style={{
                         fontSize: 12,
@@ -594,15 +912,31 @@ export const WalletManagementScreen: React.FC = () => {
                       {formatCurrency(bal)}
                     </Text>
                   </View>
-                  <TouchableOpacity
-                    onPress={() => handleDeleteWallet(wallet)}
-                    style={{ padding: 6 }}>
-                    <Ionicons
-                      name="trash-outline"
-                      size={18}
-                      color={colors.error}
-                    />
-                  </TouchableOpacity>
+                  {wallet.archived ? (
+                    <TouchableOpacity
+                      onPress={async () => {
+                        await walletService.unarchiveWallet(wallet.id);
+                        await loadWallets();
+                        showSuccess(`Unarchived "${wallet.name}"`);
+                      }}
+                      style={{ padding: 6 }}>
+                      <Ionicons
+                        name="arrow-undo-outline"
+                        size={18}
+                        color={colors.primary}
+                      />
+                    </TouchableOpacity>
+                  ) : (
+                    <TouchableOpacity
+                      onPress={() => handleDeleteWallet(wallet)}
+                      style={{ padding: 6 }}>
+                      <Ionicons
+                        name="trash-outline"
+                        size={18}
+                        color={colors.error}
+                      />
+                    </TouchableOpacity>
+                  )}
                 </TouchableOpacity>
               );
             })}
@@ -755,7 +1089,9 @@ export const WalletManagementScreen: React.FC = () => {
                   return (
                     <TouchableOpacity
                       key={wt}
-                      onPress={() => setFormType(wt)}
+                      onPress={() => {
+                        setFormType(wt);
+                      }}
                       style={{
                         flex: 1,
                         paddingVertical: 10,
@@ -767,7 +1103,7 @@ export const WalletManagementScreen: React.FC = () => {
                       }}>
                       <Text
                         style={{
-                          fontSize: 12,
+                          fontSize: 11,
                           fontWeight: "700",
                           textTransform: "capitalize",
                           color: selected
@@ -781,7 +1117,73 @@ export const WalletManagementScreen: React.FC = () => {
                 })}
               </View>
 
-              {/* Initial Balance */}
+              {/* Secret Wallet Toggle (Matches Settings Switch Row) */}
+              <TouchableOpacity
+                activeOpacity={0.7}
+                onPress={() => {
+                  const nextVal = !formIsSecret;
+                  setFormIsSecret(nextVal);
+                  if (nextVal) {
+                    setFormIcon("lock-closed-outline");
+                  }
+                }}
+                style={{
+                  flexDirection: "row",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  backgroundColor: colors.surfaceVariant,
+                  padding: spacing.md,
+                  borderRadius: 14,
+                  marginBottom: spacing.md,
+                }}>
+                <View
+                  style={{
+                    width: 32,
+                    height: 32,
+                    borderRadius: 16,
+                    alignItems: "center",
+                    justifyContent: "center",
+                    backgroundColor: formIsSecret
+                      ? colors.errorContainer
+                      : colors.primaryContainer,
+                    marginRight: 10,
+                  }}>
+                  <Ionicons
+                    name="lock-closed"
+                    size={16}
+                    color={formIsSecret ? colors.error : colors.primary}
+                  />
+                </View>
+                <View style={{ flex: 1, paddingRight: 10 }}>
+                  <Text
+                    style={{
+                      fontSize: 14,
+                      fontWeight: "700",
+                      color: colors.onSurface,
+                    }}>
+                    Secret Wallet
+                  </Text>
+                  <Text
+                    style={{
+                      fontSize: 11,
+                      color: colors.onSurfaceVariant,
+                      marginTop: 2,
+                    }}>
+                    Money added will not show up in totals unless assigned to a budget
+                  </Text>
+                </View>
+                <Switch
+                  value={formIsSecret}
+                  onValueChange={(val) => {
+                    setFormIsSecret(val);
+                    if (val) {
+                      setFormIcon("lock-closed-outline");
+                    }
+                  }}
+                />
+              </TouchableOpacity>
+
+              {/* Initial / Reconcile Balance */}
               <Text
                 style={{
                   fontSize: 12,
@@ -790,7 +1192,9 @@ export const WalletManagementScreen: React.FC = () => {
                   marginBottom: 6,
                   letterSpacing: 0.5,
                 }}>
-                INITIAL BALANCE ({currencySymbol.trim()})
+                {editingWallet
+                  ? `RECONCILE BALANCE (${currencySymbol.trim()})`
+                  : `INITIAL BALANCE (${currencySymbol.trim()})`}
               </Text>
               <TextInput
                 style={{
@@ -801,7 +1205,7 @@ export const WalletManagementScreen: React.FC = () => {
                   color: colors.onSurface,
                   fontSize: 16,
                   fontWeight: "700",
-                  marginBottom: spacing.md,
+                  marginBottom: 4,
                 }}
                 value={formInitialBalance}
                 onChangeText={setFormInitialBalance}
@@ -809,6 +1213,16 @@ export const WalletManagementScreen: React.FC = () => {
                 placeholderTextColor={colors.onSurfaceVariant}
                 keyboardType="decimal-pad"
               />
+              <Text
+                style={{
+                  fontSize: 11,
+                  color: colors.onSurfaceVariant,
+                  marginBottom: spacing.md,
+                }}>
+                {editingWallet
+                  ? 'Enter the actual current balance. An adjustment transaction named "Balance adjustment" will be created for the difference.'
+                  : "Starting balance for this account."}
+              </Text>
 
               {/* Icon Picker Grid */}
               <Text
@@ -1121,6 +1535,133 @@ export const WalletManagementScreen: React.FC = () => {
                 Confirm Transfer
               </Text>
             </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Move Transactions & Delete Modal */}
+      <Modal
+        visible={showMoveModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowMoveModal(false)}>
+        <View
+          style={{
+            flex: 1,
+            backgroundColor: "rgba(0,0,0,0.6)",
+            justifyContent: "center",
+            alignItems: "center",
+            padding: spacing.lg,
+          }}>
+          <View
+            style={{
+              backgroundColor: colors.surface,
+              borderRadius: 20,
+              padding: spacing.lg,
+              width: "100%",
+              maxWidth: 400,
+              borderWidth: 1,
+              borderColor: colors.outlineVariant,
+            }}>
+            <Text
+              style={[
+                typography.h3,
+                { color: colors.onSurface, fontWeight: "700", marginBottom: 8 },
+              ]}>
+              Move Transactions
+            </Text>
+            <Text
+              style={[
+                typography.bodyMedium,
+                { color: colors.onSurfaceVariant, marginBottom: spacing.md },
+              ]}>
+              Select the active wallet to receive all transactions from "{walletToMove?.name}" before deleting it:
+            </Text>
+            <View style={{ gap: 8, marginBottom: spacing.lg }}>
+              {wallets
+                .filter((w) => w.id !== walletToMove?.id && !w.archived)
+                .map((w) => {
+                  const selected = destinationWalletId === w.id;
+                  return (
+                    <TouchableOpacity
+                      key={w.id}
+                      onPress={() => setDestinationWalletId(w.id)}
+                      style={{
+                        flexDirection: "row",
+                        alignItems: "center",
+                        justifyContent: "space-between",
+                        padding: 12,
+                        borderRadius: 12,
+                        backgroundColor: selected
+                          ? colors.primaryContainer
+                          : colors.surfaceVariant,
+                      }}>
+                      <Text
+                        style={{
+                          fontWeight: "600",
+                          color: selected
+                            ? colors.onPrimaryContainer
+                            : colors.onSurface,
+                        }}>
+                        {w.name}
+                      </Text>
+                      {selected && (
+                        <Ionicons
+                          name="checkmark-circle"
+                          size={18}
+                          color={colors.primary}
+                        />
+                      )}
+                    </TouchableOpacity>
+                  );
+                })}
+            </View>
+            <View style={{ flexDirection: "row", gap: 12 }}>
+              <TouchableOpacity
+                style={{
+                  flex: 1,
+                  paddingVertical: 12,
+                  borderRadius: 12,
+                  alignItems: "center",
+                  backgroundColor: colors.surfaceVariant,
+                }}
+                onPress={() => setShowMoveModal(false)}>
+                <Text style={{ fontWeight: "700", color: colors.onSurface }}>
+                  Cancel
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={{
+                  flex: 1,
+                  paddingVertical: 12,
+                  borderRadius: 12,
+                  alignItems: "center",
+                  backgroundColor: colors.error,
+                }}
+                onPress={async () => {
+                  if (!walletToMove || !destinationWalletId) return;
+                  try {
+                    await walletService.reassignTransactions(
+                      walletToMove.id,
+                      destinationWalletId,
+                    );
+                    const { db } = await import("../database/queries");
+                    await db.wallets.hardDeleteWallet(walletToMove.id);
+                    await dispatch(fetchTransactions());
+                    await loadWallets();
+                    setShowMoveModal(false);
+                    showSuccess(
+                      `Moved transactions and deleted "${walletToMove.name}"`,
+                    );
+                  } catch {
+                    showError("Failed to move transactions and delete wallet");
+                  }
+                }}>
+                <Text style={{ fontWeight: "700", color: "#FFFFFF" }}>
+                  Move & Delete
+                </Text>
+              </TouchableOpacity>
+            </View>
           </View>
         </View>
       </Modal>

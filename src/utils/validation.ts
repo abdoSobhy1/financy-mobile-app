@@ -4,21 +4,59 @@ import { Transaction, TransactionType } from "../types";
 /**
  * Validates and cleans transaction data before database operations
  */
-export const validateTransactionData = (transaction: Partial<Transaction>): void => {
-  if (!transaction.amount || transaction.amount <= 0) {
+export const validateTransactionData = (
+  transaction: Partial<Transaction>,
+  isCreate: boolean = false,
+): void => {
+  if (transaction.amount !== undefined && transaction.amount <= 0) {
     throw new Error("Transaction amount must be greater than 0");
   }
 
-  if (!transaction.description?.trim()) {
+  if (transaction.description !== undefined && !transaction.description.trim()) {
     throw new Error("Transaction description is required");
   }
 
-  if (!transaction.categoryId) {
-    throw new Error("Transaction category is required");
+  if (
+    transaction.type !== undefined &&
+    !["income", "expense", "debt", "transfer"].includes(transaction.type)
+  ) {
+    throw new Error("Valid transaction type is required");
   }
 
-  if (!transaction.type || !["income", "expense", "debt"].includes(transaction.type)) {
-    throw new Error("Valid transaction type is required");
+  if (transaction.type === "transfer") {
+    if (
+      transaction.accountId &&
+      transaction.toAccountId &&
+      transaction.accountId === transaction.toAccountId
+    ) {
+      throw new Error("Source and destination accounts must be different");
+    }
+  }
+
+  if (isCreate) {
+    if (!transaction.amount || transaction.amount <= 0) {
+      throw new Error("Transaction amount must be greater than 0");
+    }
+    if (!transaction.description?.trim()) {
+      throw new Error("Transaction description is required");
+    }
+    if (!transaction.type) {
+      throw new Error("Valid transaction type is required");
+    }
+    if (transaction.type !== "transfer" && !transaction.categoryId) {
+      throw new Error("Transaction category is required");
+    }
+    if (transaction.type === "transfer") {
+      if (!transaction.accountId) {
+        throw new Error("Source account is required for transfer");
+      }
+      if (!transaction.toAccountId) {
+        throw new Error("Destination account is required for transfer");
+      }
+      if (transaction.accountId === transaction.toAccountId) {
+        throw new Error("Source and destination accounts must be different");
+      }
+    }
   }
 };
 
@@ -28,10 +66,11 @@ export const validateTransactionData = (transaction: Partial<Transaction>): void
 export const cleanTransactionData = (transaction: any): any => {
   const cleaned = {
     ...transaction,
+    categoryId: transaction.categoryId || transaction.category_id || null,
     budgetId: transaction.budgetId || null,
-    accountId: transaction.accountId || "default_cash",
+    accountId: transaction.accountId || transaction.account_id || "default_cash",
+    toAccountId: transaction.toAccountId || transaction.to_account_id || null,
     receiptUri: transaction.receiptUri || null,
-    recurringId: transaction.recurringId || null,
     note: transaction.note?.trim() || null,
     // Ensure numbers are properly typed
     amount: Number(transaction.amount),

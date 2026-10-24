@@ -1,5 +1,6 @@
 import { db } from "../database/queries";
 import { getDateRangeForBillingPeriod } from "./index";
+import { subDays } from "date-fns";
 
 /**
  * Gets the current billing period dates based on app settings
@@ -23,11 +24,9 @@ export const getPreviousBillingPeriod = async (): Promise<{ start: Date; end: Da
     const settings = await db.settings.getSettings();
     const current = getDateRangeForBillingPeriod(settings.billingPeriodStartDay);
 
-    // Go back one billing period
-    const previousMonthRef = new Date(current.start);
-    previousMonthRef.setMonth(previousMonthRef.getMonth() - 1);
-
-    return getDateRangeForBillingPeriod(settings.billingPeriodStartDay, previousMonthRef);
+    // The previous billing period ended on the day before current period started
+    const prevPeriodEnd = subDays(current.start, 1);
+    return getDateRangeForBillingPeriod(settings.billingPeriodStartDay, prevPeriodEnd);
   } catch (error) {
     // Fallback to previous calendar month
     const now = new Date();

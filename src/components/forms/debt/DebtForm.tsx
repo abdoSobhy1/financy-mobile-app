@@ -4,7 +4,7 @@ import { View, Text, StyleSheet, TextInput, TouchableOpacity, ScrollView, Keyboa
 import { useDispatch } from "react-redux";
 import { useNavigation } from "@react-navigation/native";
 import { StackNavigationProp } from "@react-navigation/stack";
-import { DebtStackParamList } from "../../../navigation/DebtStackNavigator";
+import { DebtStackParamList } from "../../../types";
 import { useToast, CustomDatePicker } from "../../ui";
 import { AppDispatch } from "../../../store";
 import { addDebt, updateDebt, deleteDebt } from "../../../store/slices/debtsSlice";

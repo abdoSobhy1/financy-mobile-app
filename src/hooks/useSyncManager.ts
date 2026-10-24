@@ -1,4 +1,4 @@
-import { useEffect, useCallback, useState } from "react";
+import { useEffect, useCallback, useState, useRef } from "react";
 import { useDispatch } from "react-redux";
 import { AppState, AppStateStatus } from "react-native";
 import NetInfo from "@react-native-community/netinfo";
@@ -32,7 +32,10 @@ export const useSyncManager = () => {
   const SYNC_DEBOUNCE_MS = 10000; // 10 seconds
 
   // Notification callback (will be set by SyncProvider)
-  const [notificationCallback, setNotificationCallback] = useState<((notification: SyncNotification) => void) | null>(null);
+  const notificationCallbackRef = useRef<((notification: SyncNotification) => void) | null>(null);
+  const setNotificationCallback = useCallback((callback: ((notification: SyncNotification) => void) | null) => {
+    notificationCallbackRef.current = callback;
+  }, []);
 
   // Unified sync function - now with smart sync that avoids full data pulls
   const performSync = useCallback(
@@ -49,8 +52,8 @@ export const useSyncManager = () => {
       setLastSyncAttempt(now);
       setSyncState((prev) => ({ ...prev, isSyncing: true, syncError: null }));
 
-      if (showFeedback && notificationCallback) {
-        notificationCallback({ type: "info", message: "Syncing data..." });
+      if (showFeedback && notificationCallbackRef.current) {
+        notificationCallbackRef.current({ type: "info", message: "Syncing data..." });
       }
 
       try {
@@ -72,8 +75,8 @@ export const useSyncManager = () => {
           syncError: null,
         }));
 
-        if (showFeedback && notificationCallback) {
-          notificationCallback({ type: "success", message: "Data synced successfully" });
+        if (showFeedback && notificationCallbackRef.current) {
+          notificationCallbackRef.current({ type: "success", message: "Data synced successfully" });
         }
       } catch (error) {
         const errorMessage = error && typeof error === "object" && "message" in error ? (error as Error).message : "Unknown sync error";
@@ -83,14 +86,14 @@ export const useSyncManager = () => {
           syncError: errorMessage,
         }));
 
-        if (showFeedback && notificationCallback) {
+        if (showFeedback && notificationCallbackRef.current) {
           const safeErrorMessage = errorMessage || "Unknown error";
-          notificationCallback({ type: "error", message: `Sync failed: ${safeErrorMessage}` });
+          notificationCallbackRef.current({ type: "error", message: `Sync failed: ${safeErrorMessage}` });
         }
         console.error("Sync error:", error);
       }
     },
-    [syncState.isSyncing, notificationCallback, lastSyncAttempt, SYNC_DEBOUNCE_MS]
+    [syncState.isSyncing, lastSyncAttempt, SYNC_DEBOUNCE_MS]
   );
 
   // Manual refresh trigger - smart sync by default
@@ -120,8 +123,8 @@ export const useSyncManager = () => {
         syncError: null,
       }));
 
-      if (notificationCallback) {
-        notificationCallback({ type: "success", message: "Change check completed" });
+      if (notificationCallbackRef.current) {
+        notificationCallbackRef.current({ type: "success", message: "Change check completed" });
       }
     } catch (error) {
       const errorMessage = error && typeof error === "object" && "message" in error ? (error as Error).message : "Change check failed";
@@ -132,11 +135,11 @@ export const useSyncManager = () => {
         syncError: errorMessage,
       }));
 
-      if (notificationCallback) {
-        notificationCallback({ type: "error", message: `Change check failed: ${errorMessage}` });
+      if (notificationCallbackRef.current) {
+        notificationCallbackRef.current({ type: "error", message: `Change check failed: ${errorMessage}` });
       }
     }
-  }, [syncState.isSyncing, notificationCallback]);
+  }, [syncState.isSyncing]);
 
   // Network state monitoring
   useEffect(() => {

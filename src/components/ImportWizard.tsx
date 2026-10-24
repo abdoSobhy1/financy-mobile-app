@@ -6,6 +6,7 @@ import { useNavigation } from "@react-navigation/native";
 import * as DocumentPicker from "expo-document-picker";
 import { RootState, AppDispatch } from "../store";
 import { Modal, Screen } from "./ui";
+import { useAppTheme } from "./ui/ThemeProvider";
 import { UI } from "../constants";
 import { ImportPreview, ImportMapping, ImportSettings, ImportResult, ImportProgress } from "../types/import";
 import { ExcelImportService } from "../services/excelImportService";
@@ -29,6 +30,7 @@ type WizardStep = "file-selection" | "preview" | "column-mapping" | "global-sett
 export const ImportWizard: React.FC<ImportWizardProps> = ({ visible, onClose, onSuccess, fullScreen = false }) => {
   const dispatch = useDispatch<AppDispatch>();
   const navigation = useNavigation();
+  const { colors } = useAppTheme();
 
   // Wizard state
   const [currentStep, setCurrentStep] = useState<WizardStep>("file-selection");
@@ -216,17 +218,17 @@ export const ImportWizard: React.FC<ImportWizardProps> = ({ visible, onClose, on
   };
 
   const content = (
-    <View style={styles.container}>
+    <View style={[styles.container, { backgroundColor: colors.background }]}>
       {/* Header */}
-      <View style={styles.header}>
-        <Text style={styles.title}>{getStepTitle()}</Text>
+      <View style={[styles.header, { borderBottomColor: colors.outlineVariant }]}>
+        <Text style={[styles.title, { color: colors.onBackground }]}>{getStepTitle()}</Text>
         {currentStep !== "results" && (
           <View style={styles.progressContainer}>
-            <Text style={styles.progressText}>
+            <Text style={[styles.progressText, { color: colors.onSurfaceVariant }]}>
               Step {getStepProgress().current + 1} of {getStepProgress().total + 1}
             </Text>
-            <View style={styles.progressBar}>
-              <View style={[styles.progressFill, { width: `${(getStepProgress().current / getStepProgress().total) * 100}%` }]} />
+            <View style={[styles.progressBar, { backgroundColor: colors.surfaceVariant }]}>
+              <View style={[styles.progressFill, { backgroundColor: colors.primary, width: `${(getStepProgress().current / getStepProgress().total) * 100}%` }]} />
             </View>
           </View>
         )}
@@ -249,17 +251,14 @@ export const ImportWizard: React.FC<ImportWizardProps> = ({ visible, onClose, on
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: UI.COLORS.BACKGROUND,
   },
   header: {
     padding: UI.SPACING.LG,
     borderBottomWidth: 1,
-    borderBottomColor: UI.COLORS.BORDER,
   },
   title: {
     fontSize: 24,
     fontWeight: "bold",
-    color: UI.COLORS.TEXT_PRIMARY,
     marginBottom: UI.SPACING.SM,
   },
   progressContainer: {
@@ -269,19 +268,16 @@ const styles = StyleSheet.create({
   },
   progressText: {
     fontSize: 14,
-    color: UI.COLORS.TEXT_SECONDARY,
     marginRight: UI.SPACING.MD,
   },
   progressBar: {
     flex: 1,
     height: 4,
-    backgroundColor: UI.COLORS.SURFACE,
     borderRadius: 2,
     overflow: "hidden",
   },
   progressFill: {
     height: "100%",
-    backgroundColor: UI.COLORS.PRIMARY,
     borderRadius: 2,
   },
   content: {

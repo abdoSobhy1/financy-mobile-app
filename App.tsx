@@ -18,11 +18,20 @@ import {
 import { initializeFirebase } from "./src/services/firebase";
 import { AuthProvider } from "./src/contexts/AuthContext";
 import { SyncProvider } from "./src/contexts/SyncProvider";
-import { offlineFirstSync } from "./src/services/OfflineFirstSync";
+import {
+  offlineFirstSync,
+  registerSyncDispatchListener,
+} from "./src/services/OfflineFirstSync";
+import { registerDeltaSyncListener } from "./src/services/syncService";
+import { markSynced as markTransactionSynced } from "./src/store/slices/transactionsSlice";
+import { markSynced as markBudgetSynced } from "./src/store/slices/budgetsSlice";
+import { markSynced as markCategorySynced } from "./src/store/slices/categoriesSlice";
+import { markSynced as markDebtSynced } from "./src/store/slices/debtsSlice";
+import { setLastSync } from "./src/store/slices/syncSlice";
 import { useSyncDataRefresh } from "./src/hooks";
 import { ShimmerProvider } from "react-native-fast-shimmer";
 import { ThemeProvider } from "./src/components/ui/ThemeProvider";
-import { AppLockOverlay } from "./src/components/ui/AppLockOverlay";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { fetchSettings } from "./src/store/slices/settingsSlice";
 import {
   smsService,
@@ -39,6 +48,31 @@ const AppWithSyncRefresh = () => {
   useSyncDataRefresh();
   return <AppNavigator />;
 };
+
+// Wire up OfflineFirstSync to Redux without require cycles
+registerSyncDispatchListener((tableName, recordId) => {
+  switch (tableName) {
+    case "transactions":
+      store.dispatch(markTransactionSynced(recordId));
+      break;
+    case "budgets":
+      store.dispatch(markBudgetSynced(recordId));
+      break;
+    case "categories":
+      store.dispatch(markCategorySynced(recordId));
+      break;
+    case "debts":
+    case "debt_payments":
+      store.dispatch(markDebtSynced(recordId));
+      break;
+    default:
+      break;
+  }
+});
+
+registerDeltaSyncListener((timestamp) => {
+  store.dispatch(setLastSync(timestamp));
+});
 
 export default function App() {
   const [isLoading, setIsLoading] = useState(true);
@@ -67,6 +101,12 @@ export default function App() {
         } catch (e) {
           console.warn("Could not pre-fetch settings:", e);
         }
+
+        // Clean up legacy app lock state if present
+        AsyncStorage.multiRemove([
+          "financy_app_lock_enabled_v1",
+          "financy_app_lock_pin_hash_v1",
+        ]).catch(() => {});
 
         // Run database migrations if needed for cloud compatibility
         console.log("Checking for database migrations...");
@@ -272,7 +312,6 @@ export default function App() {
                       <SyncProvider>
                         <GlobalAlertProvider>
                           {!isLoading && !dbError && <AppWithSyncRefresh />}
-                          <AppLockOverlay />
                         </GlobalAlertProvider>
                       </SyncProvider>
                     </BottomSheetModalProvider>

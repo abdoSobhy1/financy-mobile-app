@@ -28,24 +28,24 @@ const Screen: React.FC<ScreenProps> = ({
   showsVerticalScrollIndicator = false,
   keyboardShouldPersistTaps = "handled",
 }) => {
-  const { colors } = useAppTheme();
+  const { colors, isDark } = useAppTheme();
 
   const content = scrollable ? (
     <ScrollView
-      style={[styles.scrollView, style]}
+      style={[styles.scrollView, { backgroundColor: colors.background }, style]}
       contentContainerStyle={[styles.scrollContent, contentContainerStyle]}
       showsVerticalScrollIndicator={showsVerticalScrollIndicator}
       keyboardShouldPersistTaps={keyboardShouldPersistTaps}>
       {children}
     </ScrollView>
   ) : (
-    <View style={[styles.container, style]}>{children}</View>
+    <View style={[styles.container, { backgroundColor: colors.background }, style]}>{children}</View>
   );
 
   return (
     <SafeAreaView style={[styles.safeArea, { backgroundColor: colors.background }]}>
       <StatusBar
-        barStyle="light-content"
+        barStyle={isDark ? "light-content" : "dark-content"}
         backgroundColor={colors.background}
       />
       {content}
@@ -60,12 +60,10 @@ const styles = StyleSheet.create({
 
   container: {
     flex: 1,
-    backgroundColor: "#0B0B1E",
   },
 
   scrollView: {
     flex: 1,
-    backgroundColor: "#0B0B1E",
   },
 
   scrollContent: {

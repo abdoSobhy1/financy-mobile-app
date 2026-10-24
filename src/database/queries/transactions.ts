@@ -21,7 +21,7 @@ export class TransactionRepository {
     transaction: Omit<Transaction, "id" | "createdAt">,
     options?: { skipSync?: boolean; useProvidedId?: string },
   ): Promise<Transaction> {
-    validateTransactionData(transaction);
+    validateTransactionData(transaction, true);
     const cleanedTransaction = cleanTransactionData(transaction);
 
     const database = this.db.getDatabase();
@@ -31,18 +31,18 @@ export class TransactionRepository {
 
     await database.runAsync(
       `INSERT INTO transactions (
-        id, amount, type, category_id, budget_id, account_id, receipt_uri, recurring_id, description, 
+        id, amount, type, category_id, budget_id, account_id, to_account_id, receipt_uri, description, 
         date, note, linked_debt_payment_id, created_at, duplicated_at, sync_updated_at
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         id,
         tableData.amount,
         tableData.type,
-        tableData.category_id,
+        tableData.category_id || null,
         tableData.budget_id || null,
         tableData.account_id || "default_cash",
+        tableData.to_account_id || null,
         tableData.receipt_uri || null,
-        tableData.recurring_id || null,
         tableData.description,
         tableData.date,
         tableData.note || null,
@@ -183,7 +183,7 @@ export class TransactionRepository {
       throw new Error("No updates provided");
     }
 
-    validateTransactionData(updates);
+    validateTransactionData(updates, false);
     const cleanedUpdates = cleanTransactionData(updates);
 
     await this.db.ensureInitialized();
@@ -235,6 +235,11 @@ export class TransactionRepository {
     if (cleanedUpdates.accountId !== undefined) {
       updateFields.push("account_id = ?");
       updateValues.push(cleanedUpdates.accountId || "default_cash");
+    }
+
+    if (cleanedUpdates.toAccountId !== undefined) {
+      updateFields.push("to_account_id = ?");
+      updateValues.push(cleanedUpdates.toAccountId || null);
     }
 
     if (cleanedUpdates.receiptUri !== undefined) {

@@ -133,8 +133,8 @@ export const RADIUS = {
   pill: 999,
 };
 
-// Muted olive/sage fallback seed color
-const FALLBACK_SOURCE_COLOR = "#6B705C";
+// Refined emerald seed color
+const FALLBACK_SOURCE_COLOR = "#0D7A55";
 
 /** Darken a hex colour by multiplying each channel by `factor` (0–1). */
 function darkenHex(hex: string, factor: number): string {
@@ -203,6 +203,8 @@ type ThemeContextType = {
     bg: string;
     fg: string;
   };
+  updateTheme?: (sourceColor: string) => void;
+  resetTheme?: () => void;
 };
 
 const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
@@ -225,39 +227,72 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({
     ? preferredTheme === "dark"
     : systemColorScheme !== "light";
 
-  const { theme } = useMaterial3Theme({
+  const { theme, updateTheme, resetTheme } = useMaterial3Theme({
     fallbackSourceColor: FALLBACK_SOURCE_COLOR,
   });
 
   const activeColors = useMemo(() => {
-    const colors = { ...(isDark ? theme.dark : theme.light) };
+    const baseColors = isDark ? theme.dark : theme.light;
+    const colors = { ...baseColors };
 
     if (isDark) {
       // Darken the Material3 colours proportionally so the seed hue is preserved (from git commit 8a29225)
       colors.background = darkenHex(colors.background, 0.3);
       colors.surface = darkenHex(colors.surface, 0.38);
       colors.surfaceVariant = darkenHex(colors.surfaceVariant, 0.45);
+    } else {
+      // Light Mode: Enhance surface separation, tactile hierarchy, contrast, and visual comfort
+      // while FULLY PRESERVING the active Material 3 theme colors (primary, primaryContainer, secondary, tertiary, etc.)
+
+      // 1. Canvas Background: Soothing cool-slate alabaster canvas that eliminates glare and eye strain
+      // Decoupled from card surfaces so cards visually float above the canvas
+      colors.background = "#F4F6F9";
+
+      // 2. Primary Card Surface: Crisp pure white cards, modals, sheets, and tab bar for distinct separation
+      colors.surface = "#FFFFFF";
+
+      // 3. Inset / Control Surface: Ensure clear inset contrast for inputs, segmented tracks, and keypad keys
+      // Retains active theme tint while ensuring contrast against pure white cards
+      colors.surfaceVariant = baseColors.surfaceVariant || "#EAEFF5";
+
+      // 4. Subtle crisp borders framing cards, dividers, and lists
+      colors.outlineVariant = baseColors.outlineVariant || "#DFE4EA";
+      colors.outline = baseColors.outline || "#94A3B8";
+
+      // 5. High-contrast typography: Ensure deeply legible dark text (WCAG AAA)
+      colors.onBackground = baseColors.onBackground || "#0F172A";
+      colors.onSurface = baseColors.onSurface || "#0F172A";
+      colors.onSurfaceVariant = baseColors.onSurfaceVariant || "#5A677B";
     }
 
     return {
       ...colors,
-      elevation: (colors as any).elevation || {
-        level0: "transparent",
-        level1: colors.surfaceVariant,
-        level2: colors.surfaceVariant,
-        level3: colors.surfaceVariant,
-        level4: colors.surfaceVariant,
-        level5: colors.surfaceVariant,
-      },
+      elevation: isDark
+        ? (colors as any).elevation || {
+            level0: "transparent",
+            level1: colors.surfaceVariant,
+            level2: colors.surfaceVariant,
+            level3: colors.surfaceVariant,
+            level4: colors.surfaceVariant,
+            level5: colors.surfaceVariant,
+          }
+        : {
+            level0: "transparent",
+            level1: "#FFFFFF",
+            level2: "#FFFFFF",
+            level3: "#F8FAFC",
+            level4: "#F1F5F9",
+            level5: "#E8EDF5",
+          },
       surfaceDisabled:
         (colors as any).surfaceDisabled ||
-        (isDark ? "rgba(255, 255, 255, 0.12)" : "rgba(0, 0, 0, 0.12)"),
+        (isDark ? "rgba(255, 255, 255, 0.12)" : "rgba(15, 23, 42, 0.05)"),
       onSurfaceDisabled:
         (colors as any).onSurfaceDisabled ||
-        (isDark ? "rgba(255, 255, 255, 0.38)" : "rgba(0, 0, 0, 0.38)"),
+        (isDark ? "rgba(255, 255, 255, 0.38)" : "rgba(15, 23, 42, 0.38)"),
       backdrop:
         (colors as any).backdrop ||
-        (isDark ? "rgba(0, 0, 0, 0.6)" : "rgba(0, 0, 0, 0.4)"),
+        (isDark ? "rgba(0, 0, 0, 0.7)" : "rgba(15, 23, 42, 0.45)"),
     };
   }, [isDark, theme]);
 
@@ -274,8 +309,10 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({
       categoryPalette: CATEGORY_PALETTE,
       resolveCategoryColor: (colorName?: string | null) =>
         resolveCategoryColor(colorName, isDark),
+      updateTheme,
+      resetTheme,
     }),
-    [activeColors, isDark, currency]
+    [activeColors, isDark, currency, updateTheme, resetTheme]
   );
 
   return (

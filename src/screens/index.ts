@@ -9,6 +9,8 @@ export { default as DebtsScreen } from "./DebtsScreen";
 
 // Settings Screens
 export * from "./SettingsScreens";
+export * from "./WalletManagementScreen";
+export * from "./SmsDetectorSettingsScreen";
 
 // Analysis Screens
 export { AnalysisScreen } from "./analysis/AnalysisScreen";
