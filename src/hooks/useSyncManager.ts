@@ -5,6 +5,7 @@ import NetInfo from "@react-native-community/netinfo";
 import { AppDispatch } from "../store";
 import { offlineFirstSync } from "../services/OfflineFirstSync";
 import { syncService } from "../services/syncService";
+import { syncWithFirebase } from "../store/slices/syncSlice";
 
 interface SyncState {
   isOnline: boolean;
@@ -58,9 +59,8 @@ export const useSyncManager = () => {
 
       try {
         if (forceFullSync) {
-          // Perform full bidirectional sync (only when explicitly requested)
-          await offlineFirstSync.forceSyncAll();
-          await syncService.forceFullSync();
+          // Perform full bidirectional sync with Firebase database
+          await dispatch(syncWithFirebase({ showToast: false })).unwrap();
         } else {
           // Only process pending local operations (smart sync)
           await offlineFirstSync.processUnSyncedOperationsOnly();

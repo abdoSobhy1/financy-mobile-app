@@ -15,7 +15,6 @@ import {
 } from "firebase/firestore";
 import { authService } from "./authService";
 import { getFirestoreInstance } from "./firebase";
-import { hasCustomAIApiKey } from "./aiConfigService";
 import { getPersistentDeviceKeys } from "../utils/deviceId";
 
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
@@ -151,19 +150,6 @@ async function setLocalUsageToday(today: string, count: number): Promise<void> {
  */
 export async function getOcrQuotaStatus(): Promise<OcrQuotaStatus> {
   const today = getTodayDateString();
-
-  // 1. Check if the user supplied their own custom API key in Settings
-  const hasCustomKey = await hasCustomAIApiKey();
-  if (hasCustomKey) {
-    return {
-      isUnlimited: true,
-      usedToday: 0,
-      dailyLimit: DEFAULT_DAILY_LIMIT,
-      remainingToday: 999,
-      canScan: true,
-      reason: "custom_api_key",
-    };
-  }
 
   const currentUser = await authService.getCurrentAuthenticatedUser();
   const isSignedInAccount = Boolean(

@@ -235,7 +235,12 @@ export type RootTabParamList = {
 
 export type TransactionStackParamList = {
   TransactionList: undefined;
-  AddTransaction: { editTransaction?: Transaction; prefilledData?: ParsedTransaction; categoryId?: string };
+  AddTransaction: {
+    editTransaction?: Transaction;
+    prefilledData?: ParsedTransaction;
+    categoryId?: string;
+    openCreateCategory?: boolean;
+  };
   Dashboard: undefined;
   VoiceInput: { existingTransactions?: ParsedTransaction[] } | undefined;
   VoiceVerify: {

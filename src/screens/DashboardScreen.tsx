@@ -1299,6 +1299,42 @@ export const DashboardScreen: React.FC = () => {
                   </Text>
                 </TouchableOpacity>
               ))}
+
+              {/* Quick Create Category -> Opens New Transaction Screen + Create Category Modal */}
+              <TouchableOpacity
+                style={{ alignItems: "center", width: 64 }}
+                onPress={() =>
+                  navigation.navigate("AddTransaction", {
+                    openCreateCategory: true,
+                  })
+                }>
+                <View
+                  style={[
+                    styles.moreChip,
+                    {
+                      backgroundColor: colors.surface,
+                      borderRadius: 28,
+                      borderWidth: 1.5,
+                      borderStyle: "dashed",
+                      borderColor: colors.primary,
+                    },
+                  ]}>
+                  <Ionicons name="add" size={26} color={colors.primary} />
+                </View>
+                <Text
+                  style={[
+                    typography.bodySmall,
+                    {
+                      color: colors.primary,
+                      marginTop: spacing.xs,
+                      textAlign: "center",
+                      fontWeight: "700",
+                    },
+                  ]}
+                  numberOfLines={1}>
+                  + فئة
+                </Text>
+              </TouchableOpacity>
             </ScrollView>
 
             {/* Vertical Separator between categories and AI/Scan actions */}

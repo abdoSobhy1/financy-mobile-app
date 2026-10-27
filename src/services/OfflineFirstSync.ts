@@ -6,6 +6,7 @@ import NetInfo from "@react-native-community/netinfo";
 import { getDeviceId } from "../utils/deviceId";
 import { addDeviceTracking } from "../utils/deviceTracking";
 import NotificationService from "./notificationService";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 
 export type SyncDispatchListener = (tableName: string, recordId: string) => void;
 let syncDispatchListener: SyncDispatchListener | null = null;
@@ -29,6 +30,7 @@ export interface SyncLogEntry {
 class OfflineFirstSync {
   private db = DatabaseManager.getInstance();
   private isProcessing = false;
+  private isFullSyncing = false;
   private retryTimeout: ReturnType<typeof setTimeout> | null = null;
   private periodicSyncInterval: ReturnType<typeof setInterval> | null = null;
   private isInitialized = false;
@@ -675,6 +677,132 @@ class OfflineFirstSync {
   }
 
   /**
+   * Complete bidirectional sync with Firebase database:
+   * 1. Validates auth & internet connection
+   * 2. Initializes sync service & ensures Firestore user document exists
+   * 3. Flushes pending local sync operations
+   * 4. Pushes local data (categories, settings, wallets, budgets, transactions, debts, debt_payments) to cloud
+   * 5. Pulls/restores cloud data down to local SQLite
+   * 6. Updates syncUpdatedAt timestamp
+   */
+  public async syncWithFirebase(forceFullPush: boolean = true): Promise<{
+    push: { totalUploaded: number; totalSkipped: number; errors: string[] };
+    pull: { itemsCreated: number; itemsUpdated: number; errors: string[] };
+  }> {
+    if (this.isFullSyncing) {
+      console.log("🔄 Full sync already in progress, skipping duplicate request");
+      return {
+        push: { totalUploaded: 0, totalSkipped: 0, errors: [] },
+        pull: { itemsCreated: 0, itemsUpdated: 0, errors: [] },
+      };
+    }
+
+    this.isFullSyncing = true;
+    try {
+      const { authService } = await import("./authService");
+      const canSync = await authService.isCloudSyncAllowedAsync();
+      if (!canSync) {
+        console.log("⏭️ Cloud sync skipped: user is not authenticated or in guest mode");
+        return {
+          push: { totalUploaded: 0, totalSkipped: 0, errors: [] },
+          pull: { itemsCreated: 0, itemsUpdated: 0, errors: [] },
+        };
+      }
+
+      const netInfo = await NetInfo.fetch();
+      if (!netInfo.isConnected) {
+        console.log("📡 No internet connection for Firebase sync");
+        throw new Error("No internet connection");
+      }
+
+      console.log("🔄 Starting full bidirectional sync with Firebase database...");
+
+      // 1. Initialize Firebase sync service & ensure user document exists in Firestore
+      await syncService.initializeSync();
+
+      // 2. Process pending offline sync operations
+      await this.processUnSyncedOperations();
+
+      // 3. Restore cloud data FIRST so local database is populated with cloud records before pushing
+      let pullResult = { itemsCreated: 0, itemsUpdated: 0, errors: [] as string[] };
+      try {
+        pullResult = await this.performComprehensiveCloudRestore();
+      } catch (pullErr: any) {
+        console.error("❌ Restore from cloud failed:", pullErr);
+        pullResult.errors.push(pullErr?.message || String(pullErr));
+      }
+
+      // 4. Ensure categories state for this user is marked or seeded
+      try {
+        await this.db.ensureInitialized();
+        const database = this.db.getDatabase();
+        const catCountRow = await database.getFirstAsync<{ count: number }>(
+          "SELECT COUNT(*) as count FROM categories WHERE deleted = 0",
+        );
+        const { authService } = await import("./authService");
+        const currentUserId = (await authService.getCurrentAuthenticatedUser())?.uid;
+
+        if (currentUserId) {
+          const seededKey = `financy_categories_seeded_v1_${currentUserId}`;
+          if (catCountRow && catCountRow.count > 0) {
+            // User already has categories from cloud or local - mark as seeded so defaults never duplicate
+            await AsyncStorage.setItem(seededKey, "true");
+          } else {
+            // Brand new user with 0 categories in cloud & local: seed default Arabic categories with deterministic IDs once
+            const alreadySeeded = await AsyncStorage.getItem(seededKey);
+            if (alreadySeeded !== "true") {
+              const { CategoryRepository } = await import("../database/queries/categories");
+              const categoryRepo = new CategoryRepository();
+              await categoryRepo.seedDefaultArabicCategories();
+            }
+          }
+        }
+      } catch (catInitErr) {
+        console.warn("Category post-restore check warning:", catInitErr);
+      }
+
+      // 5. Push local data to cloud (categories, settings, wallets, budgets, transactions, debts, debt_payments)
+      let pushResult = {
+        totalUploaded: 0,
+        totalSkipped: 0,
+        collections: {},
+        errors: [] as string[],
+      };
+      try {
+        pushResult = await this.pushAllDataToCloud(forceFullPush);
+      } catch (pushErr: any) {
+        console.warn("⚠️ Push to cloud encountered an issue:", pushErr);
+        pushResult.errors.push(pushErr?.message || String(pushErr));
+      }
+
+      // 6. Update settings.syncUpdatedAt
+      try {
+        const { SettingsRepository } = await import("../database/queries/settings");
+        const settingsRepo = new SettingsRepository();
+        const now = Date.now();
+        await settingsRepo.updateSettings({ syncUpdatedAt: now });
+      } catch (e) {
+        console.warn("Could not update syncUpdatedAt setting:", e);
+      }
+
+      console.log(
+        `✅ Firebase database sync completed: ${pushResult.totalUploaded} pushed, ${pullResult.itemsCreated + pullResult.itemsUpdated} pulled`,
+      );
+
+      return {
+        push: {
+          totalUploaded: pushResult.totalUploaded,
+          totalSkipped: pushResult.totalSkipped,
+          errors: pushResult.errors,
+        },
+        pull: pullResult,
+      };
+    } finally {
+      this.isFullSyncing = false;
+    }
+  }
+
+  /**
    * Sync only conflicts and pending operations (no full data pull)
    */
   async syncConflictsOnly(): Promise<void> {
@@ -973,30 +1101,23 @@ class OfflineFirstSync {
       // Process each cloud document
       for (const cloudDoc of cloudDocuments) {
         try {
-          // Special handling for categories - handle soft deletion of default categories
-          if (
-            (tableName === "categories" && cloudDoc.deleted === true) ||
-            cloudDoc.deleted === 1
-          ) {
+          // Special handling for deleted cloud documents
+          if (cloudDoc.deleted === true || cloudDoc.deleted === 1) {
             const localDoc = localById.get(cloudDoc.id);
-            if (localDoc && (await this.isDefaultCategory(cloudDoc.id))) {
-              // Soft delete default category instead of skipping
-              console.log(`🔄 Soft deleting default category: ${cloudDoc.id}`);
-              await this.softDeleteCategory(cloudDoc.id);
+            if (localDoc) {
+              await this.db.ensureInitialized();
+              const database = this.db.getDatabase();
+              if (tableName === "categories" && (await this.isDefaultCategory(cloudDoc.id))) {
+                console.log(`🔄 Soft deleting default category: ${cloudDoc.id}`);
+                await this.softDeleteCategory(cloudDoc.id);
+              } else {
+                console.log(`🗑️ Removing deleted ${tableName} document from local DB: ${cloudDoc.id}`);
+                await database.runAsync(`DELETE FROM ${tableName} WHERE id = ?`, [cloudDoc.id]);
+              }
               result.updated++;
             } else {
-              console.log(
-                `🗑️ Skipping deleted ${tableName} document: ${cloudDoc.id}`,
-              );
+              console.log(`🗑️ Skipping already absent deleted ${tableName} document: ${cloudDoc.id}`);
             }
-            continue;
-          }
-
-          // Skip deleted documents for other collections
-          if (cloudDoc.deleted === true || cloudDoc.deleted === 1) {
-            console.log(
-              `🗑️ Skipping deleted ${tableName} document: ${cloudDoc.id}`,
-            );
             continue;
           }
 
@@ -1276,8 +1397,9 @@ class OfflineFirstSync {
 
   /**
    * Push all local data to Firebase cloud - ensures complete backup without duplicates
+   * @param forceAll If true, ignores last sync timestamp and evaluates all local documents
    */
-  public async pushAllDataToCloud(): Promise<{
+  public async pushAllDataToCloud(forceAll: boolean = false): Promise<{
     totalUploaded: number;
     totalSkipped: number;
     collections: Record<
@@ -1322,32 +1444,37 @@ class OfflineFirstSync {
 
       // Read last sync attempt marker so we only push local items updated since then
       let since = 0;
-      try {
-        await this.db.ensureInitialized();
-        const database = this.db.getDatabase();
-        const row = await database.getFirstAsync<{ sync_updated_at: number }>(
-          "SELECT sync_updated_at FROM settings WHERE id = 'default' LIMIT 1",
-        );
-        since = row?.sync_updated_at || 0;
-        console.log(
-          `⬆️ Pushing only local items updated after ${new Date(since).toISOString()}`,
-        );
-      } catch (err) {
-        console.warn(
-          "Could not read settings.syncUpdatedAt, falling back to full push:",
-          err,
-        );
-        since = 0;
+      if (!forceAll) {
+        try {
+          await this.db.ensureInitialized();
+          const database = this.db.getDatabase();
+          const row = await database.getFirstAsync<{ sync_updated_at: number }>(
+            "SELECT sync_updated_at FROM settings WHERE id = 'default' LIMIT 1",
+          );
+          since = row?.sync_updated_at || 0;
+          console.log(
+            `⬆️ Pushing only local items updated after ${new Date(since).toISOString()}`,
+          );
+        } catch (err) {
+          console.warn(
+            "Could not read settings.syncUpdatedAt, falling back to full push:",
+            err,
+          );
+          since = 0;
+        }
+      } else {
+        console.log("⬆️ Force push enabled: checking all local records for upload");
       }
 
-      // Process all collections
+      // Process all collections (independent first, then dependent)
       const allCollections = [
         "categories",
+        "settings",
+        "wallets",
         "budgets",
         "transactions",
         "debts",
         "debt_payments",
-        "settings",
       ];
 
       for (const tableName of allCollections) {
@@ -1615,11 +1742,12 @@ class OfflineFirstSync {
 
   /**
    * Check if a category is a default (pre-installed) category
-   * Since we removed default categories, this always returns false
    */
   private async isDefaultCategory(categoryId: string): Promise<boolean> {
-    // No default categories are created anymore - users create their own
-    return false;
+    return (
+      categoryId.startsWith("cat_default_") ||
+      categoryId.startsWith("default_")
+    );
   }
 
   /**

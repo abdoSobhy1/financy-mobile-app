@@ -1,5 +1,32 @@
-import React, { createContext, useContext, ReactNode } from "react";
+import React, { createContext, useContext, ReactNode, useEffect } from "react";
 import { ToastContainer, useToast as useToastHook } from "./Toast";
+
+let _showToast: ((message: string, type?: "success" | "error" | "info" | "warning", duration?: number) => void) | null = null;
+
+export const ToastService = {
+  register(fn: ((message: string, type?: "success" | "error" | "info" | "warning", duration?: number) => void) | null) {
+    _showToast = fn;
+  },
+  show(message: string, type: "success" | "error" | "info" | "warning" = "info", duration?: number) {
+    if (_showToast) {
+      _showToast(message, type, duration);
+    } else {
+      console.log(`[ToastService] (${type}) ${message}`);
+    }
+  },
+  showSuccess(message: string, duration?: number) {
+    this.show(message, "success", duration);
+  },
+  showError(message: string, duration?: number) {
+    this.show(message, "error", duration);
+  },
+  showInfo(message: string, duration?: number) {
+    this.show(message, "info", duration);
+  },
+  showWarning(message: string, duration?: number) {
+    this.show(message, "warning", duration);
+  },
+};
 
 interface ToastContextType {
   showToast: (message: string, type?: "success" | "error" | "info" | "warning", duration?: number) => void;
@@ -18,6 +45,13 @@ interface ToastProviderProps {
 
 export const ToastProvider: React.FC<ToastProviderProps> = ({ children }) => {
   const { showToast, showSuccess, showError, showWarning, showInfo, clearAllToasts, ToastComponent } = useToastHook();
+
+  useEffect(() => {
+    ToastService.register(showToast);
+    return () => {
+      ToastService.register(null);
+    };
+  }, [showToast]);
 
   const contextValue: ToastContextType = {
     showToast,

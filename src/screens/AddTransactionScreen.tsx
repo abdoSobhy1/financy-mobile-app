@@ -46,8 +46,6 @@ import {
 } from "../components/ui";
 import { formatCurrency } from "../utils";
 import { walletService } from "../services/walletService";
-import { OCRService, OcrDebugReport, OcrReceiptResult } from "../services/ocrService";
-import { ReceiptScanModal } from "../components/receipt/ReceiptScanModal";
 
 type NavigationProp = StackNavigationProp<
   TransactionStackParamList,
@@ -88,6 +86,7 @@ export const AddTransactionScreen: React.FC = () => {
   const editTransaction = params?.editTransaction;
   const prefilledData = params?.prefilledData;
   const initialCategoryId = params?.categoryId;
+  const openCreateCategory = params?.openCreateCategory;
 
   const dispatch = useDispatch<AppDispatch>();
   const {
@@ -113,8 +112,6 @@ export const AddTransactionScreen: React.FC = () => {
   const [wallets, setWallets] = useState<WalletAccount[]>(() =>
     walletService.getCachedWallets()
   );
-  const [showScanModal, setShowScanModal] = useState(false);
-  const [isScanningOcr, setIsScanningOcr] = useState(false);
   const [manualBudgetSelected, setManualBudgetSelected] = useState(false);
   const [showMore, setShowMore] = useState(false);
   const [description, setDescription] = useState("");
@@ -175,14 +172,14 @@ export const AddTransactionScreen: React.FC = () => {
   const amountInputRef = useRef<TextInput>(null);
   const descriptionInputRef = useRef<TextInput>(null);
 
-  const [lastOcrReport, setLastOcrReport] = useState<OcrDebugReport | null>(null);
-  const [showOcrDebugModal, setShowOcrDebugModal] = useState(false);
-  const [ocrDebugTab, setOcrDebugTab] = useState<"items" | "unrecognized" | "raw">("items");
-
   useEffect(() => {
     dispatch(fetchCategories());
     dispatch(fetchBudgets());
     walletService.getWallets().then(setWallets).catch(() => {});
+
+    if (openCreateCategory) {
+      setShowCreateCategoryModal(true);
+    }
 
     if (editTransaction) {
       setAmountStr(editTransaction.amount.toString());
@@ -296,90 +293,14 @@ export const AddTransactionScreen: React.FC = () => {
           icon: data.icon || "pricetag",
         })
       ).unwrap();
+      if (data.type && data.type !== type) {
+        setType(data.type);
+      }
       setCategoryId(created.id);
       setShowCreateCategoryModal(false);
       showSuccess(`Created "${created.name}"`);
     } catch (e) {
       showError("Could not create category");
-    }
-  };
-
-  const handleScanReceiptOcr = () => {
-    setShowScanModal(true);
-  };
-
-  const handleScanComplete = (ocrResult: OcrReceiptResult, assetUri: string) => {
-    // If multi-entry receipt (2 or more items detected), navigate to the modern VoiceVerify screen
-    if (ocrResult.items && ocrResult.items.length > 1) {
-      const parsedItems: ParsedTransaction[] = ocrResult.items.map((it) => ({
-        amount: it.price,
-        type: ocrResult.type || "expense",
-        description:
-          it.quantity && it.quantity > 1 ? `${it.quantity}x ${it.name}` : it.name,
-        date: ocrResult.date || new Date(),
-        note: ocrResult.description ? `From: ${ocrResult.description}` : undefined,
-        confidence: 0.9,
-        rawText: `${it.name} ${it.price}`,
-        categoryId: it.categoryId || ocrResult.categoryId,
-        quantity: it.quantity,
-        unitPrice: it.unitPrice,
-      }));
-
-      navigation.navigate("VoiceVerify", {
-        parsedTransactions: parsedItems,
-        source: "ocr",
-        ocrReport: ocrResult.debugReport,
-        receiptSummary: {
-          merchant: ocrResult.description,
-          totalAmount: ocrResult.amount,
-          itemsSum: ocrResult.itemsSum,
-          discount: ocrResult.discount,
-          date: ocrResult.date,
-          unrecognizedLines: ocrResult.debugReport?.unrecognizedLines,
-        },
-        rawText: ocrResult.rawText,
-        imageUri: assetUri,
-      });
-      return;
-    }
-
-    // Single entry or transfer slip (e.g. InstaPay)
-    if (ocrResult.debugReport) {
-      setLastOcrReport(ocrResult.debugReport);
-    }
-
-    const detectedItems: string[] = [];
-
-    if (ocrResult.amount !== undefined && !isNaN(ocrResult.amount)) {
-      setAmountStr(ocrResult.amount.toString());
-      detectedItems.push(formatCurrency(ocrResult.amount));
-    }
-
-    if (ocrResult.description) {
-      setDescription(ocrResult.description);
-      detectedItems.push(ocrResult.description);
-    }
-
-    if (ocrResult.note) {
-      setNote((prev) => (prev ? `${prev}\n${ocrResult.note}` : ocrResult.note!));
-    }
-
-    if (ocrResult.date) {
-      setDate(ocrResult.date);
-    }
-
-    if (ocrResult.categoryId) {
-      setCategoryId(ocrResult.categoryId);
-    }
-
-    if (ocrResult.type) {
-      setType(ocrResult.type);
-    }
-
-    if (detectedItems.length > 0) {
-      showSuccess(`OCR Extracted: ${detectedItems.join(" • ")}`);
-    } else {
-      showSuccess("OCR completed. No transaction details could be detected.");
     }
   };
 
@@ -483,82 +404,47 @@ export const AddTransactionScreen: React.FC = () => {
             paddingBottom: showKeypad ? KEYPAD_HEIGHT + spacing.md : spacing.xxl,
           }}
           keyboardShouldPersistTaps="handled">
-          {/* Segmented Control & Scan Action */}
+          {/* Segmented Control */}
           <View
-            style={{
-              flexDirection: "row",
-              alignItems: "center",
-              gap: 10,
-              marginBottom: spacing.xl,
-            }}>
-            <View
-              style={[
-                styles.segmentContainer,
-                {
-                  flex: 1,
-                  backgroundColor: colors.surfaceVariant,
-                  borderRadius: radius.pill,
-                  marginBottom: 0,
-                },
-              ]}>
-              {["income", "expense"].map((t) => {
-                const isActive = type === t;
-                return (
-                  <TouchableOpacity
-                    key={t}
-                    style={[
-                      styles.segmentButton,
-                      {
-                        borderRadius: radius.pill,
-                        backgroundColor: isActive
-                          ? colors.surface
-                          : "transparent",
-                      },
-                    ]}
-                    onPress={() => setType(t as TransactionType)}>
-                    <Text
-                      style={[
-                        typography.bodyMedium,
-                        {
-                          color: isActive
-                            ? colors.onBackground
-                            : colors.onSurfaceVariant,
-                          fontWeight: isActive ? "700" : "500",
-                          textTransform: "capitalize",
-                        },
-                      ]}>
-                      {t}
-                    </Text>
-                  </TouchableOpacity>
-                );
-              })}
-            </View>
-
-            {/* Dedicated Scan Button */}
-            <TouchableOpacity
-              onPress={() => setShowScanModal(true)}
-              activeOpacity={0.75}
-              style={{
-                height: 48,
-                paddingHorizontal: 14,
-                borderRadius: radius.pill,
+            style={[
+              styles.segmentContainer,
+              {
                 backgroundColor: colors.surfaceVariant,
-                flexDirection: "row",
-                alignItems: "center",
-                gap: 6,
-                borderWidth: 1,
-                borderColor: colors.outlineVariant,
-              }}>
-              <Ionicons name="scan-outline" size={20} color={colors.primary} />
-              <Text
-                style={{
-                  fontSize: 13,
-                  fontWeight: "700",
-                  color: colors.primary,
-                }}>
-                Scan
-              </Text>
-            </TouchableOpacity>
+                borderRadius: radius.pill,
+                marginBottom: spacing.xl,
+              },
+            ]}>
+            {["income", "expense"].map((t) => {
+              const isActive = type === t;
+              return (
+                <TouchableOpacity
+                  key={t}
+                  style={[
+                    styles.segmentButton,
+                    {
+                      borderRadius: radius.pill,
+                      backgroundColor: isActive
+                        ? colors.surface
+                        : "transparent",
+                    },
+                  ]}
+                  onPress={() => setType(t as TransactionType)}>
+                  <Text
+                    style={[
+                      typography.bodyMedium,
+                      {
+                        color: isActive
+                          ? colors.onBackground
+                          : colors.onSurfaceVariant,
+                        fontWeight: isActive ? "700" : "500",
+                        textTransform: "capitalize",
+                      },
+                    ]}>
+                    {t}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
           </View>
 
           {/* Amount Section — Tactile Calculator Display */}
@@ -1001,8 +887,8 @@ export const AddTransactionScreen: React.FC = () => {
               style={[
                 styles.optionRow,
                 {
-                  borderBottomColor: colors.outlineVariant,
-                  borderBottomWidth: 1,
+                  borderBottomColor: "transparent",
+                  borderBottomWidth: 0,
                 },
               ]}
               onPress={() => setShowDatePicker(true)}>
@@ -1038,82 +924,6 @@ export const AddTransactionScreen: React.FC = () => {
                 color={colors.onSurfaceVariant}
               />
             </TouchableOpacity>
-
-            {/* OCR Receipt Scanner */}
-            <TouchableOpacity
-              style={[
-                styles.optionRow,
-                { borderBottomColor: "transparent", borderBottomWidth: 0 },
-              ]}
-              onPress={() => setShowScanModal(true)}>
-              <View
-                style={[
-                  styles.optionIcon,
-                  { backgroundColor: colors.surface },
-                ]}>
-                <Ionicons
-                  name="scan-outline"
-                  size={20}
-                  color={colors.primary}
-                />
-              </View>
-              <View style={styles.optionContent}>
-                <Text
-                  style={[
-                    typography.bodyMedium,
-                    {
-                      color: colors.onBackground,
-                      fontWeight: "600",
-                    },
-                  ]}
-                  numberOfLines={1}>
-                  Scan Receipt or Bill
-                </Text>
-                <Text
-                  style={[
-                    typography.label,
-                    { color: colors.onSurfaceVariant, marginTop: 2 },
-                  ]}>
-                  Camera scanner, photo gallery, or PDF
-                </Text>
-              </View>
-              <Ionicons
-                name="chevron-forward"
-                size={18}
-                color={colors.onSurfaceVariant}
-              />
-            </TouchableOpacity>
-
-            {lastOcrReport && (
-              <TouchableOpacity
-                style={[
-                  {
-                    flexDirection: "row",
-                    alignItems: "center",
-                    paddingHorizontal: 12,
-                    paddingVertical: 10,
-                    borderRadius: 12,
-                    backgroundColor: colors.surfaceVariant,
-                    marginTop: 8,
-                  },
-                ]}
-                onPress={() => setShowOcrDebugModal(true)}>
-                <Ionicons name="information-circle-outline" size={16} color={colors.primary} />
-                <Text
-                  style={[
-                    typography.label,
-                    { color: colors.primary, fontWeight: "600", marginLeft: 6 },
-                  ]}>
-                  View OCR Scan Details & Unrecognized ({lastOcrReport.unrecognizedLinesCount})
-                </Text>
-                <Ionicons
-                  name="chevron-forward"
-                  size={14}
-                  color={colors.primary}
-                  style={{ marginLeft: "auto" }}
-                />
-              </TouchableOpacity>
-            )}
           </View>
 
           {/* More Options */}
@@ -1198,288 +1008,6 @@ export const AddTransactionScreen: React.FC = () => {
           initialData={{ name: "", type: type === "income" ? "income" : "expense" }}
         />
       </KeyboardAvoidingView>
-
-      {/* OCR Scan Details & Debug Inspector Modal */}
-      <Modal
-        visible={showOcrDebugModal}
-        transparent
-        animationType="slide"
-        onRequestClose={() => setShowOcrDebugModal(false)}>
-        <View
-          style={{
-            flex: 1,
-            backgroundColor: "rgba(0,0,0,0.7)",
-            justifyContent: "flex-end",
-          }}>
-          <View
-            style={{
-              height: "80%",
-              backgroundColor: colors.surface,
-              borderTopLeftRadius: 28,
-              borderTopRightRadius: 28,
-              paddingTop: 20,
-              paddingHorizontal: 18,
-            }}>
-            {/* Header */}
-            <View
-              style={{
-                flexDirection: "row",
-                justifyContent: "space-between",
-                alignItems: "center",
-                marginBottom: 14,
-              }}>
-              <View style={{ flexDirection: "row", alignItems: "center" }}>
-                <Ionicons name="scan" size={22} color={colors.primary} />
-                <Text style={[typography.h3, { color: colors.onSurface, marginLeft: 8 }]}>
-                  OCR Scan & Debug Details
-                </Text>
-              </View>
-              <TouchableOpacity onPress={() => setShowOcrDebugModal(false)} style={{ padding: 4 }}>
-                <Ionicons name="close" size={24} color={colors.onSurfaceVariant} />
-              </TouchableOpacity>
-            </View>
-
-            {/* Tabs */}
-            <View
-              style={{
-                flexDirection: "row",
-                borderBottomWidth: 1,
-                borderBottomColor: "rgba(255, 255, 255, 0.1)",
-                marginBottom: 14,
-              }}>
-              <TouchableOpacity
-                style={{
-                  flex: 1,
-                  alignItems: "center",
-                  paddingVertical: 10,
-                  borderBottomWidth: 2,
-                  borderBottomColor: ocrDebugTab === "items" ? colors.primary : "transparent",
-                }}
-                onPress={() => setOcrDebugTab("items")}>
-                <Text
-                  style={[
-                    typography.label,
-                    {
-                      color: ocrDebugTab === "items" ? colors.primary : colors.onSurfaceVariant,
-                      fontWeight: ocrDebugTab === "items" ? "700" : "500",
-                    },
-                  ]}>
-                  Detected Fields
-                </Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={{
-                  flex: 1,
-                  alignItems: "center",
-                  paddingVertical: 10,
-                  borderBottomWidth: 2,
-                  borderBottomColor: ocrDebugTab === "unrecognized" ? colors.primary : "transparent",
-                }}
-                onPress={() => setOcrDebugTab("unrecognized")}>
-                <Text
-                  style={[
-                    typography.label,
-                    {
-                      color: ocrDebugTab === "unrecognized" ? colors.primary : colors.onSurfaceVariant,
-                      fontWeight: ocrDebugTab === "unrecognized" ? "700" : "500",
-                    },
-                  ]}>
-                  Skipped Lines ({lastOcrReport?.unrecognizedLinesCount || 0})
-                </Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={{
-                  flex: 1,
-                  alignItems: "center",
-                  paddingVertical: 10,
-                  borderBottomWidth: 2,
-                  borderBottomColor: ocrDebugTab === "raw" ? colors.primary : "transparent",
-                }}
-                onPress={() => setOcrDebugTab("raw")}>
-                <Text
-                  style={[
-                    typography.label,
-                    {
-                      color: ocrDebugTab === "raw" ? colors.primary : colors.onSurfaceVariant,
-                      fontWeight: ocrDebugTab === "raw" ? "700" : "500",
-                    },
-                  ]}>
-                  Raw OCR Text
-                </Text>
-              </TouchableOpacity>
-            </View>
-
-            {/* Tab 1: Detected Fields */}
-            {ocrDebugTab === "items" && (
-              <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: 24 }}>
-                <View
-                  style={{
-                    padding: 14,
-                    borderRadius: 14,
-                    backgroundColor: colors.surfaceVariant,
-                    marginBottom: 10,
-                  }}>
-                  <Text style={[typography.label, { color: colors.onSurfaceVariant }]}>
-                    Merchant / Recipient
-                  </Text>
-                  <Text
-                    style={[typography.bodyLarge, { color: colors.onSurface, fontWeight: "700", marginTop: 2 }]}>
-                    {lastOcrReport?.merchant || description || "(Not detected)"}
-                  </Text>
-                </View>
-
-                <View
-                  style={{
-                    padding: 14,
-                    borderRadius: 14,
-                    backgroundColor: colors.surfaceVariant,
-                    marginBottom: 10,
-                  }}>
-                  <Text style={[typography.label, { color: colors.onSurfaceVariant }]}>
-                    Detected Amount
-                  </Text>
-                  <Text
-                    style={[typography.bodyLarge, { color: colors.primary, fontWeight: "700", marginTop: 2 }]}>
-                    {lastOcrReport?.detectedGrandTotal !== undefined
-                      ? formatCurrency(lastOcrReport.detectedGrandTotal)
-                      : amountStr
-                      ? formatCurrency(parseFloat(amountStr) || 0)
-                      : "(Not detected)"}
-                  </Text>
-                </View>
-
-                <View
-                  style={{
-                    padding: 14,
-                    borderRadius: 14,
-                    backgroundColor: colors.surfaceVariant,
-                    marginBottom: 10,
-                  }}>
-                  <Text style={[typography.label, { color: colors.onSurfaceVariant }]}>
-                    Detected Date
-                  </Text>
-                  <Text
-                    style={[typography.bodyLarge, { color: colors.onSurface, fontWeight: "700", marginTop: 2 }]}>
-                    {lastOcrReport?.date
-                      ? new Date(lastOcrReport.date).toLocaleDateString()
-                      : date.toLocaleDateString()}
-                  </Text>
-                </View>
-
-                {note ? (
-                  <View
-                    style={{
-                      padding: 14,
-                      borderRadius: 14,
-                      backgroundColor: colors.surfaceVariant,
-                      marginBottom: 10,
-                    }}>
-                    <Text style={[typography.label, { color: colors.onSurfaceVariant }]}>
-                      Notes & Reference
-                    </Text>
-                    <Text
-                      style={[typography.bodyMedium, { color: colors.onSurface, marginTop: 2 }]}>
-                      {note}
-                    </Text>
-                  </View>
-                ) : null}
-              </ScrollView>
-            )}
-
-            {/* Tab 2: Skipped Lines */}
-            {ocrDebugTab === "unrecognized" && (
-              <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: 24 }}>
-                {lastOcrReport?.lines && lastOcrReport.lines.length > 0 ? (
-                  lastOcrReport.lines
-                    .filter((l) => l.type !== "item" && l.type !== "total")
-                    .map((l, idx) => (
-                      <View
-                        key={idx}
-                        style={{
-                          padding: 12,
-                          borderRadius: 14,
-                          backgroundColor: colors.surfaceVariant,
-                          marginBottom: 8,
-                        }}>
-                        <Text style={[typography.bodyMedium, { color: colors.onSurface, fontWeight: "600" }]}>
-                          "{l.line}"
-                        </Text>
-                        <Text style={[typography.label, { color: colors.onSurfaceVariant, marginTop: 4 }]}>
-                          Status: {l.type.toUpperCase()} • {l.reason || "Skipped line"}
-                        </Text>
-                      </View>
-                    ))
-                ) : (
-                  <View style={{ padding: 24, alignItems: "center" }}>
-                    <Ionicons name="checkmark-circle" size={36} color={colors.primary} />
-                    <Text style={[typography.bodyMedium, { color: colors.onSurfaceVariant, marginTop: 8 }]}>
-                      No skipped lines recorded.
-                    </Text>
-                  </View>
-                )}
-              </ScrollView>
-            )}
-
-            {/* Tab 3: Raw OCR Text */}
-            {ocrDebugTab === "raw" && (
-              <View style={{ flex: 1 }}>
-                <ScrollView
-                  style={{
-                    flex: 1,
-                    backgroundColor: "rgba(0,0,0,0.3)",
-                    padding: 14,
-                    borderRadius: 14,
-                    marginBottom: 14,
-                  }}>
-                  <Text
-                    style={[
-                      typography.bodySmall,
-                      {
-                        color: colors.onSurface,
-                        fontFamily: Platform.OS === "ios" ? "Courier" : "monospace",
-                      },
-                    ]}>
-                    {lastOcrReport?.rawText || "No raw text available."}
-                  </Text>
-                </ScrollView>
-                <TouchableOpacity
-                  style={{
-                    flexDirection: "row",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    height: 48,
-                    borderRadius: 24,
-                    backgroundColor: colors.primary,
-                    marginBottom: 16,
-                  }}
-                  onPress={() => {
-                    if (lastOcrReport?.rawText) {
-                      Share.share({ message: lastOcrReport.rawText, title: "Raw OCR Text" });
-                    }
-                  }}>
-                  <Ionicons name="share-outline" size={18} color={colors.onPrimary} />
-                  <Text
-                    style={[
-                      typography.bodyMedium,
-                      { color: colors.onPrimary, fontWeight: "700", marginLeft: 8 },
-                    ]}>
-                    Share / Copy Raw Text
-                  </Text>
-                </TouchableOpacity>
-              </View>
-            )}
-          </View>
-        </View>
-      </Modal>
-
-      <ReceiptScanModal
-        visible={showScanModal}
-        onClose={() => setShowScanModal(false)}
-        categories={categories}
-        onScanComplete={handleScanComplete}
-      />
     </SafeAreaView>
   );
 };

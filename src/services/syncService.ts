@@ -1829,12 +1829,21 @@ export class SyncService {
         user.uid,
         collectionName,
       );
-      const q = query(collectionRef, orderBy("updatedAt", "desc"));
 
       console.log(`☁️ Fetching all documents from ${collectionName}...`);
 
-      // Use getDocs for one-time fetch
-      const snapshot = await getDocs(q);
+      // Use getDocs for one-time fetch with graceful fallback if orderBy index or field is missing
+      let snapshot;
+      try {
+        const q = query(collectionRef, orderBy("updatedAt", "desc"));
+        snapshot = await getDocs(q);
+      } catch (queryErr) {
+        console.warn(
+          `Query with orderBy failed for ${collectionName}, falling back to plain collection query:`,
+          queryErr,
+        );
+        snapshot = await getDocs(collectionRef);
+      }
 
       const documents: any[] = [];
       snapshot.forEach((doc) => {

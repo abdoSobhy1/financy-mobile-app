@@ -10,7 +10,7 @@ export { ErrorBoundary } from "./ErrorBoundary";
 export { CustomAlert, useCustomAlert, GlobalAlertProvider } from "./CustomAlert";
 export { Toast, ToastContainer } from "./Toast";
 export { FloatingActionButton } from "./FloatingActionButton";
-export { ToastProvider, useToast } from "./ToastProvider";
+export { ToastProvider, useToast, ToastService } from "./ToastProvider";
 export { SyncStatus } from "./SyncStatus";
 export { CustomDatePicker } from "./CustomDatePicker";
 export { EmptyState } from "./EmptyState";

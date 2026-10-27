@@ -21,11 +21,11 @@ import { StackNavigationProp } from "@react-navigation/stack";
 import { TransactionStackParamList, ParsedTransaction } from "../types";
 import { useAppTheme, resolveCategoryColor } from "../components/ui/ThemeProvider";
 import { formatCurrency } from "../utils";
-import { useToast, Card, IconChip } from "../components/ui";
+import { useToast, Card, IconChip, CategoryCreationModal } from "../components/ui";
 import { useSelector, useDispatch } from "react-redux";
 import { RootState, AppDispatch } from "../store";
 import { addTransaction } from "../store/slices/transactionsSlice";
-import { OcrDebugReport } from "../services/ocrService";
+import { addCategory, fetchCategories } from "../store/slices/categoriesSlice";
 import { AIService } from "../services/aiService";
 
 type NavigationProp = StackNavigationProp<TransactionStackParamList>;
@@ -39,14 +39,17 @@ export const VoiceVerifyScreen: React.FC = () => {
   const { showSuccess, showError } = useToast();
 
   const source = route.params?.source || "voice";
-  const ocrReport = route.params?.ocrReport as OcrDebugReport | undefined;
   const receiptSummary = route.params?.receiptSummary;
-  const rawText = route.params?.rawText || ocrReport?.rawText || "";
+  const rawText = route.params?.rawText || "";
   const imageUri = route.params?.imageUri;
 
   const [parsedTransactions, setParsedTransactions] = useState<ParsedTransaction[]>(
     route.params.parsedTransactions || []
   );
+
+  useEffect(() => {
+    dispatch(fetchCategories());
+  }, [dispatch]);
 
   // Sync state when navigating back with updated list
   useEffect(() => {
@@ -63,9 +66,7 @@ export const VoiceVerifyScreen: React.FC = () => {
     budgetId?: string;
   }>({ amount: "", description: "", categoryId: "", budgetId: undefined });
 
-  // Debug inspector modal state
-  const [showDebugModal, setShowDebugModal] = useState(false);
-  const [debugTab, setDebugTab] = useState<"items" | "unrecognized" | "raw">("items");
+  const [showCreateCategoryModal, setShowCreateCategoryModal] = useState(false);
   const [isEnhancingAI, setIsEnhancingAI] = useState(false);
 
   const { items: categoriesMap, ids: categoryIds } = useSelector(
@@ -80,17 +81,28 @@ export const VoiceVerifyScreen: React.FC = () => {
     [parsedTransactions]
   );
 
-  // Unrecognized or non-item lines from OCR
-  const nonItemLines = useMemo(() => {
-    if (!ocrReport?.lines) {
-      return (receiptSummary?.unrecognizedLines || []).map((line) => ({
-        line,
-        type: "unrecognized" as const,
-        reason: "Unmatched line",
-      }));
+  const handleQuickCreateCategory = async (data: {
+    name: string;
+    type: "income" | "expense";
+    color?: string;
+    icon?: string;
+  }) => {
+    try {
+      const created = await dispatch(
+        addCategory({
+          name: data.name,
+          type: data.type || "expense",
+          color: data.color || "#14B8A6",
+          icon: data.icon || "pricetag",
+        })
+      ).unwrap();
+      setEditData((prev) => ({ ...prev, categoryId: created.id }));
+      setShowCreateCategoryModal(false);
+      showSuccess(`Created "${created.name}"`);
+    } catch {
+      showError("Could not create category");
     }
-    return ocrReport.lines.filter((l) => l.type !== "item");
-  }, [ocrReport, receiptSummary]);
+  };
 
   // ── Confirm all individual transactions ──────────────────────────────
   const handleConfirmAll = async () => {
@@ -201,18 +213,6 @@ export const VoiceVerifyScreen: React.FC = () => {
     setParsedTransactions((prev) => prev.filter((_, i) => i !== index));
   };
 
-  const handleShareRawText = async () => {
-    if (!rawText) return;
-    try {
-      await Share.share({
-        message: rawText,
-        title: "OCR Extracted Receipt Text",
-      });
-    } catch {
-      // ignored
-    }
-  };
-
   const handleEnhanceWithAI = async () => {
     const online = await AIService.isOnline();
     if (!online) {
@@ -281,12 +281,7 @@ export const VoiceVerifyScreen: React.FC = () => {
             </Text>
           )}
         </View>
-        <TouchableOpacity
-          onPress={() => setShowDebugModal(true)}
-          style={styles.debugIconBtn}
-          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-          <Ionicons name="information-circle-outline" size={24} color={colors.primary} />
-        </TouchableOpacity>
+        <View style={{ width: 36 }} />
       </View>
 
       <ScrollView contentContainerStyle={styles.scrollContent}>
@@ -345,47 +340,34 @@ export const VoiceVerifyScreen: React.FC = () => {
               ) : null}
             </View>
 
-            {/* Actions Row: Debug report & Re-parse with AI */}
-            <View style={{ flexDirection: "row", gap: 8, marginTop: 8 }}>
+            {/* Re-parse with AI Action */}
+            {rawText ? (
               <TouchableOpacity
-                style={[styles.inspectBtn, { flex: 1, backgroundColor: colors.surfaceVariant, marginTop: 0 }]}
-                onPress={() => setShowDebugModal(true)}>
-                <Ionicons name="search-outline" size={16} color={colors.primary} />
+                style={[
+                  styles.inspectBtn,
+                  {
+                    backgroundColor: colors.primaryContainer,
+                    marginTop: 8,
+                    justifyContent: "center",
+                    paddingHorizontal: 12,
+                  },
+                ]}
+                onPress={handleEnhanceWithAI}
+                disabled={isEnhancingAI}>
+                {isEnhancingAI ? (
+                  <ActivityIndicator size="small" color={colors.onPrimaryContainer} />
+                ) : (
+                  <Ionicons name="sparkles" size={16} color={colors.onPrimaryContainer} />
+                )}
                 <Text
-                  style={[typography.label, { color: colors.primary, fontWeight: "600", marginLeft: 6 }]}
-                  numberOfLines={1}>
-                  Scan Report ({nonItemLines.length})
-                </Text>
-                <Ionicons name="chevron-forward" size={14} color={colors.primary} style={{ marginLeft: "auto" }} />
-              </TouchableOpacity>
-
-              {rawText ? (
-                <TouchableOpacity
                   style={[
-                    styles.inspectBtn,
-                    {
-                      backgroundColor: colors.primaryContainer,
-                      marginTop: 0,
-                      paddingHorizontal: 12,
-                    },
-                  ]}
-                  onPress={handleEnhanceWithAI}
-                  disabled={isEnhancingAI}>
-                  {isEnhancingAI ? (
-                    <ActivityIndicator size="small" color={colors.onPrimaryContainer} />
-                  ) : (
-                    <Ionicons name="sparkles" size={16} color={colors.onPrimaryContainer} />
-                  )}
-                  <Text
-                    style={[
-                      typography.label,
-                      { color: colors.onPrimaryContainer, fontWeight: "700", marginLeft: 6 },
-                    ]}>
-                    {isEnhancingAI ? "Analyzing..." : "Re-parse with AI"}
-                  </Text>
-                </TouchableOpacity>
-              ) : null}
-            </View>
+                    typography.label,
+                    { color: colors.onPrimaryContainer, fontWeight: "700", marginLeft: 6 },
+                  ]}>
+                  {isEnhancingAI ? "Analyzing..." : "Re-parse with AI"}
+                </Text>
+              </TouchableOpacity>
+            ) : null}
           </Card>
         )}
 
@@ -574,6 +556,7 @@ export const VoiceVerifyScreen: React.FC = () => {
               style={{ marginBottom: 16, paddingBottom: 8 }}>
               {categoryIds.map((id) => {
                 const c = categoriesMap[id];
+                if (!c || c.deleted) return null;
                 const isSelected = editData.categoryId === id;
                 const resolved = resolveCategoryColor(c.color, isDark);
                 return (
@@ -596,6 +579,29 @@ export const VoiceVerifyScreen: React.FC = () => {
                   </TouchableOpacity>
                 );
               })}
+
+              {/* Quick "+ New Category" Pill */}
+              <TouchableOpacity
+                onPress={() => setShowCreateCategoryModal(true)}
+                style={[
+                  styles.modalCatPill,
+                  {
+                    backgroundColor: colors.surface,
+                    borderWidth: 1,
+                    borderStyle: "dashed",
+                    borderColor: colors.primary,
+                  },
+                ]}>
+                <Ionicons
+                  name="add-circle-outline"
+                  size={15}
+                  color={colors.primary}
+                  style={{ marginRight: 4 }}
+                />
+                <Text style={[typography.label, { color: colors.primary, fontWeight: "700" }]}>
+                  New Category
+                </Text>
+              </TouchableOpacity>
             </ScrollView>
 
             <Text style={[typography.label, { color: colors.onSurfaceVariant, marginBottom: 8 }]}>
@@ -651,188 +657,12 @@ export const VoiceVerifyScreen: React.FC = () => {
         </KeyboardAvoidingView>
       </Modal>
 
-      {/* ── Scan Details & Debug Inspector Modal ──────────────────────────── */}
-      <Modal
-        visible={showDebugModal}
-        transparent
-        animationType="slide"
-        onRequestClose={() => setShowDebugModal(false)}>
-        <View style={styles.debugModalOverlay}>
-          <View style={[styles.debugModalSheet, { backgroundColor: colors.surface }]}>
-            {/* Header */}
-            <View style={styles.debugModalHeader}>
-              <View style={{ flexDirection: "row", alignItems: "center" }}>
-                <Ionicons name="scan" size={22} color={colors.primary} />
-                <Text style={[typography.h3, { color: colors.onSurface, marginLeft: 8 }]}>
-                  Scan & OCR Debug Details
-                </Text>
-              </View>
-              <TouchableOpacity onPress={() => setShowDebugModal(false)} style={{ padding: 4 }}>
-                <Ionicons name="close" size={24} color={colors.onSurfaceVariant} />
-              </TouchableOpacity>
-            </View>
-
-            {/* Tabs */}
-            <View style={styles.tabRow}>
-              <TouchableOpacity
-                style={[
-                  styles.tabBtn,
-                  debugTab === "items" && [styles.tabBtnActive, { borderBottomColor: colors.primary }],
-                ]}
-                onPress={() => setDebugTab("items")}>
-                <Text
-                  style={[
-                    typography.label,
-                    {
-                      color: debugTab === "items" ? colors.primary : colors.onSurfaceVariant,
-                      fontWeight: debugTab === "items" ? "700" : "500",
-                    },
-                  ]}>
-                  Detected ({parsedTransactions.length})
-                </Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={[
-                  styles.tabBtn,
-                  debugTab === "unrecognized" && [styles.tabBtnActive, { borderBottomColor: colors.primary }],
-                ]}
-                onPress={() => setDebugTab("unrecognized")}>
-                <Text
-                  style={[
-                    typography.label,
-                    {
-                      color: debugTab === "unrecognized" ? colors.primary : colors.onSurfaceVariant,
-                      fontWeight: debugTab === "unrecognized" ? "700" : "500",
-                    },
-                  ]}>
-                  Skipped / Non-Items ({nonItemLines.length})
-                </Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={[
-                  styles.tabBtn,
-                  debugTab === "raw" && [styles.tabBtnActive, { borderBottomColor: colors.primary }],
-                ]}
-                onPress={() => setDebugTab("raw")}>
-                <Text
-                  style={[
-                    typography.label,
-                    {
-                      color: debugTab === "raw" ? colors.primary : colors.onSurfaceVariant,
-                      fontWeight: debugTab === "raw" ? "700" : "500",
-                    },
-                  ]}>
-                  Raw OCR Text
-                </Text>
-              </TouchableOpacity>
-            </View>
-
-            {/* Tab 1: Detected Items */}
-            {debugTab === "items" && (
-              <ScrollView style={styles.debugList} contentContainerStyle={{ paddingBottom: 24 }}>
-                {parsedTransactions.map((tx, idx) => (
-                  <View
-                    key={idx}
-                    style={[styles.debugItemCard, { backgroundColor: colors.surfaceVariant }]}>
-                    <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
-                      <Text style={[typography.bodyMedium, { color: colors.onSurface, fontWeight: "700", flex: 1 }]}>
-                        {idx + 1}. {tx.description}
-                      </Text>
-                      <Text style={[typography.bodyLarge, { color: colors.primary, fontWeight: "700" }]}>
-                        {formatCurrency(tx.amount || 0)}
-                      </Text>
-                    </View>
-                    {tx.quantity && tx.quantity > 1 ? (
-                      <Text style={[typography.label, { color: colors.onSurfaceVariant, marginTop: 4 }]}>
-                        Quantity: {tx.quantity} • Unit Price: {formatCurrency(tx.unitPrice || 0)}
-                      </Text>
-                    ) : null}
-                    <View style={{ flexDirection: "row", marginTop: 6, gap: 8 }}>
-                      <View style={[styles.miniBadge, { backgroundColor: colors.primary + "20" }]}>
-                        <Text style={[typography.label, { color: colors.primary, fontSize: 10 }]}>
-                          Category: {categoriesMap[tx.categoryId || ""]?.name || "Auto-detected"}
-                        </Text>
-                      </View>
-                    </View>
-                  </View>
-                ))}
-              </ScrollView>
-            )}
-
-            {/* Tab 2: What was NOT detected as items */}
-            {debugTab === "unrecognized" && (
-              <ScrollView style={styles.debugList} contentContainerStyle={{ paddingBottom: 24 }}>
-                {nonItemLines.length === 0 ? (
-                  <View style={{ padding: 24, alignItems: "center" }}>
-                    <Ionicons name="checkmark-circle" size={36} color={colors.primary} />
-                    <Text style={[typography.bodyMedium, { color: colors.onSurfaceVariant, marginTop: 8 }]}>
-                      All lines from the document were matched as items!
-                    </Text>
-                  </View>
-                ) : (
-                  nonItemLines.map((l, idx) => {
-                    const badgeColor =
-                      l.type === "header"
-                        ? "#3B82F6"
-                        : l.type === "total"
-                        ? "#10B981"
-                        : l.type === "date"
-                        ? "#F59E0B"
-                        : l.type === "tax_discount"
-                        ? "#EC4899"
-                        : l.type === "merchant"
-                        ? "#8B5CF6"
-                        : colors.onSurfaceVariant;
-
-                    return (
-                      <View
-                        key={idx}
-                        style={[styles.debugItemCard, { backgroundColor: colors.surfaceVariant }]}>
-                        <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
-                          <Text style={[typography.bodyMedium, { color: colors.onSurface, fontWeight: "600", flex: 1 }]}>
-                            "{l.line}"
-                          </Text>
-                          <View style={[styles.miniBadge, { backgroundColor: badgeColor + "25" }]}>
-                            <Text style={[typography.label, { color: badgeColor, fontSize: 11, fontWeight: "700" }]}>
-                              {l.type.toUpperCase()}
-                            </Text>
-                          </View>
-                        </View>
-                        {l.reason && (
-                          <Text style={[typography.label, { color: colors.onSurfaceVariant, marginTop: 4 }]}>
-                            Reason: {l.reason}
-                          </Text>
-                        )}
-                      </View>
-                    );
-                  })
-                )}
-              </ScrollView>
-            )}
-
-            {/* Tab 3: Raw OCR Text */}
-            {debugTab === "raw" && (
-              <View style={{ flex: 1 }}>
-                <ScrollView style={styles.rawTextContainer}>
-                  <Text style={[typography.bodySmall, { color: colors.onSurface, fontFamily: Platform.OS === "ios" ? "Courier" : "monospace" }]}>
-                    {rawText || "No text extracted."}
-                  </Text>
-                </ScrollView>
-                <TouchableOpacity
-                  style={[styles.shareBtn, { backgroundColor: colors.primary }]}
-                  onPress={handleShareRawText}>
-                  <Ionicons name="share-outline" size={18} color={colors.onPrimary} />
-                  <Text style={[typography.bodyMedium, { color: colors.onPrimary, fontWeight: "700", marginLeft: 8 }]}>
-                    Share / Copy Raw Text
-                  </Text>
-                </TouchableOpacity>
-              </View>
-            )}
-          </View>
-        </View>
-      </Modal>
+      <CategoryCreationModal
+        visible={showCreateCategoryModal}
+        onClose={() => setShowCreateCategoryModal(false)}
+        onCreateCategory={handleQuickCreateCategory}
+        initialData={{ name: "", type: "expense" }}
+      />
     </SafeAreaView>
   );
 };

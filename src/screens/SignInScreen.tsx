@@ -15,6 +15,7 @@ import {
 import { useDispatch, useSelector } from "react-redux";
 import { RootState, AppDispatch } from "../store";
 import { signIn, signUp, signInAsGuest, sendPasswordReset } from "../store/slices/authSlice";
+import { syncWithFirebase } from "../store/slices/syncSlice";
 import { Ionicons } from "@expo/vector-icons";
 import { useAppTheme } from "../components/ui/ThemeProvider";
 
@@ -38,6 +39,8 @@ export const SignInScreen: React.FC = () => {
     }
     try {
       await dispatch(signIn({ email: email.trim(), password })).unwrap();
+      // Automatically trigger sync with Firebase database right after successful login
+      dispatch(syncWithFirebase({ showToast: true }));
     } catch (error: any) {
       AlertService.alert("Sign In Failed", error.message);
     }
@@ -68,6 +71,8 @@ export const SignInScreen: React.FC = () => {
           displayName: displayName.trim(),
         }),
       ).unwrap();
+      // Automatically trigger sync with Firebase database right after successful signup
+      dispatch(syncWithFirebase({ showToast: true }));
     } catch (error: any) {
       AlertService.alert("Sign Up Failed", error.message);
     }

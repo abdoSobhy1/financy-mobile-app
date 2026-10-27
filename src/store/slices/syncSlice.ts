@@ -1,7 +1,16 @@
 // Redux slice for sync state management
 import { createSlice, createAsyncThunk, PayloadAction } from "@reduxjs/toolkit";
 import { SyncState } from "../../types";
-import { offlineFirstSync, syncConflictsOnly as syncConflictsOnlyService } from "../../services/OfflineFirstSync";
+import {
+  offlineFirstSync,
+  syncConflictsOnly as syncConflictsOnlyService,
+} from "../../services/OfflineFirstSync";
+import { fetchTransactions } from "./transactionsSlice";
+import { fetchBudgets } from "./budgetsSlice";
+import { fetchCategories } from "./categoriesSlice";
+import { fetchDebts } from "./debtsSlice";
+import { fetchSettings } from "./settingsSlice";
+import { ToastService } from "../../components/ui/ToastProvider";
 
 // Initial state
 const initialState: SyncState = {
@@ -12,8 +21,48 @@ const initialState: SyncState = {
   error: null,
 };
 
+// Full bidirectional sync with Firebase database
+export const syncWithFirebase = createAsyncThunk(
+  "sync/syncWithFirebase",
+  async (options: { showToast?: boolean } | undefined, { dispatch, getState }) => {
+    const state = getState() as { sync: SyncState };
+    if (state.sync?.syncInProgress) {
+      console.log("🔄 Sync already in progress, skipping duplicate request");
+      return await offlineFirstSync.getSyncStatus();
+    }
+
+    try {
+      await offlineFirstSync.syncWithFirebase(true);
+
+      // Refresh all Redux slices so the UI updates immediately with restored cloud data
+      await Promise.all([
+        dispatch(fetchTransactions()),
+        dispatch(fetchCategories()),
+        dispatch(fetchBudgets()),
+        dispatch(fetchDebts()),
+        dispatch(fetchSettings()),
+      ]);
+
+      const now = Date.now();
+      dispatch(setLastSync(now));
+
+      if (options?.showToast) {
+        ToastService.showSuccess("Synced with Firebase database");
+      }
+
+      return await offlineFirstSync.getSyncStatus();
+    } catch (error: any) {
+      console.error("❌ syncWithFirebase failed:", error);
+      if (options?.showToast) {
+        ToastService.showError(error?.message || "Sync with Firebase failed");
+      }
+      throw error;
+    }
+  }
+);
+
 // Async thunks for sync operations
-export const initializeSync = createAsyncThunk("sync/initialize", async () => {
+export const initializeSync = createAsyncThunk("sync/initialize", async (_, { dispatch }) => {
   // Use conflicts-only sync to avoid pulling all data on startup
   await offlineFirstSync.syncConflictsOnly();
   return await offlineFirstSync.getSyncStatus();
@@ -29,15 +78,12 @@ export const refreshSyncStatus = createAsyncThunk("sync/refreshStatus", async ()
   return await offlineFirstSync.getSyncStatus();
 });
 
-export const forceSyncAll = createAsyncThunk("sync/forceSync", async () => {
-  await offlineFirstSync.forceSyncAll();
-  return await offlineFirstSync.getSyncStatus();
+export const forceSyncAll = createAsyncThunk("sync/forceSync", async (_, { dispatch }) => {
+  return await dispatch(syncWithFirebase({ showToast: false })).unwrap();
 });
 
-export const initialCloudRestore = createAsyncThunk("sync/initialCloudRestore", async () => {
-  const dataRestored = await offlineFirstSync.performInitialCloudPull();
-  const status = await offlineFirstSync.getSyncStatus();
-  return { dataRestored, status };
+export const initialCloudRestore = createAsyncThunk("sync/initialCloudRestore", async (_, { dispatch }) => {
+  return await dispatch(syncWithFirebase({ showToast: false })).unwrap();
 });
 
 export const syncConflictsOnly = createAsyncThunk("sync/conflictsOnly", async () => {
@@ -101,6 +147,24 @@ const syncSlice = createSlice({
     },
   },
   extraReducers: (builder) => {
+    // Sync With Firebase
+    builder.addCase(syncWithFirebase.pending, (state) => {
+      state.syncInProgress = true;
+      state.error = null;
+    });
+    builder.addCase(syncWithFirebase.fulfilled, (state, action) => {
+      const status = action.payload;
+      state.syncInProgress = false;
+      state.isOnline = status.isOnline;
+      state.pendingOperations = status.pendingOperations;
+      state.lastSync = Date.now();
+      state.error = status.failedOperations > 0 ? `${status.failedOperations} operations failed` : null;
+    });
+    builder.addCase(syncWithFirebase.rejected, (state, action) => {
+      state.syncInProgress = false;
+      state.error = action.error.message || "Firebase sync failed";
+    });
+
     // Initialize Sync
     builder.addCase(initializeSync.pending, (state) => {
       state.syncInProgress = true;
@@ -144,7 +208,7 @@ const syncSlice = createSlice({
     });
     builder.addCase(forceSyncAll.fulfilled, (state, action) => {
       const status = action.payload;
-      state.syncInProgress = status.isProcessing;
+      state.syncInProgress = false;
       state.isOnline = status.isOnline;
       state.pendingOperations = status.pendingOperations;
       state.lastSync = Date.now();
@@ -175,7 +239,14 @@ const syncSlice = createSlice({
   },
 });
 
-export const { setOnlineStatus, setLastSync, setPendingOperations, setSyncInProgress, setSyncError, clearSyncError, updateSyncStatus } =
-  syncSlice.actions;
+export const {
+  setOnlineStatus,
+  setLastSync,
+  setPendingOperations,
+  setSyncInProgress,
+  setSyncError,
+  clearSyncError,
+  updateSyncStatus,
+} = syncSlice.actions;
 
 export default syncSlice.reducer;

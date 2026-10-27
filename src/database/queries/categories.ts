@@ -3,13 +3,41 @@ import { Category } from "../../types";
 import { CategoryTable, transformCategory, toCategoryTable } from "../models";
 import { generateId } from "../../utils";
 import { offlineFirstSync } from "../../services/OfflineFirstSync";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import {
   validateCategoryData,
   cleanCategoryData,
 } from "../../utils/validation";
 
+export const DEFAULT_ARABIC_CATEGORIES: Array<{
+  id: string;
+  name: string;
+  type: "income" | "expense";
+  color: string;
+  icon: string;
+}> = [
+  // Expenses (مصروفات)
+  { id: "cat_default_food", name: "طعام ومطاعم", type: "expense", color: "#F97316", icon: "restaurant" },
+  { id: "cat_default_groceries", name: "سوبر ماركت وبقالة", type: "expense", color: "#22C55E", icon: "cart" },
+  { id: "cat_default_transport", name: "مواصلات ووقود", type: "expense", color: "#3B82F6", icon: "car" },
+  { id: "cat_default_bills", name: "فواتير وخدمات", type: "expense", color: "#F59E0B", icon: "flash" },
+  { id: "cat_default_shopping", name: "تسوق وملابس", type: "expense", color: "#8B5CF6", icon: "bag-handle" },
+  { id: "cat_default_health", name: "صحة وأدوية", type: "expense", color: "#F43F5E", icon: "medkit" },
+  { id: "cat_default_housing", name: "إيجار وسكن", type: "expense", color: "#6366F1", icon: "home" },
+  { id: "cat_default_entertainment", name: "ترفيه وخروجات", type: "expense", color: "#EC4899", icon: "game-controller" },
+  { id: "cat_default_education", name: "تعليم ودورات", type: "expense", color: "#14B8A6", icon: "school" },
+  { id: "cat_default_other_exp", name: "مصاريف أخرى", type: "expense", color: "#64748B", icon: "pricetag" },
+  // Income (دخل)
+  { id: "cat_default_salary", name: "راتب شهري", type: "income", color: "#10B981", icon: "cash" },
+  { id: "cat_default_freelance", name: "عمل حر ومشاريع", type: "income", color: "#14B8A6", icon: "briefcase" },
+  { id: "cat_default_bonus", name: "مكافآت وحوافز", type: "income", color: "#EAB308", icon: "gift" },
+  { id: "cat_default_investments", name: "استثمارات وأرباح", type: "income", color: "#0EA5E9", icon: "trending-up" },
+  { id: "cat_default_other_inc", name: "دخل إضافي", type: "income", color: "#8B5CF6", icon: "wallet" },
+];
+
 export class CategoryRepository {
   private db = DatabaseManager.getInstance();
+  private isSeedingDefaults = false;
 
   async createCategory(
     category: Omit<Category, "id" | "createdAt">,
@@ -71,14 +99,95 @@ export class CategoryRepository {
     return result ? transformCategory(result) : null;
   }
 
+  private async shouldSeedDefaults(): Promise<boolean> {
+    try {
+      const { authService } = await import("../../services/authService");
+      const isCloudAllowed = await authService.isCloudSyncAllowedAsync();
+      const currentUserId = (await authService.getCurrentAuthenticatedUser())?.uid || "guest";
+
+      // If user has already been marked as seeded, NEVER auto-seed again (prevents resurrecting deleted categories)
+      const seededKey = `financy_categories_seeded_v1_${currentUserId}`;
+      const alreadySeeded = await AsyncStorage.getItem(seededKey);
+      if (alreadySeeded === "true") {
+        return false;
+      }
+
+      // If user is logged in with Firebase, wait for cloud restore before seeding defaults
+      if (isCloudAllowed) {
+        return false;
+      }
+
+      return true;
+    } catch (e) {
+      console.warn("Error checking shouldSeedDefaults:", e);
+      return false;
+    }
+  }
+
+  public async seedDefaultArabicCategories(): Promise<void> {
+    const database = this.db.getDatabase();
+    console.log("🌱 Auto-generating default Arabic categories with deterministic IDs...");
+
+    for (const defCat of DEFAULT_ARABIC_CATEGORIES) {
+      // Check if a category with this deterministic ID or exact name already exists
+      const existing = await database.getFirstAsync<{ id: string }>(
+        "SELECT id FROM categories WHERE id = ? OR name = ?",
+        [defCat.id, defCat.name],
+      );
+
+      if (!existing) {
+        await this.createCategory(
+          {
+            name: defCat.name,
+            type: defCat.type,
+            color: defCat.color,
+            icon: defCat.icon,
+            entryCount: 0,
+            updatedAt: Date.now(),
+            deleted: false,
+            syncStatus: "pending",
+          },
+          { useProvidedId: defCat.id },
+        );
+      }
+    }
+
+    // Mark as seeded for this user/session so it never regenerates if user deletes them
+    try {
+      const { authService } = await import("../../services/authService");
+      const currentUserId = (await authService.getCurrentAuthenticatedUser())?.uid || "guest";
+      await AsyncStorage.setItem(`financy_categories_seeded_v1_${currentUserId}`, "true");
+    } catch (e) {
+      console.warn("Failed to set categories seeded key:", e);
+    }
+  }
+
   async getAllCategories(): Promise<Category[]> {
     try {
       await this.db.ensureInitialized();
       const database = this.db.getDatabase();
       console.log("Querying categories table...");
-      const results = (await database.getAllAsync(
+      let results = (await database.getAllAsync(
         "SELECT * FROM categories ORDER BY entry_count DESC, type ASC, name ASC",
       )) as CategoryTable[];
+
+      const activeResults = results.filter((r) => !(r as any).deleted);
+
+      // Only auto-generate if no active categories exist AND shouldSeedDefaults() allows it
+      if (activeResults.length === 0 && !this.isSeedingDefaults) {
+        const canSeed = await this.shouldSeedDefaults();
+        if (canSeed) {
+          this.isSeedingDefaults = true;
+          try {
+            await this.seedDefaultArabicCategories();
+            results = (await database.getAllAsync(
+              "SELECT * FROM categories ORDER BY entry_count DESC, type ASC, name ASC",
+            )) as CategoryTable[];
+          } finally {
+            this.isSeedingDefaults = false;
+          }
+        }
+      }
 
       console.log(`Found ${results.length} categories in database`);
       return results.map(transformCategory);

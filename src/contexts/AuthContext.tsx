@@ -3,7 +3,7 @@ import React, { createContext, useContext, useEffect, ReactNode } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { RootState, AppDispatch } from "../store";
 import { setUser, initializeAuth } from "../store/slices/authSlice";
-import { initializeSync, stopSync, initialCloudRestore } from "../store/slices/syncSlice";
+import { syncWithFirebase, stopSync } from "../store/slices/syncSlice";
 import { authService } from "../services/authService";
 import { useSessionManager } from "../hooks/useSessionManager";
 import { User } from "../types";
@@ -45,21 +45,20 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
       // Initialize or stop sync based on auth state (skip sync for Guest Mode)
       if (user && !user.isGuest && user.uid !== "guest") {
-        // Delay sync initialization to ensure auth state is stable
+        // Delay sync initialization slightly to ensure auth state and database are stable
         authTimeout = setTimeout(async () => {
           try {
-            // Double-check user is still authenticated before initializing sync
+            // Double-check user is still authenticated before syncing
             const currentUser = authService.getCurrentUser();
             if (currentUser && !currentUser.isGuest) {
-              console.log("🔐 User authenticated, initializing sync (conflicts-only)...");
-              // Initialize sync (now uses conflicts-only approach)
-              await dispatch(initializeSync());
-              console.log("✅ Sync initialized successfully!");
+              console.log("🔐 User authenticated, automatically syncing with Firebase database...");
+              await dispatch(syncWithFirebase({ showToast: true })).unwrap();
+              console.log("✅ Auto-sync with Firebase database completed successfully!");
             } else {
-              console.log("⚠️ User no longer authenticated, skipping sync initialization");
+              console.log("⚠️ User no longer authenticated, skipping sync");
             }
           } catch (error) {
-            console.error("❌ Failed to initialize sync:", error);
+            console.error("❌ Failed to auto-sync with Firebase database:", error);
           } finally {
             authTimeout = null;
           }

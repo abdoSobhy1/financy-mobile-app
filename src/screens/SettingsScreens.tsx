@@ -17,11 +17,9 @@ import {
   Platform,
   Linking,
 } from "react-native";
-import AsyncStorage from "@react-native-async-storage/async-storage";
 import {
   getAIConfigStatus,
   saveAIConfig,
-  clearCustomAIConfig,
   testAIConnection,
   AIConfig,
   AIProvider,
@@ -56,14 +54,6 @@ import NotificationService, {
   NotificationSettings,
 } from "../services/notificationService";
 import { formatCurrency } from "../utils";
-
-const PROFILE_STORAGE_KEY = "financy_user_profile_v1";
-
-interface LocalUserProfile {
-  displayName: string;
-  email: string;
-  avatarColor: string;
-}
 import {
   fetchSettings,
   updateBillingPeriodStartDay,
@@ -78,6 +68,8 @@ import {
 } from "../store/slices/categoriesSlice";
 import { fetchBudgets } from "../store/slices/budgetsSlice";
 import { fetchTransactions } from "../store/slices/transactionsSlice";
+import { fetchDebts } from "../store/slices/debtsSlice";
+import { syncWithFirebase } from "../store/slices/syncSlice";
 import { Category } from "../types";
 import { exportToExcel, exportToCSV, ExportData } from "../utils/exportUtils";
 import { exportDatabaseToJSON } from "../utils/databaseExport";
@@ -86,7 +78,8 @@ import { useAuth } from "../contexts/AuthContext";
 import { useSync } from "../contexts/SyncProvider";
 import { setDebugMode, getDebugMode } from "../utils/logger";
 import { getDeviceId } from "../utils/deviceId";
-import { signOut } from "../store/slices/authSlice";
+import { signOut, setUser } from "../store/slices/authSlice";
+import { authService } from "../services/authService";
 import {
   getSmsDetectionEnabled,
   setSmsDetectionEnabled,
@@ -188,14 +181,9 @@ export const SettingsScreen: React.FC = () => {
   const [smsEnabled, setSmsEnabled] = useState(true);
 
   // ── Profile & Notifications State ──────────────────────────────
-  const [localProfile, setLocalProfile] = useState<LocalUserProfile>({
-    displayName: "Financy User",
-    email: "",
-    avatarColor: "#10B981",
-  });
   const [showProfileModal, setShowProfileModal] = useState(false);
   const [profileNameInput, setProfileNameInput] = useState("");
-  const [profileEmailInput, setProfileEmailInput] = useState("");
+  const [savingProfile, setSavingProfile] = useState(false);
 
   const [notifSettings, setNotifSettings] = useState<NotificationSettings>({
     transactionReminders: true,
@@ -205,7 +193,6 @@ export const SettingsScreen: React.FC = () => {
 
   // ── AI Configuration State (Never loads raw API keys into UI) ────
   const [showAiModal, setShowAiModal] = useState(false);
-  const [hasCustomAiKey, setHasCustomAiKey] = useState(false);
   const [aiKeyInput, setAiKeyInput] = useState("");
   const [selectedAiProvider, setSelectedAiProvider] = useState<AIProvider>("gemini");
   const [isTestingAi, setIsTestingAi] = useState(false);
@@ -231,28 +218,11 @@ export const SettingsScreen: React.FC = () => {
     if (Platform.OS === "android") {
       getSmsDetectionEnabled().then(setSmsEnabled);
     }
-    // Load local profile & notifications
-    AsyncStorage.getItem(PROFILE_STORAGE_KEY)
-      .then((raw) => {
-        if (raw) {
-          const prof = {
-            displayName: "Financy User",
-            email: "",
-            avatarColor: "#10B981",
-            ...JSON.parse(raw),
-          };
-          setLocalProfile(prof);
-          setProfileNameInput(prof.displayName);
-          setProfileEmailInput(prof.email);
-        }
-      })
-      .catch(() => {});
     NotificationService.getInstance()
       .getNotificationSettings()
       .then(setNotifSettings)
       .catch(() => {});
     getAIConfigStatus().then((status) => {
-      setHasCustomAiKey(status.hasCustomKey);
       setSelectedAiProvider(status.provider);
       // Never load any API key string into aiKeyInput
       setAiKeyInput("");
@@ -270,20 +240,10 @@ export const SettingsScreen: React.FC = () => {
       apiKey: trimmed,
     };
     await saveAIConfig(updated);
-    setHasCustomAiKey(true);
     setAiKeyInput("");
     setShowAiKeySecret(false);
     setShowAiModal(false);
-    showSuccess("Custom AI key saved!");
-  };
-
-  const handleRemoveCustomAiKey = async () => {
-    await clearCustomAIConfig();
-    setHasCustomAiKey(false);
-    setAiKeyInput("");
-    setShowAiKeySecret(false);
-    setShowAiModal(false);
-    showSuccess("Custom AI key removed");
+    showSuccess("AI configuration saved!");
   };
 
   const handleTestAi = async () => {
@@ -301,18 +261,21 @@ export const SettingsScreen: React.FC = () => {
   };
 
   const handleSaveProfile = async () => {
+    const trimmedName = profileNameInput.trim();
+    if (!trimmedName) {
+      showError("Please enter a display name");
+      return;
+    }
     try {
-      const updated: LocalUserProfile = {
-        ...localProfile,
-        displayName: profileNameInput.trim() || "Financy User",
-        email: profileEmailInput.trim(),
-      };
-      await AsyncStorage.setItem(PROFILE_STORAGE_KEY, JSON.stringify(updated));
-      setLocalProfile(updated);
+      setSavingProfile(true);
+      const updatedUser = await authService.updateUserProfile(trimmedName);
+      dispatch(setUser(updatedUser));
       setShowProfileModal(false);
       showSuccess("Profile updated");
     } catch {
       showError("Failed to update profile");
+    } finally {
+      setSavingProfile(false);
     }
   };
 
@@ -454,17 +417,8 @@ export const SettingsScreen: React.FC = () => {
     setSyncing(true);
     try {
       showSuccess("Syncing…");
-      const { offlineFirstSync } = await import("../services/OfflineFirstSync");
-      const push = await offlineFirstSync.pushAllDataToCloud();
-      const pull = await offlineFirstSync.performComprehensiveCloudRestore();
-      const msg = `Synced! ${push.totalUploaded} pushed, ${pull.itemsCreated + pull.itemsUpdated} pulled.`;
-      showSuccess(msg);
-      dispatch(fetchTransactions());
-      dispatch(fetchCategories());
-      dispatch(fetchBudgets());
-      const errors = [...push.errors, ...pull.errors];
-      if (errors.length)
-        showError(`Completed with ${errors.length} warnings (see console)`);
+      await dispatch(syncWithFirebase({ showToast: false })).unwrap();
+      showSuccess("Synced with cloud!");
     } catch (e: any) {
       showError(
         e?.message?.includes("authenticated")
@@ -497,6 +451,7 @@ export const SettingsScreen: React.FC = () => {
       dispatch(fetchTransactions());
       dispatch(fetchCategories());
       dispatch(fetchBudgets());
+      dispatch(fetchDebts());
       if (r.errors.length)
         showError(`Completed with ${r.errors.length} warnings`);
     } catch (e: any) {
@@ -644,23 +599,22 @@ export const SettingsScreen: React.FC = () => {
             icon="person-outline"
             title={
               isGuest
-                ? localProfile.displayName !== "Financy User"
-                  ? `${localProfile.displayName} (Guest)`
-                  : "Guest User"
-                : user?.displayName || localProfile.displayName || "Profile Information"
+                ? user?.displayName || "Guest User"
+                : user?.displayName || "Profile Information"
             }
             subtitle={
               isGuest
                 ? "Guest Mode — Data stored locally on device only"
                 : user?.email
                   ? `Signed in as ${user.email}`
-                  : localProfile.email
-                    ? localProfile.email
-                    : "Tap to customize your profile"
+                  : "Tap to customize your display name"
             }
             onPress={() => {
-              setProfileNameInput(user?.displayName || localProfile.displayName);
-              setProfileEmailInput(user?.email || localProfile.email);
+              setProfileNameInput(
+                isGuest
+                  ? user?.displayName || "Guest User"
+                  : user?.displayName || "",
+              );
               setShowProfileModal(true);
             }}
           />
@@ -765,11 +719,7 @@ export const SettingsScreen: React.FC = () => {
           <SettingRow
             icon="sparkles-outline"
             title="Cloud AI Assistant"
-            subtitle={
-              hasCustomAiKey
-                ? `Personal ${selectedAiProvider === "gemini" ? "Google Gemini" : selectedAiProvider === "groq" ? "Groq Llama 3.3" : "OpenAI"} Key Active (Unlimited)`
-                : "Configure your own personal Gemini, Groq, or OpenAI key"
-            }
+            subtitle="Configure free Google Gemini or Groq key"
             onPress={() => {
               setAiKeyInput("");
               setShowAiKeySecret(false);
@@ -1030,7 +980,9 @@ export const SettingsScreen: React.FC = () => {
               Profile Information
             </Text>
             <Text style={[styles.modalSubtitle, { color: colors.onSurfaceVariant }]}>
-              Customize your display name and contact info.
+              {isGuest
+                ? "Update your local guest display name."
+                : "Update your account display name."}
             </Text>
 
             <Text
@@ -1058,45 +1010,51 @@ export const SettingsScreen: React.FC = () => {
               placeholderTextColor={colors.onSurfaceVariant}
             />
 
-            <Text
-              style={{
-                fontSize: 12,
-                fontWeight: "600",
-                color: colors.onSurfaceVariant,
-                marginBottom: 6,
-              }}>
-              EMAIL ADDRESS (OPTIONAL)
-            </Text>
-            <TextInput
-              style={{
-                backgroundColor: colors.surfaceVariant,
-                borderRadius: 12,
-                paddingHorizontal: 14,
-                paddingVertical: 12,
-                color: colors.onSurface,
-                fontSize: 15,
-                marginBottom: 8,
-              }}
-              value={profileEmailInput}
-              onChangeText={setProfileEmailInput}
-              placeholder="name@example.com"
-              placeholderTextColor={colors.onSurfaceVariant}
-              keyboardType="email-address"
-              autoCapitalize="none"
-            />
+            {!isGuest && user?.email ? (
+              <>
+                <Text
+                  style={{
+                    fontSize: 12,
+                    fontWeight: "600",
+                    color: colors.onSurfaceVariant,
+                    marginBottom: 6,
+                  }}>
+                  ACCOUNT EMAIL
+                </Text>
+                <View
+                  style={{
+                    backgroundColor: colors.surfaceVariant,
+                    borderRadius: 12,
+                    paddingHorizontal: 14,
+                    paddingVertical: 12,
+                    marginBottom: 8,
+                    opacity: 0.7,
+                  }}>
+                  <Text style={{ color: colors.onSurfaceVariant, fontSize: 15 }}>
+                    {user.email}
+                  </Text>
+                </View>
+              </>
+            ) : null}
 
             <View style={styles.modalActions}>
               <TouchableOpacity
                 style={styles.modalCancelBtn}
+                disabled={savingProfile}
                 onPress={() => setShowProfileModal(false)}>
                 <Text style={styles.modalCancelText}>Cancel</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={[styles.modalSaveBtn, { backgroundColor: colors.primary }]}
+                disabled={savingProfile}
                 onPress={handleSaveProfile}>
-                <Text style={[styles.modalSaveText, { color: colors.onPrimary }]}>
-                  Save
-                </Text>
+                {savingProfile ? (
+                  <ActivityIndicator size="small" color={colors.onPrimary} />
+                ) : (
+                  <Text style={[styles.modalSaveText, { color: colors.onPrimary }]}>
+                    Save
+                  </Text>
+                )}
               </TouchableOpacity>
             </View>
           </View>
@@ -1199,31 +1157,6 @@ export const SettingsScreen: React.FC = () => {
             </View>
 
             {/* API Key Input (Never pre-populated with stored or bundled keys) */}
-            {hasCustomAiKey && (
-              <View
-                style={{
-                  flexDirection: "row",
-                  alignItems: "center",
-                  justifyContent: "space-between",
-                  backgroundColor: colors.primaryContainer,
-                  paddingHorizontal: 12,
-                  paddingVertical: 8,
-                  borderRadius: 10,
-                  marginBottom: 10,
-                }}>
-                <View style={{ flexDirection: "row", alignItems: "center", gap: 6, flex: 1 }}>
-                  <Ionicons name="checkmark-circle" size={16} color={colors.onPrimaryContainer} />
-                  <Text style={{ fontSize: 12, fontWeight: "600", color: colors.onPrimaryContainer }}>
-                    Personal key saved (hidden for security)
-                  </Text>
-                </View>
-                <TouchableOpacity onPress={handleRemoveCustomAiKey}>
-                  <Text style={{ fontSize: 12, fontWeight: "700", color: colors.error }}>
-                    Remove
-                  </Text>
-                </TouchableOpacity>
-              </View>
-            )}
             <Text
               style={{
                 fontSize: 12,
@@ -1253,13 +1186,11 @@ export const SettingsScreen: React.FC = () => {
                 value={aiKeyInput}
                 onChangeText={setAiKeyInput}
                 placeholder={
-                  hasCustomAiKey
-                    ? "Enter a new key to replace saved key..."
-                    : selectedAiProvider === "gemini"
-                      ? "AIzaSy..."
-                      : selectedAiProvider === "groq"
-                        ? "gsk_..."
-                        : "sk-..."
+                  selectedAiProvider === "gemini"
+                    ? "AIzaSy..."
+                    : selectedAiProvider === "groq"
+                      ? "gsk_..."
+                      : "sk-..."
                 }
                 placeholderTextColor={colors.onSurfaceVariant}
                 secureTextEntry={!showAiKeySecret}

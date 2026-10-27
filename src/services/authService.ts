@@ -249,6 +249,7 @@ export class AuthService {
       if (this.getAuth().currentUser) {
         await signOut(this.getAuth());
       }
+      await AsyncStorage.removeItem("financy_user_profile_v1");
     } catch {
       // Ignore Firebase signOut errors when entering guest mode
     }
@@ -256,6 +257,52 @@ export class AuthService {
     await this.saveSession(guestUser);
     console.log("👤 Signed in as Guest (local-only mode)");
     return guestUser;
+  }
+
+  // Update user display name in Firebase Auth, Firestore, and local session
+  public async updateUserProfile(displayName: string): Promise<User> {
+    const cleanName = displayName.trim();
+    const firebaseUser: FirebaseUser | null = this.getAuth().currentUser;
+
+    if (firebaseUser) {
+      await updateProfile(firebaseUser, { displayName: cleanName });
+
+      try {
+        const db = getFirestoreInstance();
+        await setDoc(
+          doc(db, "users", firebaseUser.uid),
+          {
+            displayName: cleanName,
+            updatedAt: serverTimestamp(),
+          },
+          { merge: true },
+        );
+      } catch (firestoreErr) {
+        console.warn("Failed to update displayName in Firestore:", firestoreErr);
+      }
+
+      const updatedUser: User = {
+        uid: firebaseUser.uid,
+        email: firebaseUser.email,
+        displayName: cleanName,
+        emailVerified: firebaseUser.emailVerified,
+      };
+      await this.saveSession(updatedUser);
+      return updatedUser;
+    }
+
+    // Fallback for stored session / Guest user
+    const storedUser = await this.getStoredUser();
+    if (storedUser) {
+      const updatedUser: User = {
+        ...storedUser,
+        displayName: cleanName || (storedUser.isGuest ? "Guest User" : "Financy User"),
+      };
+      await this.saveSession(updatedUser);
+      return updatedUser;
+    }
+
+    throw new Error("No active user session to update");
   }
 
   // Check if current session is Guest Mode
@@ -288,6 +335,7 @@ export class AuthService {
 
       // Clear stored session
       await this.clearStoredSession();
+      await AsyncStorage.removeItem("financy_user_profile_v1");
 
       // Clear user preferences
       try {
