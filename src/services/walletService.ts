@@ -80,17 +80,19 @@ const getDb = async () => {
 
 const warnedUnknownAccounts = new Set<string>();
 
-let cachedWallets: WalletAccount[] = [...DEFAULT_WALLETS];
+let cachedWallets: WalletAccount[] = [];
 
 export const walletService = {
   getCachedWallets(): WalletAccount[] {
-    return cachedWallets.length > 0 ? cachedWallets : DEFAULT_WALLETS;
+    return cachedWallets;
   },
 
   setCachedWallets(wallets: WalletAccount[]): void {
-    if (wallets && wallets.length > 0) {
-      cachedWallets = wallets;
-    }
+    cachedWallets = wallets || [];
+  },
+
+  clearCache(): void {
+    cachedWallets = [];
   },
 
   isSecretWallet(wallet?: WalletAccount | null): boolean {
@@ -135,16 +137,13 @@ export const walletService = {
     try {
       const db = await getDb();
       const loaded = await db.wallets.getAllWallets(options);
-      if (loaded && loaded.length > 0) {
-        if (!options?.includeArchived) {
-          cachedWallets = loaded;
-        }
-        return loaded;
+      if (!options?.includeArchived) {
+        cachedWallets = loaded;
       }
-      return cachedWallets.length > 0 ? cachedWallets : DEFAULT_WALLETS;
+      return loaded;
     } catch (error) {
       console.warn("Failed to load wallets from SQLite:", error);
-      return cachedWallets.length > 0 ? cachedWallets : DEFAULT_WALLETS;
+      return cachedWallets;
     }
   },
 

@@ -1,6 +1,7 @@
 import { createSlice, createAsyncThunk, PayloadAction } from "@reduxjs/toolkit";
 import { Category, CategoryFormData } from "../../types";
 import { db } from "../../database/queries";
+import { signIn, signUp, signInAsGuest, signOut } from "./authSlice";
 
 // Async thunks for database operations
 export const fetchCategories = createAsyncThunk(
@@ -298,6 +299,12 @@ const categoriesSlice = createSlice({
     builder.addCase(fetchTopSpendingCategories.fulfilled, (state, action) => {
       state.topSpendingCategories = action.payload;
     });
+
+    // Clear categories state on session transitions so previous session / guest categories never flash
+    builder.addCase(signIn.pending, () => initialState);
+    builder.addCase(signUp.pending, () => initialState);
+    builder.addCase(signInAsGuest.pending, () => initialState);
+    builder.addCase(signOut.fulfilled, () => initialState);
   },
 });
 

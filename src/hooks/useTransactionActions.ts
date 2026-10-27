@@ -8,6 +8,8 @@ import {
   deleteTransaction,
   duplicateTransaction,
 } from "../store/slices/transactionsSlice";
+import { fetchDebts } from "../store/slices/debtsSlice";
+import { fetchBudgets } from "../store/slices/budgetsSlice";
 
 export const useTransactionActions = () => {
   const dispatch = useDispatch<AppDispatch>();
@@ -38,6 +40,10 @@ export const useTransactionActions = () => {
           style: "destructive",
           onPress: async () => {
             await dispatch(deleteTransaction(transaction.id));
+            dispatch(fetchBudgets());
+            if (transaction.linkedDebtPaymentId) {
+              dispatch(fetchDebts());
+            }
           },
         },
       ],

@@ -1280,11 +1280,11 @@ export async function scanReceiptFile(
   asset: DocumentAsset,
   categories: Record<string, Category> = {}
 ): Promise<OcrReceiptResult> {
-  // Enforce persistent daily OCR AI rate limit (3/day for Guest & non-owner users)
-  const quota = await getOcrQuotaStatus();
+  // Enforce persistent daily OCR AI rate limit non-blockingly via cached/background-synced quota
+  const quota = await getOcrQuotaStatus({ fast: true });
   if (!quota.canScan) {
     throw new Error(
-      `Daily limit of ${quota.dailyLimit} OCR AI scans reached. Your limit resets tomorrow, or you can configure your own API key in Settings for unlimited scans.`,
+      `Daily limit of ${quota.dailyLimit} OCR AI scans reached. Your limit resets tomorrow.`,
     );
   }
 

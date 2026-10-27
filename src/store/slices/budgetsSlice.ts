@@ -258,6 +258,9 @@ const budgetsSlice = createSlice({
       const budgetId = action.meta.arg;
       state.spendingByCategory[budgetId] = action.payload;
     });
+
+    // Clear budgets state on sign out
+    builder.addCase("auth/signOut/fulfilled", () => initialState);
   },
 });
 

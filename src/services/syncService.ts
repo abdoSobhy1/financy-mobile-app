@@ -703,6 +703,18 @@ export class SyncService {
       return;
     }
 
+    if (localDoc.deleted === 1 || localDoc.deleted === true) {
+      console.log(
+        `🗑️ Local document ${collectionName}/${docId} is marked deleted, propagating deletion to remote`,
+      );
+      try {
+        await this.performSyncOperation(collectionName, "delete", docId);
+      } catch (delErr) {
+        console.warn(`Could not propagate deletion for ${collectionName}/${docId}:`, delErr);
+      }
+      return;
+    }
+
     // Compare timestamps for conflict resolution using safe parsing
     const remoteTime = this.safeParseTimestamp(
       remoteDoc.data?.lastModifiedAt ||

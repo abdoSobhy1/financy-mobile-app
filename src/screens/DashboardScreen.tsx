@@ -41,6 +41,7 @@ import { useTransactionActions } from "../hooks/useTransactionActions";
 import { walletService } from "../services/walletService";
 import { ReceiptScanModal } from "../components/receipt/ReceiptScanModal";
 import { OcrReceiptResult } from "../services/ocrService";
+import { prefetchOcrQuota } from "../services/ocrRateLimitService";
 
 type DashboardNavigationProp = StackNavigationProp<any, "Dashboard">;
 
@@ -149,6 +150,8 @@ export const DashboardScreen: React.FC = () => {
       }
     };
     checkDismissedAlerts();
+    // Pre-warm OCR quota in the background so opening the scan modal & camera never blocks the UI
+    prefetchOcrQuota();
   }, []);
 
   const handleDismissAlert = async (budgetId: string) => {
@@ -1332,7 +1335,7 @@ export const DashboardScreen: React.FC = () => {
                     },
                   ]}
                   numberOfLines={1}>
-                  + فئة
+                  + Category
                 </Text>
               </TouchableOpacity>
             </ScrollView>

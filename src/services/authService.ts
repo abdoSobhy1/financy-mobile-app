@@ -59,47 +59,65 @@ export class AuthService {
   }
 
   // Session management methods with rolling 30-day expiration
+  private saveSessionPromise: Promise<void> | null = null;
+  private savingUserId: string | null = null;
+
   private async saveSession(user: User): Promise<void> {
-    try {
-      const now = Date.now();
-      const sessionData: SessionData = {
-        user,
-        lastActivity: now,
-        expiresAt: now + AuthService.SESSION_DURATION, // Always reset to 30 days from now for rolling renewal
-      };
-      await AsyncStorage.setItem(
-        AuthService.SESSION_KEY,
-        JSON.stringify(sessionData),
-      );
-      console.log(
-        `💾 Session saved for user ${user.uid}, expires at ${new Date(sessionData.expiresAt).toLocaleString()}`,
-      );
-
-      // Check if user changed and reset database if needed
-      const lastUserId = await AsyncStorage.getItem(AuthService.LAST_USER_KEY);
-
-      // Do not reset local data when upgrading from Guest mode ("guest") to a signed-in account
-      if (lastUserId && lastUserId !== user.uid && lastUserId !== "guest") {
-        console.log(
-          `👤 User changed from ${lastUserId} to ${user.uid}. Resetting local database for security.`,
-        );
-        try {
-          // Initialize DB manager if needed (it might not be initialized yet if coming from fresh app start -> login)
-          const dbManager = DatabaseManager.getInstance();
-          await dbManager.ensureInitialized();
-          await dbManager.resetDatabase();
-          console.log("✅ Local database reset successfully");
-        } catch (dbError) {
-          console.error("❌ Failed to reset database on user switch:", dbError);
-          // Non-fatal? Maybe should be fatal. But let's proceed for now.
-        }
-      }
-
-      // Update last user ID
-      await AsyncStorage.setItem(AuthService.LAST_USER_KEY, user.uid);
-    } catch (error) {
-      console.error("Failed to save session:", error);
+    if (this.saveSessionPromise && this.savingUserId === user.uid) {
+      return this.saveSessionPromise;
     }
+
+    this.savingUserId = user.uid;
+    this.saveSessionPromise = (async () => {
+      try {
+        const now = Date.now();
+        const sessionData: SessionData = {
+          user,
+          lastActivity: now,
+          expiresAt: now + AuthService.SESSION_DURATION, // Always reset to 30 days from now for rolling renewal
+        };
+        await AsyncStorage.setItem(
+          AuthService.SESSION_KEY,
+          JSON.stringify(sessionData),
+        );
+        console.log(
+          `💾 Session saved for user ${user.uid}, expires at ${new Date(sessionData.expiresAt).toLocaleString()}`,
+        );
+
+        // Check if user changed (or fresh sign-in after sign-out) and reset database if needed
+        const lastUserId = await AsyncStorage.getItem(AuthService.LAST_USER_KEY);
+
+        // Reset local database whenever switching between any two different sessions (or signing in after sign-out)
+        // so Guest default categories/wallets never flash or leak into a signed-in user's account, and vice versa
+        if (!lastUserId || lastUserId !== user.uid) {
+          console.log(
+            `👤 Session user changed from ${lastUserId || "none"} to ${user.uid}. Resetting local database for clean session.`,
+          );
+          try {
+            const dbManager = DatabaseManager.getInstance();
+            await dbManager.ensureInitialized();
+            await dbManager.resetDatabase();
+            if (user.isGuest || user.uid === "guest") {
+              await AsyncStorage.removeItem("financy_categories_seeded_v1_guest");
+              await AsyncStorage.removeItem("financy_wallets_seeded_v1_guest");
+            }
+            console.log("✅ Local database reset successfully");
+          } catch (dbError) {
+            console.error("❌ Failed to reset database on user switch:", dbError);
+          }
+        }
+
+        // Update last user ID
+        await AsyncStorage.setItem(AuthService.LAST_USER_KEY, user.uid);
+      } catch (error) {
+        console.error("Failed to save session:", error);
+      } finally {
+        this.saveSessionPromise = null;
+        this.savingUserId = null;
+      }
+    })();
+
+    return this.saveSessionPromise;
   }
 
   private async getStoredSession(): Promise<SessionData | null> {
@@ -336,6 +354,16 @@ export class AuthService {
       // Clear stored session
       await this.clearStoredSession();
       await AsyncStorage.removeItem("financy_user_profile_v1");
+      await AsyncStorage.removeItem(AuthService.LAST_USER_KEY);
+
+      // Reset local SQLite database on sign out so no data leaks across sessions or flashes on next login
+      try {
+        const dbManager = DatabaseManager.getInstance();
+        await dbManager.ensureInitialized();
+        await dbManager.resetDatabase();
+      } catch (dbResetErr) {
+        console.warn("Failed to reset local database on sign out:", dbResetErr);
+      }
 
       // Clear user preferences
       try {
@@ -377,13 +405,15 @@ export class AuthService {
     return onAuthStateChanged(this.getAuth(), async (firebaseUser) => {
       const user = this.mapFirebaseUser(firebaseUser);
       if (user) {
+        // Ensure session save and any required database reset complete BEFORE notifying UI listeners
+        await this.saveSession(user);
         callback(user);
         return;
       }
 
-      // Preserve active Guest Mode session when Firebase has no authenticated user
+      // Preserve active stored session (authenticated user or Guest Mode) when Firebase has not yet hydrated or has no user
       const storedUser = await this.getStoredUser();
-      if (storedUser?.isGuest || storedUser?.uid === "guest") {
+      if (storedUser) {
         callback(storedUser);
         return;
       }

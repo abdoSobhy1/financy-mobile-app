@@ -293,11 +293,12 @@ export class TransactionRepository {
       )) as any;
 
       if (debtPayment) {
-        // Restore debt balance
+        const restoredAmount = debtPayment.amount || debtPayment.principal || 0;
+        // Restore debt balance clamped to total_amount
         await database.runAsync(
-          "UPDATE debts SET current_balance = current_balance + ?, updated_at = ?, sync_updated_at = ? WHERE id = ?",
+          "UPDATE debts SET current_balance = MIN(total_amount, ROUND((current_balance + ?) * 100) / 100), updated_at = ?, sync_updated_at = ? WHERE id = ?",
           [
-            debtPayment.principal,
+            restoredAmount,
             new Date().toISOString(),
             Date.now(),
             debtPayment.debt_id,
@@ -308,6 +309,26 @@ export class TransactionRepository {
         await database.runAsync("DELETE FROM debt_payments WHERE id = ?", [
           transaction.linkedDebtPaymentId,
         ]);
+        if (!options?.skipSync) {
+          await offlineFirstSync.logOperation(
+            "debt_payments",
+            transaction.linkedDebtPaymentId,
+            "delete",
+            { id: transaction.linkedDebtPaymentId },
+          );
+          const updatedDebtRow = await database.getFirstAsync(
+            "SELECT * FROM debts WHERE id = ?",
+            [debtPayment.debt_id],
+          );
+          if (updatedDebtRow) {
+            await offlineFirstSync.logOperation(
+              "debts",
+              debtPayment.debt_id,
+              "update",
+              updatedDebtRow,
+            );
+          }
+        }
         console.log(
           `Deleted linked debt payment ${transaction.linkedDebtPaymentId} and restored balance when deleting transaction ${id}`,
         );

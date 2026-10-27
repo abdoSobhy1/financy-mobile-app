@@ -602,15 +602,28 @@ export class DatabaseManager {
     if (!this.db) return;
 
     await this.db.execAsync(`
+      DROP TABLE IF EXISTS debt_payments;
+      DROP TABLE IF EXISTS debts;
       DROP TABLE IF EXISTS wallets;
       DROP TABLE IF EXISTS transactions;
       DROP TABLE IF EXISTS budgets;
       DROP TABLE IF EXISTS categories;
       DROP TABLE IF EXISTS settings;
+      DROP TABLE IF EXISTS sync_log;
     `);
 
     await this.createTables();
     await this.insertDefaultData();
+
+    try {
+      const AsyncStorage = (await import("@react-native-async-storage/async-storage")).default;
+      await AsyncStorage.removeItem("financy_categories_seeded_v1_guest");
+      await AsyncStorage.removeItem("financy_wallets_seeded_v1_guest");
+      const { walletService } = await import("../services/walletService");
+      walletService.clearCache();
+    } catch (e) {
+      console.warn("Could not clear guest seeded flags or wallet cache on resetDatabase:", e);
+    }
   }
 
   public async clearAllData(): Promise<void> {
@@ -635,7 +648,7 @@ export class DatabaseManager {
     console.log("All data cleared except categories");
   }
 
-  private async recalculateEntryCounts(): Promise<void> {
+  public async recalculateEntryCounts(): Promise<void> {
     try {
       if (!this.db) return;
       await this.db.runAsync(`

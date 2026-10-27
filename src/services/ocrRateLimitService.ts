@@ -120,224 +120,408 @@ async function getLedgerFirestore(): Promise<Firestore | null> {
   return ledgerSignInPromise;
 }
 
-async function getLocalUsageToday(today: string): Promise<number> {
+interface LocalQuotaCache {
+  date: string;
+  count: number;
+  dailyLimit?: number;
+  isUnlimited?: boolean;
+  uid?: string;
+  reason?: string;
+  updatedAt: number;
+}
+
+let memoryQuotaCache: {
+  date: string;
+  uid: string;
+  status: OcrQuotaStatus;
+} | null = null;
+
+let backgroundSyncPromise: Promise<OcrQuotaStatus> | null = null;
+const quotaListeners = new Set<(status: OcrQuotaStatus) => void>();
+
+function notifyQuotaListeners(status: OcrQuotaStatus) {
+  quotaListeners.forEach((listener) => {
+    try {
+      listener(status);
+    } catch {
+      // Ignore listener errors
+    }
+  });
+}
+
+/**
+ * Subscribe to background OCR quota updates so UI can render immediately and update smoothly.
+ */
+export function subscribeOcrQuota(
+  listener: (status: OcrQuotaStatus) => void,
+): () => void {
+  quotaListeners.add(listener);
+  if (memoryQuotaCache && memoryQuotaCache.date === getTodayDateString()) {
+    listener(memoryQuotaCache.status);
+  }
+  return () => {
+    quotaListeners.delete(listener);
+  };
+}
+
+/**
+ * Returns the in-memory cached quota synchronously (0ms) if available for today.
+ */
+export function getCachedOcrQuotaSync(): OcrQuotaStatus | null {
+  const today = getTodayDateString();
+  if (memoryQuotaCache && memoryQuotaCache.date === today) {
+    return memoryQuotaCache.status;
+  }
+  return null;
+}
+
+/**
+ * Pre-warms the local + cloud OCR quota in the background without blocking the UI.
+ */
+export function prefetchOcrQuota(): void {
+  getOcrQuotaStatus({ fast: true }).catch(() => {});
+}
+
+async function getLocalQuotaCache(today: string): Promise<LocalQuotaCache | null> {
   try {
     const raw = await AsyncStorage.getItem(LOCAL_USAGE_STORAGE_KEY);
-    if (!raw) return 0;
+    if (!raw) return null;
     const parsed = JSON.parse(raw);
     if (parsed && parsed.date === today && typeof parsed.count === "number") {
-      return parsed.count;
+      return parsed as LocalQuotaCache;
     }
   } catch {
     // Ignore local read errors
   }
-  return 0;
+  return null;
 }
 
-async function setLocalUsageToday(today: string, count: number): Promise<void> {
+async function setLocalQuotaCache(cache: LocalQuotaCache): Promise<void> {
   try {
-    await AsyncStorage.setItem(
-      LOCAL_USAGE_STORAGE_KEY,
-      JSON.stringify({ date: today, count, updatedAt: Date.now() }),
-    );
+    await AsyncStorage.setItem(LOCAL_USAGE_STORAGE_KEY, JSON.stringify(cache));
   } catch {
     // Ignore local write errors
   }
 }
 
+function buildQuotaStatus(
+  usedToday: number,
+  dailyLimit: number,
+  isUnlimited: boolean,
+  reason?: string,
+): OcrQuotaStatus {
+  if (isUnlimited) {
+    return {
+      isUnlimited: true,
+      usedToday: 0,
+      dailyLimit,
+      remainingToday: 999,
+      canScan: true,
+      reason,
+    };
+  }
+  const remainingToday = Math.max(0, dailyLimit - usedToday);
+  return {
+    isUnlimited: false,
+    usedToday,
+    dailyLimit,
+    remainingToday,
+    canScan: remainingToday > 0,
+    reason,
+  };
+}
+
+async function syncOcrQuotaFromCloud(): Promise<OcrQuotaStatus> {
+  if (backgroundSyncPromise) {
+    return backgroundSyncPromise;
+  }
+
+  backgroundSyncPromise = (async () => {
+    const today = getTodayDateString();
+    const currentUser = await authService.getCurrentAuthenticatedUser();
+    const isSignedInAccount = Boolean(
+      currentUser && !currentUser.isGuest && currentUser.uid !== "guest",
+    );
+    const activeUid = isSignedInAccount && currentUser ? currentUser.uid : "guest";
+
+    const localCache = await getLocalQuotaCache(today);
+    let dailyLimit = localCache?.dailyLimit || DEFAULT_DAILY_LIMIT;
+    const localUsed = localCache?.count || 0;
+    let maxUsedToday = localUsed;
+    let isUnlimited = false;
+    let reason: string | undefined;
+
+    try {
+      const [db, deviceKeys] = await Promise.all([
+        getLedgerFirestore(),
+        getPersistentDeviceKeys(),
+      ]);
+
+      if (db) {
+        const lookupKeys = [...deviceKeys];
+        if (isSignedInAccount && currentUser?.uid) {
+          lookupKeys.push(`uid_${currentUser.uid}`);
+        }
+
+        const configRef = doc(db, "users", OCR_CONFIG_DOC_UID);
+        const userDocPromise =
+          isSignedInAccount && currentUser
+            ? getDoc(doc(getFirestoreInstance(), "users", currentUser.uid)).catch(
+                () => null,
+              )
+            : Promise.resolve(null);
+
+        // Run all Firestore reads in parallel instead of sequentially
+        const [configSnap, userDocSnap, ...usageSnaps] = await Promise.all([
+          getDoc(configRef).catch(() => null),
+          userDocPromise,
+          ...lookupKeys.map((key) =>
+            getDoc(
+              doc(db, "users", OCR_CONFIG_DOC_UID, "ocr_daily_usage", key),
+            ).catch(() => null),
+          ),
+        ]);
+
+        if (configSnap && configSnap.exists()) {
+          const configData = configSnap.data() || {};
+          if (
+            typeof configData.dailyLimit === "number" &&
+            configData.dailyLimit > 0
+          ) {
+            dailyLimit = configData.dailyLimit;
+          }
+
+          if (isSignedInAccount && currentUser) {
+            const unlimitedUids: string[] = Array.isArray(
+              configData.unlimitedUids,
+            )
+              ? configData.unlimitedUids.map((u: any) => String(u).trim())
+              : [];
+            const unlimitedEmails: string[] = Array.isArray(
+              configData.unlimitedEmails,
+            )
+              ? configData.unlimitedEmails.map((e: any) =>
+                  String(e).trim().toLowerCase(),
+                )
+              : [];
+
+            const userEmailLower = (currentUser.email || "")
+              .trim()
+              .toLowerCase();
+            if (
+              unlimitedUids.includes(currentUser.uid) ||
+              (userEmailLower && unlimitedEmails.includes(userEmailLower))
+            ) {
+              isUnlimited = true;
+              reason = "owner_account";
+            }
+          }
+        }
+
+        if (!isUnlimited && userDocSnap && userDocSnap.exists()) {
+          const uData = userDocSnap.data() || {};
+          if (
+            uData.unlimitedOcr === true ||
+            uData.role === "admin" ||
+            uData.role === "owner"
+          ) {
+            isUnlimited = true;
+            reason = "owner_user_doc";
+          }
+        }
+
+        if (!isUnlimited) {
+          for (const snap of usageSnaps) {
+            if (snap && snap.exists()) {
+              const data = snap.data();
+              if (data?.date === today && typeof data?.count === "number") {
+                if (data.count > maxUsedToday) {
+                  maxUsedToday = data.count;
+                }
+              }
+            }
+          }
+        }
+      }
+    } catch (err) {
+      console.warn(
+        "[OcrRateLimit] Error checking cloud quota, using local count:",
+        err,
+      );
+    }
+
+    const status = buildQuotaStatus(
+      maxUsedToday,
+      dailyLimit,
+      isUnlimited,
+      reason,
+    );
+
+    memoryQuotaCache = {
+      date: today,
+      uid: activeUid,
+      status,
+    };
+
+    await setLocalQuotaCache({
+      date: today,
+      count: maxUsedToday,
+      dailyLimit,
+      isUnlimited,
+      uid: activeUid,
+      reason,
+      updatedAt: Date.now(),
+    });
+
+    notifyQuotaListeners(status);
+    return status;
+  })().finally(() => {
+    backgroundSyncPromise = null;
+  });
+
+  return backgroundSyncPromise;
+}
+
 /**
  * Checks whether the current user + device has unlimited OCR access or how many scans remain today.
+ * Pass `{ fast: true }` to return immediately from memory/local cache while refreshing cloud state in the background.
  */
-export async function getOcrQuotaStatus(): Promise<OcrQuotaStatus> {
+export async function getOcrQuotaStatus(options?: {
+  fast?: boolean;
+}): Promise<OcrQuotaStatus> {
   const today = getTodayDateString();
-
   const currentUser = await authService.getCurrentAuthenticatedUser();
   const isSignedInAccount = Boolean(
     currentUser && !currentUser.isGuest && currentUser.uid !== "guest",
   );
+  const activeUid = isSignedInAccount && currentUser ? currentUser.uid : "guest";
 
-  let dailyLimit = DEFAULT_DAILY_LIMIT;
-  const localUsed = await getLocalUsageToday(today);
-  let maxUsedToday = localUsed;
-
-  // 2. Check Firestore config & persistent device/user usage ledger
-  try {
-    const db = await getLedgerFirestore();
-    if (db) {
-      const configRef = doc(db, "users", OCR_CONFIG_DOC_UID);
-      const configSnap = await getDoc(configRef);
-
-      if (configSnap.exists()) {
-        const configData = configSnap.data() || {};
-        if (
-          typeof configData.dailyLimit === "number" &&
-          configData.dailyLimit > 0
-        ) {
-          dailyLimit = configData.dailyLimit;
-        }
-
-        if (isSignedInAccount && currentUser) {
-          const unlimitedUids: string[] = Array.isArray(
-            configData.unlimitedUids,
-          )
-            ? configData.unlimitedUids.map((u: any) => String(u).trim())
-            : [];
-          const unlimitedEmails: string[] = Array.isArray(
-            configData.unlimitedEmails,
-          )
-            ? configData.unlimitedEmails.map((e: any) =>
-                String(e).trim().toLowerCase(),
-              )
-            : [];
-
-          const userEmailLower = (currentUser.email || "").trim().toLowerCase();
-          if (
-            unlimitedUids.includes(currentUser.uid) ||
-            (userEmailLower && unlimitedEmails.includes(userEmailLower))
-          ) {
-            return {
-              isUnlimited: true,
-              usedToday: 0,
-              dailyLimit,
-              remainingToday: 999,
-              canScan: true,
-              reason: "owner_account",
-            };
-          }
-        }
-      }
-
-      // Also check the signed-in user's own `users/{uid}` document for `unlimitedOcr: true` or `role: "admin"`
-      if (isSignedInAccount && currentUser) {
-        try {
-          const primaryDb = getFirestoreInstance();
-          const userDocSnap = await getDoc(doc(primaryDb, "users", currentUser.uid));
-          if (userDocSnap.exists()) {
-            const uData = userDocSnap.data() || {};
-            if (
-              uData.unlimitedOcr === true ||
-              uData.role === "admin" ||
-              uData.role === "owner"
-            ) {
-              return {
-                isUnlimited: true,
-                usedToday: 0,
-                dailyLimit,
-                remainingToday: 999,
-                canScan: true,
-                reason: "owner_user_doc",
-              };
-            }
-          }
-        } catch {
-          // Non-fatal
-        }
-      }
-
-      // 3. Query usage across all persistent hardware device keys + user UID
-      const deviceKeys = await getPersistentDeviceKeys();
-      const lookupKeys = [...deviceKeys];
-      if (isSignedInAccount && currentUser?.uid) {
-        lookupKeys.push(`uid_${currentUser.uid}`);
-      }
-
-      const usageSnaps = await Promise.all(
-        lookupKeys.map((key) =>
-          getDoc(
-            doc(db, "users", OCR_CONFIG_DOC_UID, "ocr_daily_usage", key),
-          ).catch(() => null),
-        ),
-      );
-
-      for (const snap of usageSnaps) {
-        if (snap && snap.exists()) {
-          const data = snap.data();
-          if (data?.date === today && typeof data?.count === "number") {
-            if (data.count > maxUsedToday) {
-              maxUsedToday = data.count;
-            }
-          }
-        }
-      }
-
-      // Sync local cache upward if cloud ledger has a higher count (e.g. after reinstall!)
-      if (maxUsedToday > localUsed) {
-        await setLocalUsageToday(today, maxUsedToday);
-      }
+  if (options?.fast) {
+    if (
+      memoryQuotaCache &&
+      memoryQuotaCache.date === today &&
+      memoryQuotaCache.uid === activeUid
+    ) {
+      // Trigger non-blocking background refresh
+      syncOcrQuotaFromCloud().catch(() => {});
+      return memoryQuotaCache.status;
     }
-  } catch (err) {
-    console.warn("[OcrRateLimit] Error checking cloud quota, using local count:", err);
+
+    const localCache = await getLocalQuotaCache(today);
+    if (localCache) {
+      const canTrustUnlimited =
+        isSignedInAccount &&
+        localCache.uid === activeUid &&
+        Boolean(localCache.isUnlimited);
+      const fastStatus = buildQuotaStatus(
+        localCache.count || 0,
+        localCache.dailyLimit || DEFAULT_DAILY_LIMIT,
+        canTrustUnlimited,
+        canTrustUnlimited ? localCache.reason : undefined,
+      );
+      memoryQuotaCache = {
+        date: today,
+        uid: activeUid,
+        status: fastStatus,
+      };
+      // Trigger non-blocking background refresh
+      syncOcrQuotaFromCloud().catch(() => {});
+      return fastStatus;
+    }
+
+    // Even if no local cache exists yet (brand new day/install), return optimistic default immediately
+    // and let the cloud sync update in the background so UI never freezes!
+    const optimisticStatus = buildQuotaStatus(0, DEFAULT_DAILY_LIMIT, false);
+    memoryQuotaCache = {
+      date: today,
+      uid: activeUid,
+      status: optimisticStatus,
+    };
+    syncOcrQuotaFromCloud().catch(() => {});
+    return optimisticStatus;
   }
 
-  const remainingToday = Math.max(0, dailyLimit - maxUsedToday);
-  return {
-    isUnlimited: false,
-    usedToday: maxUsedToday,
-    dailyLimit,
-    remainingToday,
-    canScan: remainingToday > 0,
-  };
+  return syncOcrQuotaFromCloud();
 }
 
 /**
  * Increments the daily OCR scan counter for this device (and signed-in user) in both local storage and Firestore.
- * Call this after a successful OCR AI scan (or right as an AI scan begins).
+ * Updates local cache & memory immediately and syncs to Firestore in the background without blocking the UI.
  */
 export async function consumeOcrQuota(): Promise<OcrQuotaStatus> {
-  const status = await getOcrQuotaStatus();
+  const status = await getOcrQuotaStatus({ fast: true });
   if (status.isUnlimited) {
     return status;
   }
 
   const today = getTodayDateString();
   const nextCount = status.usedToday + 1;
+  const currentUser = await authService.getCurrentAuthenticatedUser();
+  const isSignedInAccount = Boolean(
+    currentUser && !currentUser.isGuest && currentUser.uid !== "guest",
+  );
+  const activeUid = isSignedInAccount && currentUser ? currentUser.uid : "guest";
+
+  const nextStatus = buildQuotaStatus(
+    nextCount,
+    status.dailyLimit,
+    false,
+    status.reason,
+  );
+
+  memoryQuotaCache = {
+    date: today,
+    uid: activeUid,
+    status: nextStatus,
+  };
+  notifyQuotaListeners(nextStatus);
 
   // Save locally immediately
-  await setLocalUsageToday(today, nextCount);
-
-  // Save to cloud ledger across all persistent hardware device keys + user UID
-  try {
-    const db = await getLedgerFirestore();
-    if (db) {
-      const currentUser = await authService.getCurrentAuthenticatedUser();
-      const isSignedInAccount = Boolean(
-        currentUser && !currentUser.isGuest && currentUser.uid !== "guest",
-      );
-      const deviceKeys = await getPersistentDeviceKeys();
-      const lookupKeys = [...deviceKeys];
-      if (isSignedInAccount && currentUser?.uid) {
-        lookupKeys.push(`uid_${currentUser.uid}`);
-      }
-
-      await Promise.all(
-        lookupKeys.map((key) =>
-          setDoc(
-            doc(db, "users", OCR_CONFIG_DOC_UID, "ocr_daily_usage", key),
-            {
-              date: today,
-              count: nextCount,
-              key,
-              uid: currentUser?.uid || "guest",
-              email: currentUser?.email || null,
-              updatedAt: Date.now(),
-            },
-            { merge: true },
-          ).catch((e) =>
-            console.warn(`[OcrRateLimit] Failed to write key ${key}:`, e),
-          ),
-        ),
-      );
-    }
-  } catch (err) {
-    console.warn("[OcrRateLimit] Failed to persist cloud usage:", err);
-  }
-
-  const remainingToday = Math.max(0, status.dailyLimit - nextCount);
-  return {
-    isUnlimited: false,
-    usedToday: nextCount,
+  await setLocalQuotaCache({
+    date: today,
+    count: nextCount,
     dailyLimit: status.dailyLimit,
-    remainingToday,
-    canScan: remainingToday > 0,
-  };
+    isUnlimited: false,
+    uid: activeUid,
+    updatedAt: Date.now(),
+  });
+
+  // Fire-and-forget cloud ledger update across all persistent hardware device keys + user UID
+  (async () => {
+    try {
+      const [db, deviceKeys] = await Promise.all([
+        getLedgerFirestore(),
+        getPersistentDeviceKeys(),
+      ]);
+      if (db) {
+        const lookupKeys = [...deviceKeys];
+        if (isSignedInAccount && currentUser?.uid) {
+          lookupKeys.push(`uid_${currentUser.uid}`);
+        }
+
+        await Promise.all(
+          lookupKeys.map((key) =>
+            setDoc(
+              doc(db, "users", OCR_CONFIG_DOC_UID, "ocr_daily_usage", key),
+              {
+                date: today,
+                count: nextCount,
+                key,
+                uid: currentUser?.uid || "guest",
+                email: currentUser?.email || null,
+                updatedAt: Date.now(),
+              },
+              { merge: true },
+            ).catch((e) =>
+              console.warn(`[OcrRateLimit] Failed to write key ${key}:`, e),
+            ),
+          ),
+        );
+      }
+    } catch (err) {
+      console.warn("[OcrRateLimit] Failed to persist cloud usage:", err);
+    }
+  })();
+
+  return nextStatus;
 }

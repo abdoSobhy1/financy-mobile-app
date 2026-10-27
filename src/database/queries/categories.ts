@@ -102,18 +102,24 @@ export class CategoryRepository {
   private async shouldSeedDefaults(): Promise<boolean> {
     try {
       const { authService } = await import("../../services/authService");
+      const currentUser = await authService.getCurrentAuthenticatedUser();
+      // Never auto-seed when no user session is active (e.g. on SignInScreen)
+      if (!currentUser) {
+        return false;
+      }
+
       const isCloudAllowed = await authService.isCloudSyncAllowedAsync();
-      const currentUserId = (await authService.getCurrentAuthenticatedUser())?.uid || "guest";
+      // If user is logged in with Firebase, wait for cloud restore before seeding defaults
+      if (isCloudAllowed || (!currentUser.isGuest && currentUser.uid !== "guest")) {
+        return false;
+      }
+
+      const currentUserId = currentUser.uid || "guest";
 
       // If user has already been marked as seeded, NEVER auto-seed again (prevents resurrecting deleted categories)
       const seededKey = `financy_categories_seeded_v1_${currentUserId}`;
       const alreadySeeded = await AsyncStorage.getItem(seededKey);
       if (alreadySeeded === "true") {
-        return false;
-      }
-
-      // If user is logged in with Firebase, wait for cloud restore before seeding defaults
-      if (isCloudAllowed) {
         return false;
       }
 
@@ -171,7 +177,7 @@ export class CategoryRepository {
         "SELECT * FROM categories ORDER BY entry_count DESC, type ASC, name ASC",
       )) as CategoryTable[];
 
-      const activeResults = results.filter((r) => !(r as any).deleted);
+      let activeResults = results.filter((r) => !(r as any).deleted);
 
       // Only auto-generate if no active categories exist AND shouldSeedDefaults() allows it
       if (activeResults.length === 0 && !this.isSeedingDefaults) {
@@ -183,14 +189,15 @@ export class CategoryRepository {
             results = (await database.getAllAsync(
               "SELECT * FROM categories ORDER BY entry_count DESC, type ASC, name ASC",
             )) as CategoryTable[];
+            activeResults = results.filter((r) => !(r as any).deleted);
           } finally {
             this.isSeedingDefaults = false;
           }
         }
       }
 
-      console.log(`Found ${results.length} categories in database`);
-      return results.map(transformCategory);
+      console.log(`Found ${activeResults.length} categories in database`);
+      return activeResults.map(transformCategory);
     } catch (error) {
       console.error("Error in getAllCategories:", error);
       throw error;
@@ -200,7 +207,7 @@ export class CategoryRepository {
   async getCategoriesByType(type: "income" | "expense"): Promise<Category[]> {
     const database = this.db.getDatabase();
     const results = (await database.getAllAsync(
-      "SELECT * FROM categories WHERE type = ? ORDER BY entry_count DESC, name ASC",
+      "SELECT * FROM categories WHERE type = ? AND (deleted = 0 OR deleted IS NULL) ORDER BY entry_count DESC, name ASC",
       [type],
     )) as CategoryTable[];
 
@@ -286,6 +293,15 @@ export class CategoryRepository {
 
     await database.runAsync("DELETE FROM categories WHERE id = ?", [id]);
 
+    // Ensure deleting categories never triggers auto-reseeding
+    try {
+      const { authService } = await import("../../services/authService");
+      const currentUserId = (await authService.getCurrentAuthenticatedUser())?.uid || "guest";
+      await AsyncStorage.setItem(`financy_categories_seeded_v1_${currentUserId}`, "true");
+    } catch (e) {
+      // ignore
+    }
+
     // Log operation for offline-first sync (never fails)
     if (!options?.skipSync) {
       await offlineFirstSync.logOperation("categories", id, "delete", { id });
@@ -310,6 +326,7 @@ export class CategoryRepository {
         COALESCE(AVG(t.amount), 0) as average_amount
       FROM categories c
       LEFT JOIN transactions t ON c.id = t.category_id
+      WHERE c.deleted = 0 OR c.deleted IS NULL
       GROUP BY c.id, c.name, c.type, c.color, c.created_at
       ORDER BY transaction_count DESC
     `)) as Array<

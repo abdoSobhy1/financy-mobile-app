@@ -18,6 +18,8 @@ import {
 } from "../../services/ocrService";
 import {
   getOcrQuotaStatus,
+  getCachedOcrQuotaSync,
+  subscribeOcrQuota,
   OcrQuotaStatus,
 } from "../../services/ocrRateLimitService";
 import { Category } from "../../types";
@@ -38,23 +40,39 @@ export const ReceiptScanModal: React.FC<ReceiptScanModalProps> = ({
   const { colors, typography } = useAppTheme();
   const [isProcessing, setIsProcessing] = useState(false);
   const [statusMessage, setStatusMessage] = useState("Analyzing receipt...");
-  const [quota, setQuota] = useState<OcrQuotaStatus | null>(null);
+  const [quota, setQuota] = useState<OcrQuotaStatus | null>(() =>
+    getCachedOcrQuotaSync(),
+  );
+
+  useEffect(() => {
+    const unsubscribe = subscribeOcrQuota((latest) => {
+      setQuota(latest);
+    });
+    return unsubscribe;
+  }, []);
 
   useEffect(() => {
     if (visible) {
-      getOcrQuotaStatus()
+      const syncCached = getCachedOcrQuotaSync();
+      if (syncCached) {
+        setQuota(syncCached);
+      }
+      // Non-blocking fast check + background cloud refresh
+      getOcrQuotaStatus({ fast: true })
         .then(setQuota)
         .catch(() => {});
     }
   }, [visible]);
 
   const ensureCanScan = async (): Promise<boolean> => {
-    const latest = await getOcrQuotaStatus();
+    // Non-blocking check: uses in-memory / local cache immediately while background sync updates quota
+    const latest =
+      getCachedOcrQuotaSync() ?? (await getOcrQuotaStatus({ fast: true }));
     setQuota(latest);
     if (!latest.canScan) {
       Alert.alert(
         "Daily OCR Limit Reached",
-        `You have used all ${latest.dailyLimit} free AI receipt scans for today. Your quota resets tomorrow, or you can configure your own personal API key in Settings → Cloud AI Assistant for unlimited scans.`,
+        `You have used all ${latest.dailyLimit} free AI receipt scans for today. Your quota resets tomorrow.`,
       );
       return false;
     }
@@ -66,7 +84,7 @@ export const ReceiptScanModal: React.FC<ReceiptScanModalProps> = ({
       setIsProcessing(true);
       setStatusMessage("Extracting receipt data...");
       const result = await OCRService.scanReceiptFile(asset, categories);
-      getOcrQuotaStatus()
+      getOcrQuotaStatus({ fast: true })
         .then(setQuota)
         .catch(() => {});
       setIsProcessing(false);

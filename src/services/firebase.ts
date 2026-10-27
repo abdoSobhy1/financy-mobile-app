@@ -25,6 +25,10 @@ let auth: Auth;
 let db: Firestore;
 
 export const initializeFirebase = () => {
+  if (app && auth && db) {
+    return { app, auth, db };
+  }
+
   try {
     app = initializeApp(firebaseConfig);
 
@@ -55,30 +59,24 @@ export const initializeFirebase = () => {
   }
 };
 
-// Export Firebase instances
+// Export Firebase instances (lazily initialize if needed)
 export const getFirebaseAuth = (): Auth => {
   if (!auth) {
-    throw new Error(
-      "Firebase Auth not initialized. Call initializeFirebase() first.",
-    );
+    initializeFirebase();
   }
   return auth;
 };
 
 export const getFirestoreInstance = (): Firestore => {
   if (!db) {
-    throw new Error(
-      "Firestore not initialized. Call initializeFirebase() first.",
-    );
+    initializeFirebase();
   }
   return db;
 };
 
 export const getFirebaseApp = (): FirebaseApp => {
   if (!app) {
-    throw new Error(
-      "Firebase App not initialized. Call initializeFirebase() first.",
-    );
+    initializeFirebase();
   }
   return app;
 };

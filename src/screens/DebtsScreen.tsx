@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useCallback } from "react";
 import {
   View,
   Text,
@@ -13,7 +13,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { useDispatch, useSelector } from "react-redux";
 import { useAppTheme } from "../components/ui/ThemeProvider";
 import { AppHeader } from "../components/ui/AppHeader";
-import { useNavigation } from "@react-navigation/native";
+import { useNavigation, useFocusEffect } from "@react-navigation/native";
 import { StackNavigationProp } from "@react-navigation/stack";
 import { useTabBarHeight, FilterChips } from "../components/ui";
 import { formatCurrency, formatDate } from "../utils";
@@ -40,16 +40,22 @@ const DebtsScreen: React.FC = () => {
     dispatch(fetchDebts());
   }, [dispatch]);
 
+  useFocusEffect(
+    useCallback(() => {
+      dispatch(fetchDebts());
+    }, [dispatch])
+  );
+
   const debts = ids
     .map((id) => items[id])
     .filter((d) => d && !d.deleted);
 
   // Compute real stats using debt.type ("owed_to_me" vs "i_owe")
-  const iOweList = debts.filter((d) => d.type !== "owed_to_me" && d.currentBalance > 0);
-  const owedToMeList = debts.filter((d) => d.type === "owed_to_me" && d.currentBalance > 0);
+  const iOweList = debts.filter((d) => d.type !== "owed_to_me" && d.currentBalance > 0.005);
+  const owedToMeList = debts.filter((d) => d.type === "owed_to_me" && d.currentBalance > 0.005);
   const overdueList = debts.filter(
     (d) =>
-      d.currentBalance > 0 && d.dueDate && new Date(d.dueDate) < new Date()
+      d.currentBalance > 0.005 && d.dueDate && new Date(d.dueDate) < new Date()
   );
 
   const totalYouOwe = iOweList.reduce((sum, d) => sum + d.currentBalance, 0);
@@ -60,7 +66,7 @@ const DebtsScreen: React.FC = () => {
   const netPosition = totalOwedToYou - totalYouOwe;
 
   const [filter, setFilter] = useState<
-    "All Debts" | "Owed to Me" | "I Owe" | "Overdue"
+    "All Debts" | "Owed to Me" | "I Owe" | "Overdue" | "Paid Off"
   >("All Debts");
 
   const filteredDebts = debts.filter((d) => {
@@ -68,8 +74,9 @@ const DebtsScreen: React.FC = () => {
     if (filter === "I Owe") return d.type !== "owed_to_me";
     if (filter === "Overdue")
       return (
-        d.currentBalance > 0 && d.dueDate && new Date(d.dueDate) < new Date()
+        d.currentBalance > 0.005 && d.dueDate && new Date(d.dueDate) < new Date()
       );
+    if (filter === "Paid Off") return d.currentBalance <= 0.005;
     return true;
   });
 
@@ -252,7 +259,7 @@ const DebtsScreen: React.FC = () => {
 
         {/* Filters */}
         <FilterChips
-          options={["All Debts", "Owed to Me", "I Owe", "Overdue"]}
+          options={["All Debts", "Owed to Me", "I Owe", "Overdue", "Paid Off"]}
           selected={filter}
           onSelect={(f) => setFilter(f as any)}
           style={{ marginBottom: spacing.lg }}
@@ -297,24 +304,26 @@ const DebtsScreen: React.FC = () => {
           ) : (
             filteredDebts.map((debt, index) => {
               const isOwedToMe = debt.type === "owed_to_me";
-              const displayAmount = Math.abs(debt.currentBalance);
+              const isPaid = debt.currentBalance <= 0.005;
+              const displayAmount = isPaid ? 0 : Math.abs(debt.currentBalance);
               const totalOriginal = Math.max(
                 debt.totalAmount || displayAmount,
                 displayAmount,
                 1
               );
-              const paidPct = Math.min(
-                100,
-                Math.max(
-                  0,
-                  Math.round(
-                    ((totalOriginal - displayAmount) / totalOriginal) * 100
-                  )
-                )
-              );
-              const isPaid = debt.currentBalance === 0;
+              const paidPct = isPaid
+                ? 100
+                : Math.min(
+                    100,
+                    Math.max(
+                      0,
+                      Math.round(
+                        ((totalOriginal - displayAmount) / totalOriginal) * 100
+                      )
+                    )
+                  );
               const isOverdue =
-                debt.currentBalance > 0 &&
+                !isPaid &&
                 debt.dueDate &&
                 new Date(debt.dueDate) < new Date();
 
@@ -325,9 +334,9 @@ const DebtsScreen: React.FC = () => {
                 : colors.secondary + "1F";
 
               if (isPaid) {
-                badgeText = "Settled";
-                badgeColor = colors.onSurfaceVariant;
-                badgeBg = colors.surfaceVariant;
+                badgeText = "Paid Off";
+                badgeColor = colors.tertiary;
+                badgeBg = colors.tertiary + "22";
               } else if (isOverdue) {
                 badgeText = "Overdue";
                 badgeColor = colors.error;
@@ -356,15 +365,29 @@ const DebtsScreen: React.FC = () => {
                       style={[
                         styles.debtIconBox,
                         {
-                          backgroundColor: isOwedToMe
+                          backgroundColor: isPaid
+                            ? colors.tertiary + "22"
+                            : isOwedToMe
                             ? colors.primary + "1F"
                             : colors.error + "1F",
                         },
                       ]}>
                       <Ionicons
-                        name={isOwedToMe ? "person-add-outline" : "card-outline"}
+                        name={
+                          isPaid
+                            ? "checkmark-circle"
+                            : isOwedToMe
+                            ? "person-add-outline"
+                            : "card-outline"
+                        }
                         size={20}
-                        color={isOwedToMe ? colors.primary : colors.error}
+                        color={
+                          isPaid
+                            ? colors.tertiary
+                            : isOwedToMe
+                            ? colors.primary
+                            : colors.error
+                        }
                       />
                     </View>
                     <View style={{ flex: 1, marginRight: 12 }}>
@@ -391,7 +414,9 @@ const DebtsScreen: React.FC = () => {
                           : debt.description
                           ? `${debt.description} • `
                           : ""}
-                        {debt.dueDate
+                        {isPaid
+                          ? `Paid off • Total ${formatCurrency(totalOriginal)}`
+                          : debt.dueDate
                           ? `Due ${formatDate(debt.dueDate)}`
                           : `Total ${formatCurrency(totalOriginal)}`}
                       </Text>
@@ -402,7 +427,7 @@ const DebtsScreen: React.FC = () => {
                           typography.bodyLarge,
                           {
                             color: isPaid
-                              ? colors.onSurfaceVariant
+                              ? colors.tertiary
                               : isOwedToMe
                               ? colors.primary
                               : colors.error,
@@ -440,7 +465,9 @@ const DebtsScreen: React.FC = () => {
                             styles.progressFill,
                             {
                               width: `${paidPct}%`,
-                              backgroundColor: isOwedToMe
+                              backgroundColor: isPaid
+                                ? colors.tertiary
+                                : isOwedToMe
                                 ? colors.primary
                                 : colors.secondary,
                             },
@@ -450,7 +477,10 @@ const DebtsScreen: React.FC = () => {
                       <Text
                         style={{
                           fontSize: 11,
-                          color: colors.onSurfaceVariant,
+                          color: isPaid
+                            ? colors.tertiary
+                            : colors.onSurfaceVariant,
+                          fontWeight: isPaid ? "600" : "400",
                           marginTop: 4,
                         }}>
                         {paidPct}% paid of {formatCurrency(totalOriginal)}

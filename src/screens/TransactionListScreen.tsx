@@ -1,5 +1,5 @@
 import { AlertService } from "../services/AlertService";
-import React, { useEffect, useState, useMemo } from "react";
+import React, { useEffect, useState, useMemo, useCallback } from "react";
 import {
   View,
   Text,
@@ -18,7 +18,7 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useDispatch, useSelector } from "react-redux";
-import { useNavigation } from "@react-navigation/native";
+import { useNavigation, useFocusEffect } from "@react-navigation/native";
 import { StackNavigationProp } from "@react-navigation/stack";
 import { RootState, AppDispatch } from "../store";
 import {
@@ -147,6 +147,14 @@ export const TransactionListScreen: React.FC = () => {
     dispatch(fetchBudgets());
     loadSecretWalletIds();
   }, [dispatch]);
+
+  useFocusEffect(
+    useCallback(() => {
+      dispatch(fetchTransactions());
+      dispatch(fetchBudgets());
+      loadSecretWalletIds();
+    }, [dispatch]),
+  );
 
   const handleRefresh = async () => {
     setRefreshing(true);

@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useEffect, useState } from "react";
 import { NavigationContainer, createNavigationContainerRef } from "@react-navigation/native";
 import { createStackNavigator } from "@react-navigation/stack";
 import { useAuth } from "../contexts/AuthContext";
@@ -17,7 +17,16 @@ const AppNavigator: React.FC = () => {
   const { isAuthenticated, loading } = useAuth();
   const { colors } = useAppTheme();
 
-  if (loading) {
+  // Only block the UI with a spinner during the *initial* auth restore.
+  // `auth.loading` also toggles during signIn / signOut / guest login; tearing
+  // down the whole NavigationContainer for those caused the SignIn screen to be
+  // remounted mid-transition (clipped "Welcome back" title, lost form input).
+  const [initialAuthResolved, setInitialAuthResolved] = useState(!loading);
+  useEffect(() => {
+    if (!loading) setInitialAuthResolved(true);
+  }, [loading]);
+
+  if (!initialAuthResolved) {
     return (
       <View style={[styles.centerContainer, { backgroundColor: colors.background }]}>
         <ActivityIndicator size="large" color={colors.primary} />

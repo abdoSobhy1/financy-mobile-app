@@ -293,6 +293,9 @@ const transactionsSlice = createSlice({
     builder.addCase(fetchTransactionStats.fulfilled, (state, action) => {
       state.stats = action.payload;
     });
+
+    // Clear transactions state on sign out
+    builder.addCase("auth/signOut/fulfilled", () => initialState);
   },
 });
 

@@ -268,7 +268,7 @@ export const cleanSettingsData = (settings: any): any => {
   const cleaned = {
     ...settings,
     // Ensure numeric fields are properly typed
-    billingPeriodStartDay: Number(settings.billingPeriodStartDay || settings.billing_period_start_day || 28),
+    billingPeriodStartDay: Number(settings.billingPeriodStartDay || settings.billing_period_start_day || 1),
     // Ensure boolean fields are properly typed
     firebaseSync: Boolean(settings.firebaseSync || settings.firebase_sync || false),
     // Ensure string fields are properly typed
@@ -311,12 +311,27 @@ export const cleanSettingsData = (settings: any): any => {
  * Cleans debt data by removing undefined values and ensuring required fields
  */
 export const cleanDebtData = (debt: any): any => {
+  const rawTotalAmount =
+    debt.totalAmount !== undefined && debt.totalAmount !== null
+      ? debt.totalAmount
+      : debt.total_amount !== undefined && debt.total_amount !== null
+      ? debt.total_amount
+      : debt.amount !== undefined && debt.amount !== null
+      ? debt.amount
+      : 0;
+  const rawCurrentBalance =
+    debt.currentBalance !== undefined && debt.currentBalance !== null
+      ? debt.currentBalance
+      : debt.current_balance !== undefined && debt.current_balance !== null
+      ? debt.current_balance
+      : rawTotalAmount;
+
   const cleaned = {
     ...debt,
     type: debt.type === "owed_to_me" || debt.debt_type === "owed_to_me" ? "owed_to_me" : "i_owe",
-    // Ensure required numeric fields are properly typed and have valid values
-    totalAmount: Number(debt.totalAmount || debt.total_amount || debt.amount || 0),
-    currentBalance: Number(debt.currentBalance || debt.current_balance || debt.totalAmount || debt.total_amount || debt.amount || 0),
+    // Ensure required numeric fields are properly typed and preserve 0 for paid-off debts
+    totalAmount: Number(rawTotalAmount),
+    currentBalance: Number(rawCurrentBalance),
     // Ensure optional numeric fields are properly typed
     interestRate: debt.interestRate !== undefined ? Number(debt.interestRate) : debt.interest_rate !== undefined ? Number(debt.interest_rate) : null,
     minimumPayment:

@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useCallback } from "react";
 import {
   View,
   Text,
@@ -7,18 +7,20 @@ import {
   TouchableOpacity,
   StatusBar,
   ActivityIndicator,
+  RefreshControl,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useAppTheme } from "../components/ui/ThemeProvider";
 import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons } from "@expo/vector-icons";
 import { useDispatch, useSelector } from "react-redux";
-import { useNavigation, useRoute } from "@react-navigation/native";
+import { useNavigation, useRoute, useFocusEffect } from "@react-navigation/native";
 import { StackNavigationProp } from "@react-navigation/stack";
 import { RouteProp } from "@react-navigation/native";
 import { useToast, FloatingActionButton } from "../components/ui";
 import { DebtPaymentCard } from "../components/debt";
 import { AppDispatch, RootState } from "../store";
+import { fetchDebts, deletePayment } from "../store/slices/debtsSlice";
 import { DebtPayment } from "../types";
 import { formatCurrency, formatDate } from "../utils";
 import { UI } from "../constants";
@@ -43,12 +45,54 @@ const DebtPaymentsScreen: React.FC = () => {
 
   const { debtId, debtName } = route.params;
   const debt = useSelector((state: RootState) => state.debts.items[debtId]);
+  const paymentsByDebtCount = useSelector(
+    (state: RootState) => state.debts.paymentsByDebt[debtId]?.length ?? 0,
+  );
   const [payments, setPayments] = useState<DebtPayment[]>([]);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
 
+  const loadPayments = useCallback(
+    async (silent?: boolean) => {
+      try {
+        if (!silent) {
+          setLoading(true);
+        }
+        const debtPayments = await db.debts.getPaymentsByDebt(debtId);
+        setPayments(
+          debtPayments.sort(
+            (a, b) =>
+              new Date(b.paymentDate).getTime() -
+              new Date(a.paymentDate).getTime(),
+          ),
+        );
+      } catch (error) {
+        showError("Failed to load payments");
+      } finally {
+        setLoading(false);
+      }
+    },
+    [debtId, showError],
+  );
+
+  // Revalidate whenever screen comes into focus (e.g. returning from AddPayment modal)
+  useFocusEffect(
+    useCallback(() => {
+      loadPayments(true);
+      dispatch(fetchDebts());
+    }, [loadPayments, dispatch]),
+  );
+
+  // Also revalidate whenever Redux debt balance or payment count changes
   useEffect(() => {
-    loadPayments();
-  }, [debtId]);
+    loadPayments(payments.length > 0);
+  }, [debtId, debt?.currentBalance, debt?.updatedAt, paymentsByDebtCount, loadPayments]);
+
+  const handleRefresh = async () => {
+    setRefreshing(true);
+    await Promise.all([loadPayments(true), dispatch(fetchDebts())]);
+    setRefreshing(false);
+  };
 
   const navigateToAddPayment = () => {
     navigation.navigate("AddPayment", {
@@ -60,28 +104,11 @@ const DebtPaymentsScreen: React.FC = () => {
     });
   };
 
-  const loadPayments = async () => {
-    try {
-      setLoading(true);
-      const debtPayments = await db.debts.getPaymentsByDebt(debtId);
-      setPayments(
-        debtPayments.sort(
-          (a, b) =>
-            new Date(b.paymentDate).getTime() -
-            new Date(a.paymentDate).getTime(),
-        ),
-      );
-    } catch (error) {
-      showError("Failed to load payments");
-    } finally {
-      setLoading(false);
-    }
-  };
-
   const handleDeletePayment = async (paymentId: string) => {
     try {
-      await db.debts.deletePayment(paymentId);
-      await loadPayments();
+      await dispatch(deletePayment(paymentId)).unwrap();
+      await Promise.all([loadPayments(true), dispatch(fetchDebts())]);
+      showSuccess("Payment deleted");
     } catch (error) {
       showError("Failed to delete payment");
     }
@@ -101,6 +128,7 @@ const DebtPaymentsScreen: React.FC = () => {
   const avgPayment = payments.length > 0 ? totalPaid / payments.length : 0;
   const latestPaymentDate =
     payments.length > 0 ? payments[0].paymentDate : null;
+  const isPaidOff = Boolean(debt && debt.currentBalance <= 0.005);
 
   // ── Payment renderer ───────────────────────────────────────
   const renderPayment = ({ item }: { item: DebtPayment }) => (
@@ -143,7 +171,15 @@ const DebtPaymentsScreen: React.FC = () => {
           <View style={[styles.decorCircle, styles.circle2]} />
 
           {/* Total paid */}
-          <Text style={[styles.heroLabel, { color: colors.onPrimaryContainer, opacity: 0.8 }]}>Total Paid</Text>
+          <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
+            <Text style={[styles.heroLabel, { color: colors.onPrimaryContainer, opacity: 0.8 }]}>Total Paid</Text>
+            {isPaidOff && (
+              <View style={{ flexDirection: "row", alignItems: "center", backgroundColor: colors.tertiary + "28", paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12, gap: 4 }}>
+                <Ionicons name="checkmark-circle" size={14} color={colors.tertiary} />
+                <Text style={{ fontSize: 11, fontWeight: "700", color: colors.tertiary }}>Paid Off</Text>
+              </View>
+            )}
+          </View>
           <Text style={[styles.heroValue, { color: colors.onPrimaryContainer }]}>{formatCurrency(totalPaid)}</Text>
           {latestPaymentDate && (
             <Text style={[styles.heroSubtext, { color: colors.onPrimaryContainer, opacity: 0.7 }]}>
@@ -202,20 +238,26 @@ const DebtPaymentsScreen: React.FC = () => {
   const renderEmptyState = () => (
     <View style={styles.emptyState}>
       <View style={[styles.emptyIconCircle, { backgroundColor: colors.primaryContainer }]}>
-        <Ionicons name="receipt-outline" size={40} color={colors.primary} />
+        <Ionicons name={isPaidOff ? "checkmark-circle-outline" : "receipt-outline"} size={40} color={colors.primary} />
       </View>
-      <Text style={[styles.emptyTitle, { color: colors.onBackground }]}>No Payments Yet</Text>
-      <Text style={[styles.emptySubtitle, { color: colors.onSurfaceVariant }]}>
-        Start making payments to track your progress on this debt.
+      <Text style={[styles.emptyTitle, { color: colors.onBackground }]}>
+        {isPaidOff ? "Debt Paid Off" : "No Payments Yet"}
       </Text>
-      <TouchableOpacity
-        activeOpacity={0.8}
-        onPress={navigateToAddPayment}>
-        <View style={[styles.emptyButton, { backgroundColor: colors.primary }]}>
-          <Ionicons name="add-circle" size={18} color={colors.onPrimary} />
-          <Text style={[styles.emptyButtonText, { color: colors.onPrimary }]}>Record a Payment</Text>
-        </View>
-      </TouchableOpacity>
+      <Text style={[styles.emptySubtitle, { color: colors.onSurfaceVariant }]}>
+        {isPaidOff
+          ? "This debt has been fully paid off."
+          : "Start making payments to track your progress on this debt."}
+      </Text>
+      {!isPaidOff && (
+        <TouchableOpacity
+          activeOpacity={0.8}
+          onPress={navigateToAddPayment}>
+          <View style={[styles.emptyButton, { backgroundColor: colors.primary }]}>
+            <Ionicons name="add-circle" size={18} color={colors.onPrimary} />
+            <Text style={[styles.emptyButtonText, { color: colors.onPrimary }]}>Record a Payment</Text>
+          </View>
+        </TouchableOpacity>
+      )}
     </View>
   );
 
@@ -227,7 +269,7 @@ const DebtPaymentsScreen: React.FC = () => {
         translucent
       />
 
-        {loading ? (
+        {loading && payments.length === 0 ? (
           <View style={styles.centered}>
             <ActivityIndicator size="large" color={colors.primary} />
           </View>
@@ -240,14 +282,23 @@ const DebtPaymentsScreen: React.FC = () => {
             ListEmptyComponent={renderEmptyState}
             contentContainerStyle={styles.listContainer}
             showsVerticalScrollIndicator={false}
+            refreshControl={
+              <RefreshControl
+                refreshing={refreshing}
+                onRefresh={handleRefresh}
+                tintColor={colors.primary}
+              />
+            }
           />
         )}
 
-        <FloatingActionButton
-          icon="add"
-          onPress={navigateToAddPayment}
-          style={{ position: "absolute", bottom: 30, right: 20 }}
-        />
+        {!isPaidOff && (
+          <FloatingActionButton
+            icon="add"
+            onPress={navigateToAddPayment}
+            style={{ position: "absolute", bottom: 30, right: 20 }}
+          />
+        )}
     </SafeAreaView>
   );
 };

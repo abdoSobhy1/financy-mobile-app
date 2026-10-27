@@ -15,12 +15,12 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { useAppTheme } from "../components/ui/ThemeProvider";
 import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons } from "@expo/vector-icons";
-import { useDispatch } from "react-redux";
+import { useDispatch, useSelector } from "react-redux";
 import { useNavigation, useRoute } from "@react-navigation/native";
 import { StackNavigationProp } from "@react-navigation/stack";
 import { RouteProp } from "@react-navigation/native";
 import { useToast } from "../components/ui";
-import { AppDispatch } from "../store";
+import { AppDispatch, RootState } from "../store";
 import { makeDebtPayment } from "../store/slices/debtsSlice";
 import { formatCurrency } from "../utils";
 import { DebtStackParamList } from "../types";
@@ -38,8 +38,11 @@ const AddPaymentScreen: React.FC = () => {
   const route = useRoute<AddPaymentScreenRouteProp>();
   const { showSuccess, showError } = useToast();
 
-  const { debtId, debtName, currentBalance, minimumPayment, interestRate } =
-    route.params;
+  const { debtId, debtName } = route.params;
+  const liveDebt = useSelector((state: RootState) => state.debts.items[debtId]);
+  const currentBalance = liveDebt?.currentBalance ?? route.params.currentBalance;
+  const minimumPayment = liveDebt?.minimumPayment ?? route.params.minimumPayment;
+  const interestRate = liveDebt?.interestRate ?? route.params.interestRate;
 
   const [paymentData, setPaymentData] = useState({
     amount: "",
@@ -82,7 +85,7 @@ const AddPaymentScreen: React.FC = () => {
       Number(paymentData.amount) <= 0
     )
       newErrors.amount = "Please enter a valid payment amount";
-    else if (Number(paymentData.amount) > currentBalance)
+    else if (Number(paymentData.amount) > currentBalance + 0.01)
       newErrors.amount = `Cannot exceed balance (${formatCurrency(currentBalance)})`;
 
     const totalSplit =

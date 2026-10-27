@@ -21,24 +21,20 @@ const initialState: SyncState = {
   error: null,
 };
 
+let lastSyncToastTimestamp = 0;
+
 // Full bidirectional sync with Firebase database
 export const syncWithFirebase = createAsyncThunk(
   "sync/syncWithFirebase",
-  async (options: { showToast?: boolean } | undefined, { dispatch, getState }) => {
-    const state = getState() as { sync: SyncState };
-    if (state.sync?.syncInProgress) {
-      console.log("🔄 Sync already in progress, skipping duplicate request");
-      return await offlineFirstSync.getSyncStatus();
-    }
-
+  async (options: { showToast?: boolean } | undefined, { dispatch }) => {
     try {
-      await offlineFirstSync.syncWithFirebase(true);
+      const result = await offlineFirstSync.syncWithFirebase(true);
 
       // Refresh all Redux slices so the UI updates immediately with restored cloud data
       await Promise.all([
-        dispatch(fetchTransactions()),
         dispatch(fetchCategories()),
         dispatch(fetchBudgets()),
+        dispatch(fetchTransactions()),
         dispatch(fetchDebts()),
         dispatch(fetchSettings()),
       ]);
@@ -46,14 +42,25 @@ export const syncWithFirebase = createAsyncThunk(
       const now = Date.now();
       dispatch(setLastSync(now));
 
-      if (options?.showToast) {
-        ToastService.showSuccess("Synced with Firebase database");
+      if (options?.showToast && now - lastSyncToastTimestamp > 3000) {
+        lastSyncToastTimestamp = now;
+        const pulledCount = (result?.pull?.itemsCreated || 0) + (result?.pull?.itemsUpdated || 0);
+        const pushedCount = result?.push?.totalUploaded || 0;
+        if (pulledCount > 0 || pushedCount > 0) {
+          ToastService.showSuccess(
+            `Synced with cloud (${pulledCount} fetched, ${pushedCount} uploaded)`
+          );
+        } else {
+          ToastService.showSuccess("Synced with Firebase database");
+        }
       }
 
       return await offlineFirstSync.getSyncStatus();
     } catch (error: any) {
       console.error("❌ syncWithFirebase failed:", error);
-      if (options?.showToast) {
+      const now = Date.now();
+      if (options?.showToast && now - lastSyncToastTimestamp > 3000) {
+        lastSyncToastTimestamp = now;
         ToastService.showError(error?.message || "Sync with Firebase failed");
       }
       throw error;

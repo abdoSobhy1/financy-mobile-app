@@ -68,7 +68,81 @@ export class DebtRepository {
     }
   }
 
+  async reconcileDebtBalances(debtId?: string): Promise<void> {
+    try {
+      const database = this.db.getDatabase();
+      const whereClause = debtId
+        ? "WHERE d.id = ? AND (d.deleted = 0 OR d.deleted IS NULL)"
+        : "WHERE d.deleted = 0 OR d.deleted IS NULL";
+      const params = debtId ? [debtId] : [];
+
+      const rows = (await database.getAllAsync(
+        `
+        SELECT
+          d.id,
+          d.total_amount,
+          d.current_balance,
+          COUNT(dp.id) as payment_count,
+          COALESCE(SUM(dp.amount), 0) as total_paid_amount,
+          COALESCE(SUM(CASE WHEN COALESCE(dp.principal, 0) > 0 THEN dp.principal ELSE dp.amount END), 0) as total_paid_principal
+        FROM debts d
+        LEFT JOIN debt_payments dp
+          ON dp.debt_id = d.id AND (dp.deleted = 0 OR dp.deleted IS NULL)
+        ${whereClause}
+        GROUP BY d.id
+        `,
+        params
+      )) as Array<{
+        id: string;
+        total_amount: number;
+        current_balance: number;
+        payment_count: number;
+        total_paid_amount: number;
+        total_paid_principal: number;
+      }>;
+
+      const now = new Date().toISOString();
+      for (const row of rows) {
+        if (row.payment_count > 0) {
+          const paidAmount = Math.max(row.total_paid_amount, row.total_paid_principal);
+          const rawExpected = Math.max(
+            0,
+            Math.round((row.total_amount - paidAmount) * 100) / 100
+          );
+          const expectedBalance = rawExpected < 0.01 ? 0 : rawExpected;
+
+          if (Math.abs(row.current_balance - expectedBalance) >= 0.01) {
+            await database.runAsync(
+              `UPDATE debts SET current_balance = ?, updated_at = ?, sync_updated_at = ? WHERE id = ?`,
+              [expectedBalance, now, Date.now(), row.id]
+            );
+            const updatedResult = (await database.getFirstAsync(
+              `SELECT * FROM debts WHERE id = ?`,
+              [row.id]
+            )) as DebtTable | null;
+            if (updatedResult) {
+              await offlineFirstSync.logOperation(
+                "debts",
+                row.id,
+                "update",
+                fromDebtTable(updatedResult)
+              );
+            }
+          }
+        } else if (row.current_balance < 0.01 && row.current_balance > 0) {
+          await database.runAsync(
+            `UPDATE debts SET current_balance = 0, updated_at = ?, sync_updated_at = ? WHERE id = ?`,
+            [now, Date.now(), row.id]
+          );
+        }
+      }
+    } catch (error) {
+      console.warn("DebtRepository: Failed to reconcile debt balances:", error);
+    }
+  }
+
   async getDebtById(id: string): Promise<Debt | null> {
+    await this.reconcileDebtBalances(id);
     const database = this.db.getDatabase();
     const result = (await database.getFirstAsync(
       `
@@ -81,6 +155,7 @@ export class DebtRepository {
   }
 
   async getAllDebts(): Promise<Debt[]> {
+    await this.reconcileDebtBalances();
     const database = this.db.getDatabase();
     const results = (await database.getAllAsync(`
       SELECT * FROM debts ORDER BY created_at DESC
@@ -90,6 +165,7 @@ export class DebtRepository {
   }
 
   async getActiveDebts(): Promise<Debt[]> {
+    await this.reconcileDebtBalances();
     const database = this.db.getDatabase();
     const results = (await database.getAllAsync(`
       SELECT * FROM debts WHERE current_balance > 0 ORDER BY created_at DESC
@@ -99,6 +175,7 @@ export class DebtRepository {
   }
 
   async getPaidOffDebts(): Promise<Debt[]> {
+    await this.reconcileDebtBalances();
     const database = this.db.getDatabase();
     const results = (await database.getAllAsync(`
       SELECT * FROM debts WHERE current_balance = 0 ORDER BY updated_at DESC
@@ -303,13 +380,17 @@ export class DebtRepository {
       ]
     );
 
-    // Update debt balance
-    await database.runAsync(`UPDATE debts SET current_balance = current_balance - ?, updated_at = ?, sync_updated_at = ? WHERE id = ?`, [
-      payment.principal,
-      now,
-      Date.now(),
-      payment.debtId,
-    ]);
+    // Update debt balance safely (subtract payment amount and clamp to >= 0)
+    const rawNewBalance = Math.max(
+      0,
+      Math.round((debt.currentBalance - payment.amount) * 100) / 100
+    );
+    const finalBalance = rawNewBalance < 0.01 ? 0 : rawNewBalance;
+
+    await database.runAsync(
+      `UPDATE debts SET current_balance = ?, updated_at = ?, sync_updated_at = ? WHERE id = ?`,
+      [finalBalance, now, Date.now(), payment.debtId]
+    );
 
     const newPayment = {
       id: paymentId,
@@ -344,7 +425,7 @@ export class DebtRepository {
     const results = (await database.getAllAsync(
       `
       SELECT * FROM debt_payments 
-      WHERE debt_id = ? 
+      WHERE debt_id = ? AND (deleted = 0 OR deleted IS NULL)
       ORDER BY payment_date DESC, created_at DESC
     `,
       [debtId]
@@ -420,23 +501,38 @@ export class DebtRepository {
     const payment = await this.getPaymentById(id);
     if (!payment) return;
 
-    // Delete linked transaction first
-    if (payment.linkedTransactionId) {
-      await database.runAsync("DELETE FROM transactions WHERE id = ?", [payment.linkedTransactionId]);
-      console.log(`Deleted linked transaction ${payment.linkedTransactionId} for debt payment ${id}`);
+    // Find and delete linked transaction(s)
+    const linkedTxRows = (await database.getAllAsync(
+      "SELECT id FROM transactions WHERE id = ? OR linked_debt_payment_id = ?",
+      [payment.linkedTransactionId || "", id]
+    )) as Array<{ id: string }>;
+
+    for (const txRow of linkedTxRows) {
+      await database.runAsync("DELETE FROM transactions WHERE id = ?", [txRow.id]);
+      console.log(`Deleted linked transaction ${txRow.id} for debt payment ${id}`);
     }
 
     // Delete payment
     await database.runAsync("DELETE FROM debt_payments WHERE id = ?", [id]);
 
-    // Restore debt balance
+    // Restore debt balance safely (clamped to total_amount)
+    const currentDebtRow = (await database.getFirstAsync(
+      "SELECT total_amount, current_balance FROM debts WHERE id = ?",
+      [payment.debtId]
+    )) as { total_amount: number; current_balance: number } | null;
+
+    const restoredBalance = currentDebtRow
+      ? Math.min(
+          currentDebtRow.total_amount,
+          Math.round((currentDebtRow.current_balance + payment.amount) * 100) / 100
+        )
+      : payment.amount;
+
     const now = new Date().toISOString();
-    await database.runAsync(`UPDATE debts SET current_balance = current_balance + ?, updated_at = ?, sync_updated_at = ? WHERE id = ?`, [
-      payment.principal,
-      now,
-      Date.now(),
-      payment.debtId,
-    ]);
+    await database.runAsync(
+      `UPDATE debts SET current_balance = ?, updated_at = ?, sync_updated_at = ? WHERE id = ?`,
+      [restoredBalance, now, Date.now(), payment.debtId]
+    );
 
     console.log(`Deleted debt payment ${id} and restored debt balance`);
 
@@ -445,8 +541,8 @@ export class DebtRepository {
       await offlineFirstSync.logOperation("debt_payments", id, "delete", { id });
 
       // Log transaction deletion for sync if there was a linked transaction
-      if (payment.linkedTransactionId) {
-        await offlineFirstSync.logOperation("transactions", payment.linkedTransactionId, "delete", { id: payment.linkedTransactionId });
+      for (const txRow of linkedTxRows) {
+        await offlineFirstSync.logOperation("transactions", txRow.id, "delete", { id: txRow.id });
       }
 
       // Log debt update for sync (balance was restored)
@@ -502,16 +598,22 @@ export class DebtRepository {
       }
     }
 
-    // Update debt balance if principal amount changed
-    if (updates.principal !== undefined && updates.principal !== payment.principal) {
-      const balanceChange = payment.principal - updates.principal;
+    // Update debt balance if payment amount changed
+    if (updates.amount !== undefined && updates.amount !== payment.amount) {
+      const balanceChange = payment.amount - updates.amount;
+      const rawNewBalance = Math.max(
+        0,
+        Math.min(
+          debt.totalAmount,
+          Math.round((debt.currentBalance + balanceChange) * 100) / 100
+        )
+      );
+      const finalBalance = rawNewBalance < 0.01 ? 0 : rawNewBalance;
       const now = new Date().toISOString();
-      await database.runAsync(`UPDATE debts SET current_balance = current_balance + ?, updated_at = ?, sync_updated_at = ? WHERE id = ?`, [
-        balanceChange,
-        now,
-        Date.now(),
-        payment.debtId,
-      ]);
+      await database.runAsync(
+        `UPDATE debts SET current_balance = ?, updated_at = ?, sync_updated_at = ? WHERE id = ?`,
+        [finalBalance, now, Date.now(), payment.debtId]
+      );
       console.log(`Updated debt balance by ${balanceChange} for debt ${payment.debtId}`);
     }
   }
@@ -524,6 +626,7 @@ export class DebtRepository {
     paidOffDebts: number;
     monthlyMinimumPayments: number;
   }> {
+    await this.reconcileDebtBalances();
     const database = this.db.getDatabase();
 
     const summaryResult = (await database.getFirstAsync(`

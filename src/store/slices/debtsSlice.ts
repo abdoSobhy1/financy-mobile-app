@@ -1,6 +1,8 @@
 import { createSlice, createAsyncThunk, PayloadAction } from "@reduxjs/toolkit";
 import { Debt, DebtPayment, DebtFormData, DebtPaymentFormData } from "../../types";
 import { db } from "../../database/queries";
+import { fetchTransactions } from "./transactionsSlice";
+import { fetchBudgets } from "./budgetsSlice";
 
 // Async thunks for database operations
 export const fetchDebts = createAsyncThunk("debts/fetchDebts", async () => {
@@ -97,7 +99,7 @@ export const deleteDebt = createAsyncThunk("debts/deleteDebt", async (id: string
 
 export const makeDebtPayment = createAsyncThunk(
   "debts/makeDebtPayment",
-  async ({ debtId, paymentData }: { debtId: string; paymentData: DebtPaymentFormData }, { rejectWithValue }) => {
+  async ({ debtId, paymentData }: { debtId: string; paymentData: DebtPaymentFormData }, { dispatch, rejectWithValue }) => {
     try {
       const payment = {
         debtId,
@@ -116,8 +118,10 @@ export const makeDebtPayment = createAsyncThunk(
 
       const createdPayment = await db.debts.makePayment(paymentWithTimestamp);
 
-      // Return both payment and updated debt
+      // Return both payment and updated debt, and revalidate transactions/budgets
       const updatedDebt = await db.debts.getDebtById(debtId);
+      dispatch(fetchTransactions());
+      dispatch(fetchBudgets());
       return { payment: createdPayment, debt: updatedDebt };
     } catch (error) {
       console.error("Redux makeDebtPayment: Error for debt", debtId, ":", error);
@@ -132,7 +136,7 @@ export const fetchPaymentsByDebt = createAsyncThunk("debts/fetchPaymentsByDebt",
 
 export const updatePayment = createAsyncThunk(
   "debts/updatePayment",
-  async ({ id, updates }: { id: string; updates: Partial<DebtPaymentFormData> }) => {
+  async ({ id, updates }: { id: string; updates: Partial<DebtPaymentFormData> }, { dispatch }) => {
     const paymentUpdates: Partial<Omit<DebtPayment, "id" | "debtId" | "createdAt">> = {};
 
     if (updates.amount !== undefined) {
@@ -151,14 +155,23 @@ export const updatePayment = createAsyncThunk(
       paymentUpdates.note = updates.note;
     }
 
-    await db.debts.updatePayment(id, paymentUpdates);
-    return await db.debts.getPaymentById(id);
+    await db.debts.updatePaymentAndTransaction(id, paymentUpdates);
+    const updatedPayment = await db.debts.getPaymentById(id);
+    const updatedDebt = updatedPayment ? await db.debts.getDebtById(updatedPayment.debtId) : null;
+    dispatch(fetchTransactions());
+    dispatch(fetchBudgets());
+    return { payment: updatedPayment, debt: updatedDebt };
   }
 );
 
-export const deletePayment = createAsyncThunk("debts/deletePayment", async (id: string) => {
+export const deletePayment = createAsyncThunk("debts/deletePayment", async (id: string, { dispatch }) => {
+  const existingPayment = await db.debts.getPaymentById(id);
+  const debtId = existingPayment?.debtId;
   await db.debts.deletePayment(id);
-  return id;
+  const updatedDebt = debtId ? await db.debts.getDebtById(debtId) : null;
+  dispatch(fetchTransactions());
+  dispatch(fetchBudgets());
+  return { id, debt: updatedDebt };
 });
 
 export const fetchDebtSummary = createAsyncThunk("debts/fetchDebtSummary", async () => {
@@ -370,7 +383,7 @@ const debtsSlice = createSlice({
           state.items[debt.id] = debt;
 
           // Update debt lists based on new balance
-          if (debt.currentBalance === 0) {
+          if (debt.currentBalance <= 0.005) {
             // Debt is paid off
             state.activeDebtIds = state.activeDebtIds.filter((id) => id !== debt.id);
             if (!state.paidOffDebtIds.includes(debt.id)) {
@@ -408,15 +421,29 @@ const debtsSlice = createSlice({
 
     // Update payment
     builder.addCase(updatePayment.fulfilled, (state, action) => {
-      const payment = action.payload;
+      const { payment, debt } = action.payload;
       if (payment) {
         state.payments[payment.id] = payment;
+      }
+      if (debt) {
+        state.items[debt.id] = debt;
+        if (debt.currentBalance <= 0.005) {
+          state.activeDebtIds = state.activeDebtIds.filter((id) => id !== debt.id);
+          if (!state.paidOffDebtIds.includes(debt.id)) {
+            state.paidOffDebtIds.push(debt.id);
+          }
+        } else {
+          state.paidOffDebtIds = state.paidOffDebtIds.filter((id) => id !== debt.id);
+          if (!state.activeDebtIds.includes(debt.id)) {
+            state.activeDebtIds.push(debt.id);
+          }
+        }
       }
     });
 
     // Delete payment
     builder.addCase(deletePayment.fulfilled, (state, action) => {
-      const id = action.payload;
+      const { id, debt } = action.payload;
       const payment = state.payments[id];
 
       if (payment) {
@@ -424,10 +451,27 @@ const debtsSlice = createSlice({
         if (state.paymentsByDebt[payment.debtId]) {
           state.paymentsByDebt[payment.debtId] = state.paymentsByDebt[payment.debtId].filter((paymentId) => paymentId !== id);
         }
+      } else if (debt && state.paymentsByDebt[debt.id]) {
+        state.paymentsByDebt[debt.id] = state.paymentsByDebt[debt.id].filter((paymentId) => paymentId !== id);
       }
 
       delete state.payments[id];
       state.paymentIds = state.paymentIds.filter((paymentId) => paymentId !== id);
+
+      if (debt) {
+        state.items[debt.id] = debt;
+        if (debt.currentBalance <= 0.005) {
+          state.activeDebtIds = state.activeDebtIds.filter((debtId) => debtId !== debt.id);
+          if (!state.paidOffDebtIds.includes(debt.id)) {
+            state.paidOffDebtIds.push(debt.id);
+          }
+        } else {
+          state.paidOffDebtIds = state.paidOffDebtIds.filter((debtId) => debtId !== debt.id);
+          if (!state.activeDebtIds.includes(debt.id)) {
+            state.activeDebtIds.push(debt.id);
+          }
+        }
+      }
     });
 
     // Fetch debt summary
@@ -446,6 +490,9 @@ const debtsSlice = createSlice({
         state.paymentIds.push(payment.id);
       });
     });
+
+    // Clear debts state on sign out
+    builder.addCase("auth/signOut/fulfilled", () => initialState);
   },
 });
 

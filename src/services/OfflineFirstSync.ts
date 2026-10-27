@@ -31,6 +31,10 @@ class OfflineFirstSync {
   private db = DatabaseManager.getInstance();
   private isProcessing = false;
   private isFullSyncing = false;
+  private fullSyncPromise: Promise<{
+    push: { totalUploaded: number; totalSkipped: number; errors: string[] };
+    pull: { itemsCreated: number; itemsUpdated: number; errors: string[] };
+  }> | null = null;
   private retryTimeout: ReturnType<typeof setTimeout> | null = null;
   private periodicSyncInterval: ReturnType<typeof setInterval> | null = null;
   private isInitialized = false;
@@ -179,43 +183,13 @@ class OfflineFirstSync {
       await this.db.ensureInitialized();
       const database = this.db.getDatabase();
 
-      // Read last sync attempt marker so we only process recent operations
-      let since = 0;
-      try {
-        const row = await database.getFirstAsync<{ sync_updated_at: number }>(
-          "SELECT sync_updated_at FROM settings WHERE id = 'default' LIMIT 1",
-        );
-        since = row?.sync_updated_at || 0;
-        console.log(
-          `🔁 Processing only sync_log entries created after ${new Date(since).toISOString()} (since=${since})`,
-        );
-      } catch (err) {
-        console.warn(
-          "⚠️ Could not read last sync attempt marker; processing all pending sync_log entries",
-          err,
-        );
-        since = 0;
-      }
-
-      // Get all unprocessed operations ordered by creation time and newer than the last sync attempt
-      let sql = `SELECT * FROM sync_log 
+      // Get all unprocessed operations ordered by creation time
+      const sql = `SELECT * FROM sync_log 
          WHERE is_processed = 0 
          ORDER BY created_at ASC 
          LIMIT 50`;
-      const params: any[] = [];
 
-      if (since && since > 0) {
-        sql = `SELECT * FROM sync_log 
-         WHERE is_processed = 0 AND created_at > ? 
-         ORDER BY created_at ASC 
-         LIMIT 50`;
-        params.push(since);
-      }
-
-      const result = (await database.getAllAsync(
-        sql,
-        params,
-      )) as SyncLogEntry[];
+      const result = (await database.getAllAsync(sql)) as SyncLogEntry[];
 
       console.log(
         `🔎 Found ${result.length} pending sync operations to process`,
@@ -229,7 +203,7 @@ class OfflineFirstSync {
       );
 
       console.log(
-        `� Processing ${result.length} pending sync operations (since=${since})`,
+        `� Processing ${result.length} pending sync operations`,
       );
 
       for (const logEntry of result) {
@@ -685,121 +659,187 @@ class OfflineFirstSync {
    * 5. Pulls/restores cloud data down to local SQLite
    * 6. Updates syncUpdatedAt timestamp
    */
+  /**
+   * Normalize any timestamp value (number, numeric string, ISO string, or Firestore Timestamp) to epoch ms
+   */
+  private parseTimestampMs(val: any): number {
+    if (!val) return 0;
+    if (typeof val === "number") {
+      return isNaN(val) ? 0 : val;
+    }
+    if (typeof val === "object") {
+      if (typeof val.toDate === "function") {
+        return val.toDate().getTime();
+      }
+      if (typeof val.seconds === "number") {
+        return val.seconds * 1000;
+      }
+    }
+    if (typeof val === "string") {
+      const asNum = Number(val);
+      if (!isNaN(asNum) && asNum > 0) {
+        return asNum;
+      }
+      const parsed = Date.parse(val);
+      if (!isNaN(parsed) && parsed > 0) {
+        return parsed;
+      }
+    }
+    return 0;
+  }
+
+  /**
+   * Complete bidirectional sync with Firebase database:
+   * 1. Validates auth & internet connection
+   * 2. Initializes sync service & ensures Firestore user document exists
+   * 3. Flushes pending local sync operations
+   * 4. Pulls/restores cloud data down to local SQLite
+   * 5. Pushes local data (categories, settings, wallets, budgets, transactions, debts, debt_payments) to cloud
+   * 6. Updates syncUpdatedAt timestamp
+   */
   public async syncWithFirebase(forceFullPush: boolean = true): Promise<{
     push: { totalUploaded: number; totalSkipped: number; errors: string[] };
     pull: { itemsCreated: number; itemsUpdated: number; errors: string[] };
   }> {
-    if (this.isFullSyncing) {
-      console.log("🔄 Full sync already in progress, skipping duplicate request");
-      return {
-        push: { totalUploaded: 0, totalSkipped: 0, errors: [] },
-        pull: { itemsCreated: 0, itemsUpdated: 0, errors: [] },
-      };
+    if (this.isFullSyncing && this.fullSyncPromise) {
+      console.log("🔄 Full sync already in progress, awaiting active sync promise...");
+      return await this.fullSyncPromise;
     }
 
     this.isFullSyncing = true;
-    try {
-      const { authService } = await import("./authService");
-      const canSync = await authService.isCloudSyncAllowedAsync();
-      if (!canSync) {
-        console.log("⏭️ Cloud sync skipped: user is not authenticated or in guest mode");
-        return {
-          push: { totalUploaded: 0, totalSkipped: 0, errors: [] },
-          pull: { itemsCreated: 0, itemsUpdated: 0, errors: [] },
-        };
-      }
-
-      const netInfo = await NetInfo.fetch();
-      if (!netInfo.isConnected) {
-        console.log("📡 No internet connection for Firebase sync");
-        throw new Error("No internet connection");
-      }
-
-      console.log("🔄 Starting full bidirectional sync with Firebase database...");
-
-      // 1. Initialize Firebase sync service & ensure user document exists in Firestore
-      await syncService.initializeSync();
-
-      // 2. Process pending offline sync operations
-      await this.processUnSyncedOperations();
-
-      // 3. Restore cloud data FIRST so local database is populated with cloud records before pushing
-      let pullResult = { itemsCreated: 0, itemsUpdated: 0, errors: [] as string[] };
-      try {
-        pullResult = await this.performComprehensiveCloudRestore();
-      } catch (pullErr: any) {
-        console.error("❌ Restore from cloud failed:", pullErr);
-        pullResult.errors.push(pullErr?.message || String(pullErr));
-      }
-
-      // 4. Ensure categories state for this user is marked or seeded
+    this.fullSyncPromise = (async () => {
       try {
         await this.db.ensureInitialized();
-        const database = this.db.getDatabase();
-        const catCountRow = await database.getFirstAsync<{ count: number }>(
-          "SELECT COUNT(*) as count FROM categories WHERE deleted = 0",
-        );
-        const { authService } = await import("./authService");
-        const currentUserId = (await authService.getCurrentAuthenticatedUser())?.uid;
 
-        if (currentUserId) {
-          const seededKey = `financy_categories_seeded_v1_${currentUserId}`;
-          if (catCountRow && catCountRow.count > 0) {
-            // User already has categories from cloud or local - mark as seeded so defaults never duplicate
-            await AsyncStorage.setItem(seededKey, "true");
-          } else {
-            // Brand new user with 0 categories in cloud & local: seed default Arabic categories with deterministic IDs once
-            const alreadySeeded = await AsyncStorage.getItem(seededKey);
-            if (alreadySeeded !== "true") {
-              const { CategoryRepository } = await import("../database/queries/categories");
-              const categoryRepo = new CategoryRepository();
-              await categoryRepo.seedDefaultArabicCategories();
+        const { authService } = await import("./authService");
+        const canSync = await authService.isCloudSyncAllowedAsync();
+        if (!canSync) {
+          console.log("⏭️ Cloud sync skipped: user is not authenticated or in guest mode");
+          return {
+            push: { totalUploaded: 0, totalSkipped: 0, errors: [] },
+            pull: { itemsCreated: 0, itemsUpdated: 0, errors: [] },
+          };
+        }
+
+        const netInfo = await NetInfo.fetch();
+        if (!netInfo.isConnected) {
+          console.log("📡 No internet connection for Firebase sync");
+          throw new Error("No internet connection");
+        }
+
+        console.log("🔄 Starting full bidirectional sync with Firebase database...");
+
+        // 1. Initialize Firebase sync service & ensure user document exists in Firestore
+        await syncService.initializeSync();
+
+        // 2. Process pending offline sync operations
+        await this.processUnSyncedOperations();
+
+        // 3. Restore cloud data FIRST so local database is populated with cloud records before pushing
+        let pullResult = { itemsCreated: 0, itemsUpdated: 0, errors: [] as string[] };
+        try {
+          pullResult = await this.performComprehensiveCloudRestore();
+        } catch (pullErr: any) {
+          console.error("❌ Restore from cloud failed:", pullErr);
+          pullResult.errors.push(pullErr?.message || String(pullErr));
+        }
+
+        // 4. Ensure categories and wallets state for this user is marked or seeded
+        try {
+          await this.db.ensureInitialized();
+          const database = this.db.getDatabase();
+          const catCountRow = await database.getFirstAsync<{ count: number }>(
+            "SELECT COUNT(*) as count FROM categories WHERE deleted = 0 OR deleted IS NULL",
+          );
+          const walletCountRow = await database.getFirstAsync<{ count: number }>(
+            "SELECT COUNT(*) as count FROM wallets",
+          );
+          const currentUserId = (await authService.getCurrentAuthenticatedUser())?.uid;
+
+          if (currentUserId) {
+            const seededKey = `financy_categories_seeded_v1_${currentUserId}`;
+            const walletSeededKey = `financy_wallets_seeded_v1_${currentUserId}`;
+            const hasExistingCloudData =
+              pullResult.itemsCreated + pullResult.itemsUpdated > 0;
+
+            if ((catCountRow && catCountRow.count > 0) || hasExistingCloudData) {
+              // User already has categories or existing cloud account data (meaning any missing categories were intentionally deleted)
+              await AsyncStorage.setItem(seededKey, "true");
+            } else {
+              // Brand new user with 0 categories and 0 cloud records: seed default Arabic categories with deterministic IDs once
+              const alreadySeeded = await AsyncStorage.getItem(seededKey);
+              if (alreadySeeded !== "true") {
+                const { CategoryRepository } = await import("../database/queries/categories");
+                const categoryRepo = new CategoryRepository();
+                await categoryRepo.seedDefaultArabicCategories();
+              }
+            }
+
+            if ((walletCountRow && walletCountRow.count > 0) || hasExistingCloudData) {
+              await AsyncStorage.setItem(walletSeededKey, "true");
+            } else {
+              const alreadySeededWallets = await AsyncStorage.getItem(walletSeededKey);
+              if (alreadySeededWallets !== "true") {
+                const { WalletRepository } = await import("../database/queries/wallets");
+                const walletRepo = new WalletRepository();
+                await walletRepo.seedDefaultWallets();
+              }
             }
           }
+        } catch (catInitErr) {
+          console.warn("Category/Wallet post-restore check warning:", catInitErr);
         }
-      } catch (catInitErr) {
-        console.warn("Category post-restore check warning:", catInitErr);
+
+        // Recalculate category entry counts after cloud restore
+        try {
+          await this.db.recalculateEntryCounts();
+        } catch (recalcErr) {
+          console.warn("Could not recalculate entry counts after restore:", recalcErr);
+        }
+
+        // 5. Push local data to cloud (categories, settings, wallets, budgets, transactions, debts, debt_payments)
+        let pushResult = {
+          totalUploaded: 0,
+          totalSkipped: 0,
+          collections: {},
+          errors: [] as string[],
+        };
+        try {
+          pushResult = await this.pushAllDataToCloud(forceFullPush);
+        } catch (pushErr: any) {
+          console.warn("⚠️ Push to cloud encountered an issue:", pushErr);
+          pushResult.errors.push(pushErr?.message || String(pushErr));
+        }
+
+        // 6. Update settings.syncUpdatedAt
+        try {
+          const { SettingsRepository } = await import("../database/queries/settings");
+          const settingsRepo = new SettingsRepository();
+          const now = Date.now();
+          await settingsRepo.updateSettings({ syncUpdatedAt: now });
+        } catch (e) {
+          console.warn("Could not update syncUpdatedAt setting:", e);
+        }
+
+        console.log(
+          `✅ Firebase database sync completed: ${pushResult.totalUploaded} pushed, ${pullResult.itemsCreated + pullResult.itemsUpdated} pulled`,
+        );
+
+        return {
+          push: {
+            totalUploaded: pushResult.totalUploaded,
+            totalSkipped: pushResult.totalSkipped,
+            errors: pushResult.errors,
+          },
+          pull: pullResult,
+        };
+      } finally {
+        this.isFullSyncing = false;
+        this.fullSyncPromise = null;
       }
+    })();
 
-      // 5. Push local data to cloud (categories, settings, wallets, budgets, transactions, debts, debt_payments)
-      let pushResult = {
-        totalUploaded: 0,
-        totalSkipped: 0,
-        collections: {},
-        errors: [] as string[],
-      };
-      try {
-        pushResult = await this.pushAllDataToCloud(forceFullPush);
-      } catch (pushErr: any) {
-        console.warn("⚠️ Push to cloud encountered an issue:", pushErr);
-        pushResult.errors.push(pushErr?.message || String(pushErr));
-      }
-
-      // 6. Update settings.syncUpdatedAt
-      try {
-        const { SettingsRepository } = await import("../database/queries/settings");
-        const settingsRepo = new SettingsRepository();
-        const now = Date.now();
-        await settingsRepo.updateSettings({ syncUpdatedAt: now });
-      } catch (e) {
-        console.warn("Could not update syncUpdatedAt setting:", e);
-      }
-
-      console.log(
-        `✅ Firebase database sync completed: ${pushResult.totalUploaded} pushed, ${pullResult.itemsCreated + pullResult.itemsUpdated} pulled`,
-      );
-
-      return {
-        push: {
-          totalUploaded: pushResult.totalUploaded,
-          totalSkipped: pushResult.totalSkipped,
-          errors: pushResult.errors,
-        },
-        pull: pullResult,
-      };
-    } finally {
-      this.isFullSyncing = false;
-    }
+    return await this.fullSyncPromise;
   }
 
   /**
@@ -922,6 +962,13 @@ class OfflineFirstSync {
         totalPulled += retryCount;
       }
 
+      try {
+        const { DebtRepository } = await import("../database/queries/debts");
+        await new DebtRepository().reconcileDebtBalances();
+      } catch (reconcileErr) {
+        console.warn("Could not reconcile debt balances after initial pull:", reconcileErr);
+      }
+
       console.log(
         `☁️ Initial cloud pull completed: ${totalPulled} items restored`,
       );
@@ -1038,6 +1085,13 @@ class OfflineFirstSync {
         result.itemsCreated += retryCount;
       }
 
+      try {
+        const { DebtRepository } = await import("../database/queries/debts");
+        await new DebtRepository().reconcileDebtBalances();
+      } catch (reconcileErr) {
+        console.warn("Could not reconcile debt balances after cloud restore:", reconcileErr);
+      }
+
       const totalItems = result.itemsUpdated + result.itemsCreated;
       console.log(
         `☁️ Comprehensive cloud restore completed: ${result.itemsCreated} created, ${result.itemsUpdated} updated, ${result.errors.length} errors`,
@@ -1090,9 +1144,17 @@ class OfflineFirstSync {
         return result;
       }
 
-      // Get all local documents
-      const localDocuments = await this.getLocalDocumentsByTable(tableName);
+      // Get all local documents and any pending deletes in sync_log so hard-deleted items are never resurrected
+      const localDocuments = await this.getLocalDocumentsByTable(tableName, true);
       const localById = new Map(localDocuments.map((doc) => [doc.id, doc]));
+
+      await this.db.ensureInitialized();
+      const database = this.db.getDatabase();
+      const pendingDeleteRows = await database.getAllAsync<{ record_id: string }>(
+        `SELECT record_id FROM sync_log WHERE table_name = ? AND operation = 'delete' AND is_processed = 0`,
+        [tableName],
+      );
+      const pendingDeleteIds = new Set(pendingDeleteRows.map((r) => r.record_id));
 
       console.log(
         `📊 ${collectionName}: ${cloudDocuments.length} cloud items, ${localDocuments.length} local items`,
@@ -1101,22 +1163,25 @@ class OfflineFirstSync {
       // Process each cloud document
       for (const cloudDoc of cloudDocuments) {
         try {
-          // Special handling for deleted cloud documents
-          if (cloudDoc.deleted === true || cloudDoc.deleted === 1) {
+          const docData = cloudDoc.data || cloudDoc;
+          const isDeleted =
+            cloudDoc.deleted === true ||
+            cloudDoc.deleted === 1 ||
+            docData?.deleted === true ||
+            docData?.deleted === 1;
+
+          // Special handling for deleted cloud documents: hard-delete from local DB and remove from Firebase
+          if (isDeleted) {
             const localDoc = localById.get(cloudDoc.id);
             if (localDoc) {
-              await this.db.ensureInitialized();
-              const database = this.db.getDatabase();
-              if (tableName === "categories" && (await this.isDefaultCategory(cloudDoc.id))) {
-                console.log(`🔄 Soft deleting default category: ${cloudDoc.id}`);
-                await this.softDeleteCategory(cloudDoc.id);
-              } else {
-                console.log(`🗑️ Removing deleted ${tableName} document from local DB: ${cloudDoc.id}`);
-                await database.runAsync(`DELETE FROM ${tableName} WHERE id = ?`, [cloudDoc.id]);
-              }
+              console.log(`🗑️ Removing deleted ${tableName} document from local DB: ${cloudDoc.id}`);
+              await database.runAsync(`DELETE FROM ${tableName} WHERE id = ?`, [cloudDoc.id]);
               result.updated++;
-            } else {
-              console.log(`🗑️ Skipping already absent deleted ${tableName} document: ${cloudDoc.id}`);
+            }
+            try {
+              await syncService.syncLocalChanges(collectionName, "delete", cloudDoc.id);
+            } catch {
+              // ignore
             }
             continue;
           }
@@ -1130,9 +1195,28 @@ class OfflineFirstSync {
             continue;
           }
 
+          // If this item was hard-deleted locally and is waiting in sync_log, delete it from Firebase instead of re-inserting
+          if (pendingDeleteIds.has(cloudDoc.id)) {
+            console.log(`🗑️ ${tableName}:${cloudDoc.id} has pending local delete, removing from Firebase...`);
+            try {
+              await syncService.syncLocalChanges(collectionName, "delete", cloudDoc.id);
+              await database.runAsync(
+                `UPDATE sync_log SET is_processed = 1 WHERE table_name = ? AND record_id = ? AND operation = 'delete'`,
+                [tableName, cloudDoc.id],
+              );
+            } catch (delErr) {
+              console.warn(`Could not delete ${tableName}:${cloudDoc.id} from Firebase:`, delErr);
+            }
+            continue;
+          }
+
           const localDoc = localById.get(cloudDoc.id);
-          const cloudUpdatedAt =
-            cloudDoc.updatedAt || cloudDoc.sync_updated_at || 0;
+          const cloudUpdatedAt = this.parseTimestampMs(
+            cloudDoc.updatedAt ??
+              docData?.updatedAt ??
+              cloudDoc.sync_updated_at ??
+              docData?.sync_updated_at,
+          );
 
           if (!localDoc) {
             // Document doesn't exist locally - create it
@@ -1140,13 +1224,36 @@ class OfflineFirstSync {
             await this.insertCloudDocumentToLocal(tableName, cloudDoc);
             result.created++;
           } else {
-            // Document exists locally - check if cloud version is newer
-            const localUpdatedAt =
-              (localDoc as any).updated_at ||
-              (localDoc as any).sync_updated_at ||
-              0;
+            // If locally deleted, do not resurrect from cloud — delete from Firebase instead
+            if (
+              (localDoc as any).deleted === 1 ||
+              (localDoc as any).deleted === true
+            ) {
+              console.log(
+                `🗑️ ${tableName}:${cloudDoc.id} is marked deleted locally, removing from Firebase...`,
+              );
+              try {
+                await syncService.syncLocalChanges(
+                  collectionName,
+                  "delete",
+                  cloudDoc.id,
+                );
+                await this.markRecordSynced(tableName, cloudDoc.id);
+              } catch (delErr) {
+                console.warn(
+                  `Could not delete ${tableName}:${cloudDoc.id} from Firebase:`,
+                  delErr,
+                );
+              }
+              continue;
+            }
 
-            if (cloudUpdatedAt > localUpdatedAt) {
+            // Document exists locally - check if cloud version is newer
+            const localUpdatedAt = this.parseTimestampMs(
+              (localDoc as any).sync_updated_at ?? (localDoc as any).updated_at,
+            );
+
+            if (cloudUpdatedAt > localUpdatedAt || localUpdatedAt === 0) {
               console.log(
                 `🔄 Updating ${tableName}: ${cloudDoc.id} (cloud: ${cloudUpdatedAt}, local: ${localUpdatedAt})`,
               );
@@ -1180,38 +1287,26 @@ class OfflineFirstSync {
   /**
    * Get all local documents from a specific table
    */
-  private async getLocalDocumentsByTable(tableName: string): Promise<any[]> {
+  private async getLocalDocumentsByTable(
+    tableName: string,
+    includeDeleted: boolean = false,
+  ): Promise<any[]> {
     await this.db.ensureInitialized();
     const database = this.db.getDatabase();
+    const whereClause = includeDeleted
+      ? ""
+      : " WHERE deleted = 0 OR deleted IS NULL";
 
     switch (tableName) {
       case "transactions":
-        return await database.getAllAsync(
-          "SELECT * FROM transactions WHERE deleted = 0 OR deleted IS NULL",
-        );
       case "categories":
-        return await database.getAllAsync(
-          "SELECT * FROM categories WHERE deleted = 0 OR deleted IS NULL",
-        );
       case "budgets":
-        return await database.getAllAsync(
-          "SELECT * FROM budgets WHERE deleted = 0 OR deleted IS NULL",
-        );
       case "debts":
-        return await database.getAllAsync(
-          "SELECT * FROM debts WHERE deleted = 0 OR deleted IS NULL",
-        );
       case "debt_payments":
-        return await database.getAllAsync(
-          "SELECT * FROM debt_payments WHERE deleted = 0 OR deleted IS NULL",
-        );
       case "settings":
-        return await database.getAllAsync(
-          "SELECT * FROM settings WHERE deleted = 0 OR deleted IS NULL",
-        );
       case "wallets":
         return await database.getAllAsync(
-          "SELECT * FROM wallets WHERE deleted = 0 OR deleted IS NULL",
+          `SELECT * FROM ${tableName}${whereClause}`,
         );
       default:
         return [];
@@ -1233,90 +1328,12 @@ class OfflineFirstSync {
 
     switch (tableName) {
       case "transactions":
-        await database.runAsync(
-          `UPDATE transactions SET 
-           amount = ?, type = ?, category_id = ?, budget_id = ?, description = ?, date = ?, note = ?, updated_at = ?
-           WHERE id = ?`,
-          [
-            localData.amount,
-            localData.type,
-            localData.categoryId,
-            localData.budgetId,
-            localData.description,
-            localData.date,
-            localData.note,
-            localData.updatedAt,
-            localData.id,
-          ],
-        );
-        break;
-
       case "categories":
-        await database.runAsync(
-          `UPDATE categories SET name = ?, type = ?, color = ?, updated_at = ? WHERE id = ?`,
-          [
-            localData.name,
-            localData.type,
-            localData.color,
-            localData.updatedAt,
-            localData.id,
-          ],
-        );
-        break;
-
       case "budgets":
-        await database.runAsync(
-          `UPDATE budgets SET 
-           name = ?, amount = ?, period_type = ?, period_start = ?, category_id = ?, reset_day = ?, updated_at = ?
-           WHERE id = ?`,
-          [
-            localData.name,
-            localData.amount,
-            localData.periodType,
-            localData.periodStart,
-            localData.categoryId,
-            localData.resetDay,
-            localData.updatedAt,
-            localData.id,
-          ],
-        );
-        break;
-
       case "debts":
-        await database.runAsync(
-          `UPDATE debts SET 
-           name = ?, amount = ?, total_amount = ?, current_balance = ?, monthly_payment = ?, due_date = ?, category_id = ?, budget_id = ?, updated_at = ?
-           WHERE id = ?`,
-          [
-            localData.name,
-            localData.amount,
-            localData.totalAmount,
-            localData.currentBalance,
-            localData.monthlyPayment,
-            localData.dueDate,
-            localData.categoryId,
-            localData.budgetId,
-            localData.updatedAt,
-            localData.id,
-          ],
-        );
-        break;
-
       case "debt_payments":
-        await database.runAsync(
-          `UPDATE debt_payments SET debt_id = ?, amount = ?, date = ?, payment_date = ?, principal = ?, interest = ?, note = ?, updated_at = ? WHERE id = ?`,
-          [
-            localData.debtId,
-            localData.amount,
-            localData.date,
-            localData.paymentDate || localData.date,
-            localData.principal || 0,
-            localData.interest || 0,
-            localData.note,
-            localData.updatedAt,
-            localData.id,
-          ],
-        );
+      case "wallets":
+        await this.insertCloudDocumentToLocal(tableName, cloudDocument);
         break;
 
       case "settings":
@@ -1550,8 +1567,8 @@ class OfflineFirstSync {
     const result = { uploaded: 0, skipped: 0, errors: 0 };
 
     try {
-      // Get all local documents for this table
-      let localDocuments = await this.getLocalDocumentsByTable(tableName);
+      // Get all local documents for this table (including soft-deleted rows so deletions propagate to cloud)
+      let localDocuments = await this.getLocalDocumentsByTable(tableName, true);
 
       // If a since timestamp is provided, filter to only items updated after that time
       if (since && since > 0) {
@@ -1578,23 +1595,32 @@ class OfflineFirstSync {
       // Process each local document
       for (const localDoc of localDocuments) {
         try {
-          // Skip deleted items
+          // Handle locally deleted items: remove from cloud if still present
           if (
             (localDoc as any).deleted === 1 ||
             (localDoc as any).deleted === true
           ) {
-            console.log(
-              `🗑️ Skipping deleted ${tableName}: ${(localDoc as any).id}`,
-            );
-            result.skipped++;
+            if (cloudById.has((localDoc as any).id)) {
+              console.log(
+                `🗑️ Deleting ${tableName} from cloud: ${(localDoc as any).id}`,
+              );
+              await syncService.syncLocalChanges(
+                collectionName,
+                "delete",
+                (localDoc as any).id,
+              );
+              await this.markRecordSynced(tableName, (localDoc as any).id);
+              result.uploaded++;
+            } else {
+              result.skipped++;
+            }
             continue;
           }
 
           const cloudDoc = cloudById.get((localDoc as any).id);
-          const localUpdatedAt =
-            (localDoc as any).updated_at ||
-            (localDoc as any).sync_updated_at ||
-            0;
+          const localUpdatedAt = this.parseTimestampMs(
+            (localDoc as any).sync_updated_at ?? (localDoc as any).updated_at,
+          );
 
           // Convert local database format to cloud format
           const cloudFormatDoc = this.convertLocalToCloudFormat(
@@ -1616,8 +1642,13 @@ class OfflineFirstSync {
             result.uploaded++;
           } else {
             // Document exists in cloud - check if local is newer
-            const cloudUpdatedAt =
-              cloudDoc.updatedAt || cloudDoc.sync_updated_at || 0;
+            const cloudDocData = cloudDoc.data || cloudDoc;
+            const cloudUpdatedAt = this.parseTimestampMs(
+              cloudDoc.updatedAt ??
+                cloudDocData?.updatedAt ??
+                cloudDoc.sync_updated_at ??
+                cloudDocData?.sync_updated_at,
+            );
 
             if (localUpdatedAt > cloudUpdatedAt) {
               console.log(
@@ -1925,30 +1956,48 @@ class OfflineFirstSync {
     const localData = this.convertCloudToLocalFormat(tableName, document);
 
     switch (tableName) {
-      case "transactions":
+      case "transactions": {
+        let validCategoryId = localData.categoryId || null;
+        if (validCategoryId) {
+          const catRow = await database.getFirstAsync(
+            "SELECT id FROM categories WHERE id = ?",
+            [validCategoryId],
+          );
+          if (!catRow) validCategoryId = null;
+        }
+        let validBudgetId = localData.budgetId || null;
+        if (validBudgetId) {
+          const budRow = await database.getFirstAsync(
+            "SELECT id FROM budgets WHERE id = ?",
+            [validBudgetId],
+          );
+          if (!budRow) validBudgetId = null;
+        }
         await database.runAsync(
-          `INSERT OR REPLACE INTO transactions (id, amount, type, category_id, budget_id, account_id, to_account_id, description, date, note, updated_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          `INSERT OR REPLACE INTO transactions (id, amount, type, category_id, budget_id, account_id, to_account_id, description, date, note, updated_at, sync_updated_at, deleted, sync_status)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 'synced')`,
           [
             localData.id,
             localData.amount,
             localData.type,
-            localData.categoryId || null,
-            localData.budgetId || null,
+            validCategoryId,
+            validBudgetId,
             localData.accountId || "default_cash",
             localData.toAccountId || null,
             localData.description,
             localData.date,
             localData.note,
             localData.updatedAt,
+            this.parseTimestampMs(localData.updatedAt) || Date.now(),
           ],
         );
         break;
+      }
 
       case "categories":
         await database.runAsync(
-          `INSERT OR REPLACE INTO categories (id, name, type, color, icon, updated_at)
-           VALUES (?, ?, ?, ?, ?, ?)`,
+          `INSERT OR REPLACE INTO categories (id, name, type, color, icon, updated_at, sync_updated_at, deleted, sync_status)
+           VALUES (?, ?, ?, ?, ?, ?, ?, 0, 'synced')`,
           [
             localData.id,
             localData.name,
@@ -1956,54 +2005,120 @@ class OfflineFirstSync {
             localData.color,
             localData.icon,
             localData.updatedAt,
+            this.parseTimestampMs(localData.updatedAt) || Date.now(),
           ],
         );
         break;
 
-      case "budgets":
+      case "budgets": {
+        let validCategoryId = localData.categoryId || null;
+        if (validCategoryId) {
+          const catRow = await database.getFirstAsync(
+            "SELECT id FROM categories WHERE id = ?",
+            [validCategoryId],
+          );
+          if (!catRow) validCategoryId = null;
+        }
         await database.runAsync(
-          `INSERT OR REPLACE INTO budgets (id, name, amount, period_type, period_start, category_id, reset_day, updated_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+          `INSERT OR REPLACE INTO budgets (id, name, amount, period_type, period_start, category_id, reset_day, updated_at, sync_updated_at, deleted, sync_status)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 'synced')`,
           [
             localData.id,
             localData.name,
             localData.amount,
             localData.periodType,
             localData.periodStart,
-            localData.categoryId,
+            validCategoryId,
             localData.resetDay,
             localData.updatedAt,
+            this.parseTimestampMs(localData.updatedAt) || Date.now(),
           ],
         );
         break;
+      }
 
-      case "debts":
+      case "debts": {
         // Use validation to ensure all required fields are present and valid
         const { cleanDebtData } = await import("../utils/validation");
         const cleanedDebt = cleanDebtData(localData);
+        let validCategoryId = cleanedDebt.categoryId || null;
+        if (validCategoryId) {
+          const catRow = await database.getFirstAsync(
+            "SELECT id FROM categories WHERE id = ?",
+            [validCategoryId],
+          );
+          if (!catRow) validCategoryId = null;
+        }
+        let validBudgetId = cleanedDebt.budgetId || null;
+        if (validBudgetId) {
+          const budRow = await database.getFirstAsync(
+            "SELECT id FROM budgets WHERE id = ?",
+            [validBudgetId],
+          );
+          if (!budRow) validBudgetId = null;
+        }
 
-        await database.runAsync(
-          `INSERT OR REPLACE INTO debts (id, name, amount, total_amount, current_balance, monthly_payment, interest_rate, minimum_payment, due_date, creditor, description, category_id, budget_id, created_at, updated_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-          [
-            cleanedDebt.id,
-            cleanedDebt.name,
-            cleanedDebt.totalAmount, // Use validated totalAmount
-            cleanedDebt.totalAmount, // total_amount field (same as amount for compatibility)
-            cleanedDebt.currentBalance, // validated current_balance
-            cleanedDebt.minimumPayment, // monthly_payment (using minimumPayment as source)
-            cleanedDebt.interestRate, // validated interest_rate
-            cleanedDebt.minimumPayment, // minimum_payment
-            cleanedDebt.dueDate, // validated due_date
-            cleanedDebt.creditor, // creditor
-            cleanedDebt.description, // description
-            cleanedDebt.categoryId, // category_id
-            cleanedDebt.budgetId, // budget_id
-            cleanedDebt.createdAt, // validated created_at
-            cleanedDebt.updatedAt, // validated updated_at
-          ],
+        const existingDebt = await database.getFirstAsync<{ id: string }>(
+          "SELECT id FROM debts WHERE id = ?",
+          [cleanedDebt.id],
         );
+        const debtSyncUpdatedAt =
+          this.parseTimestampMs(cleanedDebt.updatedAt) || Date.now();
+
+        if (existingDebt) {
+          await database.runAsync(
+            `UPDATE debts SET
+              name = ?, debt_type = ?, amount = ?, total_amount = ?, current_balance = ?,
+              monthly_payment = ?, interest_rate = ?, minimum_payment = ?, due_date = ?,
+              creditor = ?, description = ?, category_id = ?, budget_id = ?,
+              updated_at = ?, sync_updated_at = ?, deleted = 0, sync_status = 'synced'
+             WHERE id = ?`,
+            [
+              cleanedDebt.name,
+              cleanedDebt.type || "i_owe",
+              cleanedDebt.totalAmount,
+              cleanedDebt.totalAmount,
+              cleanedDebt.currentBalance,
+              cleanedDebt.minimumPayment,
+              cleanedDebt.interestRate,
+              cleanedDebt.minimumPayment,
+              cleanedDebt.dueDate,
+              cleanedDebt.creditor,
+              cleanedDebt.description,
+              validCategoryId,
+              validBudgetId,
+              cleanedDebt.updatedAt,
+              debtSyncUpdatedAt,
+              cleanedDebt.id,
+            ],
+          );
+        } else {
+          await database.runAsync(
+            `INSERT INTO debts (id, name, debt_type, amount, total_amount, current_balance, monthly_payment, interest_rate, minimum_payment, due_date, creditor, description, category_id, budget_id, created_at, updated_at, sync_updated_at, deleted, sync_status)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 'synced')`,
+            [
+              cleanedDebt.id,
+              cleanedDebt.name,
+              cleanedDebt.type || "i_owe",
+              cleanedDebt.totalAmount,
+              cleanedDebt.totalAmount,
+              cleanedDebt.currentBalance,
+              cleanedDebt.minimumPayment,
+              cleanedDebt.interestRate,
+              cleanedDebt.minimumPayment,
+              cleanedDebt.dueDate,
+              cleanedDebt.creditor,
+              cleanedDebt.description,
+              validCategoryId,
+              validBudgetId,
+              cleanedDebt.createdAt,
+              cleanedDebt.updatedAt,
+              debtSyncUpdatedAt,
+            ],
+          );
+        }
         break;
+      }
 
       case "debt_payments":
         await database.runAsync(
@@ -2041,7 +2156,7 @@ class OfflineFirstSync {
               localData.id,
               localData.billingPeriodStartDay ||
                 localData.billing_period_start_day ||
-                28,
+                1,
               localData.currency || "USD",
               localData.firebaseSync !== undefined
                 ? localData.firebaseSync
@@ -2103,7 +2218,7 @@ class OfflineFirstSync {
           billingPeriodStartDay:
             document.billing_period_start_day ||
             document.billingPeriodStartDay ||
-            28,
+            1,
           currency: document.currency || "USD",
           firebaseSync:
             document.firebase_sync !== undefined
@@ -2133,6 +2248,7 @@ class OfflineFirstSync {
         return {
           ...baseFields,
           name: document.name,
+          type: document.type || "expense",
           color: document.color || "#007AFF",
           icon: document.icon || "folder",
           isDefault:
@@ -2144,23 +2260,33 @@ class OfflineFirstSync {
       case "budgets":
         return {
           ...baseFields,
-          categoryId: document.category_id || document.categoryId,
+          categoryId: document.category_id || document.categoryId || null,
           amount: document.amount,
-          period: document.period || "monthly",
+          periodType: document.period_type || document.periodType || document.period || "monthly",
+          periodStart: document.period_start || document.periodStart || null,
+          resetDay: document.reset_day || document.resetDay || 1,
           name: document.name || "",
         };
 
-      case "debts":
+      case "debts": {
+        const totalAmount =
+          document.total_amount !== undefined && document.total_amount !== null
+            ? Number(document.total_amount)
+            : document.totalAmount !== undefined && document.totalAmount !== null
+            ? Number(document.totalAmount)
+            : Number(document.amount || 0);
+        const currentBalance =
+          document.current_balance !== undefined && document.current_balance !== null
+            ? Number(document.current_balance)
+            : document.currentBalance !== undefined && document.currentBalance !== null
+            ? Number(document.currentBalance)
+            : totalAmount;
         return {
           ...baseFields,
           name: document.name || "Unnamed Debt",
-          totalAmount:
-            document.total_amount || document.totalAmount || document.amount,
-          currentBalance:
-            document.current_balance ||
-            document.currentBalance ||
-            document.total_amount ||
-            document.amount,
+          type: document.debt_type || document.type || "i_owe",
+          totalAmount,
+          currentBalance,
           interestRate: document.interest_rate || document.interestRate || 0,
           minimumPayment:
             document.minimum_payment || document.minimumPayment || 0,
@@ -2170,6 +2296,7 @@ class OfflineFirstSync {
           categoryId: document.category_id || document.categoryId || null,
           budgetId: document.budget_id || document.budgetId || null,
         };
+      }
 
       case "debt_payments":
         return {
@@ -2240,17 +2367,23 @@ class OfflineFirstSync {
         : defaultValue;
     };
 
-    // Helper function to get value from either document or data
+    // Helper function to get value from either document or data (preserving 0 and false)
     const getValue = (field: string, ...alternativeFields: string[]) => {
-      let value = data[field] || document[field];
+      let value =
+        data[field] !== undefined && data[field] !== null
+          ? data[field]
+          : document[field];
 
       // Try alternative field names if primary is not found
       for (const altField of alternativeFields) {
         if (
-          !value &&
+          (value === undefined || value === null || value === "") &&
           (data[altField] !== undefined || document[altField] !== undefined)
         ) {
-          value = data[altField] || document[altField];
+          value =
+            data[altField] !== undefined && data[altField] !== null
+              ? data[altField]
+              : document[altField];
         }
       }
 
@@ -2298,21 +2431,30 @@ class OfflineFirstSync {
           resetDay: ensureValue(getValue("resetDay", "reset_day"), 1), // Required NOT NULL field
         };
 
-      case "debts":
+      case "debts": {
         const totalAmount = Math.max(
-          ensureValue(getValue("totalAmount", "total_amount"), 1),
+          Number(ensureValue(getValue("totalAmount", "total_amount", "amount"), 1)),
           0.01,
         );
+        const rawCurrentBalance = getValue("currentBalance", "current_balance");
+        const currentBalance =
+          rawCurrentBalance !== undefined &&
+          rawCurrentBalance !== null &&
+          rawCurrentBalance !== "" &&
+          !isNaN(Number(rawCurrentBalance))
+            ? Math.max(Number(rawCurrentBalance), 0)
+            : totalAmount;
+        const debtType =
+          getValue("type", "debt_type") === "owed_to_me" ? "owed_to_me" : "i_owe";
         return {
           ...baseFields,
           name: ensureValue(getValue("name"), "Imported Debt"),
+          type: debtType,
+          debt_type: debtType,
           // Map to database snake_case fields for proper storage
           amount: totalAmount, // amount field for compatibility
           total_amount: totalAmount, // total_amount field
-          current_balance: Math.max(
-            getValue("currentBalance", "current_balance") || totalAmount,
-            0,
-          ),
+          current_balance: currentBalance,
           monthly_payment:
             getValue(
               "monthlyPayment",
@@ -2337,6 +2479,7 @@ class OfflineFirstSync {
             new Date().toISOString(),
           ),
         };
+      }
 
       case "debt_payments":
         return {
@@ -2371,7 +2514,7 @@ class OfflineFirstSync {
             // Map cloud camelCase to local snake_case and vice versa
             billing_period_start_day: ensureValue(
               getValue("billingPeriodStartDay", "billing_period_start_day"),
-              28,
+              1,
             ),
             currency: ensureValue(getValue("currency"), "USD"),
             firebase_sync:

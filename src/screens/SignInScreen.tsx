@@ -11,6 +11,7 @@ import {
   ScrollView,
   StyleSheet,
   ActivityIndicator,
+  Image,
 } from "react-native";
 import { useDispatch, useSelector } from "react-redux";
 import { RootState, AppDispatch } from "../store";
@@ -18,6 +19,9 @@ import { signIn, signUp, signInAsGuest, sendPasswordReset } from "../store/slice
 import { syncWithFirebase } from "../store/slices/syncSlice";
 import { Ionicons } from "@expo/vector-icons";
 import { useAppTheme } from "../components/ui/ThemeProvider";
+
+// Actual app logo (same asset used for the launcher icon in app.json)
+const APP_LOGO = require("../../assets/icon.png");
 
 export const SignInScreen: React.FC = () => {
   const { colors, typography, radius } = useAppTheme();
@@ -105,10 +109,16 @@ export const SignInScreen: React.FC = () => {
 
   const renderLogo = () => (
     <View style={styles.logoContainer}>
-      <View style={[styles.iconWrapper, { backgroundColor: colors.primaryContainer, shadowColor: colors.primaryContainer }]}>
-        <Ionicons name="pulse" size={28} color={colors.onPrimaryContainer} />
-      </View>
-      <Text style={[typography.h1, { color: colors.onBackground, fontSize: 36 }]}>
+      <Image
+        source={APP_LOGO}
+        style={styles.logoImage}
+        resizeMode="cover"
+        accessibilityLabel="Financy logo"
+      />
+      <Text
+        style={[typography.h1, { color: colors.onBackground, fontSize: 36, lineHeight: 44 }]}
+        numberOfLines={1}
+      >
         Financy
       </Text>
     </View>
@@ -123,11 +133,18 @@ export const SignInScreen: React.FC = () => {
         
         {renderLogo()}
 
-        <View style={{ alignItems: "center", marginBottom: 40 }}>
-          <Text style={[typography.h1, { color: colors.onBackground, marginBottom: 8, fontSize: 28 }]}>
+        <View style={{ alignItems: "center", marginBottom: 40, width: "100%" }}>
+          {/* Full-width + centered so Android never wraps/clips the last word
+              (previously "Welcome back" rendered as just "Welcome"). */}
+          <Text
+            style={[
+              typography.h1,
+              { color: colors.onBackground, marginBottom: 8, fontSize: 28, lineHeight: 36, width: "100%", textAlign: "center" },
+            ]}
+          >
             {isSignUp ? "Create an account" : "Welcome back"}
           </Text>
-          <Text style={[typography.bodyMedium, { color: colors.onSurfaceVariant, textAlign: "center" }]}>
+          <Text style={[typography.bodyMedium, { color: colors.onSurfaceVariant, textAlign: "center", width: "100%" }]}>
             {isSignUp ? "Sign up to start managing your finances." : "Sign in to continue managing your finances."}
           </Text>
         </View>
@@ -293,17 +310,11 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     marginBottom: 40,
   },
-  iconWrapper: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    alignItems: "center",
-    justifyContent: "center",
+  logoImage: {
+    width: 52,
+    height: 52,
+    borderRadius: 14,
     marginRight: 12,
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.5,
-    shadowRadius: 10,
-    elevation: 10,
   },
   inputContainer: {
     flexDirection: "row",

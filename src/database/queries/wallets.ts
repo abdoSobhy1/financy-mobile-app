@@ -16,10 +16,43 @@ export class WalletRepository {
   private initialized = false;
 
   public async ensureInitialized(): Promise<void> {
-    if (this.initialized) return;
     await this.db.ensureInitialized();
+    if (this.initialized) {
+      // Check if database was reset (e.g. when switching sessions / entering Guest mode)
+      const database = this.db.getDatabase();
+      const anyRow = await database.getFirstAsync<{ count: number }>(
+        "SELECT COUNT(*) as count FROM wallets",
+      );
+      if (anyRow && anyRow.count > 0) {
+        return;
+      }
+    }
     await this.migrateAndSeedIfNeeded();
     this.initialized = true;
+  }
+
+  private async shouldSeedDefaultWallets(): Promise<boolean> {
+    try {
+      const { authService } = await import("../../services/authService");
+      const currentUser = await authService.getCurrentAuthenticatedUser();
+      if (!currentUser) {
+        return false;
+      }
+      const isCloudAllowed = await authService.isCloudSyncAllowedAsync();
+      // For signed-in cloud users, wait for cloud restore in syncWithFirebase before seeding default wallets
+      if (isCloudAllowed || (!currentUser.isGuest && currentUser.uid !== "guest")) {
+        return false;
+      }
+      const currentUserId = currentUser.uid || "guest";
+      const seededKey = `financy_wallets_seeded_v1_${currentUserId}`;
+      const alreadySeeded = await AsyncStorage.getItem(seededKey);
+      if (alreadySeeded === "true") {
+        return false;
+      }
+      return true;
+    } catch (e) {
+      return false;
+    }
   }
 
   private async migrateAndSeedIfNeeded(): Promise<void> {
@@ -79,15 +112,12 @@ export class WalletRepository {
       }
 
       // Check if table has any wallets
-      const totalRow = await database.getFirstAsync<{ count: number }>(
-        "SELECT COUNT(*) as count FROM wallets WHERE deleted = 0",
+      const anyRow = await database.getFirstAsync<{ count: number }>(
+        "SELECT COUNT(*) as count FROM wallets",
       );
-
-      if (!totalRow || totalRow.count === 0) {
-        const anyRow = await database.getFirstAsync<{ count: number }>(
-          "SELECT COUNT(*) as count FROM wallets",
-        );
-        if (!anyRow || anyRow.count === 0) {
+      if (!anyRow || anyRow.count === 0) {
+        const canSeed = await this.shouldSeedDefaultWallets();
+        if (canSeed) {
           await this.seedDefaultWallets();
         }
       }
@@ -120,6 +150,15 @@ export class WalletRepository {
           "pending",
         ],
       );
+    }
+
+    try {
+      const { authService } = await import("../../services/authService");
+      const currentUserId =
+        (await authService.getCurrentAuthenticatedUser())?.uid || "guest";
+      await AsyncStorage.setItem(`financy_wallets_seeded_v1_${currentUserId}`, "true");
+    } catch (e) {
+      // ignore
     }
   }
 
@@ -296,12 +335,17 @@ export class WalletRepository {
   ): Promise<void> {
     await this.ensureInitialized();
     const database = this.db.getDatabase();
-    const now = Date.now();
 
-    await database.runAsync(
-      `UPDATE wallets SET deleted = 1, updated_at = ?, sync_updated_at = ?, sync_status = 'pending' WHERE id = ?`,
-      [now, now, id],
-    );
+    await database.runAsync(`DELETE FROM wallets WHERE id = ?`, [id]);
+
+    try {
+      const { authService } = await import("../../services/authService");
+      const currentUserId =
+        (await authService.getCurrentAuthenticatedUser())?.uid || "guest";
+      await AsyncStorage.setItem(`financy_wallets_seeded_v1_${currentUserId}`, "true");
+    } catch {
+      // ignore
+    }
 
     if (!options?.skipSync) {
       await offlineFirstSync.logOperation("wallets", id, "delete", { id });
@@ -322,10 +366,11 @@ export class WalletRepository {
     await this.updateWallet(id, { archived: false }, options);
   }
 
-  async hardDeleteWallet(id: string): Promise<void> {
-    await this.ensureInitialized();
-    const database = this.db.getDatabase();
-    await database.runAsync("DELETE FROM wallets WHERE id = ?", [id]);
+  async hardDeleteWallet(
+    id: string,
+    options?: { skipSync?: boolean },
+  ): Promise<void> {
+    await this.deleteWallet(id, options);
   }
 
   async countTransactionsForWallet(walletId: string): Promise<number> {
@@ -357,6 +402,11 @@ export class WalletRepository {
     const database = this.db.getDatabase();
     const now = Date.now();
 
+    const affectedRows = await database.getAllAsync<{ id: string }>(
+      `SELECT id FROM transactions WHERE account_id = ? OR to_account_id = ?`,
+      [fromWalletId, fromWalletId],
+    );
+
     let affected = 0;
     await database.withTransactionAsync(async () => {
       const resFrom = await database.runAsync(
@@ -377,6 +427,29 @@ export class WalletRepository {
         // to_account_id might not exist yet before phase 3
       }
     });
+
+    // Log updated transactions so Firebase reflects the new wallet assignment
+    for (const row of affectedRows) {
+      const txRow = await database.getFirstAsync<any>(
+        "SELECT * FROM transactions WHERE id = ?",
+        [row.id],
+      );
+      if (txRow) {
+        await offlineFirstSync.logOperation("transactions", row.id, "update", {
+          id: txRow.id,
+          amount: txRow.amount,
+          type: txRow.type,
+          categoryId: txRow.category_id || null,
+          budgetId: txRow.budget_id || null,
+          accountId: txRow.account_id || "default_cash",
+          toAccountId: txRow.to_account_id || null,
+          description: txRow.description,
+          date: txRow.date,
+          note: txRow.note || null,
+          updatedAt: now,
+        });
+      }
+    }
 
     return affected;
   }

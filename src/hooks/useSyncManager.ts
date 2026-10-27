@@ -200,12 +200,11 @@ export const useSyncManager = () => {
             }
           }
 
-          // Only process pending operations, don't force full sync
-          console.log("📤 Processing pending operations...");
-          console.log("📤 Processing pending sync operations only (no full sync)");
+          // Only process pending operations, don't force full sync on app load
+          console.log("📤 Processing pending sync operations only (smart sync)...");
           await offlineFirstSync.processUnSyncedOperationsOnly();
 
-          // Initialize efficient polling system (no full data pull)
+          // Initialize efficient polling & listeners system (no full data pull)
           console.log("🔗 Initializing efficient sync polling...");
           await syncService.initializeSync();
 
