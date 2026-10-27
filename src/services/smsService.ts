@@ -23,6 +23,8 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { ParsedTransaction, Budget } from "../types";
 import { isBankSender, parseSmsTransaction } from "./smsParser";
 import { getSmsConfig } from "./smsConfigService";
+import { DatabaseManager } from "../database";
+import { db } from "../database/queries";
 
 // AsyncStorage key prefix — each notification gets its own entry
 export const SMS_TX_KEY_PREFIX = "sms_tx_";
@@ -58,7 +60,7 @@ export async function storeSmsTransaction(
   try {
     await AsyncStorage.setItem(
       `${SMS_TX_KEY_PREFIX}${notifId}`,
-      JSON.stringify(tx)
+      JSON.stringify({ ...tx, _notifId: notifId })
     );
   } catch (e) {
     console.error("[SmsService] Failed to store SMS transaction:", e);
@@ -71,7 +73,11 @@ export async function retrieveSmsTransaction(
   try {
     const raw = await AsyncStorage.getItem(`${SMS_TX_KEY_PREFIX}${notifId}`);
     if (!raw) return null;
-    return JSON.parse(raw) as ParsedTransaction;
+    const parsed = JSON.parse(raw) as ParsedTransaction;
+    if (parsed.date && typeof parsed.date === "string") {
+      parsed.date = new Date(parsed.date);
+    }
+    return parsed;
   } catch {
     return null;
   }
@@ -81,6 +87,116 @@ export async function clearSmsTransaction(notifId: string): Promise<void> {
   try {
     await AsyncStorage.removeItem(`${SMS_TX_KEY_PREFIX}${notifId}`);
   } catch {}
+}
+
+// ── Deduplication guard (prevents double-notify if foreground + headless both fire) ──
+const recentSmsFingerprints = new Map<string, number>();
+const DEDUP_WINDOW_MS = 8000;
+
+function isDuplicateSms(sender: string, body: string): boolean {
+  const now = Date.now();
+  for (const [key, ts] of recentSmsFingerprints.entries()) {
+    if (now - ts > DEDUP_WINDOW_MS) {
+      recentSmsFingerprints.delete(key);
+    }
+  }
+  const fingerprint = `${sender.trim().toUpperCase()}::${body.trim()}`;
+  const lastSeen = recentSmsFingerprints.get(fingerprint);
+  if (lastSeen && now - lastSeen <= DEDUP_WINDOW_MS) {
+    return true;
+  }
+  recentSmsFingerprints.set(fingerprint, now);
+  return false;
+}
+
+/**
+ * Shared handler used by both Headless JS background task and foreground listener.
+ */
+export async function processIncomingSms(
+  message: SmsMessage,
+  options?: {
+    categories?: { id: string; name: string }[];
+    budgets?: Record<string, Budget> | Budget[] | null;
+  }
+): Promise<ParsedTransaction | null> {
+  if (!message?.originatingAddress || !message?.body) return null;
+
+  // Deduplicate if both foreground event and HeadlessJS fire for the same SMS
+  if (isDuplicateSms(message.originatingAddress, message.body)) {
+    return null;
+  }
+
+  // Check feature toggle
+  const enabled = await getSmsDetectionEnabled();
+  if (!enabled) return null;
+
+  // Load user-configured rules from AsyncStorage
+  const config = await getSmsConfig();
+
+  // Filter non-bank senders
+  if (!isBankSender(message.originatingAddress, config)) {
+    return null;
+  }
+
+  let categories = options?.categories;
+  let budgets = options?.budgets;
+
+  if (!categories || categories.length === 0 || !budgets) {
+    try {
+      await DatabaseManager.getInstance().init();
+      const [dbCats, dbBudgets] = await Promise.all([
+        db.categories.getAllCategories(),
+        db.budgets.getAllBudgets(),
+      ]);
+      if (!categories || categories.length === 0) {
+        categories = dbCats;
+      }
+      if (!budgets) {
+        budgets = dbBudgets;
+      }
+    } catch (dbErr) {
+      console.warn("[SmsService] Could not query DB for categories/budgets:", dbErr);
+    }
+  }
+
+  const parsed = parseSmsTransaction(
+    message.body,
+    categories || [],
+    budgets,
+    undefined,
+    config
+  );
+
+  if (!parsed) return null;
+
+  // Pre-generate notification ID and store transaction BEFORE scheduling
+  // to avoid any race condition if the user taps the notification immediately
+  const customNotifId = `sms_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+  await storeSmsTransaction(customNotifId, parsed);
+
+  const scheduledId = await Notifications.scheduleNotificationAsync({
+    identifier: customNotifId,
+    content: {
+      title:
+        parsed.type === "income"
+          ? "💰 Income Detected"
+          : "💳 Expense Detected",
+      body: `${parsed.type === "income" ? "+" : "-"}${parsed.amount} EGP — ${parsed.description}. Tap to log it.`,
+      data: {
+        type: "sms-transaction",
+        smsNotifId: customNotifId,
+      },
+      sound: true,
+    },
+    trigger: null,
+  });
+
+  if (scheduledId && scheduledId !== customNotifId) {
+    await storeSmsTransaction(scheduledId, parsed);
+  }
+
+  console.log("[SmsService] Parsed & Notified:", parsed.type, parsed.amount, parsed.description);
+  return parsed;
 }
 
 // ── Main service class ────────────────────────────────────────────────
@@ -131,8 +247,19 @@ class SmsService {
     categories: { id: string; name: string }[] = [],
     budgets?: Record<string, Budget> | Budget[] | null
   ): void {
-    // Native Headless JS task handles SMS parsing now.
-    // No foreground JS listener needed.
+    if (Platform.OS !== "android" || this.isListening) return;
+    this.isListening = true;
+
+    this.subscription = DeviceEventEmitter.addListener(
+      "onSMSReceived",
+      async (message: SmsMessage) => {
+        try {
+          await processIncomingSms(message, { categories, budgets });
+        } catch (error) {
+          console.error("[SmsService] Error processing foreground SMS:", error);
+        }
+      }
+    );
   }
 
   public stopListening(): void {
@@ -180,7 +307,11 @@ class SmsService {
       };
     }
 
+    const customNotifId = `sms_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+    await storeSmsTransaction(customNotifId, parsed);
+
     const notifId = await Notifications.scheduleNotificationAsync({
+      identifier: customNotifId,
       content: {
         title:
           parsed.type === "income"
@@ -189,18 +320,16 @@ class SmsService {
         body: `${parsed.type === "income" ? "+" : "-"}${parsed.amount} EGP — ${parsed.description}. Tap to log it.`,
         data: {
           type: "sms-transaction",
-          smsNotifId: "pending",
+          smsNotifId: customNotifId,
         },
         sound: true,
       },
       trigger: null,
     });
 
-    await storeSmsTransaction(notifId, parsed);
-    await AsyncStorage.setItem(
-      `${SMS_TX_KEY_PREFIX}${notifId}`,
-      JSON.stringify({ ...parsed, _notifId: notifId })
-    );
+    if (notifId && notifId !== customNotifId) {
+      await storeSmsTransaction(notifId, parsed);
+    }
 
     return { success: true, transaction: parsed };
   }

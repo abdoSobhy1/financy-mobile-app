@@ -331,16 +331,33 @@ class NotificationService {
     };
   }
 
+  private activeBudgetNotificationIds: Map<string, string> = new Map();
+
   async sendBudgetAlertNotification(
     budgetName: string,
     spentFormatted: string,
     limitFormatted: string,
-    percentageUsed: number
+    percentageUsed: number,
+    budgetId?: string
   ) {
     try {
       if (!this.initialized) {
         await this.initialize();
       }
+      const budgetKey = (budgetId || budgetName).replace(/[^a-zA-Z0-9_-]/g, "_");
+      const identifier = `budget-alert-${budgetKey}`;
+
+      // Dismiss any existing presented notification for this budget so it updates/replaces cleanly
+      const prevNotifId = this.activeBudgetNotificationIds.get(budgetKey) || identifier;
+      try {
+        await Notifications.dismissNotificationAsync(prevNotifId);
+      } catch {}
+      if (prevNotifId !== identifier) {
+        try {
+          await Notifications.dismissNotificationAsync(identifier);
+        } catch {}
+      }
+
       const isOver = percentageUsed >= 100;
       const title = isOver
         ? `🚨 Over Budget: ${budgetName}`
@@ -349,7 +366,8 @@ class NotificationService {
         ? `You have spent ${spentFormatted} (${Math.round(percentageUsed)}% of your ${limitFormatted} limit).`
         : `You have reached ${Math.round(percentageUsed)}% of your ${budgetName} budget (${spentFormatted} / ${limitFormatted}).`;
 
-      await Notifications.scheduleNotificationAsync({
+      const scheduledId = await Notifications.scheduleNotificationAsync({
+        identifier,
         content: {
           title,
           body,
@@ -357,11 +375,15 @@ class NotificationService {
           badge: 1,
           data: {
             type: "budget_alert",
+            budgetId: budgetId || budgetName,
             budgetName,
           },
         },
         trigger: null,
       });
+      if (scheduledId) {
+        this.activeBudgetNotificationIds.set(budgetKey, scheduledId);
+      }
     } catch (error) {
       console.error("Failed to send budget alert notification:", error);
     }

@@ -14,7 +14,7 @@ import {
 } from "react-native";
 import { useDispatch, useSelector } from "react-redux";
 import { RootState, AppDispatch } from "../store";
-import { signIn, signUp, sendPasswordReset } from "../store/slices/authSlice";
+import { signIn, signUp, signInAsGuest, sendPasswordReset } from "../store/slices/authSlice";
 import { Ionicons } from "@expo/vector-icons";
 import { useAppTheme } from "../components/ui/ThemeProvider";
 
@@ -40,6 +40,14 @@ export const SignInScreen: React.FC = () => {
       await dispatch(signIn({ email: email.trim(), password })).unwrap();
     } catch (error: any) {
       AlertService.alert("Sign In Failed", error.message);
+    }
+  };
+
+  const handleContinueAsGuest = async () => {
+    try {
+      await dispatch(signInAsGuest()).unwrap();
+    } catch (error: any) {
+      AlertService.alert("Guest Login Failed", error.message);
     }
   };
 
@@ -206,6 +214,49 @@ export const SignInScreen: React.FC = () => {
             )}
           </TouchableOpacity>
 
+          <View style={styles.dividerRow}>
+            <View style={[styles.dividerLine, { backgroundColor: colors.outlineVariant }]} />
+            <Text style={[typography.label, { color: colors.onSurfaceVariant, paddingHorizontal: 12 }]}>
+              OR
+            </Text>
+            <View style={[styles.dividerLine, { backgroundColor: colors.outlineVariant }]} />
+          </View>
+
+          <TouchableOpacity
+            style={[
+              styles.guestButton,
+              {
+                backgroundColor: colors.surfaceVariant,
+                borderColor: colors.outlineVariant,
+              },
+            ]}
+            onPress={handleContinueAsGuest}
+            disabled={loading}
+          >
+            <Ionicons
+              name="person-circle-outline"
+              size={22}
+              color={colors.onSurface}
+              style={{ marginRight: 8 }}
+            />
+            <Text style={[typography.bodyLarge, { color: colors.onSurface, fontWeight: "600" }]}>
+              Continue as Guest
+            </Text>
+          </TouchableOpacity>
+          <Text
+            style={[
+              typography.label,
+              {
+                color: colors.onSurfaceVariant,
+                textAlign: "center",
+                marginTop: -12,
+                fontSize: 12,
+              },
+            ]}
+          >
+            Offline local storage only • Cloud backup disabled • 3 AI receipt scans/day
+          </Text>
+
         </View>
 
         <View style={{ flexDirection: "row", justifyContent: "center", marginTop: 40 }}>
@@ -272,6 +323,24 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     marginTop: 16,
+  },
+  dividerRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginVertical: 2,
+  },
+  dividerLine: {
+    flex: 1,
+    height: 1,
+  },
+  guestButton: {
+    width: "100%",
+    height: 52,
+    borderRadius: 26,
+    borderWidth: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
   },
 });
 

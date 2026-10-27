@@ -17,9 +17,11 @@ import {
   Platform,
   Linking,
 } from "react-native";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import {
-  getAIConfig,
+  getAIConfigStatus,
   saveAIConfig,
+  clearCustomAIConfig,
   testAIConnection,
   AIConfig,
   AIProvider,
@@ -53,8 +55,15 @@ import { UI } from "../constants";
 import NotificationService, {
   NotificationSettings,
 } from "../services/notificationService";
-import { securityService, LocalUserProfile } from "../services/securityService";
 import { formatCurrency } from "../utils";
+
+const PROFILE_STORAGE_KEY = "financy_user_profile_v1";
+
+interface LocalUserProfile {
+  displayName: string;
+  email: string;
+  avatarColor: string;
+}
 import {
   fetchSettings,
   updateBillingPeriodStartDay,
@@ -178,7 +187,7 @@ export const SettingsScreen: React.FC = () => {
   const { showSuccess, showError } = useToast();
   const [smsEnabled, setSmsEnabled] = useState(true);
 
-  // ── Profile, Security, Notifications & Recurring State ──────────
+  // ── Profile & Notifications State ──────────────────────────────
   const [localProfile, setLocalProfile] = useState<LocalUserProfile>({
     displayName: "Financy User",
     email: "",
@@ -194,14 +203,15 @@ export const SettingsScreen: React.FC = () => {
     eveningReminderTime: "20:00",
   });
 
-  // ── AI Configuration State ──────────────────────────────────────
+  // ── AI Configuration State (Never loads raw API keys into UI) ────
   const [showAiModal, setShowAiModal] = useState(false);
-  const [aiConfig, setAiConfig] = useState<AIConfig>({ provider: "gemini", apiKey: "" });
+  const [hasCustomAiKey, setHasCustomAiKey] = useState(false);
   const [aiKeyInput, setAiKeyInput] = useState("");
   const [selectedAiProvider, setSelectedAiProvider] = useState<AIProvider>("gemini");
   const [isTestingAi, setIsTestingAi] = useState(false);
   const [showAiKeySecret, setShowAiKeySecret] = useState(false);
 
+  const isGuest = Boolean(user?.isGuest || user?.uid === "guest");
   const currentBillingDay = settings.data?.billingPeriodStartDay || 28;
 
   // ── Effects ─────────────────────────────────────────────────────
@@ -221,32 +231,59 @@ export const SettingsScreen: React.FC = () => {
     if (Platform.OS === "android") {
       getSmsDetectionEnabled().then(setSmsEnabled);
     }
-    // Load local profile, notifications & recurring rules
-    securityService.getProfile().then((prof) => {
-      setLocalProfile(prof);
-      setProfileNameInput(prof.displayName);
-      setProfileEmailInput(prof.email);
-    });
+    // Load local profile & notifications
+    AsyncStorage.getItem(PROFILE_STORAGE_KEY)
+      .then((raw) => {
+        if (raw) {
+          const prof = {
+            displayName: "Financy User",
+            email: "",
+            avatarColor: "#10B981",
+            ...JSON.parse(raw),
+          };
+          setLocalProfile(prof);
+          setProfileNameInput(prof.displayName);
+          setProfileEmailInput(prof.email);
+        }
+      })
+      .catch(() => {});
     NotificationService.getInstance()
       .getNotificationSettings()
       .then(setNotifSettings)
       .catch(() => {});
-    getAIConfig().then((cfg) => {
-      setAiConfig(cfg);
-      setAiKeyInput(cfg.apiKey || "");
-      setSelectedAiProvider(cfg.provider);
+    getAIConfigStatus().then((status) => {
+      setHasCustomAiKey(status.hasCustomKey);
+      setSelectedAiProvider(status.provider);
+      // Never load any API key string into aiKeyInput
+      setAiKeyInput("");
     });
   }, [dispatch]);
 
   const handleSaveAiConfig = async () => {
+    const trimmed = aiKeyInput.trim();
+    if (!trimmed) {
+      showError("Please enter an API key to save");
+      return;
+    }
     const updated: AIConfig = {
       provider: selectedAiProvider,
-      apiKey: aiKeyInput.trim(),
+      apiKey: trimmed,
     };
     await saveAIConfig(updated);
-    setAiConfig(updated);
+    setHasCustomAiKey(true);
+    setAiKeyInput("");
+    setShowAiKeySecret(false);
     setShowAiModal(false);
-    showSuccess("AI configuration saved!");
+    showSuccess("Custom AI key saved!");
+  };
+
+  const handleRemoveCustomAiKey = async () => {
+    await clearCustomAIConfig();
+    setHasCustomAiKey(false);
+    setAiKeyInput("");
+    setShowAiKeySecret(false);
+    setShowAiModal(false);
+    showSuccess("Custom AI key removed");
   };
 
   const handleTestAi = async () => {
@@ -265,10 +302,12 @@ export const SettingsScreen: React.FC = () => {
 
   const handleSaveProfile = async () => {
     try {
-      const updated = await securityService.saveProfile({
+      const updated: LocalUserProfile = {
+        ...localProfile,
         displayName: profileNameInput.trim() || "Financy User",
         email: profileEmailInput.trim(),
-      });
+      };
+      await AsyncStorage.setItem(PROFILE_STORAGE_KEY, JSON.stringify(updated));
       setLocalProfile(updated);
       setShowProfileModal(false);
       showSuccess("Profile updated");
@@ -368,13 +407,14 @@ export const SettingsScreen: React.FC = () => {
   };
 
   const lastSyncSubtitle = React.useMemo(() => {
+    if (isGuest) return "Disabled in Guest Mode — Sign in to enable cloud sync";
     if (syncing || newSyncState?.isSyncing) return "Syncing with cloud…";
     if (!isAuthenticated) return "Sign in to enable cloud backup";
     if (syncState.lastSync) {
       return `Last synced: ${formatRelativeTime(new Date(syncState.lastSync).toISOString())}`;
     }
     return "Tap to sync your data with cloud";
-  }, [syncing, newSyncState?.isSyncing, isAuthenticated, syncState.lastSync]);
+  }, [isGuest, syncing, newSyncState?.isSyncing, isAuthenticated, syncState.lastSync]);
 
   const handleComingSoon = (feature: string) => {
     AlertService.alert("Coming Soon", `The ${feature} feature is not yet available. Stay tuned!`, [{ text: "OK" }]);
@@ -393,8 +433,18 @@ export const SettingsScreen: React.FC = () => {
 
   // ── Sync Now (bidirectional) ────────────────────────────────────
   const handleSyncNow = async () => {
-    if (!isAuthenticated) {
-      showError("Please sign in first");
+    if (!isAuthenticated || isGuest) {
+      showAlert(
+        "Cloud Sync Unavailable",
+        "Guest Mode stores your data locally on this device only. Sign in with an account to enable Firebase cloud backup and sync.",
+        [
+          { text: "Stay as Guest", style: "cancel" },
+          {
+            text: "Sign In",
+            onPress: () => dispatch(signOut()),
+          },
+        ],
+      );
       return;
     }
     if (syncing || newSyncState.isSyncing) {
@@ -592,13 +642,21 @@ export const SettingsScreen: React.FC = () => {
         <GlassCard>
           <SettingRow
             icon="person-outline"
-            title={user?.displayName || localProfile.displayName || "Profile Information"}
+            title={
+              isGuest
+                ? localProfile.displayName !== "Financy User"
+                  ? `${localProfile.displayName} (Guest)`
+                  : "Guest User"
+                : user?.displayName || localProfile.displayName || "Profile Information"
+            }
             subtitle={
-              user?.email
-                ? `Signed in as ${user.email}`
-                : localProfile.email
-                  ? localProfile.email
-                  : "Tap to customize your profile"
+              isGuest
+                ? "Guest Mode — Data stored locally on device only"
+                : user?.email
+                  ? `Signed in as ${user.email}`
+                  : localProfile.email
+                    ? localProfile.email
+                    : "Tap to customize your profile"
             }
             onPress={() => {
               setProfileNameInput(user?.displayName || localProfile.displayName);
@@ -606,6 +664,14 @@ export const SettingsScreen: React.FC = () => {
               setShowProfileModal(true);
             }}
           />
+          {isGuest && (
+            <SettingRow
+              icon="log-in-outline"
+              title="Sign In / Create Account"
+              subtitle="Upgrade from Guest Mode to enable Firebase cloud sync"
+              onPress={() => dispatch(signOut())}
+            />
+          )}
         </GlassCard>
 
         <SectionLabel text="PREFERENCES" />
@@ -700,11 +766,15 @@ export const SettingsScreen: React.FC = () => {
             icon="sparkles-outline"
             title="Cloud AI Assistant"
             subtitle={
-              aiConfig?.apiKey
-                ? `${aiConfig.provider === "gemini" ? "Google Gemini" : aiConfig.provider === "groq" ? "Groq Llama 3.3" : "OpenAI"} Active`
-                : "Configure free Google Gemini or Groq key"
+              hasCustomAiKey
+                ? `Personal ${selectedAiProvider === "gemini" ? "Google Gemini" : selectedAiProvider === "groq" ? "Groq Llama 3.3" : "OpenAI"} Key Active (Unlimited)`
+                : "Configure your own personal Gemini, Groq, or OpenAI key"
             }
-            onPress={() => setShowAiModal(true)}
+            onPress={() => {
+              setAiKeyInput("");
+              setShowAiKeySecret(false);
+              setShowAiModal(true);
+            }}
           />
         </GlassCard>
 
@@ -1128,7 +1198,32 @@ export const SettingsScreen: React.FC = () => {
               })}
             </View>
 
-            {/* API Key Input */}
+            {/* API Key Input (Never pre-populated with stored or bundled keys) */}
+            {hasCustomAiKey && (
+              <View
+                style={{
+                  flexDirection: "row",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  backgroundColor: colors.primaryContainer,
+                  paddingHorizontal: 12,
+                  paddingVertical: 8,
+                  borderRadius: 10,
+                  marginBottom: 10,
+                }}>
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 6, flex: 1 }}>
+                  <Ionicons name="checkmark-circle" size={16} color={colors.onPrimaryContainer} />
+                  <Text style={{ fontSize: 12, fontWeight: "600", color: colors.onPrimaryContainer }}>
+                    Personal key saved (hidden for security)
+                  </Text>
+                </View>
+                <TouchableOpacity onPress={handleRemoveCustomAiKey}>
+                  <Text style={{ fontSize: 12, fontWeight: "700", color: colors.error }}>
+                    Remove
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            )}
             <Text
               style={{
                 fontSize: 12,
@@ -1158,11 +1253,13 @@ export const SettingsScreen: React.FC = () => {
                 value={aiKeyInput}
                 onChangeText={setAiKeyInput}
                 placeholder={
-                  selectedAiProvider === "gemini"
-                    ? "AIzaSy..."
-                    : selectedAiProvider === "groq"
-                    ? "gsk_..."
-                    : "sk-..."
+                  hasCustomAiKey
+                    ? "Enter a new key to replace saved key..."
+                    : selectedAiProvider === "gemini"
+                      ? "AIzaSy..."
+                      : selectedAiProvider === "groq"
+                        ? "gsk_..."
+                        : "sk-..."
                 }
                 placeholderTextColor={colors.onSurfaceVariant}
                 secureTextEntry={!showAiKeySecret}

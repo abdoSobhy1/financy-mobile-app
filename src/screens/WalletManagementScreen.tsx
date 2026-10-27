@@ -20,7 +20,7 @@ import { fetchTransactions } from "../store/slices/transactionsSlice";
 import { useAppTheme } from "../components/ui/ThemeProvider";
 import { AppHeader } from "../components/ui/AppHeader";
 import { IconChip } from "../components/ui/IconChip";
-import { Card, useToast, Switch } from "../components/ui";
+import { Card, useToast, Switch, WalletEditorModal, WalletEditorFormValues } from "../components/ui";
 import { formatCurrency } from "../utils";
 import { getCurrentBillingPeriod } from "../utils/billingPeriod";
 import { AlertService } from "../services/AlertService";
@@ -35,38 +35,6 @@ const getAlphaColor = (color: string, hexAlpha: string = "1F") => {
   }
   return color;
 };
-
-const WALLET_ICONS = [
-  "cash-outline",
-  "wallet-outline",
-  "business-outline",
-  "card-outline",
-  "phone-portrait-outline",
-  "briefcase-outline",
-  "lock-closed-outline",
-  "globe-outline",
-  "diamond-outline",
-  "cart-outline",
-  "save-outline",
-  "trending-up-outline",
-  "receipt-outline",
-  "shield-checkmark-outline",
-  "pricetag-outline",
-  "pie-chart-outline",
-];
-
-const WALLET_COLORS = [
-  "teal",
-  "blue",
-  "green",
-  "purple",
-  "orange",
-  "indigo",
-  "pink",
-  "brown",
-  "bluegrey",
-  "red",
-];
 
 export const WalletManagementScreen: React.FC = () => {
   const { colors, typography, spacing, radius, isDark, currencySymbol } =
@@ -92,12 +60,6 @@ export const WalletManagementScreen: React.FC = () => {
   // Add / Edit Modal state
   const [showEditorModal, setShowEditorModal] = useState(false);
   const [editingWallet, setEditingWallet] = useState<WalletAccount | null>(null);
-  const [formName, setFormName] = useState("");
-  const [formType, setFormType] = useState<WalletType>("bank");
-  const [formIcon, setFormIcon] = useState("business-outline");
-  const [formColor, setFormColor] = useState("blue");
-  const [formInitialBalance, setFormInitialBalance] = useState("");
-  const [formIsSecret, setFormIsSecret] = useState(false);
 
   // Transfer Modal state
   const [showTransferModal, setShowTransferModal] = useState(false);
@@ -158,37 +120,24 @@ export const WalletManagementScreen: React.FC = () => {
 
   const openAddModal = () => {
     setEditingWallet(null);
-    setFormName("");
-    setFormType("bank");
-    setFormIcon("business-outline");
-    setFormColor("blue");
-    setFormInitialBalance("");
-    setFormIsSecret(false);
     setShowEditorModal(true);
   };
 
   const openEditModal = (wallet: WalletAccount) => {
     setEditingWallet(wallet);
-    setFormName(wallet.name);
-    setFormType(wallet.type);
-    setFormIcon(wallet.icon || "wallet-outline");
-    setFormColor(wallet.color || "teal");
-    const currentBal = walletBalances[wallet.id] || 0;
-    setFormInitialBalance(currentBal.toString());
-    setFormIsSecret(walletService.isSecretWallet(wallet));
     setShowEditorModal(true);
   };
 
-  const handleSaveWallet = async () => {
-    if (!formName.trim()) {
+  const handleSaveWallet = async (values: WalletEditorFormValues) => {
+    if (!values.name.trim()) {
       showError("Please enter an account name");
       return;
     }
 
-    const initBal = parseFloat(formInitialBalance) || 0;
+    const initBal = parseFloat(values.initialBalance) || 0;
     try {
       if (editingWallet) {
-        const enteredBal = parseFloat(formInitialBalance) || 0;
+        const enteredBal = parseFloat(values.initialBalance) || 0;
         const currentBal = walletBalances[editingWallet.id] || 0;
         const diff = enteredBal - currentBal;
 
@@ -206,25 +155,25 @@ export const WalletManagementScreen: React.FC = () => {
         }
 
         await walletService.updateWallet(editingWallet.id, {
-          name: formName.trim(),
-          type: formType,
-          icon: formIcon,
-          color: formColor,
-          isSecret: formIsSecret,
+          name: values.name.trim(),
+          type: values.type,
+          icon: values.icon,
+          color: values.color,
+          isSecret: values.isSecret,
         });
         await loadWallets();
-        showSuccess(`Reconciled and updated "${formName.trim()}"`);
+        showSuccess(`Reconciled and updated "${values.name.trim()}"`);
       } else {
         await walletService.addWallet({
-          name: formName.trim(),
-          type: formType,
-          icon: formIcon,
-          color: formColor,
+          name: values.name.trim(),
+          type: values.type,
+          icon: values.icon,
+          color: values.color,
           initialBalance: initBal,
-          isSecret: formIsSecret,
+          isSecret: values.isSecret,
         });
         await loadWallets();
-        showSuccess(`Created "${formName.trim()}"`);
+        showSuccess(`Created "${values.name.trim()}"`);
       }
       setShowEditorModal(false);
     } catch {
@@ -969,409 +918,13 @@ export const WalletManagementScreen: React.FC = () => {
       </ScrollView>
 
       {/* Full-featured Add / Edit Wallet Modal */}
-      <Modal
+      <WalletEditorModal
         visible={showEditorModal}
-        transparent
-        animationType="slide"
-        onRequestClose={() => setShowEditorModal(false)}>
-        <View style={styles.modalOverlay}>
-          <View
-            style={[
-              styles.modalCard,
-              {
-                backgroundColor: colors.surface,
-                borderColor: colors.outlineVariant,
-                maxHeight: "90%",
-              },
-            ]}>
-            <View
-              style={{
-                flexDirection: "row",
-                justifyContent: "space-between",
-                alignItems: "center",
-                marginBottom: spacing.md,
-              }}>
-              <Text
-                style={[
-                  typography.h3,
-                  { color: colors.onSurface, fontWeight: "800" },
-                ]}>
-                {editingWallet ? "Edit Account" : "New Account"}
-              </Text>
-              <TouchableOpacity onPress={() => setShowEditorModal(false)}>
-                <Ionicons name="close" size={24} color={colors.onSurfaceVariant} />
-              </TouchableOpacity>
-            </View>
-
-            <ScrollView
-              showsVerticalScrollIndicator={false}
-              contentContainerStyle={{ paddingBottom: 20 }}>
-              {/* Live Preview */}
-              <View
-                style={{
-                  alignItems: "center",
-                  justifyContent: "center",
-                  paddingVertical: 14,
-                  backgroundColor: colors.surfaceVariant,
-                  borderRadius: 20,
-                  marginBottom: spacing.md,
-                }}>
-                <IconChip
-                  iconName={formIcon as any}
-                  colorName={formColor as any}
-                  size={56}
-                />
-                <Text
-                  style={{
-                    fontSize: 16,
-                    fontWeight: "800",
-                    color: colors.onSurface,
-                    marginTop: 8,
-                  }}>
-                  {formName || "Account Name"}
-                </Text>
-                <Text
-                  style={{
-                    fontSize: 12,
-                    textTransform: "capitalize",
-                    color: colors.onSurfaceVariant,
-                  }}>
-                  {formType} Account
-                </Text>
-              </View>
-
-              {/* Name Input */}
-              <Text
-                style={{
-                  fontSize: 12,
-                  fontWeight: "700",
-                  color: colors.onSurfaceVariant,
-                  marginBottom: 6,
-                  letterSpacing: 0.5,
-                }}>
-                ACCOUNT NAME
-              </Text>
-              <TextInput
-                style={{
-                  backgroundColor: colors.surfaceVariant,
-                  borderRadius: 14,
-                  paddingHorizontal: 14,
-                  paddingVertical: 12,
-                  color: colors.onSurface,
-                  fontSize: 15,
-                  marginBottom: spacing.md,
-                }}
-                value={formName}
-                onChangeText={setFormName}
-                placeholder="e.g. CIB Salary, Vodafone Cash, Cash Safe"
-                placeholderTextColor={colors.onSurfaceVariant}
-              />
-
-              {/* Account Type */}
-              <Text
-                style={{
-                  fontSize: 12,
-                  fontWeight: "700",
-                  color: colors.onSurfaceVariant,
-                  marginBottom: 6,
-                  letterSpacing: 0.5,
-                }}>
-                ACCOUNT TYPE
-              </Text>
-              <View
-                style={{
-                  flexDirection: "row",
-                  gap: 8,
-                  marginBottom: spacing.md,
-                }}>
-                {(["cash", "bank", "card", "wallet"] as WalletType[]).map((wt) => {
-                  const selected = formType === wt;
-                  return (
-                    <TouchableOpacity
-                      key={wt}
-                      onPress={() => {
-                        setFormType(wt);
-                      }}
-                      style={{
-                        flex: 1,
-                        paddingVertical: 10,
-                        borderRadius: 12,
-                        alignItems: "center",
-                        backgroundColor: selected
-                          ? colors.primaryContainer
-                          : colors.surfaceVariant,
-                      }}>
-                      <Text
-                        style={{
-                          fontSize: 11,
-                          fontWeight: "700",
-                          textTransform: "capitalize",
-                          color: selected
-                            ? colors.onPrimaryContainer
-                            : colors.onSurface,
-                        }}>
-                        {wt}
-                      </Text>
-                    </TouchableOpacity>
-                  );
-                })}
-              </View>
-
-              {/* Secret Wallet Toggle (Matches Settings Switch Row) */}
-              <TouchableOpacity
-                activeOpacity={0.7}
-                onPress={() => {
-                  const nextVal = !formIsSecret;
-                  setFormIsSecret(nextVal);
-                  if (nextVal) {
-                    setFormIcon("lock-closed-outline");
-                  }
-                }}
-                style={{
-                  flexDirection: "row",
-                  alignItems: "center",
-                  justifyContent: "space-between",
-                  backgroundColor: colors.surfaceVariant,
-                  padding: spacing.md,
-                  borderRadius: 14,
-                  marginBottom: spacing.md,
-                }}>
-                <View
-                  style={{
-                    width: 32,
-                    height: 32,
-                    borderRadius: 16,
-                    alignItems: "center",
-                    justifyContent: "center",
-                    backgroundColor: formIsSecret
-                      ? colors.errorContainer
-                      : colors.primaryContainer,
-                    marginRight: 10,
-                  }}>
-                  <Ionicons
-                    name="lock-closed"
-                    size={16}
-                    color={formIsSecret ? colors.error : colors.primary}
-                  />
-                </View>
-                <View style={{ flex: 1, paddingRight: 10 }}>
-                  <Text
-                    style={{
-                      fontSize: 14,
-                      fontWeight: "700",
-                      color: colors.onSurface,
-                    }}>
-                    Secret Wallet
-                  </Text>
-                  <Text
-                    style={{
-                      fontSize: 11,
-                      color: colors.onSurfaceVariant,
-                      marginTop: 2,
-                    }}>
-                    Money added will not show up in totals unless assigned to a budget
-                  </Text>
-                </View>
-                <Switch
-                  value={formIsSecret}
-                  onValueChange={(val) => {
-                    setFormIsSecret(val);
-                    if (val) {
-                      setFormIcon("lock-closed-outline");
-                    }
-                  }}
-                />
-              </TouchableOpacity>
-
-              {/* Initial / Reconcile Balance */}
-              <Text
-                style={{
-                  fontSize: 12,
-                  fontWeight: "700",
-                  color: colors.onSurfaceVariant,
-                  marginBottom: 6,
-                  letterSpacing: 0.5,
-                }}>
-                {editingWallet
-                  ? `RECONCILE BALANCE (${currencySymbol.trim()})`
-                  : `INITIAL BALANCE (${currencySymbol.trim()})`}
-              </Text>
-              <TextInput
-                style={{
-                  backgroundColor: colors.surfaceVariant,
-                  borderRadius: 14,
-                  paddingHorizontal: 14,
-                  paddingVertical: 12,
-                  color: colors.onSurface,
-                  fontSize: 16,
-                  fontWeight: "700",
-                  marginBottom: 4,
-                }}
-                value={formInitialBalance}
-                onChangeText={setFormInitialBalance}
-                placeholder="0.00"
-                placeholderTextColor={colors.onSurfaceVariant}
-                keyboardType="decimal-pad"
-              />
-              <Text
-                style={{
-                  fontSize: 11,
-                  color: colors.onSurfaceVariant,
-                  marginBottom: spacing.md,
-                }}>
-                {editingWallet
-                  ? 'Enter the actual current balance. An adjustment transaction named "Balance adjustment" will be created for the difference.'
-                  : "Starting balance for this account."}
-              </Text>
-
-              {/* Icon Picker Grid */}
-              <Text
-                style={{
-                  fontSize: 12,
-                  fontWeight: "700",
-                  color: colors.onSurfaceVariant,
-                  marginBottom: 8,
-                  letterSpacing: 0.5,
-                }}>
-                CUSTOM ICON
-              </Text>
-              <View
-                style={{
-                  flexDirection: "row",
-                  flexWrap: "wrap",
-                  gap: 8,
-                  marginBottom: spacing.md,
-                }}>
-                {WALLET_ICONS.map((ic) => {
-                  const selected = formIcon === ic;
-                  return (
-                    <TouchableOpacity
-                      key={ic}
-                      onPress={() => setFormIcon(ic)}
-                      style={{
-                        width: 44,
-                        height: 44,
-                        borderRadius: 12,
-                        alignItems: "center",
-                        justifyContent: "center",
-                        backgroundColor: selected
-                          ? colors.primaryContainer
-                          : colors.surfaceVariant,
-                        borderWidth: 1,
-                        borderColor: selected
-                          ? colors.primary
-                          : "transparent",
-                      }}>
-                      <Ionicons
-                        name={ic as any}
-                        size={22}
-                        color={
-                          selected
-                            ? colors.onPrimaryContainer
-                            : colors.onSurface
-                        }
-                      />
-                    </TouchableOpacity>
-                  );
-                })}
-              </View>
-
-              {/* Color Picker Palette */}
-              <Text
-                style={{
-                  fontSize: 12,
-                  fontWeight: "700",
-                  color: colors.onSurfaceVariant,
-                  marginBottom: 8,
-                  letterSpacing: 0.5,
-                }}>
-                CUSTOM COLOR THEME
-              </Text>
-              <View
-                style={{
-                  flexDirection: "row",
-                  flexWrap: "wrap",
-                  gap: 8,
-                  marginBottom: spacing.lg,
-                }}>
-                {WALLET_COLORS.map((col) => {
-                  const selected = formColor === col;
-                  return (
-                    <TouchableOpacity
-                      key={col}
-                      onPress={() => setFormColor(col)}
-                      style={{
-                        paddingHorizontal: 12,
-                        paddingVertical: 8,
-                        borderRadius: 12,
-                        backgroundColor: selected
-                          ? colors.primaryContainer
-                          : colors.surfaceVariant,
-                        borderWidth: 1,
-                        borderColor: selected
-                          ? colors.primary
-                          : "transparent",
-                      }}>
-                      <Text
-                        style={{
-                          fontSize: 12,
-                          fontWeight: "700",
-                          textTransform: "capitalize",
-                          color: selected
-                            ? colors.onPrimaryContainer
-                            : colors.onSurface,
-                        }}>
-                        {col}
-                      </Text>
-                    </TouchableOpacity>
-                  );
-                })}
-              </View>
-            </ScrollView>
-
-            {/* Action Buttons */}
-            <View style={{ flexDirection: "row", gap: 10 }}>
-              <TouchableOpacity
-                onPress={() => setShowEditorModal(false)}
-                style={{
-                  flex: 1,
-                  paddingVertical: 14,
-                  borderRadius: 16,
-                  alignItems: "center",
-                  borderWidth: 1,
-                  borderColor: colors.outlineVariant,
-                }}>
-                <Text
-                  style={{
-                    color: colors.onSurfaceVariant,
-                    fontWeight: "700",
-                    fontSize: 15,
-                  }}>
-                  Cancel
-                </Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                onPress={handleSaveWallet}
-                style={{
-                  flex: 1.5,
-                  backgroundColor: colors.primary,
-                  paddingVertical: 14,
-                  borderRadius: 16,
-                  alignItems: "center",
-                }}>
-                <Text
-                  style={{
-                    color: colors.onPrimary,
-                    fontWeight: "800",
-                    fontSize: 15,
-                  }}>
-                  {editingWallet ? "Save Changes" : "Create Account"}
-                </Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-      </Modal>
+        editingWallet={editingWallet}
+        currentBalance={editingWallet ? walletBalances[editingWallet.id] || 0 : 0}
+        onClose={() => setShowEditorModal(false)}
+        onSave={handleSaveWallet}
+      />
 
       {/* Wallet-to-Wallet Transfer Modal */}
       <Modal

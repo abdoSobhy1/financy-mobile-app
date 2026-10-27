@@ -19,6 +19,7 @@ import { Category, TransactionType } from "../types";
 import { guessCategoryId } from "../utils/categoryDictionary";
 import { AIService } from "./aiService";
 import { getAIConfig } from "./aiConfigService";
+import { getOcrQuotaStatus, consumeOcrQuota } from "./ocrRateLimitService";
 
 let DocumentScannerModule: any = null;
 let ResponseTypeEnum: any = { ImageFilePath: "imageFilePath", Base64: "base64" };
@@ -1279,6 +1280,22 @@ export async function scanReceiptFile(
   asset: DocumentAsset,
   categories: Record<string, Category> = {}
 ): Promise<OcrReceiptResult> {
+  // Enforce persistent daily OCR AI rate limit (3/day for Guest & non-owner users)
+  const quota = await getOcrQuotaStatus();
+  if (!quota.canScan) {
+    throw new Error(
+      `Daily limit of ${quota.dailyLimit} OCR AI scans reached. Your limit resets tomorrow, or you can configure your own API key in Settings for unlimited scans.`,
+    );
+  }
+
+  let quotaConsumed = false;
+  const markQuotaConsumed = async () => {
+    if (!quotaConsumed) {
+      quotaConsumed = true;
+      await consumeOcrQuota();
+    }
+  };
+
   const isImage =
     !asset.mimeType ||
     asset.mimeType.startsWith("image/") ||
@@ -1294,6 +1311,7 @@ export async function scanReceiptFile(
         console.log("[OCRService] Sending resized image (max 1080w/1920h) directly to Google Gemini Vision...");
         const visionResult = await AIService.parseReceiptImageWithAI(asset.uri, categories);
         if (visionResult && visionResult.items && visionResult.items.length > 0) {
+          await markQuotaConsumed();
           console.log(`[OCRService] Gemini Vision successfully parsed ${visionResult.items.length} items!`);
           return visionResult;
         }
@@ -1343,6 +1361,7 @@ export async function scanReceiptFile(
     }
   }
 
+  await markQuotaConsumed();
   return result;
 }
 

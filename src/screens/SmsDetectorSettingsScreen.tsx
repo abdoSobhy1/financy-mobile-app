@@ -31,6 +31,7 @@ import {
   isAtmWithdrawal,
   parseSmsTransaction,
 } from "../services/smsParser";
+import { smsService } from "../services/smsService";
 import { ParsedTransaction } from "../types";
 
 type KeywordGroupKey = keyof Omit<SmsDetectorConfig, "ignoreAtmWithdrawals">;
@@ -278,6 +279,24 @@ export const SmsDetectorSettingsScreen: React.FC = () => {
       isAtm,
       parsed,
     });
+  };
+
+  const handleSimulateNotification = async () => {
+    handleRunTest();
+    try {
+      const res = await smsService.simulateSms(
+        { originatingAddress: testSender, body: testBody, timestamp: Date.now() },
+        categoryList,
+        budgets
+      );
+      if (res.success) {
+        showSuccess("Notification sent! Tap it to test deep-linking.");
+      } else {
+        showError(res.reason || "Could not trigger notification for this SMS");
+      }
+    } catch {
+      showError("Failed to schedule test notification");
+    }
   };
 
   return (
@@ -655,18 +674,42 @@ export const SmsDetectorSettingsScreen: React.FC = () => {
             numberOfLines={4}
           />
 
-          <TouchableOpacity
-            style={[
-              styles.testBtn,
-              { backgroundColor: colors.primary, marginTop: spacing.md },
-            ]}
-            onPress={handleRunTest}
-          >
-            <Ionicons name="play" size={16} color={colors.onPrimary} />
-            <Text style={[styles.testBtnText, { color: colors.onPrimary }]}>
-              Test Parsing
-            </Text>
-          </TouchableOpacity>
+          <View style={{ flexDirection: "row", gap: 8, marginTop: spacing.md }}>
+            <TouchableOpacity
+              style={[
+                styles.testBtn,
+                { backgroundColor: colors.primary, flex: 1 },
+              ]}
+              onPress={handleRunTest}
+            >
+              <Ionicons name="play" size={16} color={colors.onPrimary} />
+              <Text style={[styles.testBtnText, { color: colors.onPrimary }]}>
+                Test Parsing
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[
+                styles.testBtn,
+                { backgroundColor: colors.secondaryContainer, flex: 1 },
+              ]}
+              onPress={handleSimulateNotification}
+            >
+              <Ionicons
+                name="notifications-outline"
+                size={16}
+                color={colors.onSecondaryContainer}
+              />
+              <Text
+                style={[
+                  styles.testBtnText,
+                  { color: colors.onSecondaryContainer },
+                ]}
+              >
+                Fire Notification
+              </Text>
+            </TouchableOpacity>
+          </View>
 
           {/* Test Results Display */}
           {testResult?.checked && (

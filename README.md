@@ -1,273 +1,189 @@
-# Financy - Personal Finance Management App
+# Financy — Offline-First Personal Finance & Smart Expense Tracker
 
 <div align="center">
-  <h3>A comprehensive React Native app for managing personal finances</h3>
-  <p>Track expenses, manage budgets, handle bills and debts with offline-first capabilities</p>
+  <h3>An Offline-First React Native Financial Companion Built for Real-World Spending</h3>
+  <p>Automated Egyptian Bank & InstaPay SMS Detection • Arabic/English Voice Logging • Hybrid AI Receipt OCR • Multi-Wallet & Debt Tracking</p>
 </div>
-
-## 🌟 Features
-
-### 💰 **Financial Management**
-
-- **Transaction Tracking**: Record income and expenses with categories and descriptions
-- **Budget Management**: Set and monitor monthly budgets with real-time spending tracking
-- **Bill Management**: Track recurring bills and due dates with payment reminders
-- **Debt Management**: Monitor debts with payment tracking and balance calculations
-- **Category System**: Organize transactions with customizable categories and colors
-
-### 📊 **Analytics & Insights**
-
-- **Spending Analytics**: Visual charts showing spending patterns and trends
-- **Budget Progress**: Real-time budget utilization with remaining amounts
-- **Bill Status**: Upcoming bills and payment tracking
-- **Debt Progress**: Track debt reduction over time
-- **Custom Date Ranges**: Filter data by custom periods or billing cycles
-
-### ☁️ **Sync & Backup**
-
-- **Offline-First**: Works completely offline with local SQLite database
-- **Cloud Sync**: Optional Firebase synchronization across devices
-- **Data Export**: Export data to Excel, CSV, or JSON formats
-- **Database Backup**: Full database backup and restore capabilities
-- **Conflict Resolution**: Smart handling of data conflicts during sync
-
-### 🎨 **User Experience**
-
-- **Modern UI**: Clean, intuitive interface with smooth animations
-- **Dark/Light Theme**: Adaptive theming based on system preferences
-- **Custom Billing Periods**: Set custom billing cycle start dates
-- **Search & Filter**: Advanced filtering and search across all data
-- **Quick Actions**: Swipe gestures and quick entry options
-
-## 🏗️ **Technical Architecture**
-
-### **Frontend**
-
-- **React Native**: Cross-platform mobile development
-- **Expo**: Streamlined development and deployment
-- **TypeScript**: Type-safe development with enhanced IDE support
-- **Redux Toolkit**: State management with efficient data flow
-- **React Navigation**: Smooth navigation between screens
-
-### **Database**
-
-- **SQLite**: Local database for offline-first functionality
-- **Schema Management**: Automated migrations and version control
-- **Query Optimization**: Efficient database operations and indexing
-- **Data Integrity**: Foreign key constraints and validation
-
-### **Cloud Integration**
-
-- **Firebase Firestore**: Cloud database for synchronization
-- **Firebase Auth**: Secure user authentication
-- **Offline Sync**: Intelligent sync with conflict resolution
-- **Real-time Updates**: Live data synchronization when online
-
-### **Data Management**
-
-- **Offline-First Architecture**: App works without internet connection
-- **Smart Sync**: Only sync changed data to optimize performance
-- **Data Export**: Multiple export formats for data portability
-- **Backup System**: Complete data backup and restore functionality
-
-## 📱 **Installation**
-
-### **Prerequisites**
-
-- Node.js (v16 or higher)
-- npm or yarn
-- Expo CLI
-- iOS Simulator (for iOS development) or Android Studio (for Android development)
-
-### **Setup**
-
-1. **Clone the repository**
-
-   ```bash
-   git clone https://github.com/your-username/financy.git
-   cd financy
-   ```
-
-2. **Install dependencies**
-
-   ```bash
-   npm install
-   # or
-   yarn install
-   ```
-
-3. **Configure Firebase (Optional)**
-
-   - Create a Firebase project at [Firebase Console](https://console.firebase.google.com)
-   - Enable Firestore Database and Authentication
-   - Download the configuration file:
-     - For iOS: `GoogleService-Info.plist`
-     - For Android: `google-services.json`
-   - Place the files in the appropriate directories
-   - Update the Firebase configuration in the app
-
-4. **Start the development server**
-
-   ```bash
-   npx expo start
-   ```
-
-5. **Run on device/simulator**
-   - Press `i` for iOS simulator
-   - Press `a` for Android emulator
-   - Scan QR code with Expo Go app for physical device
-
-## 🚀 **Usage**
-
-### **Initial Setup**
-
-1. **Launch the app** and complete the onboarding process
-2. **Set up categories** for organizing transactions
-3. **Configure billing period** start date (optional)
-4. **Enable cloud sync** for data backup (optional)
-
-### **Daily Usage**
-
-1. **Add transactions** as you make purchases or receive income
-2. **Monitor budgets** to stay within spending limits
-3. **Track bills** and mark them as paid when due
-4. **Record debt payments** to monitor debt reduction
-
-### **Advanced Features**
-
-1. **Export data** for external analysis or backup
-2. **Sync across devices** using Firebase integration
-3. **Analyze spending** with built-in charts and reports
-4. **Customize categories** and billing periods
-
-## 📊 **Project Structure**
-
-```
-src/
-├── components/           # Reusable UI components
-│   ├── ui/              # Base UI components (buttons, inputs, etc.)
-│   ├── charts/          # Chart components for analytics
-│   └── forms/           # Form components for data entry
-├── screens/             # Screen components
-├── navigation/          # Navigation configuration
-├── store/               # Redux store and slices
-├── services/            # API and sync services
-├── database/            # SQLite database configuration
-├── utils/               # Utility functions
-├── types/               # TypeScript type definitions
-└── constants/           # App constants and configuration
-```
-
-## 🔧 **Configuration**
-
-### **Environment Variables**
-
-Create a `.env` file in the root directory:
-
-```env
-EXPO_PUBLIC_FIREBASE_API_KEY=your_api_key
-EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN=your_auth_domain
-EXPO_PUBLIC_FIREBASE_PROJECT_ID=your_project_id
-```
-
-### **Database Configuration**
-
-The app uses SQLite for local storage with automatic schema migrations. Database configuration is in `src/database/index.ts`.
-
-### **Sync Configuration**
-
-Cloud sync settings can be configured in `src/services/OfflineFirstSync.ts`.
-
-## 🧪 **Testing**
-
-### **Running Tests**
-
-```bash
-npm test
-# or
-yarn test
-```
-
-### **Debug Mode**
-
-To access debug features:
-
-1. Go to Settings → About
-2. Tap on "App Version" 6 times consecutively
-3. Debug section will appear with advanced options
-
-## 📦 **Building**
-
-### **Development Build**
-
-```bash
-npx expo build:android
-npx expo build:ios
-```
-
-### **Production Build**
-
-```bash
-npx expo build:android --type app-bundle
-npx expo build:ios --type archive
-```
-
-## 🤝 **Contributing**
-
-We welcome contributions! Please follow these steps:
-
-1. **Fork the repository**
-2. **Create a feature branch**: `git checkout -b feature/amazing-feature`
-3. **Commit changes**: `git commit -m 'Add amazing feature'`
-4. **Push to branch**: `git push origin feature/amazing-feature`
-5. **Open a Pull Request**
-
-### **Development Guidelines**
-
-- Follow TypeScript best practices
-- Write clear, descriptive commit messages
-- Add tests for new functionality
-- Update documentation as needed
-- Ensure code passes linting checks
-
-## 📄 **License**
-
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-
-## 👨‍💻 **Author**
-
-**Abdelrahman Sobhy**
-
-- Email: [your-email@example.com]
-- GitHub: [your-github-profile]
-
-## 🙏 **Acknowledgments**
-
-- **React Native Community**: For the amazing framework and ecosystem
-- **Expo Team**: For simplifying React Native development
-- **Firebase**: For providing robust backend services
-- **Open Source Contributors**: For the libraries and tools that make this project possible
-
-## 📞 **Support**
-
-If you encounter any issues or have questions:
-
-1. **Check the documentation** in this README
-2. **Search existing issues** on GitHub
-3. **Create a new issue** with detailed information
-4. **Contact support** via email
-
-## 🔮 **Roadmap**
-
-- [ ] **Enhanced Analytics**: More detailed spending insights and trends
-- [ ] **Export Improvements**: Additional export formats and scheduling
-- [ ] **UI Enhancements**: More themes and customization options
-- [ ] **Integration Features**: Connect with bank APIs and financial services
-- [ ] **Web Version**: Progressive web app for desktop access
 
 ---
 
-<div align="center">
-  <p>Made with ❤️ by Abdelrahman Sobhy</p>
-  <p>© 2025 All rights reserved</p>
-</div>
+## 💡 Why Financy?
+
+Manual expense tracking usually fails after a few days because logging every coffee, transfer, and supermarket receipt by hand is tedious—especially across fragmented payment channels like **InstaPay**, **bank card SMS alerts**, **cash**, and **mobile wallets**.
+
+**Financy** eliminates manual entry friction while keeping your financial data **offline-first** in a local **SQLite** database, with optional conflict-resilient **Firebase Cloud Sync**.
+
+---
+
+## ✨ Key Engineering & Product Features
+
+### 1. 📱 Automated Bank & InstaPay SMS Detection (Android)
+- **Real-Time Background Listener**: Native Android broadcast receiver (`withSmsDetection` Expo config plugin) captures incoming bank transaction alerts even when the app is backgrounded.
+- **Bilingual Regex Engine (`smsParser.ts`)**: Parses Arabic and English SMS formats from major Egyptian banks (**CIB, NBE, Banque Misr, QNB, AlexBank, ValU, InstaPay**, etc.).
+- **Smart ATM Withdrawal Filtering**: Automatically distinguishes ATM cash withdrawals (*"تم سحب"*, *"ATM"*, *"صراف آلي"*) from merchant purchases so moving money from bank to pocket cash is never double-counted as an expense.
+- **Customizable Rules**: In-app configuration for custom bank sender IDs, currency keywords, and ATM filters.
+
+### 2. 🎙️ Bilingual Voice Expense Logging (Arabic & English NLP)
+- **Multi-Transaction Utterance Parsing (`voiceParser.ts`)**: Speak naturally in Egyptian Arabic or English to log multiple transactions in a single sentence:
+  - *"دفعت 50 جنيه كهربا واشتريت بطاطس ب20 جنيه"* → Extracts 2 structured expenses with amounts, descriptions, and auto-matched categories.
+  - *"استلمت 5000 مرتب"* → Extracts income transaction and maps to Salary.
+- **Eastern-to-Western Digit Normalization**: Seamlessly normalizes Arabic numerals (`٠-٩`) and spoken number words (*ألف*, *ألفين*, *نص*, *ربع*).
+- **Verification Flow**: Review, edit, or split voice-extracted transactions before committing to SQLite.
+
+### 3. 🧾 Hybrid Receipt & InstaPay Slip Scanner (On-Device OCR + Multimodal Vision)
+- **Tier 1 — On-Device OCR (`ocrService.ts`)**: Uses **Google ML Kit** / **Apple Vision** (`@dariyd/react-native-text-recognition`) and document edge scanning (`react-native-document-scanner-plugin`) for fast, private, offline extraction.
+- **Tier 2 — Multimodal Vision AI (`aiService.ts`)**: Optional cloud enhancement using **Google Gemini Vision**, **Groq (Llama 3.3)**, or **OpenAI (GPT-4o-mini)** with proportional client-side image compression (`max 1080×1920`).
+- **Line-Item Decomposition**: Automatically splits multi-item supermarket/restaurant receipts into individual categorized transactions or parses single InstaPay transfer slips.
+
+### 4. 👛 Multi-Wallet, Secret Wallets & Financial Management
+- **Multi-Account Tracking (`walletService.ts`)**: Manage Cash, Bank Accounts, Credit Cards, and Mobile Wallets with real-time balance computation and inter-wallet transfers.
+- **Secret Wallets**: Privacy-focused hidden wallets excluded from main dashboard totals unless explicitly unlocked/selected.
+- **Budgets & Custom Billing Cycles**: Set monthly category budgets aligned with your actual salary/billing start day (e.g., 25th of each month) rather than rigid calendar months.
+- **Debt & Installment Portfolio**: Track loans, credit cards, interest rates, and partial payment histories.
+- **Excel/CSV Import Wizard**: Multi-step column-mapping wizard (`ImportWizard.tsx`) with validation and preview for migrating historical spreadsheets.
+
+### 5. 🔄 True Offline-First Architecture & Outbox Sync
+- **SQLite Single Source of Truth**: All reads and writes hit local SQLite (`expo-sqlite`) first for zero-latency UI updates.
+- **Transactional Outbox (`sync_log`)**: Every mutation (`insert`, `update`, `delete`) is recorded in a local `sync_log` table with device-fingerprinted metadata (`deviceTracking.ts`) to prevent infinite sync loops.
+- **Delta Cloud Sync (`OfflineFirstSync.ts`)**: Automatically pushes pending outbox entries and pulls remote Firestore deltas on network recovery or app foregrounding.
+
+---
+
+## 🏗️ Technical Stack
+
+| Layer | Technology |
+| :--- | :--- |
+| **Framework** | React Native `0.86` + Expo SDK `57` (New Architecture enabled) |
+| **Language** | TypeScript `6.0` (Strict type-checked) |
+| **Local Database** | `expo-sqlite` with automated schema & cloud-compatibility migrations |
+| **State Management** | Redux Toolkit (`@reduxjs/toolkit`) + React Context (`SyncProvider`, `AuthProvider`) |
+| **Cloud & Auth** | Firebase Authentication + Cloud Firestore (Delta & Batch Sync) |
+| **OCR & Speech** | `@dariyd/react-native-text-recognition`, `react-native-document-scanner-plugin`, `@jamsch/expo-speech-recognition` |
+| **UI & Animations** | Custom Theme Engine (Light/Dark), `react-native-reanimated`, `@gorhom/bottom-sheet`, `react-native-svg` |
+
+---
+
+## 📂 Project Architecture
+
+```text
+financy/
+├── App.tsx                         # App bootstrap, DB init, migrations, sync & SMS listeners
+├── plugins/
+│   └── withSmsDetection.js         # Custom Expo config plugin for Android SMS broadcast receiver
+├── src/
+│   ├── components/
+│   │   ├── analysis/               # SVG Line, Pie & Custom Chart cards
+│   │   ├── import/                 # Multi-step Excel/CSV Import Wizard steps
+│   │   ├── input/                  # Voice input button & waveform feedback
+│   │   ├── receipt/                # Receipt scanner & itemized review modal
+│   │   ├── transactions/           # Transaction cards, filter bars & stats header
+│   │   └── ui/                     # Design system primitives (Theme, Keypad, Modals, Shimmer)
+│   ├── database/
+│   │   ├── index.ts                # SQLite singleton & schema initialization
+│   │   ├── migrations/             # Incremental SQLite schema migrations
+│   │   └── queries/                # Typed data-access queries (transactions, budgets, wallets, debts)
+│   ├── services/
+│   │   ├── OfflineFirstSync.ts     # Outbox queue processor & Firestore delta synchronization
+│   │   ├── smsParser.ts            # Arabic/English bank & InstaPay SMS extraction engine
+│   │   ├── voiceParser.ts          # Offline bilingual NLP parser for spoken transactions
+│   │   ├── ocrService.ts           # On-device ML Kit OCR & receipt/slip parser
+│   │   ├── aiService.ts            # Multimodal AI receipt & text extraction (Gemini / Groq / OpenAI)
+│   │   └── walletService.ts        # Multi-wallet & secret wallet balance engine
+│   ├── screens/                    # Feature screens (Dashboard, Transactions, Budgets, Debts, Analysis)
+│   ├── store/                      # Redux Toolkit store & entity slices
+│   └── utils/                      # Category dictionary, billing period math, export/backup utilities
+└── firestore-rules.txt             # User-isolated Firestore security rules
+```
+
+---
+
+## 🚀 Getting Started
+
+### Prerequisites
+- **Node.js** `>= 18`
+- **npm** or **yarn**
+- **Android Studio** (for Android development build) or **Xcode** (for iOS)
+  > **Note:** Because Financy uses custom native modules (on-device OCR, speech recognition, and native Android SMS detection), run it using an **Expo Development Build** (`npx expo run:android` / `npx expo run:ios`) rather than standard Expo Go.
+
+### 1. Clone & Install
+
+```bash
+git clone https://github.com/abdoSobhy1/financy-mobile-app.git
+cd financy-mobile-app
+npm install
+```
+
+### 2. Environment Configuration
+
+Copy `.env.example` to `.env` in the root directory:
+
+```bash
+cp .env.example .env
+```
+
+Fill in your optional Firebase and AI keys in `.env` (the app works 100% offline with local SQLite even without Firebase or AI keys configured):
+
+```env
+# Optional: Firebase Cloud Sync
+EXPO_PUBLIC_FIREBASE_API_KEY=your_firebase_api_key
+EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN=your_project_id.firebaseapp.com
+EXPO_PUBLIC_FIREBASE_PROJECT_ID=your_project_id
+EXPO_PUBLIC_FIREBASE_STORAGE_BUCKET=your_project_id.firebasestorage.app
+EXPO_PUBLIC_FIREBASE_MESSAGING_SENDER_ID=your_messaging_sender_id
+EXPO_PUBLIC_FIREBASE_APP_ID=your_firebase_app_id
+
+# Optional: Cloud AI Assistant (can also be set in-app via Settings -> Cloud AI Assistant)
+EXPO_PUBLIC_GEMINI_API_KEY=your_gemini_api_key
+```
+
+### 3. Run Development Build
+
+```bash
+# Android (builds native client with SMS & OCR plugins)
+npx expo run:android
+
+# iOS
+npx expo run:ios
+
+# Start Metro bundler only
+npm start
+```
+
+---
+
+## 🧪 Testing & Verification
+
+Run the automated test suite (covering the SMS parser, voice parser, billing period math, and sync conflict resolution):
+
+```bash
+npm test
+```
+
+Type-check the codebase:
+
+```bash
+npx tsc --noEmit
+```
+
+---
+
+## 📦 Building for Production (EAS)
+
+```bash
+# Build Android APK / AAB via EAS
+eas build --platform android --profile production
+
+# Build iOS archive via EAS
+eas build --platform ios --profile production
+```
+
+---
+
+## 📄 License
+
+This project is licensed under the MIT License — see the [LICENSE](LICENSE) file for details.
+
+## 👨‍💻 Author
+
+**Abdelrahman Sobhy**
+- GitHub: [@abdoSobhy1](https://github.com/abdoSobhy1)

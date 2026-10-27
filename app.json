@@ -25,13 +25,16 @@
       "package": "com.sobhy.financy",
       "permissions": [
         "android.permission.READ_SMS",
-        "android.permission.RECEIVE_SMS"
+        "android.permission.RECEIVE_SMS",
+        "android.permission.WAKE_LOCK",
+        "android.permission.POST_NOTIFICATIONS"
       ]
     },
     "web": {
       "favicon": "./assets/favicon.png"
     },
     "plugins": [
+      "./plugins/withSmsDetection",
       "expo-font",
       [
         "expo-splash-screen",

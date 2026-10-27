@@ -52,32 +52,33 @@ export function isAtmWithdrawal(text: string, config?: SmsDetectorConfig): boole
 
   const lowerText = text.toLowerCase();
   for (const kw of activeConfig.atmKeywords) {
-    if (kw && lowerText.includes(kw.toLowerCase())) {
+    if (!kw) continue;
+    const cleanKw = kw.trim();
+    if (!cleanKw) continue;
+    // Special handling for "ATM" so it matches "ATM", "ATM186", "ATM-123" but not "ATMOSPHERE"
+    if (cleanKw.toUpperCase() === "ATM") {
+      if (/(?:^|[^a-zA-Z])ATM(?:\d+|\b|[-_\s])/i.test(text)) {
+        return true;
+      }
+      continue;
+    }
+    if (lowerText.includes(cleanKw.toLowerCase())) {
       return true;
     }
   }
-
-  // Fallback explicit regex patterns:
-  // 1. Matches "ATM", "ATM186", "ATM491", "ATM-123", etc. (excluding words like ATMOSPHERE)
-  if (/(?:^|[^a-zA-Z])ATM(?:\d+|\b|[-_\s])/i.test(text)) return true;
-
-  // 2. Arabic cash withdrawal / ATM patterns:
-  // "تم سحب", "عملية سحب", "سحب نقدي", "سحب كاش", "صراف آلي", "ماكينة الصراف"
-  if (/تم\s+سحب/i.test(text)) return true;
-  if (/عملية\s+سحب/i.test(text)) return true;
-  if (/سحب\s*(?:نقدي|نقدية|كاش|آلي|الي)/i.test(text)) return true;
-  if (/صراف\s*(?:آلي|الي)/i.test(text)) return true;
-  if (/ماكينة\s*(?:صراف|الصراف)/i.test(text)) return true;
-
-  // 3. English cash withdrawal patterns:
-  if (/cash\s*withdrawal/i.test(text)) return true;
-  if (/atm\s*withdrawal/i.test(text)) return true;
 
   return false;
 }
 
 function cleanWhitespace(str: string): string {
   return str.replace(/\s+/g, " ").trim();
+}
+
+function normalizeDigits(str: string): string {
+  return str
+    .replace(/[٠-٩]/g, (d) => String(d.charCodeAt(0) - 0x0660))
+    .replace(/[۰-۹]/g, (d) => String(d.charCodeAt(0) - 0x06f0))
+    .replace(/٫/g, ".");
 }
 
 function escapeRegex(str: string): string {
@@ -87,6 +88,7 @@ function escapeRegex(str: string): string {
 // ── Amount extraction ──────────────────────────────────────────────────
 function extractSmsAmount(text: string, config?: SmsDetectorConfig): number | undefined {
   const activeConfig = config || getCachedConfig();
+  const normalizedText = normalizeDigits(text);
   const currencyPattern =
     activeConfig.currencyKeywords.length > 0
       ? activeConfig.currencyKeywords.map(escapeRegex).join("|")
@@ -94,16 +96,16 @@ function extractSmsAmount(text: string, config?: SmsDetectorConfig): number | un
 
   // Strip the available-balance suffix (المتاح...) before parsing
   // so we never accidentally grab the post-transaction balance
-  const balanceRegex = new RegExp(`المتاح\\s*[\\d.,]+\\s*(?:${currencyPattern})?`, "gi");
-  const stripped = text.replace(balanceRegex, "");
+  const balanceRegex = new RegExp(`(?:المتاح|الرصيد\\s*المتاح)\\s*[:\\-]?\\s*[\\d,]+(?:\\.\\d{1,2})?\\s*(?:${currencyPattern})?`, "gi");
+  const stripped = normalizedText.replace(balanceRegex, "");
 
   const amountPatterns = [
     // "بمبلغ 7400.00 جم" or "بمبلغ 468.30 EGP" — most explicit, try first
     new RegExp(`بمبلغ\\s*([\\d,]+(?:\\.\\d{1,2})?)\\s*(?:${currencyPattern})?`, "i"),
-    // "تم خصم 4000 EGP" or "تم خصم مبلغ 468.30 جم"
-    new RegExp(`(?:تم\\s+خصم|خصم)\\s+(?:مبلغ\\s+)?([\\d,]+(?:\\.\\d{1,2})?)\\s*(?:${currencyPattern})?`, "i"),
+    // "تم خصم 4000 EGP" or "تم خصم مبلغ 468.30 جم" or "تم إضافة مبلغ 1500 جم"
+    new RegExp(`(?:تم\\s+خصم|خصم|تم\\s+إضافة|تم\\s+اضافة|تم\\s+إيداع|تم\\s+ايداع|إيداع|ايداع)\\s+(?:مبلغ\\s+)?([\\d,]+(?:\\.\\d{1,2})?)\\s*(?:${currencyPattern})?`, "i"),
     // English: "Purchase of EGP 450.00" / "Amount: 450.00 EGP"
-    new RegExp(`(?:Purchase|Withdrawal|Payment|Transfer|Deposit|Amount|${currencyPattern})\\s*(?:of|is|was|:)?\\s*(?:${currencyPattern})?\\s*([\\d,]+(?:\\.\\d{1,2})?)`, "i"),
+    new RegExp(`(?:Purchase|Withdrawal|Payment|Transfer|Deposit|Credited|Debited|Amount|${currencyPattern})\\s*(?:of|is|was|:)?\\s*(?:${currencyPattern})?\\s*([\\d,]+(?:\\.\\d{1,2})?)`, "i"),
     // Currency prefix: "EGP 450.50"
     new RegExp(`(?:${currencyPattern})\\s*([\\d,]+(?:\\.\\d{1,2})?)`, "i"),
     // Currency suffix: "450.00 EGP"
@@ -120,41 +122,52 @@ function extractSmsAmount(text: string, config?: SmsDetectorConfig): number | un
   return undefined;
 }
 
+function containsKeyword(lowerText: string, keyword: string): boolean {
+  const kw = keyword.trim().toLowerCase();
+  if (!kw) return false;
+  // Short single-word keywords (like "وارد") should match on word/whitespace boundaries
+  // so they don't falsely match substrings like "موارد"
+  if (!kw.includes(" ") && kw.length <= 4) {
+    const escaped = escapeRegex(kw);
+    const boundaryRegex = new RegExp(`(?:^|[\\s.,:;()\\-/])${escaped}(?:$|[\\s.,:;()\\-/])`, "i");
+    return boundaryRegex.test(lowerText);
+  }
+  return lowerText.includes(kw);
+}
+
 // ── Transaction Type extraction ─────────────────────────────────────────
 function extractSmsType(text: string, config?: SmsDetectorConfig): TransactionType {
   const activeConfig = config || getCachedConfig();
   const lowerText = text.toLowerCase();
 
-  // 1. Check user configured income keywords first
-  for (const kw of activeConfig.incomeKeywords) {
-    if (kw && lowerText.includes(kw.toLowerCase())) {
-      return "income";
-    }
+  // Check multi-word configured phrases first (more specific), then single-word configured keywords
+  const incomePhrases = activeConfig.incomeKeywords.filter((k) => k.trim().includes(" "));
+  const expensePhrases = activeConfig.expenseKeywords.filter((k) => k.trim().includes(" "));
+  const incomeWords = activeConfig.incomeKeywords.filter((k) => !k.trim().includes(" "));
+  const expenseWords = activeConfig.expenseKeywords.filter((k) => !k.trim().includes(" "));
+
+  for (const kw of incomePhrases) {
+    if (containsKeyword(lowerText, kw)) return "income";
   }
-
-  // 2. Check user configured expense keywords
-  for (const kw of activeConfig.expenseKeywords) {
-    if (kw && lowerText.includes(kw.toLowerCase())) {
-      return "expense";
-    }
+  for (const kw of expensePhrases) {
+    if (containsKeyword(lowerText, kw)) return "expense";
   }
-
-  // 3. Fallback explicit regex patterns
-  if (/تم\s+إضافة\s+تحويل/i.test(text)) return "income";
-  if (/تحويل\s+وارد/i.test(text)) return "income";
-  if (/credited|deposit|received|income|salary|إيداع|وارد/i.test(text)) return "income";
-
-  if (/تم\s+تنفيذ\s+تحويل/i.test(text)) return "expense";
-  if (/تم\s+خصم/i.test(text)) return "expense";
+  for (const kw of incomeWords) {
+    if (containsKeyword(lowerText, kw)) return "income";
+  }
+  for (const kw of expenseWords) {
+    if (containsKeyword(lowerText, kw)) return "expense";
+  }
 
   return "expense";
 }
 
 // ── Date extraction ─────────────────────────────────────────────────────
 function extractSmsDate(text: string): Date {
+  const normalizedText = normalizeDigits(text);
   // 3-part full date: "يوم 03/09/26" (DD/MM/YY) or "يوم 07/08/26"
   // Handles with or without space: "يوم 03/09/26" or "يوم03/09/26"
-  const fullDateMatch = text.match(
+  const fullDateMatch = normalizedText.match(
     /(?:يوم|بتاريخ|on|date)\s*([0-3]?\d)[/\-]([0-1]?\d)[/\-](\d{2,4})/i
   );
   if (fullDateMatch) {
@@ -167,7 +180,7 @@ function extractSmsDate(text: string): Date {
   }
 
   // 2-part short date without year: "يوم 09-03" (MM-DD, as NBE InstaPay uses)
-  const shortDateMatch = text.match(
+  const shortDateMatch = normalizedText.match(
     /(?:يوم|بتاريخ|on|date)\s*([0-1]?\d)[/\-]([0-3]?\d)(?!\d)/i
   );
   if (shortDateMatch) {

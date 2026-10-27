@@ -254,9 +254,13 @@ export class BudgetRepository {
       `
       SELECT COALESCE(SUM(amount), 0) as spent
       FROM transactions 
-      WHERE budget_id = ? AND type = 'expense' AND date >= ? AND date <= ?
+      WHERE COALESCE(deleted, 0) = 0
+        AND description != 'Balance adjustment'
+        AND (budget_id = ? OR (? IS NOT NULL AND category_id = ?))
+        AND (type = 'expense' OR (type = 'transfer' AND budget_id = ?))
+        AND date >= ? AND date <= ?
     `,
-      [id, startDate, endDate]
+      [id, budget.categoryId || null, budget.categoryId || null, id, startDate, endDate]
     )) as { spent: number } | null;
 
     const spent = spentResult?.spent || 0;

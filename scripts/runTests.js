@@ -12,6 +12,15 @@ Module.prototype.require = function (id) {
   if (id === "@react-native-community/netinfo") {
     return { fetch: () => Promise.resolve({ isConnected: true }) };
   }
+  if (id === "@react-native-async-storage/async-storage") {
+    const store = new Map();
+    const api = {
+      getItem: (k) => Promise.resolve(store.has(k) ? store.get(k) : null),
+      setItem: (k, v) => { store.set(k, v); return Promise.resolve(); },
+      removeItem: (k) => { store.delete(k); return Promise.resolve(); },
+    };
+    return { __esModule: true, default: api, ...api };
+  }
   if (id === "expo-file-system/legacy") {
     return { readAsStringAsync: () => Promise.resolve(""), EncodingType: { Base64: "base64" } };
   }
@@ -67,3 +76,4 @@ require.extensions[".ts"] = function (module, filename) {
 // Run the unit tests
 require("../src/__tests__/calculateWalletBalances.test.ts");
 require("../src/__tests__/ocrService.test.ts");
+require("../src/__tests__/smsParser.test.ts");

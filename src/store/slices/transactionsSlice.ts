@@ -10,7 +10,7 @@ import { startOfWeek, endOfWeek } from "date-fns";
 
 async function checkAndTriggerBudgetAlert(tx: Transaction, state: any) {
   try {
-    if (tx.type !== "expense") return;
+    if (tx.type !== "expense" && !(tx.type === "transfer" && Boolean(tx.budgetId))) return;
     const budgetsMap = state?.budgets?.items || {};
     const settingsData = state?.settings?.data;
     const allBudgets = Object.values(budgetsMap) as any[];
@@ -44,7 +44,8 @@ async function checkAndTriggerBudgetAlert(tx: Transaction, state: any) {
           budget.name,
           formatCurrency(progress.spent),
           formatCurrency(budget.amount),
-          progress.percentageUsed
+          progress.percentageUsed,
+          budget.id
         );
       }
     }

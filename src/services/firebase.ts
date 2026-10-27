@@ -9,14 +9,14 @@ import {
 import { getFirestore as initFirestore, Firestore } from "firebase/firestore";
 import { Platform } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-// Firebase configuration - Replace with your actual config
+// Firebase configuration loaded from environment variables (see .env.example)
 const firebaseConfig = {
-  apiKey: "AIzaSyBHTaSDwRxVbij2xi9K-sX5wgayv0wspUk",
-  authDomain: "strapicms1.firebaseapp.com",
-  projectId: "strapicms1",
-  storageBucket: "strapicms1.firebasestorage.app",
-  messagingSenderId: "364242382069",
-  appId: "1:364242382069:web:672e45727136c4368869bc",
+  apiKey: process.env.EXPO_PUBLIC_FIREBASE_API_KEY || "",
+  authDomain: process.env.EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN || "",
+  projectId: process.env.EXPO_PUBLIC_FIREBASE_PROJECT_ID || "",
+  storageBucket: process.env.EXPO_PUBLIC_FIREBASE_STORAGE_BUCKET || "",
+  messagingSenderId: process.env.EXPO_PUBLIC_FIREBASE_MESSAGING_SENDER_ID || "",
+  appId: process.env.EXPO_PUBLIC_FIREBASE_APP_ID || "",
 };
 
 // Initialize Firebase

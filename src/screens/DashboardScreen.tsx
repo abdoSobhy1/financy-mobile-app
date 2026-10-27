@@ -24,10 +24,15 @@ import { formatCurrency, formatDate } from "../utils";
 import { useAppTheme } from "../components/ui/ThemeProvider";
 import { Badge } from "../components/ui/Badge";
 import { ParsedTransaction } from "../types";
-import { Card } from "../components/ui";
+import {
+  Card,
+  useToast,
+  useTabBarHeight,
+  WalletEditorModal,
+  WalletEditorFormValues,
+} from "../components/ui";
 import { AppHeader } from "../components/ui/AppHeader";
 import { ListRow } from "../components/ui/ListRow";
-import { useTabBarHeight } from "../components/ui";
 import { IconChip } from "../components/ui/IconChip";
 import { addCategory, fetchCategories } from "../store/slices/categoriesSlice";
 import { fetchTransactions } from "../store/slices/transactionsSlice";
@@ -61,6 +66,7 @@ export const DashboardScreen: React.FC = () => {
     useAppTheme();
   const tabBarHeight = useTabBarHeight();
   const { handleTransactionPress } = useTransactionActions();
+  const { showSuccess, showError } = useToast();
 
   const transactions = useSelector(
     (state: RootState) => state.transactions.items,
@@ -82,10 +88,13 @@ export const DashboardScreen: React.FC = () => {
   const [balanceHistory, setBalanceHistory] = useState<number[]>([]);
   const [quickAddSlots, setQuickAddSlots] = useState<QuickAddSlot[]>([]);
   const [recentTransactions, setRecentTransactions] = useState<Transaction[]>([]);
-  const [overspentBudgets, setOverspentBudgets] = useState<{ id: string; name: string; excess: number }[]>([]);
+  const [overspentBudgets, setOverspentBudgets] = useState<
+    { id: string; name: string; excess: number; spent: number; amount: number }[]
+  >([]);
+  const [dismissedAlertIds, setDismissedAlertIds] = useState<string[]>([]);
 
-  const [showAlert, setShowAlert] = useState(true);
   const [hideBalances, setHideBalances] = useState(false);
+  const [activeCardIndex, setActiveCardIndex] = useState<number>(0);
 
   // Multi-Wallet State
   const [wallets, setWallets] = useState<WalletAccount[]>(() =>
@@ -93,6 +102,7 @@ export const DashboardScreen: React.FC = () => {
   );
   const [walletBalances, setWalletBalances] = useState<Record<string, number>>({});
   const [showTransferModal, setShowTransferModal] = useState(false);
+  const [showAddWalletModal, setShowAddWalletModal] = useState(false);
   const [showScanModal, setShowScanModal] = useState(false);
   const [fromWalletId, setFromWalletId] = useState<string>("default_cash");
   const [toWalletId, setToWalletId] = useState<string>("default_bank");
@@ -124,25 +134,32 @@ export const DashboardScreen: React.FC = () => {
   };
 
   useEffect(() => {
-    const checkAlert = async () => {
+    const checkDismissedAlerts = async () => {
       try {
-        const dismissedDate = await AsyncStorage.getItem("overspendingAlertDismissedDate");
+        const stored = await AsyncStorage.getItem("overspendingAlertDismissed");
         const today = new Date().toDateString();
-        if (dismissedDate === today) {
-          setShowAlert(false);
+        if (stored) {
+          const parsed = JSON.parse(stored);
+          if (parsed?.date === today && Array.isArray(parsed.ids)) {
+            setDismissedAlertIds(parsed.ids);
+          }
         }
       } catch (e) {
         console.error(e);
       }
     };
-    checkAlert();
+    checkDismissedAlerts();
   }, []);
 
-  const handleDismissAlert = async () => {
+  const handleDismissAlert = async (budgetId: string) => {
     try {
-      setShowAlert(false);
+      const nextIds = Array.from(new Set([...dismissedAlertIds, budgetId]));
+      setDismissedAlertIds(nextIds);
       const today = new Date().toDateString();
-      await AsyncStorage.setItem("overspendingAlertDismissedDate", today);
+      await AsyncStorage.setItem(
+        "overspendingAlertDismissed",
+        JSON.stringify({ date: today, ids: nextIds })
+      );
     } catch (e) {
       console.error(e);
     }
@@ -272,20 +289,34 @@ export const DashboardScreen: React.FC = () => {
           const currentTotalBudget = activeBudgets.reduce((sum, b) => sum + b.amount, 0);
           setTotalBudget(currentTotalBudget);
 
-          // Calculate overspent budgets
-          const overspent: { id: string; name: string; excess: number }[] = [];
+          // Calculate overspent budgets for in-app banners AND phone notifications
+          const overspent: {
+            id: string;
+            name: string;
+            excess: number;
+            spent: number;
+            amount: number;
+          }[] = [];
           activeBudgets.forEach((b) => {
-            if (b.alertsEnabled) {
+            if (b.alertsEnabled !== false && b.amount > 0) {
               const spent = publicPeriodTxs
                 .filter(
                   (t) =>
-                    t.budgetId === b.id &&
-                    (t.type === "expense" || t.type === "transfer") &&
+                    (t.budgetId === b.id ||
+                      (Boolean(b.categoryId) && t.categoryId === b.categoryId)) &&
+                    (t.type === "expense" ||
+                      (t.type === "transfer" && t.budgetId === b.id)) &&
                     !isAdjustment(t),
                 )
                 .reduce((sum, t) => sum + t.amount, 0);
               if (spent > b.amount) {
-                overspent.push({ id: b.id, name: b.name, excess: spent - b.amount });
+                overspent.push({
+                  id: b.id,
+                  name: b.name,
+                  excess: spent - b.amount,
+                  spent,
+                  amount: b.amount,
+                });
               }
             }
           });
@@ -518,6 +549,44 @@ export const DashboardScreen: React.FC = () => {
     navigation.navigate("AddTransaction", {});
   };
 
+  const openAddWalletModal = () => {
+    setShowAddWalletModal(true);
+  };
+
+  const handleCreateWalletSubmit = async (values: WalletEditorFormValues) => {
+    if (!values.name.trim()) {
+      showError("Please enter an account name");
+      return;
+    }
+    const initBal = parseFloat(values.initialBalance) || 0;
+    try {
+      const updatedWallets = await walletService.addWallet({
+        name: values.name.trim(),
+        type: values.type,
+        icon: values.icon,
+        color: values.color,
+        initialBalance: initBal,
+        isSecret: values.isSecret,
+      });
+      const { start, end } = await getCurrentBillingPeriod();
+      const allTransactions = Object.values(transactions).filter((t) => !t.deleted);
+      const periodTxs = allTransactions.filter((t) => {
+        const d = new Date(t.date);
+        return d >= start && d <= end;
+      });
+      setWallets(updatedWallets);
+      setWalletBalances(
+        walletService.calculateWalletBalances(updatedWallets, periodTxs, {
+          periodOnly: true,
+        }),
+      );
+      setShowAddWalletModal(false);
+      showSuccess(`Created "${values.name.trim()}"`);
+    } catch {
+      showError("Failed to create account");
+    }
+  };
+
   const handleTransferSubmit = async () => {
     const amt = parseFloat(transferAmount);
     if (!amt || amt <= 0 || fromWalletId === toWalletId) return;
@@ -534,6 +603,29 @@ export const DashboardScreen: React.FC = () => {
       transferBudgetId || undefined,
     );
     await dispatch(fetchTransactions());
+    if (transferBudgetId) {
+      const targetBudget = budgetsMap[transferBudgetId];
+      if (targetBudget && !targetBudget.deleted && targetBudget.alertsEnabled !== false) {
+        try {
+          const { db } = await import("../database/queries");
+          const progress = await db.budgets.getBudgetProgressForPeriod(
+            targetBudget.id,
+            start.toISOString(),
+            end.toISOString(),
+          );
+          if (progress && progress.percentageUsed >= 80) {
+            const { default: NotificationService } = await import("../services/notificationService");
+            await NotificationService.getInstance().sendBudgetAlertNotification(
+              targetBudget.name,
+              formatCurrency(progress.spent),
+              formatCurrency(targetBudget.amount),
+              progress.percentageUsed,
+              targetBudget.id,
+            );
+          }
+        } catch {}
+      }
+    }
     setWallets(updatedWallets);
     setWalletBalances(
       walletService.calculateWalletBalances(updatedWallets, periodTxs, {
@@ -542,7 +634,6 @@ export const DashboardScreen: React.FC = () => {
     );
     setTransferAmount("");
     setTransferBudgetId("");
-    setShowTransferModal(false);
     setShowTransferModal(false);
   };
 
@@ -607,41 +698,41 @@ export const DashboardScreen: React.FC = () => {
           paddingBottom: tabBarHeight,
         }}>
 
-        {/* Alerts Section (Dynamic Overspending Alerts) */}
-        {showAlert && overspentBudgets.length > 0 && (
+        {/* Alerts Section (In-App Overspending Banners) */}
+        {overspentBudgets.some((ob) => !dismissedAlertIds.includes(ob.id)) && (
           <View style={{ paddingHorizontal: spacing.lg, marginBottom: spacing.md, gap: spacing.sm }}>
-            {overspentBudgets.map((ob) => (
-              <View key={ob.id} style={{
-                backgroundColor: colors.errorContainer,
-                borderRadius: radius.lg,
-                padding: spacing.md,
-                flexDirection: 'row',
-                alignItems: 'center'
-              }}>
-                <View style={{
-                  width: 40,
-                  height: 40,
-                  borderRadius: 20,
-                  backgroundColor: 'rgba(255, 255, 255, 0.2)',
-                  justifyContent: 'center',
-                  alignItems: 'center',
-                  marginRight: spacing.md
-                }}>
-                  <Ionicons name="warning" size={24} color={colors.error} />
+            {overspentBudgets
+              .filter((ob) => !dismissedAlertIds.includes(ob.id))
+              .map((ob) => (
+                <View
+                  key={ob.id}
+                  style={[
+                    styles.alertBanner,
+                    {
+                      backgroundColor: colors.errorContainer,
+                      borderRadius: radius.lg,
+                      padding: spacing.md,
+                    },
+                  ]}>
+                  <View style={[styles.alertIconWrap, { marginRight: spacing.md }]}>
+                    <Ionicons name="warning" size={24} color={colors.error} />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={[typography.label, { color: colors.onErrorContainer, fontWeight: "700" }]}>
+                      {ob.name} Overspent
+                    </Text>
+                    <Text style={[typography.bodyMedium, { color: colors.onErrorContainer, opacity: 0.9 }]}>
+                      You exceeded this budget by {formatCurrency(ob.excess)}
+                    </Text>
+                  </View>
+                  <TouchableOpacity
+                    onPress={() => handleDismissAlert(ob.id)}
+                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                    style={{ padding: 8 }}>
+                    <Ionicons name="close" size={20} color={colors.onErrorContainer} />
+                  </TouchableOpacity>
                 </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={[typography.label, { color: colors.onErrorContainer, fontWeight: '700' }]}>
-                    {ob.name} Overspent
-                  </Text>
-                  <Text style={[typography.bodyMedium, { color: colors.onErrorContainer, opacity: 0.9 }]}>
-                    You exceeded this budget by {formatCurrency(ob.excess)}
-                  </Text>
-                </View>
-                <TouchableOpacity onPress={handleDismissAlert} style={{ padding: 8 }}>
-                  <Ionicons name="close" size={20} color={colors.onErrorContainer} />
-                </TouchableOpacity>
-              </View>
-            ))}
+              ))}
           </View>
         )}
 
@@ -650,99 +741,126 @@ export const DashboardScreen: React.FC = () => {
           horizontal
           showsHorizontalScrollIndicator={false}
           snapToInterval={CARD_WIDTH + spacing.md}
+          snapToAlignment="start"
+          disableIntervalMomentum
           decelerationRate="fast"
+          onScroll={(e) => {
+            const offsetX = e.nativeEvent.contentOffset.x;
+            const index = Math.round(offsetX / (CARD_WIDTH + spacing.md));
+            if (index !== activeCardIndex) {
+              setActiveCardIndex(Math.max(0, Math.min(1, index)));
+            }
+          }}
+          scrollEventThrottle={16}
           contentContainerStyle={{
             paddingHorizontal: spacing.lg,
-            paddingBottom: spacing.xl,
+            paddingBottom: spacing.sm,
             gap: spacing.md,
           }}>
 
           {/* 1. Unified Summary Card */}
           <View
-            style={{
-              width: CARD_WIDTH,
-              backgroundColor: colors.primaryContainer,
-              borderRadius: 32,
-              padding: spacing.xl,
-              overflow: "hidden",
-              justifyContent: "center",
-              minHeight: 185,
-            }}>
+            style={[
+              styles.heroCard,
+              {
+                width: CARD_WIDTH,
+                backgroundColor: colors.primaryContainer,
+                padding: spacing.xl,
+              },
+            ]}>
 
             {/* Absolute Graph Background */}
-            <View style={{ position: "absolute", bottom: -5, left: 0, right: 0, height: "60%" }}>
+            <View style={styles.sparklineWrap}>
               <Svg width="100%" height="100%" viewBox={`0 0 ${CARD_WIDTH} 80`} preserveAspectRatio="none">
                 <Path d={fillPath} fill={colors.onPrimaryContainer} fillOpacity={isDark ? 0.12 : 0.08} />
                 <Path d={strokePath} fill="none" stroke={colors.onPrimaryContainer} strokeWidth={3} strokeOpacity={isDark ? 0.6 : 0.45} />
               </Svg>
             </View>
 
-            <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start", flex: 1 }}>
+            <View style={styles.heroCardRow}>
 
-              {/* Left Side: Header, Big Number, NET BALANCE */}
-              <View style={{ flex: 1, paddingRight: spacing.sm }}>
-                <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: spacing.sm, flexWrap: "wrap", gap: spacing.xs }}>
-                  <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
-                    <Text style={[typography.label, { color: colors.onPrimaryContainer, textTransform: "uppercase", letterSpacing: 1, opacity: 0.75 }]}>
-                      NET BALANCE
+              {/* Left Side: Header, Big Number, % Change */}
+              <View style={{ flex: 1, paddingRight: spacing.sm, justifyContent: "space-between" }}>
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginBottom: spacing.sm }}>
+                  <Text style={[typography.label, { color: colors.onPrimaryContainer, textTransform: "uppercase", letterSpacing: 1, opacity: 0.75 }]}>
+                    NET BALANCE
+                  </Text>
+                  <View
+                    style={[
+                      styles.periodBadge,
+                      {
+                        backgroundColor: isDark ? "rgba(0,0,0,0.12)" : "rgba(255,255,255,0.75)",
+                        borderWidth: isDark ? 0 : 1,
+                        borderColor: isDark ? "transparent" : getAlphaColor(colors.onPrimaryContainer, "1F"),
+                      },
+                    ]}>
+                    <Text style={{ fontSize: 9, color: colors.onPrimaryContainer, fontWeight: "700" }}>
+                      THIS PERIOD
                     </Text>
-                    <View style={{
-                      backgroundColor: isDark ? "rgba(0,0,0,0.12)" : "rgba(255,255,255,0.75)",
-                      paddingHorizontal: 6,
-                      paddingVertical: 2,
-                      borderRadius: 6,
-                      borderWidth: isDark ? 0 : 1,
-                      borderColor: isDark ? "transparent" : getAlphaColor(colors.onPrimaryContainer, "1F"),
-                    }}>
-                      <Text style={{ fontSize: 9, color: colors.onPrimaryContainer, fontWeight: "700" }}>
-                        THIS PERIOD
-                      </Text>
-                    </View>
-                    <TouchableOpacity
-                      onPress={toggleHideBalances}
-                      hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-                      style={{ opacity: 0.75 }}>
-                      <Ionicons
-                        name={hideBalances ? "eye-off-outline" : "eye-outline"}
-                        size={16}
-                        color={colors.onPrimaryContainer}
-                      />
-                    </TouchableOpacity>
                   </View>
-                  <View style={{
-                    backgroundColor: isDark ? "rgba(0,0,0,0.12)" : "rgba(255,255,255,0.75)",
-                    paddingHorizontal: 8,
-                    paddingVertical: 4,
-                    borderRadius: 12,
-                    borderWidth: isDark ? 0 : 1,
-                    borderColor: isDark ? "transparent" : getAlphaColor(colors.onPrimaryContainer, "1F"),
-                  }}>
-                    <Text style={{ fontSize: 10, color: colors.onPrimaryContainer, fontWeight: "bold", opacity: 0.85 }}>
+                  <TouchableOpacity
+                    onPress={toggleHideBalances}
+                    hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                    style={{ opacity: 0.75 }}>
+                    <Ionicons
+                      name={hideBalances ? "eye-off-outline" : "eye-outline"}
+                      size={16}
+                      color={colors.onPrimaryContainer}
+                    />
+                  </TouchableOpacity>
+                </View>
+
+                <Text
+                  style={[
+                    typography.h1,
+                    {
+                      color: colors.onPrimaryContainer,
+                      fontSize: 38,
+                      fontWeight: "900",
+                      marginBottom: spacing.sm,
+                    },
+                  ]}
+                  numberOfLines={1}
+                  adjustsFontSizeToFit>
+                  {maskCurrency(balance, balance >= 0 ? "+" : "")}
+                </Text>
+
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                  <View
+                    style={[
+                      styles.pctBadge,
+                      {
+                        backgroundColor: isDark ? "rgba(0,0,0,0.14)" : "rgba(255,255,255,0.75)",
+                        borderWidth: isDark ? 0 : 1,
+                        borderColor: isDark ? "transparent" : getAlphaColor(colors.onPrimaryContainer, "1F"),
+                      },
+                    ]}>
+                    <Text style={{ fontSize: 10, color: colors.onPrimaryContainer, fontWeight: "700", opacity: 0.9 }}>
                       {balanceChangePct >= 0 ? "↑" : "↓"} {balanceChangePct > 0 ? "+" : ""}{balanceChangePct.toFixed(1)}%
                     </Text>
                   </View>
+                  <Text style={{ fontSize: 11, color: colors.onPrimaryContainer, opacity: 0.65, fontWeight: "600" }}>
+                    vs last period
+                  </Text>
                 </View>
-
-                <Text style={[typography.h1, { color: colors.onPrimaryContainer, fontSize: 38, fontWeight: "900", marginBottom: spacing.xs }]} numberOfLines={1} adjustsFontSizeToFit>
-                  {maskCurrency(balance, balance >= 0 ? "+" : "")}
-                </Text>
               </View>
 
               {/* Right Side: Stacked Pills */}
               <View style={{ width: 124, gap: spacing.sm }}>
 
                 {/* Income Pill (stacked) */}
-                <View style={{
-                  backgroundColor: isDark ? "rgba(0,0,0,0.15)" : "rgba(255,255,255,0.75)",
-                  borderRadius: 16,
-                  padding: spacing.sm,
-                  flexDirection: "row",
-                  alignItems: "center",
-                  gap: spacing.xs,
-                  borderWidth: isDark ? 0 : 1,
-                  borderColor: isDark ? "transparent" : getAlphaColor(colors.onPrimaryContainer, "1F"),
-                }}>
-                  <View style={{ width: 24, height: 24, borderRadius: 12, backgroundColor: isDark ? "rgba(255,255,255,0.2)" : getAlphaColor(colors.onPrimaryContainer, "1F"), alignItems: "center", justifyContent: "center" }}>
+                <View
+                  style={[
+                    styles.statPill,
+                    {
+                      backgroundColor: isDark ? "rgba(0,0,0,0.15)" : "rgba(255,255,255,0.75)",
+                      padding: spacing.sm,
+                      gap: spacing.xs,
+                      borderWidth: isDark ? 0 : 1,
+                      borderColor: isDark ? "transparent" : getAlphaColor(colors.onPrimaryContainer, "1F"),
+                    },
+                  ]}>
+                  <View style={[styles.statPillIcon, { backgroundColor: isDark ? "rgba(255,255,255,0.2)" : getAlphaColor(colors.onPrimaryContainer, "1F") }]}>
                     <Ionicons name="arrow-down" size={12} color={colors.onPrimaryContainer} />
                   </View>
                   <View style={{ flex: 1, justifyContent: "center" }}>
@@ -752,17 +870,18 @@ export const DashboardScreen: React.FC = () => {
                 </View>
 
                 {/* Expenses Pill (stacked) */}
-                <View style={{
-                  backgroundColor: isDark ? "rgba(0,0,0,0.15)" : "rgba(255,255,255,0.75)",
-                  borderRadius: 16,
-                  padding: spacing.sm,
-                  flexDirection: "row",
-                  alignItems: "center",
-                  gap: spacing.xs,
-                  borderWidth: isDark ? 0 : 1,
-                  borderColor: isDark ? "transparent" : getAlphaColor(colors.onPrimaryContainer, "1F"),
-                }}>
-                  <View style={{ width: 24, height: 24, borderRadius: 12, backgroundColor: isDark ? "rgba(255,255,255,0.2)" : getAlphaColor(colors.onPrimaryContainer, "1F"), alignItems: "center", justifyContent: "center" }}>
+                <View
+                  style={[
+                    styles.statPill,
+                    {
+                      backgroundColor: isDark ? "rgba(0,0,0,0.15)" : "rgba(255,255,255,0.75)",
+                      padding: spacing.sm,
+                      gap: spacing.xs,
+                      borderWidth: isDark ? 0 : 1,
+                      borderColor: isDark ? "transparent" : getAlphaColor(colors.onPrimaryContainer, "1F"),
+                    },
+                  ]}>
+                  <View style={[styles.statPillIcon, { backgroundColor: isDark ? "rgba(255,255,255,0.2)" : getAlphaColor(colors.onPrimaryContainer, "1F") }]}>
                     <Ionicons name="arrow-up" size={12} color={colors.onPrimaryContainer} />
                   </View>
                   <View style={{ flex: 1, justifyContent: "center" }}>
@@ -779,14 +898,15 @@ export const DashboardScreen: React.FC = () => {
 
           {/* 2. Monthly Spend vs Budget Card (budgeted transactions only) */}
           <View
-            style={{
-              width: CARD_WIDTH,
-              backgroundColor: colors.primaryContainer,
-              borderRadius: 32,
-              padding: spacing.xl,
-              justifyContent: "space-between",
-              minHeight: 185,
-            }}>
+            style={[
+              styles.heroCard,
+              {
+                width: CARD_WIDTH,
+                backgroundColor: colors.primaryContainer,
+                padding: spacing.xl,
+                justifyContent: "space-between",
+              },
+            ]}>
             <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start" }}>
               <View style={{ flex: 1 }}>
                 <Text
@@ -837,46 +957,89 @@ export const DashboardScreen: React.FC = () => {
               )}
             </View>
 
-            <View style={{ flexDirection: "row", alignItems: "center", marginTop: spacing.md }}>
-              <View style={{ width: 48, height: 48, marginRight: spacing.md }}>
-                <Svg width="48" height="48" viewBox="0 0 60 60">
-                  <Circle
-                    cx="30"
-                    cy="30"
-                    r={pieRadius}
-                    stroke={colors.onPrimaryContainer}
-                    strokeOpacity={0.2}
-                    strokeWidth={pieStroke}
-                    fill="none"
-                  />
-                  <Circle
-                    cx="30"
-                    cy="30"
-                    r={pieRadius}
-                    stroke={colors.onPrimaryContainer}
-                    strokeWidth={pieStroke}
-                    fill="none"
-                    strokeDasharray={pieCircumference}
-                    strokeDashoffset={pieDashoffset}
-                    strokeLinecap="round"
-                    rotation="-90"
-                    origin="30, 30"
-                  />
-                </Svg>
+            {totalBudget > 0 ? (
+              <View style={{ flexDirection: "row", alignItems: "center", marginTop: spacing.md }}>
+                <View style={{ width: 48, height: 48, marginRight: spacing.md }}>
+                  <Svg width="48" height="48" viewBox="0 0 60 60">
+                    <Circle
+                      cx="30"
+                      cy="30"
+                      r={pieRadius}
+                      stroke={colors.onPrimaryContainer}
+                      strokeOpacity={0.2}
+                      strokeWidth={pieStroke}
+                      fill="none"
+                    />
+                    <Circle
+                      cx="30"
+                      cy="30"
+                      r={pieRadius}
+                      stroke={colors.onPrimaryContainer}
+                      strokeWidth={pieStroke}
+                      fill="none"
+                      strokeDasharray={pieCircumference}
+                      strokeDashoffset={pieDashoffset}
+                      strokeLinecap="round"
+                      rotation="-90"
+                      origin="30, 30"
+                    />
+                  </Svg>
+                </View>
+                <View>
+                  <Text style={[typography.bodyMedium, { color: colors.onPrimaryContainer, opacity: 0.75 }]}>
+                    vs. {maskCurrency(totalBudget)} Budget
+                  </Text>
+                  <Text style={[typography.label, { color: colors.onPrimaryContainer, opacity: 0.9, marginTop: 2 }]}>
+                    {budgetPercentUsed}% Used • {daysLeftInPeriod}d left
+                  </Text>
+                </View>
               </View>
-              <View>
-                <Text style={[typography.bodyMedium, { color: colors.onPrimaryContainer, opacity: 0.75 }]}>
-                  vs. {maskCurrency(totalBudget)} Budget
+            ) : (
+              <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginTop: spacing.md }}>
+                <Text style={[typography.bodyMedium, { color: colors.onPrimaryContainer, opacity: 0.8 }]}>
+                  No active budgets set
                 </Text>
-                <Text style={[typography.label, { color: colors.onPrimaryContainer, opacity: 0.9, marginTop: 2 }]}>
-                  {budgetPercentUsed}% Used • {daysLeftInPeriod}d left
-                </Text>
+                <TouchableOpacity
+                  onPress={() => (navigation as any).navigate("Budgets")}
+                  activeOpacity={0.75}
+                  style={{
+                    flexDirection: "row",
+                    alignItems: "center",
+                    gap: 4,
+                    backgroundColor: isDark ? "rgba(0,0,0,0.16)" : "rgba(255,255,255,0.8)",
+                    paddingHorizontal: 12,
+                    paddingVertical: 7,
+                    borderRadius: 14,
+                  }}>
+                  <Text style={{ fontSize: 12, fontWeight: "700", color: colors.onPrimaryContainer }}>
+                    Set Budget
+                  </Text>
+                  <Ionicons name="arrow-forward" size={13} color={colors.onPrimaryContainer} />
+                </TouchableOpacity>
               </View>
-            </View>
+            )}
           </View>
 
-
         </ScrollView>
+
+        {/* Carousel Pagination Dots */}
+        <View style={[styles.paginationRow, { marginBottom: spacing.lg }]}>
+          {[0, 1].map((idx) => {
+            const active = activeCardIndex === idx;
+            return (
+              <View
+                key={`dot_${idx}`}
+                style={[
+                  styles.paginationDot,
+                  {
+                    width: active ? 18 : 6,
+                    backgroundColor: active ? colors.primary : colors.outlineVariant,
+                  },
+                ]}
+              />
+            );
+          })}
+        </View>
 
         {/* Wallets & Accounts Strip */}
         <View style={{ marginBottom: spacing.xl }}>
@@ -912,7 +1075,23 @@ export const DashboardScreen: React.FC = () => {
                 color={colors.onSurfaceVariant}
               />
             </TouchableOpacity>
-            <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+              <TouchableOpacity
+                onPress={openAddWalletModal}
+                style={{
+                  flexDirection: "row",
+                  alignItems: "center",
+                  gap: 4,
+                  backgroundColor: colors.primaryContainer,
+                  paddingHorizontal: 10,
+                  paddingVertical: 5,
+                  borderRadius: 12,
+                }}>
+                <Ionicons name="add" size={15} color={colors.onPrimaryContainer} />
+                <Text style={{ fontSize: 12, fontWeight: "700", color: colors.onPrimaryContainer }}>
+                  Add
+                </Text>
+              </TouchableOpacity>
               <TouchableOpacity
                 onPress={() => setShowTransferModal(true)}
                 style={{
@@ -1018,6 +1197,54 @@ export const DashboardScreen: React.FC = () => {
                 </TouchableOpacity>
               );
             })}
+
+            {/* Instant Add New Wallet / Account Card */}
+            <TouchableOpacity
+              onPress={openAddWalletModal}
+              activeOpacity={0.7}
+              style={{
+                backgroundColor: colors.surface,
+                borderRadius: 20,
+                paddingHorizontal: 14,
+                paddingVertical: 12,
+                minWidth: 135,
+                flexDirection: "row",
+                alignItems: "center",
+                gap: 10,
+                borderWidth: 1,
+                borderStyle: "dashed",
+                borderColor: colors.primary,
+              }}>
+              <View
+                style={{
+                  width: 38,
+                  height: 38,
+                  borderRadius: 19,
+                  backgroundColor: colors.primaryContainer,
+                  alignItems: "center",
+                  justifyContent: "center",
+                }}>
+                <Ionicons name="add" size={20} color={colors.onPrimaryContainer} />
+              </View>
+              <View>
+                <Text
+                  style={{
+                    fontSize: 13,
+                    fontWeight: "700",
+                    color: colors.primary,
+                  }}>
+                  New Account
+                </Text>
+                <Text
+                  style={{
+                    fontSize: 11,
+                    color: colors.onSurfaceVariant,
+                    marginTop: 1,
+                  }}>
+                  Instant create
+                </Text>
+              </View>
+            </TouchableOpacity>
           </ScrollView>
         </View>
 
@@ -1074,9 +1301,17 @@ export const DashboardScreen: React.FC = () => {
               ))}
             </ScrollView>
 
+            {/* Vertical Separator between categories and AI/Scan actions */}
+            <View
+              style={[
+                styles.quickAddDivider,
+                { backgroundColor: colors.outlineVariant },
+              ]}
+            />
+
             {/* Scan Receipt / OCR chip */}
             <TouchableOpacity
-              style={{ alignItems: "center", width: 64 }}
+              style={{ alignItems: "center", width: 60 }}
               onPress={() => setShowScanModal(true)}>
               <View
                 style={[
@@ -1109,7 +1344,7 @@ export const DashboardScreen: React.FC = () => {
 
             {/* Voice / More chip */}
             <TouchableOpacity
-              style={{ alignItems: "center", width: 64 }}
+              style={{ alignItems: "center", width: 60, marginLeft: 4 }}
               onPress={() => navigation.navigate("VoiceInput")}>
               <View
                 style={[
@@ -1266,17 +1501,58 @@ export const DashboardScreen: React.FC = () => {
             })}
 
             {recentTransactions.length === 0 && (
-              <Text
-                style={[
-                  typography.bodyMedium,
-                  {
-                    color: colors.onSurfaceVariant,
-                    textAlign: "center",
-                    marginVertical: spacing.xl,
-                  },
-                ]}>
-                No recent transactions
-              </Text>
+              <View style={styles.emptyTransactionsWrap}>
+                <View
+                  style={[
+                    styles.emptyTransactionsIcon,
+                    { backgroundColor: colors.surfaceVariant },
+                  ]}>
+                  <Ionicons
+                    name="receipt-outline"
+                    size={28}
+                    color={colors.onSurfaceVariant}
+                  />
+                </View>
+                <Text
+                  style={[
+                    typography.label,
+                    { color: colors.onBackground, fontSize: 15, marginBottom: 4 },
+                  ]}>
+                  No recent transactions
+                </Text>
+                <Text
+                  style={[
+                    typography.bodySmall,
+                    {
+                      color: colors.onSurfaceVariant,
+                      textAlign: "center",
+                      marginBottom: spacing.md,
+                    },
+                  ]}>
+                  Tap a Quick Add category above or add your first entry.
+                </Text>
+                <TouchableOpacity
+                  onPress={handleMorePress}
+                  activeOpacity={0.8}
+                  style={[
+                    styles.emptyAddButton,
+                    { backgroundColor: colors.primaryContainer },
+                  ]}>
+                  <Ionicons
+                    name="add"
+                    size={16}
+                    color={colors.onPrimaryContainer}
+                  />
+                  <Text
+                    style={{
+                      fontSize: 13,
+                      fontWeight: "700",
+                      color: colors.onPrimaryContainer,
+                    }}>
+                    Add Transaction
+                  </Text>
+                </TouchableOpacity>
+              </View>
             )}
           </View>
         </View>
@@ -1504,6 +1780,13 @@ export const DashboardScreen: React.FC = () => {
         </View>
       </Modal>
 
+      {/* Shared Create Account / Wallet Modal */}
+      <WalletEditorModal
+        visible={showAddWalletModal}
+        onClose={() => setShowAddWalletModal(false)}
+        onSave={handleCreateWalletSubmit}
+      />
+
       <ReceiptScanModal
         visible={showScanModal}
         onClose={() => setShowScanModal(false)}
@@ -1522,6 +1805,76 @@ const styles = StyleSheet.create({
   notificationButton: {
     padding: 8,
   },
+  alertBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  alertIconWrap: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: "rgba(255, 255, 255, 0.2)",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  heroCard: {
+    borderRadius: 32,
+    overflow: "hidden",
+    justifyContent: "center",
+    minHeight: 185,
+  },
+  sparklineWrap: {
+    position: "absolute",
+    bottom: -5,
+    left: 0,
+    right: 0,
+    height: "60%",
+  },
+  heroCardRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "flex-start",
+    flex: 1,
+  },
+  periodBadge: {
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 6,
+  },
+  pctBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 10,
+  },
+  statPill: {
+    borderRadius: 16,
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  statPillIcon: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  paginationRow: {
+    flexDirection: "row",
+    justifyContent: "center",
+    alignItems: "center",
+    gap: 6,
+  },
+  paginationDot: {
+    height: 6,
+    borderRadius: 3,
+  },
+  quickAddDivider: {
+    width: 1,
+    height: 44,
+    marginTop: 6,
+    marginHorizontal: 8,
+    opacity: 0.7,
+  },
   circleIcon: {
     width: 56,
     height: 56,
@@ -1534,5 +1887,26 @@ const styles = StyleSheet.create({
     height: 56,
     alignItems: "center",
     justifyContent: "center",
+  },
+  emptyTransactionsWrap: {
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 24,
+  },
+  emptyTransactionsIcon: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 12,
+  },
+  emptyAddButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 20,
   },
 });

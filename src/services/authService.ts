@@ -78,7 +78,8 @@ export class AuthService {
       // Check if user changed and reset database if needed
       const lastUserId = await AsyncStorage.getItem(AuthService.LAST_USER_KEY);
 
-      if (lastUserId && lastUserId !== user.uid) {
+      // Do not reset local data when upgrading from Guest mode ("guest") to a signed-in account
+      if (lastUserId && lastUserId !== user.uid && lastUserId !== "guest") {
         console.log(
           `👤 User changed from ${lastUserId} to ${user.uid}. Resetting local database for security.`,
         );
@@ -233,10 +234,57 @@ export class AuthService {
     }
   }
 
+  // Sign in as Guest (Local SQLite only, no Firebase Cloud Sync)
+  public async signInAsGuest(): Promise<User> {
+    const guestUser: User = {
+      uid: "guest",
+      email: null,
+      displayName: "Guest User",
+      emailVerified: false,
+      isGuest: true,
+    };
+
+    try {
+      // Ensure any previous Firebase auth session is signed out
+      if (this.getAuth().currentUser) {
+        await signOut(this.getAuth());
+      }
+    } catch {
+      // Ignore Firebase signOut errors when entering guest mode
+    }
+
+    await this.saveSession(guestUser);
+    console.log("👤 Signed in as Guest (local-only mode)");
+    return guestUser;
+  }
+
+  // Check if current session is Guest Mode
+  public async isGuestAsync(): Promise<boolean> {
+    if (this.getAuth().currentUser !== null) {
+      return false;
+    }
+    const storedUser = await this.getStoredUser();
+    return Boolean(storedUser?.isGuest || storedUser?.uid === "guest");
+  }
+
+  // Check if Firebase Cloud Sync is allowed (requires real authenticated non-guest account)
+  public async isCloudSyncAllowedAsync(): Promise<boolean> {
+    if (this.getAuth().currentUser !== null) {
+      return true;
+    }
+    const storedUser = await this.getStoredUser();
+    if (!storedUser || storedUser.isGuest || storedUser.uid === "guest") {
+      return false;
+    }
+    return true;
+  }
+
   // Sign out
   public async signOut(): Promise<void> {
     try {
-      await signOut(this.getAuth());
+      if (this.getAuth().currentUser) {
+        await signOut(this.getAuth());
+      }
 
       // Clear stored session
       await this.clearStoredSession();
@@ -278,9 +326,21 @@ export class AuthService {
 
   // Listen to auth state changes
   public onAuthStateChanged(callback: (user: User | null) => void): () => void {
-    return onAuthStateChanged(this.getAuth(), (firebaseUser) => {
+    return onAuthStateChanged(this.getAuth(), async (firebaseUser) => {
       const user = this.mapFirebaseUser(firebaseUser);
-      callback(user);
+      if (user) {
+        callback(user);
+        return;
+      }
+
+      // Preserve active Guest Mode session when Firebase has no authenticated user
+      const storedUser = await this.getStoredUser();
+      if (storedUser?.isGuest || storedUser?.uid === "guest") {
+        callback(storedUser);
+        return;
+      }
+
+      callback(null);
     });
   }
 
@@ -331,6 +391,9 @@ export class AuthService {
     // Check stored session
     const storedUser = await this.getStoredUser();
     if (storedUser) {
+      if (storedUser.isGuest || storedUser.uid === "guest") {
+        throw new Error("Cloud sync is disabled in Guest Mode");
+      }
       return storedUser.uid;
     }
 

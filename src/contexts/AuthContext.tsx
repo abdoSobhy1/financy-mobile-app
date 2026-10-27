@@ -43,14 +43,14 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
       dispatch(setUser(user));
 
-      // Initialize or stop sync based on auth state
-      if (user) {
+      // Initialize or stop sync based on auth state (skip sync for Guest Mode)
+      if (user && !user.isGuest && user.uid !== "guest") {
         // Delay sync initialization to ensure auth state is stable
         authTimeout = setTimeout(async () => {
           try {
             // Double-check user is still authenticated before initializing sync
             const currentUser = authService.getCurrentUser();
-            if (currentUser) {
+            if (currentUser && !currentUser.isGuest) {
               console.log("🔐 User authenticated, initializing sync (conflicts-only)...");
               // Initialize sync (now uses conflicts-only approach)
               await dispatch(initializeSync());

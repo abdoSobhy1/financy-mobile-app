@@ -23,6 +23,10 @@ export const signUp = createAsyncThunk(
   }
 );
 
+export const signInAsGuest = createAsyncThunk("auth/signInAsGuest", async () => {
+  return await authService.signInAsGuest();
+});
+
 export const signOut = createAsyncThunk("auth/signOut", async () => {
   await authService.signOut();
 });
@@ -116,6 +120,22 @@ const authSlice = createSlice({
       state.user = null;
       state.isAuthenticated = false;
       state.error = action.error.message || "Sign up failed";
+    });
+
+    // Sign In As Guest
+    builder.addCase(signInAsGuest.pending, (state) => {
+      state.loading = true;
+      state.error = null;
+    });
+    builder.addCase(signInAsGuest.fulfilled, (state, action) => {
+      state.loading = false;
+      state.user = action.payload;
+      state.isAuthenticated = true;
+      state.error = null;
+    });
+    builder.addCase(signInAsGuest.rejected, (state, action) => {
+      state.loading = false;
+      state.error = action.error.message || "Guest login failed";
     });
 
     // Sign Out

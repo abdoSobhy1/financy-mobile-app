@@ -125,19 +125,19 @@ export async function getSmsConfig(): Promise<SmsDetectorConfig> {
     if (raw) {
       const parsed = JSON.parse(raw) as Partial<SmsDetectorConfig>;
       cachedConfig = {
-        bankSenders: Array.isArray(parsed.bankSenders) && parsed.bankSenders.length > 0
+        bankSenders: Array.isArray(parsed.bankSenders)
           ? parsed.bankSenders
           : [...DEFAULT_SMS_CONFIG.bankSenders],
-        incomeKeywords: Array.isArray(parsed.incomeKeywords) && parsed.incomeKeywords.length > 0
+        incomeKeywords: Array.isArray(parsed.incomeKeywords)
           ? parsed.incomeKeywords
           : [...DEFAULT_SMS_CONFIG.incomeKeywords],
-        expenseKeywords: Array.isArray(parsed.expenseKeywords) && parsed.expenseKeywords.length > 0
+        expenseKeywords: Array.isArray(parsed.expenseKeywords)
           ? parsed.expenseKeywords
           : [...DEFAULT_SMS_CONFIG.expenseKeywords],
-        atmKeywords: Array.isArray(parsed.atmKeywords) && parsed.atmKeywords.length > 0
+        atmKeywords: Array.isArray(parsed.atmKeywords)
           ? parsed.atmKeywords
           : [...DEFAULT_SMS_CONFIG.atmKeywords],
-        currencyKeywords: Array.isArray(parsed.currencyKeywords) && parsed.currencyKeywords.length > 0
+        currencyKeywords: Array.isArray(parsed.currencyKeywords)
           ? parsed.currencyKeywords
           : [...DEFAULT_SMS_CONFIG.currencyKeywords],
         ignoreAtmWithdrawals: typeof parsed.ignoreAtmWithdrawals === "boolean"

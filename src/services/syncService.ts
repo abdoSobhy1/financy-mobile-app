@@ -72,9 +72,10 @@ export class SyncService {
 
   // Initialize sync for all collections
   public async initializeSync(): Promise<void> {
-    const isAuth = await authService.isAuthenticatedAsync();
-    if (!isAuth) {
-      throw new Error("User must be authenticated to sync");
+    const canSync = await authService.isCloudSyncAllowedAsync();
+    if (!canSync) {
+      console.log("⏭️ Cloud sync skipped (Guest Mode or unauthenticated)");
+      return;
     }
 
     console.log(
@@ -183,9 +184,9 @@ export class SyncService {
    * Manually check for changes across all collections (immediate check)
    */
   public async checkForChanges(): Promise<void> {
-    const isAuth = await authService.isAuthenticatedAsync();
-    if (!isAuth) {
-      throw new Error("User must be authenticated to check for changes");
+    const canSync = await authService.isCloudSyncAllowedAsync();
+    if (!canSync) {
+      return;
     }
 
     console.log("🔍 Manually checking for changes across all collections...");

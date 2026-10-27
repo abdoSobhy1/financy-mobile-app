@@ -49,11 +49,25 @@ GoogleService-Info.plist
 *.sqlite
 *.sqlite3
 
-# Build artifacts
+# Build artifacts & archives
 build/
 *.ipa
 *.apk
 *.aab
+*.rar
+*.zip
+*.7z
+
+# Scratch & generated analysis reports
+grep
+exclude-self.txt
+compress rn.bat
+replace_settings.py
+scripts/replace_alert.py
+scripts/*-report.json
+scripts/*-analysis.json
+scripts/*-graph.json
+scripts/organize-plan*.json
 
 # Test files
 test-*
@@ -76,3 +90,4 @@ database-*
 
 # Environment files
 .env
+!.env.example

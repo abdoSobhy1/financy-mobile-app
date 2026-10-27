@@ -304,34 +304,6 @@ async function callChatModel(
     }
   }
 
-  // 4. Public Free Fallback (text only)
-  if (!imageInput) {
-    try {
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 8000);
-      const res = await fetch("https://text.pollinations.ai/", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          messages: [
-            { role: "system", content: systemPrompt },
-            { role: "user", content: userPrompt },
-          ],
-          model: "openai",
-          jsonMode: true,
-        }),
-        signal: controller.signal,
-      });
-      clearTimeout(timeoutId);
-      if (res.ok) {
-        const text = await res.text();
-        if (text) return text;
-      }
-    } catch (publicErr) {
-      console.warn("[AIService] Public fallback endpoint unreachable:", publicErr);
-    }
-  }
-
   throw new Error(
     "Cloud AI requires an API key. Add your free Google Gemini key in Settings > Cloud AI Assistant (100% free at aistudio.google.com)."
   );

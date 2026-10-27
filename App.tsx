@@ -227,17 +227,30 @@ export default function App() {
       const data = response.notification.request.content.data as any;
       if (data?.type !== "sms-transaction") return;
 
-      // The notification identifier is the key into AsyncStorage
-      const notifId = response.notification.request.identifier;
-      const tx = await retrieveSmsTransaction(notifId);
+      // Resolve key from either custom data payload or notification request identifier
+      const requestNotifId = response.notification.request.identifier;
+      const payloadNotifId =
+        data?.smsNotifId && data.smsNotifId !== "pending"
+          ? String(data.smsNotifId)
+          : null;
+
+      let tx = payloadNotifId ? await retrieveSmsTransaction(payloadNotifId) : null;
+      if (!tx && requestNotifId) {
+        tx = await retrieveSmsTransaction(requestNotifId);
+      }
       if (!tx) return;
 
-      // Clean up stored entry
-      await clearSmsTransaction(notifId);
+      // Navigate — wait for navigator AND Main authenticated stack to be ready
+      let attempts = 0;
+      const navigate = async () => {
+        const rootState = navigationRef.isReady()
+          ? navigationRef.getRootState()
+          : undefined;
+        const hasMainRoute = rootState?.routeNames?.includes("Main");
 
-      // Navigate — wait for navigator to be ready
-      const navigate = () => {
-        if (navigationRef.isReady()) {
+        if (navigationRef.isReady() && hasMainRoute) {
+          if (payloadNotifId) await clearSmsTransaction(payloadNotifId);
+          if (requestNotifId) await clearSmsTransaction(requestNotifId);
           (navigationRef as any).navigate("Main", {
             screen: "Transactions",
             params: {
@@ -245,7 +258,8 @@ export default function App() {
               params: { prefilledData: tx },
             },
           });
-        } else {
+        } else if (attempts < 50) {
+          attempts += 1;
           setTimeout(navigate, 200);
         }
       };

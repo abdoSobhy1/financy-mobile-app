@@ -28,3 +28,5 @@ export { IconChip } from "./IconChip";
 export { resolveCategoryColor, useAppTheme } from "./ThemeProvider";
 export { Shimmer } from "./Shimmer";
 export * from "./CustomKeypad";
+export { WalletEditorModal, WALLET_ICONS, WALLET_COLORS } from "./WalletEditorModal";
+export type { WalletEditorFormValues } from "./WalletEditorModal";

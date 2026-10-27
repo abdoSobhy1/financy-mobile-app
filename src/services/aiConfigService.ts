@@ -20,13 +20,70 @@ export interface AIConfig {
 
 const AI_CONFIG_KEY = "@financy_ai_config";
 
+function getBundledKeys(): string[] {
+  return [
+    process.env.EXPO_PUBLIC_GEMINI_API_KEY,
+    process.env.GEMINI_API_KEY,
+    process.env.EXPO_PUBLIC_GROQ_API_KEY,
+    process.env.GROQ_API_KEY,
+    process.env.EXPO_PUBLIC_OPENAI_API_KEY,
+    process.env.OPENAI_API_KEY,
+  ]
+    .filter((k): k is string => Boolean(k && k.trim()))
+    .map((k) => k.trim());
+}
+
+/**
+ * Returns metadata about the user's custom AI configuration WITHOUT ever returning the raw API key string for UI display.
+ */
+export async function getAIConfigStatus(): Promise<{
+  provider: AIProvider;
+  hasCustomKey: boolean;
+}> {
+  try {
+    const raw = await AsyncStorage.getItem(AI_CONFIG_KEY);
+    if (raw) {
+      const parsed: AIConfig = JSON.parse(raw);
+      const trimmedKey = parsed?.apiKey?.trim() || "";
+      const bundledKeys = getBundledKeys();
+      const isCustom = trimmedKey.length > 0 && !bundledKeys.includes(trimmedKey);
+      return {
+        provider: parsed?.provider || "gemini",
+        hasCustomKey: isCustom,
+      };
+    }
+  } catch (e) {
+    console.warn("[AIConfigService] Failed to read stored config status:", e);
+  }
+  return { provider: "gemini", hasCustomKey: false };
+}
+
+/**
+ * Returns true if the user has explicitly configured their own personal API key (not the bundled fallback key).
+ */
+export async function hasCustomAIApiKey(): Promise<boolean> {
+  const status = await getAIConfigStatus();
+  return status.hasCustomKey;
+}
+
+export async function clearCustomAIConfig(): Promise<void> {
+  await AsyncStorage.removeItem(AI_CONFIG_KEY);
+}
+
+/**
+ * Internal getter used by AIService to perform requests.
+ * Uses user's custom key if present, otherwise falls back to bundled environment key.
+ */
 export async function getAIConfig(): Promise<AIConfig> {
   try {
     const raw = await AsyncStorage.getItem(AI_CONFIG_KEY);
     if (raw) {
       const parsed: AIConfig = JSON.parse(raw);
-      if (parsed && parsed.provider) {
-        return parsed;
+      if (parsed && parsed.provider && parsed.apiKey && parsed.apiKey.trim()) {
+        return {
+          ...parsed,
+          apiKey: parsed.apiKey.trim(),
+        };
       }
     }
   } catch (e) {
@@ -34,24 +91,36 @@ export async function getAIConfig(): Promise<AIConfig> {
   }
 
   // Fallback to environment variables
-  if (process.env.GEMINI_API_KEY) {
-    return { provider: "gemini", apiKey: process.env.GEMINI_API_KEY, model: "gemini-3.5-flash-lite" };
+  const geminiKey = process.env.EXPO_PUBLIC_GEMINI_API_KEY || process.env.GEMINI_API_KEY;
+  if (geminiKey) {
+    return { provider: "gemini", apiKey: geminiKey, model: "gemini-3.5-flash-lite" };
   }
-  if (process.env.GROQ_API_KEY) {
-    return { provider: "groq", apiKey: process.env.GROQ_API_KEY, model: "llama-3.3-70b-versatile" };
+  const groqKey = process.env.EXPO_PUBLIC_GROQ_API_KEY || process.env.GROQ_API_KEY;
+  if (groqKey) {
+    return { provider: "groq", apiKey: groqKey, model: "llama-3.3-70b-versatile" };
   }
-  if (process.env.OPENAI_API_KEY) {
-    return { provider: "openai", apiKey: process.env.OPENAI_API_KEY, model: "gpt-4o-mini" };
-  }
-  if (process.env.G4F_API_KEY && process.env.G4F_API_KEY !== "your_api_key_here") {
-    return { provider: "custom" as any, apiKey: process.env.G4F_API_KEY };
+  const openaiKey = process.env.EXPO_PUBLIC_OPENAI_API_KEY || process.env.OPENAI_API_KEY;
+  if (openaiKey) {
+    return { provider: "openai", apiKey: openaiKey, model: "gpt-4o-mini" };
   }
 
   return { provider: "gemini", apiKey: "", model: "gemini-3.5-flash-lite" };
 }
 
 export async function saveAIConfig(config: AIConfig): Promise<void> {
-  await AsyncStorage.setItem(AI_CONFIG_KEY, JSON.stringify(config));
+  const trimmedKey = config.apiKey?.trim() || "";
+  if (!trimmedKey) {
+    await AsyncStorage.removeItem(AI_CONFIG_KEY);
+    return;
+  }
+  await AsyncStorage.setItem(
+    AI_CONFIG_KEY,
+    JSON.stringify({
+      provider: config.provider,
+      apiKey: trimmedKey,
+      model: config.model,
+    }),
+  );
 }
 
 export async function testAIConnection(
@@ -59,7 +128,7 @@ export async function testAIConnection(
 ): Promise<{ success: boolean; message: string }> {
   const { provider, apiKey } = config;
 
-  if (!apiKey && provider !== "free") {
+  if (!apiKey || !apiKey.trim()) {
     return { success: false, message: "Please enter an API key first." };
   }
 
@@ -133,21 +202,8 @@ export async function testAIConnection(
       return { success: true, message: "OpenAI connection successful! ✨" };
     }
 
-    // Free test
-    const res = await fetch("https://text.pollinations.ai/", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        messages: [{ role: "user", content: "Hello" }],
-        model: "openai",
-      }),
-      signal: controller.signal,
-    });
     clearTimeout(timeoutId);
-    if (!res.ok) {
-      return { success: false, message: `Public endpoint error: ${res.status}` };
-    }
-    return { success: true, message: "Public endpoint is reachable." };
+    return { success: false, message: "Unsupported AI provider selected." };
   } catch (err: any) {
     if (err.name === "AbortError") {
       return { success: false, message: "Connection timed out. Check your internet connection." };

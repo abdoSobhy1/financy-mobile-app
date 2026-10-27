@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   Modal,
   View,
@@ -16,6 +16,10 @@ import {
   OcrReceiptResult,
   DocumentAsset,
 } from "../../services/ocrService";
+import {
+  getOcrQuotaStatus,
+  OcrQuotaStatus,
+} from "../../services/ocrRateLimitService";
 import { Category } from "../../types";
 
 interface ReceiptScanModalProps {
@@ -34,12 +38,37 @@ export const ReceiptScanModal: React.FC<ReceiptScanModalProps> = ({
   const { colors, typography } = useAppTheme();
   const [isProcessing, setIsProcessing] = useState(false);
   const [statusMessage, setStatusMessage] = useState("Analyzing receipt...");
+  const [quota, setQuota] = useState<OcrQuotaStatus | null>(null);
+
+  useEffect(() => {
+    if (visible) {
+      getOcrQuotaStatus()
+        .then(setQuota)
+        .catch(() => {});
+    }
+  }, [visible]);
+
+  const ensureCanScan = async (): Promise<boolean> => {
+    const latest = await getOcrQuotaStatus();
+    setQuota(latest);
+    if (!latest.canScan) {
+      Alert.alert(
+        "Daily OCR Limit Reached",
+        `You have used all ${latest.dailyLimit} free AI receipt scans for today. Your quota resets tomorrow, or you can configure your own personal API key in Settings → Cloud AI Assistant for unlimited scans.`,
+      );
+      return false;
+    }
+    return true;
+  };
 
   const processAsset = async (asset: DocumentAsset) => {
     try {
       setIsProcessing(true);
       setStatusMessage("Extracting receipt data...");
       const result = await OCRService.scanReceiptFile(asset, categories);
+      getOcrQuotaStatus()
+        .then(setQuota)
+        .catch(() => {});
       setIsProcessing(false);
       onClose();
       onScanComplete(result, asset.uri);
@@ -53,6 +82,7 @@ export const ReceiptScanModal: React.FC<ReceiptScanModalProps> = ({
   };
 
   const handleDocumentScanner = async () => {
+    if (!(await ensureCanScan())) return;
     try {
       setIsProcessing(true);
       setStatusMessage("Opening camera document scanner...");
@@ -73,6 +103,7 @@ export const ReceiptScanModal: React.FC<ReceiptScanModalProps> = ({
   };
 
   const handleGalleryPick = async () => {
+    if (!(await ensureCanScan())) return;
     try {
       setIsProcessing(true);
       setStatusMessage("Selecting image...");
@@ -93,6 +124,7 @@ export const ReceiptScanModal: React.FC<ReceiptScanModalProps> = ({
   };
 
   const handleDocumentPick = async () => {
+    if (!(await ensureCanScan())) return;
     try {
       setIsProcessing(true);
       setStatusMessage("Selecting document...");
@@ -171,6 +203,61 @@ export const ReceiptScanModal: React.FC<ReceiptScanModalProps> = ({
                   </TouchableOpacity>
                 )}
               </View>
+
+              {/* Daily OCR Quota Indicator */}
+              {quota && !isProcessing && (
+                <View
+                  style={{
+                    flexDirection: "row",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    paddingHorizontal: 12,
+                    paddingVertical: 8,
+                    borderRadius: 10,
+                    marginBottom: 12,
+                    backgroundColor: quota.isUnlimited
+                      ? colors.primaryContainer
+                      : quota.canScan
+                        ? colors.surfaceVariant
+                        : colors.errorContainer,
+                  }}>
+                  <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                    <Ionicons
+                      name={
+                        quota.isUnlimited
+                          ? "infinite-outline"
+                          : quota.canScan
+                            ? "sparkles-outline"
+                            : "lock-closed-outline"
+                      }
+                      size={16}
+                      color={
+                        quota.isUnlimited
+                          ? colors.onPrimaryContainer
+                          : quota.canScan
+                            ? colors.primary
+                            : colors.onErrorContainer
+                      }
+                    />
+                    <Text
+                      style={{
+                        fontSize: 12,
+                        fontWeight: "600",
+                        color: quota.isUnlimited
+                          ? colors.onPrimaryContainer
+                          : quota.canScan
+                            ? colors.onSurface
+                            : colors.onErrorContainer,
+                      }}>
+                      {quota.isUnlimited
+                        ? "Unlimited AI Receipt Scans Active"
+                        : quota.canScan
+                          ? `Daily AI Scans: ${quota.remainingToday} of ${quota.dailyLimit} remaining today`
+                          : `Daily limit reached (${quota.dailyLimit}/${quota.dailyLimit} used today)`}
+                    </Text>
+                  </View>
+                </View>
+              )}
 
               {/* Loading State */}
               {isProcessing ? (

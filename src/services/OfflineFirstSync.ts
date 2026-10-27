@@ -1,5 +1,6 @@
 import { DatabaseManager } from "../database";
 import { syncService } from "./syncService";
+import { authService } from "./authService";
 import { COLLECTIONS, CollectionName, FirestoreDocument } from "../types";
 import NetInfo from "@react-native-community/netinfo";
 import { getDeviceId } from "../utils/deviceId";
@@ -144,6 +145,11 @@ class OfflineFirstSync {
     }
 
     try {
+      const canSync = await authService.isCloudSyncAllowedAsync();
+      if (!canSync) {
+        return;
+      }
+
       const netInfo = await NetInfo.fetch();
       if (!netInfo.isConnected) {
         return;
