@@ -36,9 +36,16 @@ yarn-error.*
 # typescript
 *.tsbuildinfo
 
-# generated native folders
+# Native build caches (keep android/ source & Kotlin modules tracked)
 /ios
-/android
+android/.gradle/
+android/.kotlin/
+android/build/
+android/app/build/
+android/app/.cxx/
+android/local.properties
+android/app/debug.keystore
+android/*.log
 
 # Firebase config files
 google-services.json

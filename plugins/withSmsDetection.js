@@ -1,6 +1,51 @@
-const { withAndroidManifest, withDangerousMod } = require("@expo/config-plugins");
+const {
+  withAndroidManifest,
+  withMainApplication,
+  withDangerousMod,
+} = require("@expo/config-plugins");
 const fs = require("fs");
 const path = require("path");
+
+const DEVICE_ID_MODULE_KT = `package com.sobhy.financy
+
+import android.provider.Settings
+import com.facebook.react.ReactPackage
+import com.facebook.react.bridge.NativeModule
+import com.facebook.react.bridge.Promise
+import com.facebook.react.bridge.ReactApplicationContext
+import com.facebook.react.bridge.ReactContextBaseJavaModule
+import com.facebook.react.bridge.ReactMethod
+import com.facebook.react.uimanager.ViewManager
+
+class DeviceIdModule(private val reactContext: ReactApplicationContext) :
+  ReactContextBaseJavaModule(reactContext) {
+
+  override fun getName(): String = "DeviceIdModule"
+
+  @ReactMethod
+  fun getAndroidId(promise: Promise) {
+    try {
+      val androidId = Settings.Secure.getString(
+        reactContext.contentResolver,
+        Settings.Secure.ANDROID_ID
+      )
+      promise.resolve(androidId ?: "")
+    } catch (e: Exception) {
+      promise.reject("ERR_ANDROID_ID", e)
+    }
+  }
+}
+
+class DeviceIdPackage : ReactPackage {
+  override fun createNativeModules(reactContext: ReactApplicationContext): List<NativeModule> {
+    return listOf(DeviceIdModule(reactContext))
+  }
+
+  override fun createViewManagers(reactContext: ReactApplicationContext): List<ViewManager<*, *>> {
+    return emptyList()
+  }
+}
+`;
 
 const SMS_RECEIVER_KT = `package com.sobhy.financy
 
@@ -261,8 +306,37 @@ function withSmsDetection(config) {
           },
         });
       }
+
+      if (!app["meta-data"]) app["meta-data"] = [];
+      const hasMlKitMeta = app["meta-data"].some(
+        (m) => m.$ && m.$["android:name"] === "com.google.mlkit.vision.DEPENDENCIES"
+      );
+      if (!hasMlKitMeta) {
+        manifest.$ = manifest.$ || {};
+        manifest.$["xmlns:tools"] = "http://schemas.android.com/tools";
+        app["meta-data"].push({
+          $: {
+            "android:name": "com.google.mlkit.vision.DEPENDENCIES",
+            "android:value": "barcode_ui,ocr",
+            "tools:replace": "android:value",
+          },
+        });
+      }
     }
 
+    return modConfig;
+  });
+
+  // Register DeviceIdPackage in MainApplication.kt
+  config = withMainApplication(config, (modConfig) => {
+    let contents = modConfig.modResults.contents;
+    if (!contents.includes("DeviceIdPackage()")) {
+      contents = contents.replace(
+        /PackageList\(this\)\.packages\.apply\s*\{/,
+        `PackageList(this).packages.apply {\n          add(DeviceIdPackage())`
+      );
+      modConfig.modResults.contents = contents;
+    }
     return modConfig;
   });
 
@@ -288,6 +362,11 @@ function withSmsDetection(config) {
       fs.writeFileSync(
         path.join(packagePath, "SmsHeadlessTaskService.kt"),
         SMS_HEADLESS_SERVICE_KT,
+        "utf8"
+      );
+      fs.writeFileSync(
+        path.join(packagePath, "DeviceIdModule.kt"),
+        DEVICE_ID_MODULE_KT,
         "utf8"
       );
       return modConfig;
