@@ -63,7 +63,7 @@ export const useSyncManager = () => {
           await dispatch(syncWithFirebase({ showToast: false })).unwrap();
         } else {
           // Only process pending local operations (smart sync)
-          await offlineFirstSync.processUnSyncedOperationsOnly();
+          await offlineFirstSync.forceSyncAll();
           // Initialize sync service for real-time updates (no full data pull)
           await syncService.initializeSync();
         }
@@ -202,7 +202,7 @@ export const useSyncManager = () => {
 
           // Only process pending operations, don't force full sync on app load
           console.log("📤 Processing pending sync operations only (smart sync)...");
-          await offlineFirstSync.processUnSyncedOperationsOnly();
+          await offlineFirstSync.forceSyncAll();
 
           // Initialize efficient polling & listeners system (no full data pull)
           console.log("🔗 Initializing efficient sync polling...");

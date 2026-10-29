@@ -48,7 +48,6 @@ import {
   AppHeader,
   Switch,
 } from "../components/ui";
-import { runSyncApplyTest, runAllSyncApplyTests } from "../debug/runSyncTest";
 import { UI } from "../constants";
 import NotificationService, {
   NotificationSettings,

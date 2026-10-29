@@ -3,7 +3,6 @@ import { syncService } from "./syncService";
 import { authService } from "./authService";
 import { COLLECTIONS, CollectionName, FirestoreDocument } from "../types";
 import NetInfo from "@react-native-community/netinfo";
-import { getDeviceId } from "../utils/deviceId";
 import { addDeviceTracking } from "../utils/deviceTracking";
 import NotificationService from "./notificationService";
 import AsyncStorage from "@react-native-async-storage/async-storage";
@@ -30,7 +29,6 @@ export interface SyncLogEntry {
 class OfflineFirstSync {
   private db = DatabaseManager.getInstance();
   private isProcessing = false;
-  private isFullSyncing = false;
   private fullSyncPromise: Promise<{
     push: { totalUploaded: number; totalSkipped: number; errors: string[] };
     pull: { itemsCreated: number; itemsUpdated: number; errors: string[] };
@@ -38,16 +36,6 @@ class OfflineFirstSync {
   private retryTimeout: ReturnType<typeof setTimeout> | null = null;
   private periodicSyncInterval: ReturnType<typeof setInterval> | null = null;
   private isInitialized = false;
-  private deviceId: string;
-
-  constructor() {
-    this.deviceId = ""; // Will be initialized async
-    this.initializeDeviceId();
-  }
-
-  private async initializeDeviceId(): Promise<void> {
-    this.deviceId = await getDeviceId();
-  }
 
   // Mapping from database table names to Firestore collection names
   private readonly TABLE_TO_COLLECTION: Record<string, CollectionName> = {
@@ -268,51 +256,6 @@ class OfflineFirstSync {
   }
 
   /**
-   * Testing helper: apply a remote document via the SyncService test helper and
-   * then return the number of new sync_log entries for the corresponding table.
-   * Useful to assert that applying remote documents does not create local sync_log entries.
-   */
-  public async applyRemoteAndCheckNoLog(
-    tableName: string,
-    docId: string,
-    docData: any,
-  ): Promise<{ newLogCount: number; error?: string }> {
-    try {
-      await this.db.ensureInitialized();
-      const database = this.db.getDatabase();
-      const beforeRow = (await database.getFirstAsync(
-        `SELECT COUNT(*) as count FROM sync_log WHERE table_name = ?`,
-        [tableName],
-      )) as {
-        count: number;
-      } | null;
-      const before = beforeRow?.count || 0;
-
-      // Call the sync service helper
-      const syncModule = await import("./syncService");
-      const syncSvc = syncModule.syncService;
-      await syncSvc.applyRemoteDocumentForTest(
-        this.TABLE_TO_COLLECTION[tableName],
-        docId,
-        docData as any,
-      );
-
-      const afterRow = (await database.getFirstAsync(
-        `SELECT COUNT(*) as count FROM sync_log WHERE table_name = ?`,
-        [tableName],
-      )) as {
-        count: number;
-      } | null;
-      const after = afterRow?.count || 0;
-
-      const newLogCount = after - before;
-      return { newLogCount };
-    } catch (error: any) {
-      return { newLogCount: -1, error: error?.message || String(error) };
-    }
-  }
-
-  /**
    * Update the entity row's sync_status column to 'synced' after a successful
    * Firebase push. tableName is validated against TABLE_TO_COLLECTION keys to
    * prevent SQL injection from an arbitrary string.
@@ -425,12 +368,10 @@ class OfflineFirstSync {
   }
 
   /**
-   * Process only unsynced operations without forcing a full bidirectional sync
-   * This is used for initial app startup to avoid unnecessary full data pulls
+   * Alias for forceSyncAll
    */
   public async processUnSyncedOperationsOnly(): Promise<void> {
-    console.log("📤 Processing pending sync operations only (no full sync)");
-    await this.processUnSyncedOperations();
+    return this.forceSyncAll();
   }
 
   /**
@@ -661,15 +602,6 @@ class OfflineFirstSync {
   }
 
   /**
-   * Complete bidirectional sync with Firebase database:
-   * 1. Validates auth & internet connection
-   * 2. Initializes sync service & ensures Firestore user document exists
-   * 3. Flushes pending local sync operations
-   * 4. Pushes local data (categories, settings, wallets, budgets, transactions, debts, debt_payments) to cloud
-   * 5. Pulls/restores cloud data down to local SQLite
-   * 6. Updates syncUpdatedAt timestamp
-   */
-  /**
    * Normalize any timestamp value (number, numeric string, ISO string, or Firestore Timestamp) to epoch ms
    */
   private parseTimestampMs(val: any): number {
@@ -711,17 +643,15 @@ class OfflineFirstSync {
     push: { totalUploaded: number; totalSkipped: number; errors: string[] };
     pull: { itemsCreated: number; itemsUpdated: number; errors: string[] };
   }> {
-    if (this.isFullSyncing && this.fullSyncPromise) {
+    if (this.fullSyncPromise) {
       console.log("🔄 Full sync already in progress, awaiting active sync promise...");
       return await this.fullSyncPromise;
     }
 
-    this.isFullSyncing = true;
     this.fullSyncPromise = (async () => {
       try {
         await this.db.ensureInitialized();
 
-        const { authService } = await import("./authService");
         const canSync = await authService.isCloudSyncAllowedAsync();
         if (!canSync) {
           console.log("⏭️ Cloud sync skipped: user is not authenticated or in guest mode");
@@ -844,7 +774,6 @@ class OfflineFirstSync {
           pull: pullResult,
         };
       } finally {
-        this.isFullSyncing = false;
         this.fullSyncPromise = null;
       }
     })();
@@ -860,7 +789,6 @@ class OfflineFirstSync {
       console.log("🔍 Starting conflicts-only sync...");
 
       // Check if user is authenticated first
-      const { authService } = await import("./authService");
       const isAuthenticated = await authService.isAuthenticatedAsync();
       if (!isAuthenticated) {
         console.log("🔐 User not authenticated, skipping conflicts sync");
@@ -888,6 +816,96 @@ class OfflineFirstSync {
   }
 
   /**
+   * Internal multi-phase restore helper executed in dependency order:
+   * Phase 1: Independent collections (categories, settings, wallets)
+   * Phase 2: Dependent collections (budgets, transactions, debts, debt_payments)
+   * Phase 3: Retry failed inserts (foreign key constraints)
+   * Followed by debt balance reconciliation.
+   */
+  private async executePhasedCloudRestore(): Promise<{
+    itemsUpdated: number;
+    itemsCreated: number;
+    errors: string[];
+  }> {
+    // Clear any existing failed inserts from previous attempts
+    syncService.clearFailedInserts();
+
+    const result = {
+      itemsUpdated: 0,
+      itemsCreated: 0,
+      errors: [] as string[],
+    };
+
+    const independentCollections = ["categories", "settings", "wallets"];
+    const dependentCollections = [
+      "budgets",
+      "transactions",
+      "debts",
+      "debt_payments",
+    ];
+
+    console.log(
+      "☁️ Phase 1: Syncing independent collections (categories, settings, wallets)",
+    );
+    for (const tableName of independentCollections) {
+      const collectionName = this.TABLE_TO_COLLECTION[tableName];
+      if (collectionName) {
+        try {
+          const stats = await this.syncCollectionWithIdComparison(
+            collectionName,
+            tableName,
+          );
+          result.itemsUpdated += stats.updated;
+          result.itemsCreated += stats.created;
+        } catch (error) {
+          const errorMsg = `Failed to sync ${tableName}: ${error instanceof Error ? error.message : error}`;
+          result.errors.push(errorMsg);
+          console.error(`❌ ${errorMsg}`);
+        }
+      }
+    }
+
+    console.log(
+      "☁️ Phase 2: Syncing dependent collections (budgets, transactions, debts, debt_payments)",
+    );
+    for (const tableName of dependentCollections) {
+      const collectionName = this.TABLE_TO_COLLECTION[tableName];
+      if (collectionName) {
+        try {
+          const stats = await this.syncCollectionWithIdComparison(
+            collectionName,
+            tableName,
+          );
+          result.itemsUpdated += stats.updated;
+          result.itemsCreated += stats.created;
+        } catch (error) {
+          const errorMsg = `Failed to sync ${tableName}: ${error instanceof Error ? error.message : error}`;
+          result.errors.push(errorMsg);
+          console.error(`❌ ${errorMsg}`);
+        }
+      }
+    }
+
+    // Phase 3: Retry failed inserts (foreign key constraints)
+    const retryCount = await this.retryFailedInserts();
+    if (retryCount > 0) {
+      console.log(
+        `☁️ Phase 3: Successfully retried ${retryCount} failed inserts`,
+      );
+      result.itemsCreated += retryCount;
+    }
+
+    try {
+      const { DebtRepository } = await import("../database/queries/debts");
+      await new DebtRepository().reconcileDebtBalances();
+    } catch (reconcileErr) {
+      console.warn("Could not reconcile debt balances after cloud restore:", reconcileErr);
+    }
+
+    return result;
+  }
+
+  /**
    * Initial cloud pull - downloads all user data from Firebase on fresh install
    */
   async performInitialCloudPull(): Promise<boolean> {
@@ -895,7 +913,6 @@ class OfflineFirstSync {
       console.log("☁️ Starting initial cloud data pull...");
 
       // Check if user is authenticated
-      const { authService } = await import("./authService");
       const isAuthenticated = await authService.isAuthenticatedAsync();
       if (!isAuthenticated) {
         console.log("🔐 User not authenticated, skipping cloud pull");
@@ -919,65 +936,8 @@ class OfflineFirstSync {
         return false;
       }
 
-      // Clear any existing failed inserts from previous attempts
-      syncService.clearFailedInserts();
-
-      // Pull data in dependency order to minimize foreign key constraint failures
-      // Phase 1: Independent collections (no foreign key dependencies)
-      const independentCollections = ["categories", "settings", "wallets"];
-      let totalPulled = 0;
-
-      console.log(
-        "☁️ Phase 1: Syncing independent collections (categories, settings, wallets)",
-      );
-      for (const tableName of independentCollections) {
-        const collectionName = this.TABLE_TO_COLLECTION[tableName];
-        if (collectionName) {
-          const count = await this.pullCollectionFromCloud(
-            collectionName,
-            tableName,
-          );
-          totalPulled += count;
-        }
-      }
-
-      // Phase 2: Collections with dependencies
-      const dependentCollections = [
-        "budgets",
-        "transactions",
-        "debts",
-        "debt_payments",
-      ];
-
-      console.log(
-        "☁️ Phase 2: Syncing dependent collections (budgets, transactions, debts, debt_payments)",
-      );
-      for (const tableName of dependentCollections) {
-        const collectionName = this.TABLE_TO_COLLECTION[tableName];
-        if (collectionName) {
-          const count = await this.pullCollectionFromCloud(
-            collectionName,
-            tableName,
-          );
-          totalPulled += count;
-        }
-      }
-
-      // Phase 3: Retry failed inserts (foreign key constraints)
-      const retryCount = await this.retryFailedInserts();
-      if (retryCount > 0) {
-        console.log(
-          `☁️ Phase 3: Successfully retried ${retryCount} failed inserts`,
-        );
-        totalPulled += retryCount;
-      }
-
-      try {
-        const { DebtRepository } = await import("../database/queries/debts");
-        await new DebtRepository().reconcileDebtBalances();
-      } catch (reconcileErr) {
-        console.warn("Could not reconcile debt balances after initial pull:", reconcileErr);
-      }
+      const result = await this.executePhasedCloudRestore();
+      const totalPulled = result.itemsCreated + result.itemsUpdated;
 
       console.log(
         `☁️ Initial cloud pull completed: ${totalPulled} items restored`,
@@ -1010,7 +970,6 @@ class OfflineFirstSync {
       );
 
       // Check if user is authenticated
-      const { authService } = await import("./authService");
       const isAuthenticated = await authService.isAuthenticatedAsync();
       if (!isAuthenticated) {
         throw new Error("User not authenticated");
@@ -1022,87 +981,8 @@ class OfflineFirstSync {
         throw new Error("No internet connection");
       }
 
-      // Clear any existing failed inserts from previous attempts
-      syncService.clearFailedInserts();
+      const result = await this.executePhasedCloudRestore();
 
-      const result = {
-        itemsUpdated: 0,
-        itemsCreated: 0,
-        errors: [] as string[],
-      };
-
-      // Process collections in dependency order
-      const independentCollections = ["categories", "settings", "wallets"];
-      const dependentCollections = [
-        "budgets",
-        "transactions",
-        "debts",
-        "debt_payments",
-      ];
-      const allCollections = [
-        ...independentCollections,
-        ...dependentCollections,
-      ];
-
-      console.log(
-        "☁️ Phase 1: Syncing independent collections (categories, settings, wallets)",
-      );
-      for (const tableName of independentCollections) {
-        const collectionName = this.TABLE_TO_COLLECTION[tableName];
-        if (collectionName) {
-          try {
-            const stats = await this.syncCollectionWithIdComparison(
-              collectionName,
-              tableName,
-            );
-            result.itemsUpdated += stats.updated;
-            result.itemsCreated += stats.created;
-          } catch (error) {
-            const errorMsg = `Failed to sync ${tableName}: ${error instanceof Error ? error.message : error}`;
-            result.errors.push(errorMsg);
-            console.error(`❌ ${errorMsg}`);
-          }
-        }
-      }
-
-      console.log(
-        "☁️ Phase 2: Syncing dependent collections (budgets, transactions, debts, debt_payments)",
-      );
-      for (const tableName of dependentCollections) {
-        const collectionName = this.TABLE_TO_COLLECTION[tableName];
-        if (collectionName) {
-          try {
-            const stats = await this.syncCollectionWithIdComparison(
-              collectionName,
-              tableName,
-            );
-            result.itemsUpdated += stats.updated;
-            result.itemsCreated += stats.created;
-          } catch (error) {
-            const errorMsg = `Failed to sync ${tableName}: ${error instanceof Error ? error.message : error}`;
-            result.errors.push(errorMsg);
-            console.error(`❌ ${errorMsg}`);
-          }
-        }
-      }
-
-      // Phase 3: Retry failed inserts (foreign key constraints)
-      const retryCount = await this.retryFailedInserts();
-      if (retryCount > 0) {
-        console.log(
-          `☁️ Phase 3: Successfully retried ${retryCount} failed inserts`,
-        );
-        result.itemsCreated += retryCount;
-      }
-
-      try {
-        const { DebtRepository } = await import("../database/queries/debts");
-        await new DebtRepository().reconcileDebtBalances();
-      } catch (reconcileErr) {
-        console.warn("Could not reconcile debt balances after cloud restore:", reconcileErr);
-      }
-
-      const totalItems = result.itemsUpdated + result.itemsCreated;
       console.log(
         `☁️ Comprehensive cloud restore completed: ${result.itemsCreated} created, ${result.itemsUpdated} updated, ${result.errors.length} errors`,
       );
@@ -1135,7 +1015,6 @@ class OfflineFirstSync {
     console.log(`🔄 Syncing ${collectionName} with ID comparison...`);
 
     // Check if user is authenticated first
-    const { authService } = await import("./authService");
     const isAuthenticated = await authService.isAuthenticatedAsync();
     if (!isAuthenticated) {
       console.log(`🔐 User not authenticated, skipping ${collectionName} sync`);
@@ -1420,24 +1299,6 @@ class OfflineFirstSync {
           );
         }
         break;
-
-      case "wallets":
-        await database.runAsync(
-          `UPDATE wallets SET name = ?, type = ?, icon = ?, color = ?, initial_balance = ?, is_secret = ?, archived = ?, updated_at = ?, sync_updated_at = ? WHERE id = ?`,
-          [
-            localData.name,
-            localData.type,
-            localData.icon || null,
-            localData.color || null,
-            localData.initialBalance ?? localData.initial_balance ?? 0,
-            localData.isSecret || localData.is_secret ? 1 : 0,
-            localData.archived ? 1 : 0,
-            localData.updatedAt || localData.updated_at || Date.now(),
-            localData.updatedAt || localData.updated_at || Date.now(),
-            localData.id,
-          ],
-        );
-        break;
     }
   }
 
@@ -1466,7 +1327,6 @@ class OfflineFirstSync {
       );
 
       // Check if user is authenticated
-      const { authService } = await import("./authService");
       const isAuthenticated = await authService.isAuthenticatedAsync();
       if (!isAuthenticated) {
         throw new Error("User not authenticated");
@@ -1728,118 +1588,6 @@ class OfflineFirstSync {
   }
 
   /**
-   * Enhanced category sync that handles bidirectional sync and soft deletion for default categories
-   */
-  public async syncCategoriesWithMobile(): Promise<{
-    uploaded: number;
-    downloaded: number;
-    softDeleted: number;
-  }> {
-    try {
-      console.log("🔄 Starting enhanced category sync...");
-
-      const result = { uploaded: 0, downloaded: 0, softDeleted: 0 };
-
-      // Check if user is authenticated
-      const { authService } = await import("./authService");
-      const isAuthenticated = await authService.isAuthenticatedAsync();
-      if (!isAuthenticated) {
-        throw new Error("User not authenticated");
-      }
-
-      // Step 1: Upload local categories to cloud (mobile → cloud)
-      const localCategories = await this.getLocalDocumentsByTable("categories");
-      const cloudCategories =
-        await syncService.getAllDocumentsFromCollection("categories");
-      const cloudById = new Map(cloudCategories.map((cat) => [cat.id, cat]));
-
-      for (const localCategory of localCategories) {
-        const cloudCategory = cloudById.get(localCategory.id);
-        const localUpdatedAt =
-          (localCategory as any).updated_at ||
-          (localCategory as any).sync_updated_at ||
-          0;
-
-        if (!cloudCategory) {
-          // Upload new category to cloud
-          console.log(
-            `⬆️ Uploading new category to cloud: ${localCategory.id}`,
-          );
-          const cloudFormatCategory = this.convertLocalToCloudFormat(
-            "categories",
-            localCategory,
-          );
-          await syncService.syncLocalChanges(
-            "categories",
-            "create",
-            localCategory.id,
-            cloudFormatCategory,
-          );
-          result.uploaded++;
-        } else {
-          const cloudUpdatedAt =
-            cloudCategory.updatedAt || cloudCategory.sync_updated_at || 0;
-          if (localUpdatedAt > cloudUpdatedAt) {
-            // Local is newer, upload to cloud
-            console.log(`⬆️ Updating cloud category: ${localCategory.id}`);
-            const cloudFormatCategory = this.convertLocalToCloudFormat(
-              "categories",
-              localCategory,
-            );
-            await syncService.syncLocalChanges(
-              "categories",
-              "update",
-              localCategory.id,
-              cloudFormatCategory,
-            );
-            result.uploaded++;
-          }
-        }
-      }
-
-      // Step 2: Download and sync cloud categories to local (cloud → mobile)
-      const stats = await this.syncCollectionWithIdComparison(
-        "categories",
-        "categories",
-      );
-      result.downloaded = stats.created + stats.updated;
-
-      console.log(
-        `✅ Category sync completed: ${result.uploaded} uploaded, ${result.downloaded} downloaded, ${result.softDeleted} soft deleted`,
-      );
-      return result;
-    } catch (error) {
-      console.error("❌ Category sync failed:", error);
-      throw error;
-    }
-  }
-
-  /**
-   * Check if a category is a default (pre-installed) category
-   */
-  private async isDefaultCategory(categoryId: string): Promise<boolean> {
-    return (
-      categoryId.startsWith("cat_default_") ||
-      categoryId.startsWith("default_")
-    );
-  }
-
-  /**
-   * Soft delete a category by marking it as deleted but keeping the record
-   */
-  private async softDeleteCategory(categoryId: string): Promise<void> {
-    await this.db.ensureInitialized();
-    const database = this.db.getDatabase();
-
-    await database.runAsync(
-      `UPDATE categories SET deleted = 1, updated_at = ? WHERE id = ?`,
-      [Date.now(), categoryId],
-    );
-
-    console.log(`🔄 Soft deleted category: ${categoryId}`);
-  }
-
-  /**
    * Check if local database has any user data
    */
   private async checkForLocalData(): Promise<boolean> {
@@ -1856,66 +1604,6 @@ class OfflineFirstSync {
     } catch (error) {
       console.error("Error checking for local data:", error);
       return false;
-    }
-  }
-
-  /**
-   * Pull all documents from a specific Firebase collection
-   */
-  private async pullCollectionFromCloud(
-    collectionName: CollectionName,
-    tableName: string,
-  ): Promise<number> {
-    try {
-      console.log(`☁️ Pulling ${collectionName} from cloud...`);
-
-      // Get all documents from Firebase collection
-      const cloudDocuments =
-        await syncService.getAllDocumentsFromCollection(collectionName);
-
-      if (cloudDocuments.length === 0) {
-        console.log(`☁️ No ${collectionName} found in cloud`);
-        return 0;
-      }
-
-      // Insert each document into local database
-      let insertedCount = 0;
-      let skippedCount = 0;
-
-      for (const doc of cloudDocuments) {
-        try {
-          // Validate document has minimum required data
-          if (!doc || !doc.id) {
-            console.warn(
-              `⚠️ Skipping invalid ${tableName} document (no ID):`,
-              doc,
-            );
-            skippedCount++;
-            continue;
-          }
-
-          // Skip documents that are marked as deleted
-          if (doc.deleted === true || doc.deleted === 1) {
-            console.log(`🗑️ Skipping deleted ${tableName} document: ${doc.id}`);
-            skippedCount++;
-            continue;
-          }
-
-          await this.insertCloudDocumentToLocal(tableName, doc);
-          insertedCount++;
-        } catch (error) {
-          console.error(`❌ Failed to insert ${tableName}:${doc.id}:`, error);
-          skippedCount++;
-        }
-      }
-
-      console.log(
-        `☁️ Inserted ${insertedCount}/${cloudDocuments.length} ${collectionName} from cloud (${skippedCount} skipped)`,
-      );
-      return insertedCount;
-    } catch (error) {
-      console.error(`❌ Failed to pull ${collectionName} from cloud:`, error);
-      return 0;
     }
   }
 
