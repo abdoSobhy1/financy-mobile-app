@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
-import { View, Text, StyleSheet, TextInput } from "react-native";
+import { View, Text, StyleSheet, TextInput, Keyboard } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useDispatch, useSelector } from "react-redux";
 import { RootState, AppDispatch } from "../../store";
@@ -8,6 +8,7 @@ import { Modal, Card, Button, Input, useToast } from "../ui";
 import { UI, VALIDATION } from "../../constants";
 import { generateId } from "../../utils";
 import { BudgetFormData } from "../../types";
+import { useUnsavedChanges } from "../../hooks";
 
 interface AddBudgetModalProps {
   visible: boolean;
@@ -109,8 +110,13 @@ export const AddBudgetModal: React.FC<AddBudgetModalProps> = ({ visible, onClose
     }
   };
 
+  const { confirmExit } = useUnsavedChanges({
+    hasChanges: formData.name.trim() !== "" || formData.amount.trim() !== "",
+    title: "Discard Budget",
+  });
+
   return (
-    <Modal visible={visible} onClose={onClose} title="Create Budget" scrollable={true} keyboardAvoiding={true}>
+    <Modal visible={visible} onClose={() => confirmExit(onClose)} title="Create Budget" scrollable={true} keyboardAvoiding={true}>
       <View style={styles.container}>
         <View style={styles.formCard}>
           {/* Budget Name */}
@@ -157,13 +163,13 @@ export const AddBudgetModal: React.FC<AddBudgetModalProps> = ({ visible, onClose
               keyboardType="number-pad"
               error={errors.resetDay}
               returnKeyType="done"
-              onSubmitEditing={handleSubmit}
+              onSubmitEditing={() => Keyboard.dismiss()}
             />
           </View>
 
           {/* Action Buttons */}
           <View style={styles.actionButtons}>
-            <Button title="Cancel" variant="secondary" onPress={onClose} style={{ flex: 1 }} icon="close" iconPosition="left" />
+            <Button title="Cancel" variant="secondary" onPress={() => confirmExit(onClose)} style={{ flex: 1 }} icon="close" iconPosition="left" />
             <View style={{ width: UI.SPACING.MD }} />
             <Button title="Create Budget" onPress={handleSubmit} loading={budgetLoading} style={{ flex: 2 }} icon="wallet" iconPosition="left" />
           </View>

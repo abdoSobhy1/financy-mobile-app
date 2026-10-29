@@ -43,7 +43,14 @@ export const validateTransactionData = (
     if (!transaction.type) {
       throw new Error("Valid transaction type is required");
     }
-    if (transaction.type !== "transfer" && !transaction.categoryId) {
+    const isBalanceAdjustment =
+      transaction.description?.trim().toLowerCase() === "balance adjustment";
+
+    if (
+      transaction.type !== "transfer" &&
+      !isBalanceAdjustment &&
+      !transaction.categoryId
+    ) {
       throw new Error("Transaction category is required");
     }
     if (transaction.type === "transfer") {

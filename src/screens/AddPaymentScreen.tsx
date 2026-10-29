@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useMemo } from "react";
 import {
   View,
   Text,
@@ -23,6 +23,8 @@ import { useToast } from "../components/ui";
 import { AppDispatch, RootState } from "../store";
 import { makeDebtPayment } from "../store/slices/debtsSlice";
 import { formatCurrency } from "../utils";
+import { AlertService } from "../services/AlertService";
+import { useUnsavedChanges } from "../hooks";
 import { DebtStackParamList } from "../types";
 
 type AddPaymentScreenNavigationProp = StackNavigationProp<
@@ -57,6 +59,19 @@ const AddPaymentScreen: React.FC = () => {
   const principalRef = useRef<TextInput>(null);
   const interestRef = useRef<TextInput>(null);
   const noteRef = useRef<TextInput>(null);
+
+  const hasChanges = useMemo(() => {
+    return (
+      paymentData.amount.trim() !== "" ||
+      paymentData.principal.trim() !== "" ||
+      paymentData.interest.trim() !== "" ||
+      paymentData.note.trim() !== ""
+    );
+  }, [paymentData]);
+
+  const { markAsSaved, resetSaved } = useUnsavedChanges({
+    hasChanges,
+  });
 
   // Auto-calculate principal/interest split
   useEffect(() => {
@@ -120,8 +135,10 @@ const AddPaymentScreen: React.FC = () => {
         }),
       ).unwrap();
       showSuccess("Payment recorded successfully!");
+      markAsSaved();
       navigation.goBack();
     } catch (error) {
+      resetSaved();
       showError("Failed to record payment. Please try again.");
     } finally {
       setLoading(false);

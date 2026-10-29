@@ -9,7 +9,7 @@ import {
   ActivityIndicator,
   RefreshControl,
 } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAppTheme } from "../components/ui/ThemeProvider";
 import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons } from "@expo/vector-icons";
@@ -41,6 +41,7 @@ const DebtPaymentsScreen: React.FC = () => {
   const dispatch = useDispatch<AppDispatch>();
   const navigation = useNavigation<DebtPaymentsScreenNavigationProp>();
   const route = useRoute<DebtPaymentsScreenRouteProp>();
+  const insets = useSafeAreaInsets();
   const { showSuccess, showError } = useToast();
 
   const { debtId, debtName } = route.params;
@@ -262,7 +263,7 @@ const DebtPaymentsScreen: React.FC = () => {
   );
 
   return (
-    <SafeAreaView style={[styles.safeArea, { backgroundColor: colors.background }]} edges={["top"]}>
+    <View style={[styles.safeArea, { backgroundColor: colors.background, paddingTop: insets.top }]}>
       <StatusBar
         barStyle={isDark ? "light-content" : "dark-content"}
         backgroundColor="transparent"
@@ -299,7 +300,7 @@ const DebtPaymentsScreen: React.FC = () => {
             style={{ position: "absolute", bottom: 30, right: 20 }}
           />
         )}
-    </SafeAreaView>
+    </View>
   );
 };
 

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useMemo } from "react";
 import {
   View,
   Text,
@@ -7,12 +7,16 @@ import {
   TouchableOpacity,
   Modal,
   TextInput,
+  ActivityIndicator,
+  Keyboard,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { WalletAccount, WalletType } from "../../types";
 import { useAppTheme } from "./ThemeProvider";
 import { IconChip } from "./IconChip";
 import { Switch } from "./Switch";
+import { ToastOverlay } from "./ToastProvider";
+import { useUnsavedChanges } from "../../hooks";
 
 export const WALLET_ICONS = [
   "cash-outline",
@@ -79,6 +83,8 @@ export const WalletEditorModal: React.FC<WalletEditorModalProps> = ({
   const [formInitialBalance, setFormInitialBalance] = useState("");
   const [formIsSecret, setFormIsSecret] = useState(false);
   const [errors, setErrors] = useState<{ name?: string; initialBalance?: string }>({});
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const isSubmittingRef = useRef(false);
 
   const nameInputRef = useRef<TextInput>(null);
   const balanceInputRef = useRef<TextInput>(null);
@@ -86,6 +92,8 @@ export const WalletEditorModal: React.FC<WalletEditorModalProps> = ({
   useEffect(() => {
     if (visible) {
       setErrors({});
+      isSubmittingRef.current = false;
+      setIsSubmitting(false);
       if (editingWallet) {
         setFormName(editingWallet.name);
         setFormType(editingWallet.type);
@@ -103,10 +111,15 @@ export const WalletEditorModal: React.FC<WalletEditorModalProps> = ({
         setFormInitialBalance("");
         setFormIsSecret(false);
       }
+    } else {
+      isSubmittingRef.current = false;
+      setIsSubmitting(false);
     }
   }, [visible, editingWallet, currentBalance]);
 
-  const handleSave = () => {
+  const handleSave = async () => {
+    if (isSubmittingRef.current) return;
+
     const trimmedName = formName.trim();
     const newErrors: { name?: string; initialBalance?: string } = {};
 
@@ -129,22 +142,67 @@ export const WalletEditorModal: React.FC<WalletEditorModalProps> = ({
       return;
     }
 
-    onSave({
-      name: trimmedName,
-      type: formType,
-      icon: formIcon,
-      color: formColor,
-      initialBalance: cleanedBalance,
-      isSecret: formIsSecret,
-    });
+    isSubmittingRef.current = true;
+    setIsSubmitting(true);
+
+    try {
+      await onSave({
+        name: trimmedName,
+        type: formType,
+        icon: formIcon,
+        color: formColor,
+        initialBalance: cleanedBalance,
+        isSecret: formIsSecret,
+      });
+    } finally {
+      isSubmittingRef.current = false;
+      setIsSubmitting(false);
+    }
   };
+
+  const hasChanges = useMemo(() => {
+    if (editingWallet) {
+      const origName = editingWallet.name || "";
+      const origType = editingWallet.type || "bank";
+      const origColor = editingWallet.color || "teal";
+      const origIcon = editingWallet.icon || "wallet-outline";
+      const origSecret = editingWallet.isSecret || false;
+      return (
+        formName !== origName ||
+        formType !== origType ||
+        formColor !== origColor ||
+        formIcon !== origIcon ||
+        formIsSecret !== origSecret
+      );
+    } else {
+      return (
+        formName.trim() !== "" ||
+        formInitialBalance.trim() !== "" ||
+        formType !== "bank" ||
+        formIsSecret
+      );
+    }
+  }, [
+    editingWallet,
+    formName,
+    formType,
+    formColor,
+    formIcon,
+    formInitialBalance,
+    formIsSecret,
+  ]);
+
+  const { confirmExit } = useUnsavedChanges({
+    hasChanges,
+    isEditing: !!editingWallet,
+  });
 
   return (
     <Modal
       visible={visible}
       transparent
       animationType="slide"
-      onRequestClose={onClose}>
+      onRequestClose={() => confirmExit(onClose)}>
       <View style={styles.modalOverlay}>
         <View
           style={[
@@ -169,12 +227,13 @@ export const WalletEditorModal: React.FC<WalletEditorModalProps> = ({
               ]}>
               {editingWallet ? "Edit Account" : "New Account"}
             </Text>
-            <TouchableOpacity onPress={onClose}>
+            <TouchableOpacity onPress={() => confirmExit(onClose)}>
               <Ionicons name="close" size={24} color={colors.onSurfaceVariant} />
             </TouchableOpacity>
           </View>
 
           <ScrollView
+            keyboardShouldPersistTaps="handled"
             showsVerticalScrollIndicator={false}
             contentContainerStyle={{ paddingBottom: 20 }}>
             {/* Live Preview */}
@@ -412,7 +471,7 @@ export const WalletEditorModal: React.FC<WalletEditorModalProps> = ({
               placeholderTextColor={colors.onSurfaceVariant}
               keyboardType="decimal-pad"
               returnKeyType="done"
-              onSubmitEditing={handleSave}
+              onSubmitEditing={() => Keyboard.dismiss()}
             />
             {errors.initialBalance && (
               <Text
@@ -538,7 +597,8 @@ export const WalletEditorModal: React.FC<WalletEditorModalProps> = ({
           {/* Action Buttons */}
           <View style={{ flexDirection: "row", gap: 10 }}>
             <TouchableOpacity
-              onPress={onClose}
+              disabled={isSubmitting}
+              onPress={() => confirmExit(onClose)}
               style={{
                 flex: 1,
                 paddingVertical: 14,
@@ -546,6 +606,7 @@ export const WalletEditorModal: React.FC<WalletEditorModalProps> = ({
                 alignItems: "center",
                 borderWidth: 1,
                 borderColor: colors.outlineVariant,
+                opacity: isSubmitting ? 0.6 : 1,
               }}>
               <Text
                 style={{
@@ -557,6 +618,7 @@ export const WalletEditorModal: React.FC<WalletEditorModalProps> = ({
               </Text>
             </TouchableOpacity>
             <TouchableOpacity
+              disabled={isSubmitting}
               onPress={handleSave}
               style={{
                 flex: 1.5,
@@ -564,19 +626,25 @@ export const WalletEditorModal: React.FC<WalletEditorModalProps> = ({
                 paddingVertical: 14,
                 borderRadius: 16,
                 alignItems: "center",
+                opacity: isSubmitting ? 0.7 : 1,
               }}>
-              <Text
-                style={{
-                  color: colors.onPrimary,
-                  fontWeight: "800",
-                  fontSize: 15,
-                }}>
-                {editingWallet ? "Save Changes" : "Create Account"}
-              </Text>
+              {isSubmitting ? (
+                <ActivityIndicator size="small" color={colors.onPrimary} />
+              ) : (
+                <Text
+                  style={{
+                    color: colors.onPrimary,
+                    fontWeight: "800",
+                    fontSize: 15,
+                  }}>
+                  {editingWallet ? "Save Changes" : "Create Account"}
+                </Text>
+              )}
             </TouchableOpacity>
           </View>
         </View>
       </View>
+      <ToastOverlay />
     </Modal>
   );
 };

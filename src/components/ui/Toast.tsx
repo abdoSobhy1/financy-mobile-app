@@ -5,11 +5,9 @@ import {
   StyleSheet,
   Animated,
   TouchableOpacity,
-  TouchableWithoutFeedback,
   Dimensions,
   Platform,
   StatusBar,
-  Modal as RNModal,
 } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons } from "@expo/vector-icons";
@@ -79,6 +77,7 @@ export const Toast: React.FC<ToastProps> = ({ toast, onDismiss, index }) => {
   const translateY = useRef(new Animated.Value(-60)).current;
   const opacity = useRef(new Animated.Value(0)).current;
   const scale = useRef(new Animated.Value(0.9)).current;
+  const dismissedRef = useRef(false);
 
   const theme = TOAST_THEME[toast.type];
 
@@ -111,6 +110,9 @@ export const Toast: React.FC<ToastProps> = ({ toast, onDismiss, index }) => {
   }, []);
 
   const handleDismiss = () => {
+    if (dismissedRef.current) return;
+    dismissedRef.current = true;
+
     Animated.parallel([
       Animated.timing(translateY, {
         toValue: -60,
@@ -140,6 +142,7 @@ export const Toast: React.FC<ToastProps> = ({ toast, onDismiss, index }) => {
 
   return (
     <Animated.View
+      pointerEvents="auto"
       style={[
         styles.container,
         {
@@ -150,7 +153,10 @@ export const Toast: React.FC<ToastProps> = ({ toast, onDismiss, index }) => {
           top: topOffset,
         },
       ]}>
-      <View style={styles.content}>
+      <TouchableOpacity
+        activeOpacity={0.9}
+        onPress={handleDismiss}
+        style={styles.content}>
         {/* Gradient icon circle */}
         <LinearGradient
           colors={theme.gradient}
@@ -172,7 +178,7 @@ export const Toast: React.FC<ToastProps> = ({ toast, onDismiss, index }) => {
           hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
           <Ionicons name="close" size={14} color="rgba(255,255,255,0.4)" />
         </TouchableOpacity>
-      </View>
+      </TouchableOpacity>
     </Animated.View>
   );
 };
@@ -299,22 +305,11 @@ export const useToast = () => {
   const ToastComponent = () => {
     if (toasts.length === 0) return null;
     return (
-      <RNModal
-        visible={toasts.length > 0}
-        transparent
-        animationType="none"
-        statusBarTranslucent
-        onRequestClose={clearAllToasts}>
-        <TouchableWithoutFeedback onPress={clearAllToasts}>
-          <View style={StyleSheet.absoluteFill} pointerEvents="box-none">
-            <TouchableWithoutFeedback>
-              <View style={StyleSheet.absoluteFill} pointerEvents="box-none">
-                <ToastContainer toasts={toasts} onDismiss={dismissToast} />
-              </View>
-            </TouchableWithoutFeedback>
-          </View>
-        </TouchableWithoutFeedback>
-      </RNModal>
+      <View
+        style={[StyleSheet.absoluteFill, { zIndex: 99999, elevation: 999 }]}
+        pointerEvents="box-none">
+        <ToastContainer toasts={toasts} onDismiss={dismissToast} />
+      </View>
     );
   };
 

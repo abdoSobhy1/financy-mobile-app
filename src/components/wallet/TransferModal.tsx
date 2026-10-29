@@ -7,16 +7,18 @@ import {
   TouchableOpacity,
   Modal,
   TextInput,
+  Keyboard,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useDispatch, useSelector } from "react-redux";
 import { WalletAccount } from "../../types";
 import { useAppTheme } from "../ui/ThemeProvider";
-import { useToast } from "../ui";
+import { useToast, ToastOverlay } from "../ui";
 import { AppDispatch, RootState } from "../../store";
 import { fetchTransactions } from "../../store/slices/transactionsSlice";
 import { walletService } from "../../services/walletService";
 import { formatCurrency } from "../../utils";
+import { useUnsavedChanges } from "../../hooks";
 
 export interface TransferModalProps {
   visible: boolean;
@@ -172,6 +174,11 @@ export const TransferModal: React.FC<TransferModalProps> = ({
     }
   };
 
+  const { confirmExit } = useUnsavedChanges({
+    hasChanges: transferAmount.trim() !== "",
+    title: "Discard Transfer",
+  });
+
   // Only wallets other than fromWalletId can be selected as destination
   const destinationOptions = visibleWallets.filter((w) => w.id !== fromWalletId);
 
@@ -180,7 +187,7 @@ export const TransferModal: React.FC<TransferModalProps> = ({
       visible={visible}
       transparent
       animationType="fade"
-      onRequestClose={onClose}>
+      onRequestClose={() => confirmExit(onClose)}>
       <View style={styles.modalOverlay}>
         <View
           style={[
@@ -208,7 +215,7 @@ export const TransferModal: React.FC<TransferModalProps> = ({
                 Transfer Money
               </Text>
             </View>
-            <TouchableOpacity onPress={onClose} style={styles.closeBtn}>
+            <TouchableOpacity onPress={() => confirmExit(onClose)} style={styles.closeBtn}>
               <Ionicons name="close" size={22} color={colors.onSurfaceVariant} />
             </TouchableOpacity>
           </View>
@@ -418,7 +425,7 @@ export const TransferModal: React.FC<TransferModalProps> = ({
               placeholderTextColor={colors.onSurfaceVariant}
               keyboardType="decimal-pad"
               returnKeyType="done"
-              onSubmitEditing={handleTransferSubmit}
+              onSubmitEditing={() => Keyboard.dismiss()}
             />
             {transferError ? (
               <Text
@@ -435,7 +442,7 @@ export const TransferModal: React.FC<TransferModalProps> = ({
             {/* Action Buttons */}
             <View style={{ flexDirection: "row", gap: 10, marginTop: 4 }}>
               <TouchableOpacity
-                onPress={onClose}
+                onPress={() => confirmExit(onClose)}
                 style={{
                   flex: 1,
                   paddingVertical: 14,
@@ -477,6 +484,7 @@ export const TransferModal: React.FC<TransferModalProps> = ({
           </ScrollView>
         </View>
       </View>
+      <ToastOverlay />
     </Modal>
   );
 };

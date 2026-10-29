@@ -11,6 +11,7 @@ import {
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useAppTheme } from "../ui/ThemeProvider";
+import { ToastOverlay } from "../ui";
 import {
   OCRService,
   OcrReceiptResult,
@@ -484,6 +485,7 @@ export const ReceiptScanModal: React.FC<ReceiptScanModalProps> = ({
           </TouchableWithoutFeedback>
         </View>
       </TouchableWithoutFeedback>
+      <ToastOverlay />
     </Modal>
   );
 };

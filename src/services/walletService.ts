@@ -82,6 +82,9 @@ const warnedUnknownAccounts = new Set<string>();
 
 let cachedWallets: WalletAccount[] = [];
 
+let lastAddWalletCall: { name: string; type: string; timestamp: number } | null = null;
+let isAddingWallet = false;
+
 export const walletService = {
   getCachedWallets(): WalletAccount[] {
     return cachedWallets;
@@ -186,22 +189,55 @@ export const walletService = {
     isSecret?: boolean;
     archived?: boolean;
   }): Promise<WalletAccount[]> {
+    const trimmedName = data.name.trim();
     const isSecret = Boolean(data.isSecret || (data.type as any) === "secret");
     const safeType: WalletType =
       (data.type as any) === "secret" ? "cash" : data.type;
 
-    const db = await getDb();
-    await db.wallets.createWallet({
-      name: data.name.trim(),
-      type: safeType,
-      icon: data.icon || "wallet-outline",
-      color: data.color || (isSecret ? "gray" : "teal"),
-      initialBalance: Number(data.initialBalance) || 0,
-      isSecret,
-      archived: Boolean(data.archived),
-    });
+    // Prevent rapid duplicate submissions for the same account name & type (within 1.5s)
+    const now = Date.now();
+    if (
+      isAddingWallet ||
+      (lastAddWalletCall &&
+        now - lastAddWalletCall.timestamp < 1500 &&
+        lastAddWalletCall.name.toLowerCase() === trimmedName.toLowerCase() &&
+        lastAddWalletCall.type === safeType)
+    ) {
+      console.warn(`[walletService] Debouncing duplicate addWallet call for "${trimmedName}"`);
+      return this.getWallets();
+    }
 
-    return this.getWallets();
+    isAddingWallet = true;
+    lastAddWalletCall = { name: trimmedName, type: safeType, timestamp: now };
+
+    try {
+      const initBal = Number(data.initialBalance) || 0;
+      const db = await getDb();
+      const newWallet = await db.wallets.createWallet({
+        name: trimmedName,
+        type: safeType,
+        icon: data.icon || "wallet-outline",
+        color: data.color || (isSecret ? "gray" : "teal"),
+        initialBalance: 0,
+        isSecret,
+        archived: Boolean(data.archived),
+      });
+
+      if (Math.abs(initBal) > 0.001) {
+        await db.transactions.createTransaction({
+          amount: Math.abs(initBal),
+          type: initBal >= 0 ? "income" : "expense",
+          description: "Balance adjustment",
+          accountId: newWallet.id,
+          date: new Date().toISOString(),
+          updatedAt: Date.now(),
+        });
+      }
+
+      return this.getWallets();
+    } finally {
+      isAddingWallet = false;
+    }
   },
 
   async updateWallet(

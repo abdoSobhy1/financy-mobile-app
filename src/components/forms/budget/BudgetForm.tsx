@@ -1,16 +1,11 @@
 import React, { useState, useEffect, useMemo, useRef } from "react";
-import { View, TextInput } from "react-native";
+import { View, TextInput, Keyboard } from "react-native";
 import { useDispatch, useSelector } from "react-redux";
 import { useNavigation } from "@react-navigation/native";
-import { useToast, CategorySelector } from "../../ui";
+import { useToast } from "../../ui";
 import { AppDispatch, RootState } from "../../../store";
 import { addBudget, updateBudget } from "../../../store/slices/budgetsSlice";
-import {
-  fetchCategories,
-  addCategory,
-} from "../../../store/slices/categoriesSlice";
 import { Budget } from "../../../types";
-import { generateId } from "../../../utils";
 import { UnifiedForm } from "../UnifiedForm";
 import { FormField } from "../FormField";
 
@@ -24,7 +19,6 @@ interface FormData {
   name: string;
   amount: string;
   resetDay: string;
-  categoryId: string;
 }
 
 export const BudgetForm: React.FC<BudgetFormProps> = ({
@@ -36,9 +30,6 @@ export const BudgetForm: React.FC<BudgetFormProps> = ({
   const navigation = useNavigation();
   const { showSuccess, showError } = useToast();
 
-  const { items: categories } = useSelector(
-    (state: RootState) => state.categories,
-  );
   const { loading } = useSelector((state: RootState) => state.budgets);
 
   const isEditing = !!budget;
@@ -47,7 +38,6 @@ export const BudgetForm: React.FC<BudgetFormProps> = ({
     name: "",
     amount: "",
     resetDay: "1",
-    categoryId: "",
   });
 
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -56,11 +46,6 @@ export const BudgetForm: React.FC<BudgetFormProps> = ({
   const amountRef = useRef<TextInput>(null);
   const resetDayRef = useRef<TextInput>(null);
 
-  // Load categories on mount
-  useEffect(() => {
-    dispatch(fetchCategories());
-  }, [dispatch]);
-
   // Initialize form data when editing
   useEffect(() => {
     if (budget) {
@@ -68,7 +53,6 @@ export const BudgetForm: React.FC<BudgetFormProps> = ({
         name: budget.name || "",
         amount: budget.amount?.toString() || "",
         resetDay: budget.resetDay?.toString() || "1",
-        categoryId: budget.categoryId || "",
       });
     }
   }, [budget]);
@@ -101,7 +85,7 @@ export const BudgetForm: React.FC<BudgetFormProps> = ({
         name: formData.name.trim(),
         amount: formData.amount, // Keep as string to match interface
         resetDay: Number(formData.resetDay),
-        categoryId: formData.categoryId || undefined,
+        categoryId: undefined,
       };
 
       // DEBUG: log the exact payload before dispatch so we can confirm resetDay is correct
@@ -200,25 +184,6 @@ export const BudgetForm: React.FC<BudgetFormProps> = ({
         onSubmitEditing={() => resetDayRef.current?.focus()}
       />
 
-      {/* Category Selection */}
-      <CategorySelector
-        categories={Object.values(categories).filter((cat) => cat != null)}
-        selectedCategoryId={formData.categoryId}
-        onCategorySelect={(categoryId) => updateField("categoryId", categoryId)}
-        onCategoryAdd={(newCategory) => {
-          const categoryData = {
-            ...newCategory,
-            id: generateId(),
-          };
-          dispatch(addCategory(categoryData));
-          updateField("categoryId", categoryData.id);
-        }}
-        type="expense"
-        label="Category"
-        showAddButton={true}
-        rememberLastUsed={false} // Don't remember for budget forms since they're more specific
-      />
-
       {/* Reset Day Input */}
       <FormField
         ref={resetDayRef}
@@ -231,7 +196,7 @@ export const BudgetForm: React.FC<BudgetFormProps> = ({
         required={true}
         error={errors.resetDay}
         returnKeyType="done"
-        onSubmitEditing={handleSubmit}
+        onSubmitEditing={() => Keyboard.dismiss()}
       />
     </UnifiedForm>
   );

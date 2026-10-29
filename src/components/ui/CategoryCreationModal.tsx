@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useMemo } from "react";
 import {
   View,
   Text,
@@ -10,10 +10,12 @@ import {
   TouchableWithoutFeedback,
   KeyboardAvoidingView,
   Platform,
+  Keyboard,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useAppTheme } from "../ui/ThemeProvider";
 import { DEFAULT_ICONS } from "./IconPicker";
+import { useUnsavedChanges } from "../../hooks";
 
 // ─── Data ─────────────────────────────────────────────────────────────────────
 
@@ -95,6 +97,28 @@ export const CategoryCreationModal: React.FC<CategoryCreationModalProps> = ({
   const isEdit = !!initialData;
   const modalTitle = title ?? (isEdit ? "Edit Category" : "Create New Category");
 
+  const hasChanges = useMemo(() => {
+    if (isEdit && initialData) {
+      const origName = initialData.name || "";
+      const origColor = initialData.color || PREDEFINED_COLORS[0];
+      const origIcon = (initialData as any)?.icon || CATEGORY_ICONS[0];
+      const origType = initialData.type || type || "expense";
+      return (
+        name !== origName ||
+        color !== origColor ||
+        icon !== origIcon ||
+        catType !== origType
+      );
+    } else {
+      return name.trim() !== "";
+    }
+  }, [isEdit, initialData, name, color, icon, catType, type]);
+
+  const { confirmExit } = useUnsavedChanges({
+    hasChanges,
+    isEditing: isEdit,
+  });
+
   const handleSave = () => {
     if (!name.trim()) {
       setNameError("Category name is required");
@@ -102,10 +126,6 @@ export const CategoryCreationModal: React.FC<CategoryCreationModalProps> = ({
       return;
     }
     onCreateCategory({ name: name.trim(), type: catType, color, icon });
-    handleClose();
-  };
-
-  const handleClose = () => {
     onClose();
   };
 
@@ -114,14 +134,14 @@ export const CategoryCreationModal: React.FC<CategoryCreationModalProps> = ({
       visible={visible}
       animationType="fade"
       transparent
-      onRequestClose={handleClose}
+      onRequestClose={() => confirmExit(onClose)}
       statusBarTranslucent
     >
       <KeyboardAvoidingView
         behavior={Platform.OS === "ios" ? "padding" : undefined}
         style={styles.overlay}
       >
-        <TouchableWithoutFeedback onPress={handleClose}>
+        <TouchableWithoutFeedback onPress={() => confirmExit(onClose)}>
           <View style={styles.backdrop} />
         </TouchableWithoutFeedback>
 
@@ -181,7 +201,7 @@ export const CategoryCreationModal: React.FC<CategoryCreationModalProps> = ({
             ]}
             maxLength={50}
             returnKeyType="done"
-            onSubmitEditing={handleSave}
+            onSubmitEditing={() => Keyboard.dismiss()}
           />
           {nameError ? (
             <Text

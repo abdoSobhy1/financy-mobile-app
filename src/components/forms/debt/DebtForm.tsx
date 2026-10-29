@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useMemo } from "react";
 import {
   View,
   Text,
@@ -8,6 +8,7 @@ import {
   ScrollView,
   KeyboardAvoidingView,
   Platform,
+  Keyboard,
 } from "react-native";
 import { useDispatch } from "react-redux";
 import { useNavigation } from "@react-navigation/native";
@@ -24,6 +25,7 @@ import {
 import { Debt, DebtDirection } from "../../../types";
 import { useAppTheme } from "../../ui/ThemeProvider";
 import { AlertService } from "../../../services/AlertService";
+import { useUnsavedChanges } from "../../../hooks";
 
 interface DebtFormProps {
   debt?: Debt | null;
@@ -96,6 +98,46 @@ export const DebtForm: React.FC<DebtFormProps> = ({
       }
     }
   }, [debt]);
+
+  const hasChanges = useMemo(() => {
+    if (isEditing && debt) {
+      const origName = debt.name || "";
+      const origType = debt.type === "owed_to_me" ? "owed_to_me" : "i_owe";
+      const origTotal = debt.totalAmount?.toString() || "";
+      const origInterest = debt.interestRate?.toString() || "";
+      const origMin = debt.minimumPayment?.toString() || "";
+      const origCreditor = debt.creditor || "";
+      const origDesc = debt.description || "";
+      const origDue = debt.dueDate ? new Date(debt.dueDate).getTime() : null;
+      const currentDue = formData.dueDate ? formData.dueDate.getTime() : null;
+
+      return (
+        formData.name !== origName ||
+        formData.type !== origType ||
+        formData.totalAmount !== origTotal ||
+        formData.interestRate !== origInterest ||
+        formData.minimumPayment !== origMin ||
+        formData.creditor !== origCreditor ||
+        formData.description !== origDesc ||
+        currentDue !== origDue
+      );
+    } else {
+      return (
+        formData.totalAmount.trim() !== "" ||
+        formData.name.trim() !== "" ||
+        formData.creditor.trim() !== "" ||
+        formData.minimumPayment.trim() !== "" ||
+        formData.interestRate.trim() !== "" ||
+        formData.description.trim() !== "" ||
+        formData.dueDate !== null
+      );
+    }
+  }, [isEditing, debt, formData]);
+
+  const { markAsSaved, resetSaved } = useUnsavedChanges({
+    hasChanges,
+    isEditing,
+  });
 
   const validateForm = () => {
     const newErrors: Record<string, string> = {};
@@ -176,8 +218,10 @@ export const DebtForm: React.FC<DebtFormProps> = ({
       }
 
       onSuccess?.();
+      markAsSaved();
       navigation.goBack();
     } catch (error) {
+      resetSaved();
       console.error("Debt operation error:", error);
       const errorMessage =
         error instanceof Error ? error.message : "Unknown error occurred";
@@ -205,8 +249,10 @@ export const DebtForm: React.FC<DebtFormProps> = ({
               await dispatch(deleteDebt(debt.id)).unwrap();
               showSuccess("Debt deleted successfully!");
               onSuccess?.();
+              markAsSaved();
               navigation.goBack();
             } catch (error) {
+              resetSaved();
               console.error("Debt deletion error:", error);
               showError("Failed to delete debt. Please try again.");
             } finally {
@@ -719,7 +765,7 @@ export const DebtForm: React.FC<DebtFormProps> = ({
                     if (showMore) {
                       descriptionRef.current?.focus();
                     } else {
-                      handleSubmit();
+                      Keyboard.dismiss();
                     }
                   }}
                 />
@@ -820,7 +866,7 @@ export const DebtForm: React.FC<DebtFormProps> = ({
                   onChangeText={(text) => updateField("description", text)}
                   multiline
                   returnKeyType="done"
-                  onSubmitEditing={handleSubmit}
+                  onSubmitEditing={() => Keyboard.dismiss()}
                 />
               </View>
             </View>

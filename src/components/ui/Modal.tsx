@@ -3,6 +3,7 @@ import { Modal as RNModal, View, Text, StyleSheet, TouchableOpacity, ScrollView,
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { useAppTheme } from "./ThemeProvider";
+import { ToastOverlay } from "./ToastProvider";
 
 interface ModalProps {
   visible: boolean;
@@ -101,6 +102,7 @@ const Modal: React.FC<ModalProps> = ({
     <RNModal visible={visible} animationType={animationType} presentationStyle={presentationStyle} onRequestClose={onClose} statusBarTranslucent>
       <StatusBar backgroundColor="rgba(0, 0, 0, 0.5)" barStyle="light-content" />
       {content}
+      <ToastOverlay />
     </RNModal>
   );
 };

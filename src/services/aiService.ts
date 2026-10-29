@@ -15,6 +15,12 @@ import NetInfo from "@react-native-community/netinfo";
 import { Category, ParsedTransaction, TransactionType } from "../types";
 import { guessCategoryId } from "../utils/categoryDictionary";
 import { getAIConfig } from "./aiConfigService";
+import {
+  getAvailableGeminiModels,
+  markModelRateLimited,
+  recordModelSuccess,
+  isRateLimitError,
+} from "./geminiQuotaService";
 import type { OcrReceiptItem, OcrReceiptResult, OcrDebugReport, OcrLineDebug } from "./ocrService";
 
 // ── Types ────────────────────────────────────────────────────────────────
@@ -142,11 +148,16 @@ async function callChatModel(
   const config = await getAIConfig();
   const apiKey = config.apiKey ? config.apiKey.trim() : "";
 
-  // 1. Google Gemini (Preferred: 500 free requests/day with Gemini-3.6-Flash)
+  // 1. Google Gemini (Multi-model auto-fallback & daily quota management)
   if (config.provider === "gemini" && apiKey) {
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 20000);
-    const model = config.model ? config.model.toLowerCase() : "gemini-3.6-flash";
+    const preferredModel = config.model ? config.model.toLowerCase().trim() : "gemini-3.6-flash";
+    const candidateModels = await getAvailableGeminiModels(preferredModel);
+
+    if (candidateModels.length === 0) {
+      throw new Error(
+        "All free Google Gemini models have reached their daily usage limit today. Limits automatically reset tomorrow, or you can switch AI providers in Settings."
+      );
+    }
 
     const parts: any[] = [
       { text: `${systemPrompt}\n\n[USER INSTRUCTION]:\n${userPrompt}` },
@@ -161,37 +172,71 @@ async function callChatModel(
       });
     }
 
-    try {
-      const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
-      const res = await fetch(url, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          contents: [{ role: "user", parts }],
-          generationConfig: {
-            responseMimeType: "application/json",
-            temperature: 0.1,
-          },
-        }),
-        signal: controller.signal,
-      });
+    let lastError: Error | null = null;
 
-      clearTimeout(timeoutId);
+    for (const model of candidateModels) {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 20000);
 
-      if (!res.ok) {
-        const errJson = await res.json().catch(() => ({}));
-        throw new Error(errJson.error?.message || `Gemini API error ${res.status}`);
+      try {
+        console.log(`[AIService] Sending Gemini request to model: ${model}`);
+        const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
+        const res = await fetch(url, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            contents: [{ role: "user", parts }],
+            generationConfig: {
+              responseMimeType: "application/json",
+              temperature: 0.1,
+            },
+          }),
+          signal: controller.signal,
+        });
+
+        clearTimeout(timeoutId);
+
+        if (!res.ok) {
+          const errJson = await res.json().catch(() => ({}));
+          const errMsg = errJson.error?.message || `Gemini API error ${res.status}`;
+
+          if (isRateLimitError(res.status, errJson.error, errMsg)) {
+            console.warn(
+              `[AIService] Model ${model} exceeded rate limit today (${res.status}): ${errMsg}. Flagging model and falling back.`
+            );
+            await markModelRateLimited(model, errMsg);
+            lastError = new Error(`Model ${model} daily quota exceeded: ${errMsg}`);
+            continue; // Fall back to next model in chain
+          }
+
+          // Other API errors (e.g. 503 service unavailable, 500, model overload)
+          console.warn(`[AIService] Model ${model} failed with HTTP ${res.status}: ${errMsg}. Trying fallback model.`);
+          lastError = new Error(errMsg);
+          continue; // Try next candidate
+        }
+
+        const data = await res.json();
+        const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
+        if (!text) {
+          console.warn(`[AIService] Model ${model} returned empty response. Trying fallback model.`);
+          lastError = new Error(`Empty response from ${model}`);
+          continue;
+        }
+
+        // Successfully received valid response! Record success and return
+        await recordModelSuccess(model);
+        console.log(`[AIService] Successfully processed request with model: ${model}`);
+        return text;
+      } catch (err: any) {
+        clearTimeout(timeoutId);
+        const errMsg = err.name === "AbortError" ? "Request timed out (20s)" : err.message || "Network error";
+        console.warn(`[AIService] Request failed with model ${model}: ${errMsg}`);
+        lastError = err;
+        // Continue to fallback model
       }
-
-      const data = await res.json();
-      const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
-      if (!text) throw new Error("Empty response from Gemini");
-      return text;
-    } catch (err: any) {
-      clearTimeout(timeoutId);
-      if (err.name === "AbortError") throw new Error("Gemini request timed out (20s)");
-      throw err;
     }
+
+    throw lastError || new Error("Failed to get response from any Gemini model.");
   }
 
   // 2. Groq (Free: Llama 3.3 70B)
@@ -384,23 +429,29 @@ export function isReceiptMetadataOrTotal(text: string): boolean {
   const t = text.trim();
   if (t.length < 2) return true;
 
-  // 1. Totals, subtotals, balance, net amounts
+  // 1. Totals, subtotals, balance, net amounts, settlements
   if (
     /^(?:grand\s*)?total\b/i.test(t) ||
     /^sub\s*total\b/i.test(t) ||
     /^net\s*(?:total|amount|due)?\b/i.test(t) ||
     /^balance\s*(?:due)?\b/i.test(t) ||
     /^amount\s*due\b/i.test(t) ||
-    /^(?:المجموع|الإجمالي|الاجمالي|الصافي|صافي\s*المبلغ|المبلغ\s*المطلوب|المطلوب\s*سداده|المجموع\s*الكلي)(?:[\s:#\d]|$|\b)/i.test(t)
+    /^(?:[0-9.,\s]+)?(?:total|grand\s*total|subtotal|net)\b/i.test(t) ||
+    /^(?:المجموع|مجموع|الإجمالي|إجمالي|الاجمالي|اجمالي|الصافي|صافي|صافي\s*المبلغ|المبلغ\s*المطلوب|المطلوب\s*سداده|المجموع\s*الكلي|مجموع\s*كلي|جملة\s*الفاتورة|الجملة|جملة|المستحق|مستحق|صافي\s*الفاتورة|صافي\s*القيمة)(?:[\s:#\d]|$|\b)/i.test(t) ||
+    /^[0-9.,\s]+(?:المجموع|مجموع|الإجمالي|إجمالي|الاجمالي|اجمالي|الصافي|صافي|الجملة|جملة|المستحق)(?:[\s:#]|$)/i.test(t)
   ) {
     return true;
   }
 
-  // 2. Receipt / Invoice / Order / Check / Bill numbers / IDs
+  // 2. Receipt / Invoice / Order / Slip / Dispatch / PO / Reference numbers & IDs
   if (
-    /^(?:receipt|rec|invoice|inv|bill|order|chk|check|ticket|txn|trans)\s*(?:#|no\.?|num\.?|id|code)?\s*[:#]?\s*\d+/i.test(t) ||
-    /^(?:receipt|rec|invoice|inv|bill|order|chk|check|ticket)\s*(?:#|no\.?|num\.?|number)\b/i.test(t) ||
-    /^(?:رقم\s*(?:الفاتورة|الإيصال|الشيك|الطلب|العملية|الحساب)|فاتورة\s*رقم|إيصال\s*رقم|طلب\s*رقم|شيك\s*رقم)(?:[\s:#\d]|$|\b)/i.test(t)
+    /^(?:dispatch\s*slip|delivery\s*slip|packing\s*slip|delivery\s*note|purchase\s*order|sales\s*order|work\s*order|receipt|rec|invoice|inv|bill|order|chk|check|ticket|txn|trans|slip|dispatch|po|so|quote|quotation|ref|reference)\s*(?:#|no\.?|num\.?|number|id|code)?\s*[:#/-]?\s*\d+/i.test(t) ||
+    /^(?:dispatch\s*slip|delivery\s*slip|packing\s*slip|receipt|rec|invoice|inv|bill|order|chk|check|ticket|slip|dispatch)\s*(?:#|no\.?|num\.?|number)\b/i.test(t) ||
+    /^(?:رقم\s*(?:الفاتورة|الإيصال|الشيك|الطلب|العملية|الحساب|التسجيل|الملف|المسلسل|الشحنة|الإذن|الاذن)|فاتورة\s*رقم|إيصال\s*رقم|طلب\s*رقم|شيك\s*رقم|سند\s*رقم|حوالة\s*رقم)(?:[\s:#/=-]|$|\b)/i.test(t) ||
+    /^(?:إذن|اذن)\s*(?:صرف|استلام|تسليم|إضافة|اضافة|دفع|قبض|توريد)?(?:\s*رقم)?(?:[\s:#/=-]|$|\b)/i.test(t) ||
+    /^(?:أمر|امر)\s*(?:توريد|شراء|بيع|شغل|عمل|صرف)?(?:\s*رقم)?(?:[\s:#/=-]|$|\b)/i.test(t) ||
+    /^(?:سند|حوالة|بوليصة)\s*(?:قبض|صرف|شحن|تسليم|استلام)?(?:\s*رقم)?(?:[\s:#/=-]|$|\b)/i.test(t) ||
+    /^(?:كود\s*(?:العميل|المندوب|الحساب|المستودع)|مسلسل)(?:[\s:#/=-]|$|\b)/i.test(t)
   ) {
     return true;
   }
@@ -421,15 +472,24 @@ export function isReceiptMetadataOrTotal(text: string): boolean {
     return true;
   }
 
-  // 5. Staff, table, station, terminal, tax ID, phone, URL, greetings
+  // 5. Timestamps, print metadata, staff, warehouse, terminal, tax ID, phone, URL, greetings
   if (
-    /^(?:cashier|server|waiter|operator|terminal|pos|table|guest|tbl|station)\b/i.test(t) ||
-    /^(?:كاشير|طاولة|ترابيزة|ويتر|مستخدم|نقطة\s*بيع|محطة)(?:[\s:#\d]|$|\b)/i.test(t) ||
-    /^(?:tel|phone|mobile|fax|cr\s*#|trn|tax\s*id)\b/i.test(t) ||
-    /^(?:س\.ت|ب\.ض|الرقم\s*الضريبي|السجل\s*التجاري)(?:[\s:#\d]|$|\b)/i.test(t) ||
+    /^(?:print\s*(?:date|time|ed)|printed\s*(?:on|at)|time\b|date\b)/i.test(t) ||
+    /^(?:تاريخ\s*(?:الطباعة|الاصدار|الفاتورة)|وقت\s*(?:الطباعة|الاصدار)|طبع\s*في|توقيت)(?:[\s:#]|$|\b)/i.test(t) ||
+    /^(?:cashier|server|waiter|operator|terminal|pos|table|guest|tbl|station|lane)\b/i.test(t) ||
+    /^(?:sales\s*(?:rep|person|man)|driver|warehouse|depot|branch|store)\b/i.test(t) ||
+    /^(?:كاشير|طاولة|ترابيزة|ويتر|مستخدم|نقطة\s*بيع|محطة|مندوب|سائق|بائع|مخزن|مستودع|معرض|فرع|صالة)(?:[\s:#]|$|\b)/i.test(t) ||
+    /^(?:tel|phone|mobile|fax|cr\s*#|trn|tax\s*id|p\.?o\.?\s*box)\b/i.test(t) ||
+    /^(?:س\.ت|ب\.ض|س\s*ت|ب\s*ض|الرقم\s*الضريبي|السجل\s*التجاري|البطاقة\s*الضريبية|الملف\s*الضريبي)(?:[\s:#\d]|$|\b)/i.test(t) ||
+    /^(?:هاتف|تليفون|موبايل|فاكس|العنوان|ص\.ب)(?:[\s:#\d]|$|\b)/i.test(t) ||
     /^(?:thank\s*you|welcome)\b/i.test(t) ||
     /^(?:شكراً\s*(?:لزيارتكم)?|أهلاً\s*بكم)(?:[\s:#\d]|$|\b)/i.test(t)
   ) {
+    return true;
+  }
+
+  // 6. Any line containing explicit time pattern at start e.g. "10:37:25 AM" or ending in separator /:#
+  if (/^\d{1,2}:\d{2}(?::\d{2})?\s*(?:am|pm|ص|م)?/i.test(t)) {
     return true;
   }
 

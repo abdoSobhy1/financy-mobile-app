@@ -24,6 +24,14 @@ import {
   AIConfig,
   AIProvider,
 } from "../services/aiConfigService";
+import {
+  getDailyGeminiUsage,
+  resetDailyGeminiUsage,
+  GEMINI_FALLBACK_MODELS,
+  GEMINI_MODEL_METADATA,
+  GeminiDailyUsage,
+} from "../services/geminiQuotaService";
+import { useIsOwner } from "../hooks";
 import { useAppTheme } from "../components/ui/ThemeProvider";
 import { LinearGradient } from "expo-linear-gradient";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -191,11 +199,37 @@ export const SettingsScreen: React.FC = () => {
   });
 
   // ── AI Configuration State (Never loads raw API keys into UI) ────
+  const isOwner = useIsOwner();
   const [showAiModal, setShowAiModal] = useState(false);
   const [aiKeyInput, setAiKeyInput] = useState("");
   const [selectedAiProvider, setSelectedAiProvider] = useState<AIProvider>("gemini");
   const [isTestingAi, setIsTestingAi] = useState(false);
   const [showAiKeySecret, setShowAiKeySecret] = useState(false);
+  const [aiStatus, setAiStatus] = useState<{
+    provider: AIProvider;
+    hasCustomKey: boolean;
+    hasBundledKey: boolean;
+    activeModel: string;
+    isFallbackModel?: boolean;
+    availableGeminiModelsCount?: number;
+    totalGeminiModelsCount?: number;
+    rateLimitedModels?: string[];
+  }>({
+    provider: "gemini",
+    hasCustomKey: false,
+    hasBundledKey: false,
+    activeModel: "gemini-3.6-flash",
+  });
+  const [geminiUsage, setGeminiUsage] = useState<GeminiDailyUsage | null>(null);
+  const [showModelChain, setShowModelChain] = useState(false);
+
+  const refreshAiStatus = async () => {
+    const status = await getAIConfigStatus();
+    setSelectedAiProvider(status.provider);
+    setAiStatus(status);
+    const usage = await getDailyGeminiUsage();
+    setGeminiUsage(usage);
+  };
 
   const isGuest = Boolean(user?.isGuest || user?.uid === "guest");
   const currentBillingDay = settings.data?.billingPeriodStartDay || 1;
@@ -221,8 +255,7 @@ export const SettingsScreen: React.FC = () => {
       .getNotificationSettings()
       .then(setNotifSettings)
       .catch(() => {});
-    getAIConfigStatus().then((status) => {
-      setSelectedAiProvider(status.provider);
+    refreshAiStatus().then(() => {
       // Never load any API key string into aiKeyInput
       setAiKeyInput("");
     });
@@ -240,6 +273,7 @@ export const SettingsScreen: React.FC = () => {
       model: selectedAiProvider === "gemini" ? "gemini-3.6-flash" : undefined,
     };
     await saveAIConfig(updated);
+    await refreshAiStatus();
     setAiKeyInput("");
     setShowAiKeySecret(false);
     setShowAiModal(false);
@@ -253,11 +287,18 @@ export const SettingsScreen: React.FC = () => {
       apiKey: aiKeyInput.trim(),
     });
     setIsTestingAi(false);
+    await refreshAiStatus();
     if (res.success) {
       showSuccess(res.message);
     } else {
       showError(res.message);
     }
+  };
+
+  const handleResetGeminiQuota = async () => {
+    await resetDailyGeminiUsage();
+    await refreshAiStatus();
+    showSuccess("Today's model quota flags have been reset!");
   };
 
   const handleSaveProfile = async () => {
@@ -719,10 +760,21 @@ export const SettingsScreen: React.FC = () => {
           <SettingRow
             icon="sparkles-outline"
             title="Cloud AI Assistant"
-            subtitle="Configure free Google Gemini or Groq key"
-            onPress={() => {
+            subtitle={
+              isOwner
+                ? (aiStatus.hasCustomKey
+                    ? `Active (Custom key • ${aiStatus.activeModel}${aiStatus.isFallbackModel ? " - Fallback" : ""})`
+                    : aiStatus.hasBundledKey
+                      ? `Active (${aiStatus.activeModel}${aiStatus.isFallbackModel ? " - Fallback" : ""})`
+                      : "Not configured — Tap to add free key")
+                : (aiStatus.hasCustomKey || aiStatus.hasBundledKey
+                    ? "Active: Smart receipt & voice parsing ready"
+                    : "Not configured — Tap to add free key")
+            }
+            onPress={async () => {
               setAiKeyInput("");
               setShowAiKeySecret(false);
+              await refreshAiStatus();
               setShowAiModal(true);
             }}
           />
@@ -1098,63 +1150,322 @@ export const SettingsScreen: React.FC = () => {
               </View>
             </View>
 
-            {/* Provider Selection */}
-            <Text
-              style={{
-                fontSize: 12,
-                fontWeight: "700",
-                color: colors.onSurfaceVariant,
-                marginBottom: 8,
-                marginTop: 6,
-                letterSpacing: 0.5,
-              }}>
-              SELECT PROVIDER
-            </Text>
-
-            <View style={{ flexDirection: "row", gap: 8, marginBottom: 14 }}>
-              {[
-                { id: "gemini" as const, label: "Google Gemini", tag: "Free" },
-                { id: "groq" as const, label: "Groq Llama", tag: "Fast" },
-                { id: "openai" as const, label: "OpenAI", tag: "" },
-              ].map((p) => {
-                const isSelected = selectedAiProvider === p.id;
-                return (
-                  <TouchableOpacity
-                    key={p.id}
-                    onPress={() => setSelectedAiProvider(p.id)}
+            <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: 520 }}>
+              {/* Active Status Banner */}
+              {!isOwner ? (
+                aiStatus.hasBundledKey || aiStatus.hasCustomKey ? (
+                  <View
                     style={{
-                      flex: 1,
-                      paddingVertical: 10,
-                      paddingHorizontal: 8,
-                      borderRadius: 12,
-                      backgroundColor: isSelected ? colors.primaryContainer : colors.surfaceVariant,
-                      borderWidth: 1.5,
-                      borderColor: isSelected ? colors.primary : "transparent",
+                      flexDirection: "row",
                       alignItems: "center",
+                      backgroundColor: colors.primaryContainer,
+                      paddingVertical: 10,
+                      paddingHorizontal: 12,
+                      borderRadius: 10,
+                      marginBottom: 12,
                     }}>
-                    <Text
-                      style={{
-                        fontSize: 13,
-                        fontWeight: isSelected ? "700" : "500",
-                        color: isSelected ? colors.onPrimaryContainer : colors.onSurfaceVariant,
-                      }}>
-                      {p.label}
+                    <Ionicons name="checkmark-circle" size={16} color={colors.primary} style={{ marginRight: 8 }} />
+                    <Text style={{ fontSize: 13, color: colors.onPrimaryContainer, flex: 1, fontWeight: "500" }}>
+                      Active: Cloud AI is connected and ready to process receipts and voice notes.
                     </Text>
-                    {p.tag ? (
+                  </View>
+                ) : (
+                  <View
+                    style={{
+                      flexDirection: "row",
+                      alignItems: "center",
+                      backgroundColor: colors.surfaceVariant,
+                      paddingVertical: 10,
+                      paddingHorizontal: 12,
+                      borderRadius: 10,
+                      marginBottom: 12,
+                    }}>
+                    <Ionicons name="information-circle-outline" size={16} color={colors.onSurfaceVariant} style={{ marginRight: 8 }} />
+                    <Text style={{ fontSize: 13, color: colors.onSurfaceVariant, flex: 1 }}>
+                      No API key in .env. Enter your free Gemini key below.
+                    </Text>
+                  </View>
+                )
+              ) : selectedAiProvider === "gemini" && aiStatus.rateLimitedModels && aiStatus.rateLimitedModels.length > 0 ? (
+                <View
+                  style={{
+                    backgroundColor: colors.errorContainer,
+                    paddingVertical: 10,
+                    paddingHorizontal: 12,
+                    borderRadius: 10,
+                    marginBottom: 12,
+                  }}>
+                  <View style={{ flexDirection: "row", alignItems: "center", marginBottom: 4 }}>
+                    <Ionicons name="warning-outline" size={16} color={colors.error} style={{ marginRight: 6 }} />
+                    <Text style={{ fontSize: 12, color: colors.onErrorContainer, fontWeight: "700" }}>
+                      Daily Quota Reached Today (Owner View)
+                    </Text>
+                  </View>
+                  <Text style={{ fontSize: 11, color: colors.onErrorContainer, lineHeight: 16 }}>
+                    Exceeded: {aiStatus.rateLimitedModels.join(", ")}
+                    {"\n"}Auto-routed to next available model:{" "}
+                    <Text style={{ fontWeight: "700" }}>{aiStatus.activeModel}</Text>
+                  </Text>
+                  <TouchableOpacity
+                    onPress={handleResetGeminiQuota}
+                    style={{
+                      marginTop: 8,
+                      alignSelf: "flex-start",
+                      backgroundColor: colors.error,
+                      paddingHorizontal: 8,
+                      paddingVertical: 4,
+                      borderRadius: 6,
+                    }}>
+                    <Text style={{ fontSize: 11, color: "#fff", fontWeight: "600" }}>Reset Flags Today</Text>
+                  </TouchableOpacity>
+                </View>
+              ) : aiStatus.hasBundledKey && !aiStatus.hasCustomKey ? (
+                <View
+                  style={{
+                    flexDirection: "row",
+                    alignItems: "center",
+                    backgroundColor: colors.primaryContainer,
+                    paddingVertical: 8,
+                    paddingHorizontal: 12,
+                    borderRadius: 10,
+                    marginBottom: 10,
+                  }}>
+                  <Ionicons name="checkmark-circle" size={16} color={colors.primary} style={{ marginRight: 6 }} />
+                  <Text style={{ fontSize: 12, color: colors.onPrimaryContainer, flex: 1, fontWeight: "500" }}>
+                    Active: {aiStatus.activeModel} ready ({aiStatus.availableGeminiModelsCount || 7} active models in auto-fallback chain).
+                  </Text>
+                </View>
+              ) : aiStatus.hasCustomKey ? (
+                <View
+                  style={{
+                    flexDirection: "row",
+                    alignItems: "center",
+                    backgroundColor: colors.secondaryContainer,
+                    paddingVertical: 8,
+                    paddingHorizontal: 12,
+                    borderRadius: 10,
+                    marginBottom: 10,
+                  }}>
+                  <Ionicons name="key" size={16} color={colors.secondary} style={{ marginRight: 6 }} />
+                  <Text style={{ fontSize: 12, color: colors.onSecondaryContainer, flex: 1, fontWeight: "500" }}>
+                    Active: Custom key saved ({aiStatus.activeModel} • auto-fallback enabled).
+                  </Text>
+                </View>
+              ) : (
+                <View
+                  style={{
+                    flexDirection: "row",
+                    alignItems: "center",
+                    backgroundColor: colors.surfaceVariant,
+                    paddingVertical: 8,
+                    paddingHorizontal: 12,
+                    borderRadius: 10,
+                    marginBottom: 10,
+                  }}>
+                  <Ionicons name="information-circle-outline" size={16} color={colors.onSurfaceVariant} style={{ marginRight: 6 }} />
+                  <Text style={{ fontSize: 12, color: colors.onSurfaceVariant, flex: 1 }}>
+                    No API key in .env. Enter your free Gemini key below.
+                  </Text>
+                </View>
+              )}
+
+              {/* Provider Selection */}
+              <Text
+                style={{
+                  fontSize: 12,
+                  fontWeight: "700",
+                  color: colors.onSurfaceVariant,
+                  marginBottom: 8,
+                  marginTop: 6,
+                  letterSpacing: 0.5,
+                }}>
+                SELECT PROVIDER
+              </Text>
+
+              <View style={{ flexDirection: "row", gap: 8, marginBottom: 14 }}>
+                {[
+                  { id: "gemini" as const, label: "Google Gemini", tag: "Free" },
+                  { id: "groq" as const, label: "Groq Llama", tag: "Fast" },
+                  { id: "openai" as const, label: "OpenAI", tag: "" },
+                ].map((p) => {
+                  const isSelected = selectedAiProvider === p.id;
+                  return (
+                    <TouchableOpacity
+                      key={p.id}
+                      onPress={() => setSelectedAiProvider(p.id)}
+                      style={{
+                        flex: 1,
+                        paddingVertical: 10,
+                        paddingHorizontal: 8,
+                        borderRadius: 12,
+                        backgroundColor: isSelected ? colors.primaryContainer : colors.surfaceVariant,
+                        borderWidth: 1.5,
+                        borderColor: isSelected ? colors.primary : "transparent",
+                        alignItems: "center",
+                      }}>
                       <Text
                         style={{
-                          fontSize: 10,
-                          fontWeight: "700",
-                          color: colors.primary,
-                          marginTop: 2,
+                          fontSize: 13,
+                          fontWeight: isSelected ? "700" : "500",
+                          color: isSelected ? colors.onPrimaryContainer : colors.onSurfaceVariant,
                         }}>
-                        {p.tag}
+                        {p.label}
                       </Text>
-                    ) : null}
+                      {p.tag ? (
+                        <Text
+                          style={{
+                            fontSize: 10,
+                            fontWeight: "700",
+                            color: colors.primary,
+                            marginTop: 2,
+                          }}>
+                          {p.tag}
+                        </Text>
+                      ) : null}
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+
+              {/* Gemini Multi-Model Fallback Cascade Details (Owner Only) */}
+              {isOwner && selectedAiProvider === "gemini" && (
+                <View
+                  style={{
+                    backgroundColor: colors.surfaceVariant,
+                    borderRadius: 12,
+                    padding: 10,
+                    marginBottom: 14,
+                    borderWidth: 1,
+                    borderColor: colors.outlineVariant,
+                  }}>
+                  <TouchableOpacity
+                    onPress={() => setShowModelChain(!showModelChain)}
+                    style={{
+                      flexDirection: "row",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                    }}>
+                    <View style={{ flexDirection: "row", alignItems: "center" }}>
+                      <Ionicons name="git-network-outline" size={16} color={colors.primary} style={{ marginRight: 6 }} />
+                      <Text style={{ fontSize: 12, fontWeight: "700", color: colors.onSurface }}>
+                        Multi-Model Fallback Chain ({aiStatus.availableGeminiModelsCount ?? 7}/7) [Owner]
+                      </Text>
+                    </View>
+                    <Ionicons
+                      name={showModelChain ? "chevron-up" : "chevron-down"}
+                      size={16}
+                      color={colors.onSurfaceVariant}
+                    />
                   </TouchableOpacity>
-                );
-              })}
-            </View>
+
+                  <Text style={{ fontSize: 11, color: colors.onSurfaceVariant, marginTop: 4 }}>
+                    Auto-routes across active models from AI Studio if rate-limited (HTTP 429).
+                  </Text>
+
+                  {showModelChain && (
+                    <View style={{ marginTop: 8, borderTopWidth: 1, borderTopColor: colors.outlineVariant, paddingTop: 6 }}>
+                      {GEMINI_FALLBACK_MODELS.map((modelName, index) => {
+                        const meta = GEMINI_MODEL_METADATA[modelName];
+                        const isLimited = Boolean(geminiUsage?.models?.[modelName]?.isRateLimited);
+                        const isActive = modelName === aiStatus.activeModel;
+                        const count = geminiUsage?.models?.[modelName]?.requestCount || 0;
+
+                        return (
+                          <View
+                            key={modelName}
+                            style={{
+                              flexDirection: "row",
+                              alignItems: "center",
+                              justifyContent: "space-between",
+                              paddingVertical: 4,
+                            }}>
+                            <View style={{ flexDirection: "row", alignItems: "center", flex: 1, flexWrap: "wrap" }}>
+                              <Text style={{ fontSize: 11, color: colors.onSurfaceVariant, width: 18 }}>
+                                {index + 1}.
+                              </Text>
+                              <Text
+                                style={{
+                                  fontSize: 12,
+                                  fontWeight: isActive ? "700" : "500",
+                                  color: isLimited ? colors.error : colors.onSurface,
+                                }}>
+                                {meta?.label || modelName}
+                              </Text>
+                              <View
+                                style={{
+                                  marginLeft: 6,
+                                  paddingHorizontal: 4,
+                                  paddingVertical: 1,
+                                  borderRadius: 4,
+                                  backgroundColor: meta?.isGenerous ? colors.primaryContainer : colors.surface,
+                                }}>
+                                <Text
+                                  style={{
+                                    fontSize: 9,
+                                    fontWeight: "700",
+                                    color: meta?.isGenerous ? colors.primary : colors.onSurfaceVariant,
+                                  }}>
+                                  {meta?.rpd} RPD
+                                </Text>
+                              </View>
+                              {count > 0 ? (
+                                <Text style={{ fontSize: 10, color: colors.onSurfaceVariant, marginLeft: 4 }}>
+                                  ({count} used)
+                                </Text>
+                              ) : null}
+                            </View>
+                            <View
+                              style={{
+                                paddingHorizontal: 6,
+                                paddingVertical: 2,
+                                borderRadius: 6,
+                                backgroundColor: isLimited
+                                  ? colors.errorContainer
+                                  : isActive
+                                  ? colors.primaryContainer
+                                  : "transparent",
+                              }}>
+                              <Text
+                                style={{
+                                  fontSize: 10,
+                                  fontWeight: "600",
+                                  color: isLimited
+                                    ? colors.onErrorContainer
+                                    : isActive
+                                    ? colors.onPrimaryContainer
+                                    : colors.onSurfaceVariant,
+                                }}>
+                                {isLimited ? "Limited Today" : isActive ? "Active" : "Standby"}
+                              </Text>
+                            </View>
+                          </View>
+                        );
+                      })}
+                      <Text style={{ fontSize: 10, color: colors.onSurfaceVariant, marginTop: 6, fontStyle: "italic" }}>
+                        Usage & rate-limit flags are stored per-day in AsyncStorage and automatically reset on the next day.
+                      </Text>
+                      {aiStatus.rateLimitedModels && aiStatus.rateLimitedModels.length > 0 ? (
+                        <TouchableOpacity
+                          onPress={handleResetGeminiQuota}
+                          style={{
+                            marginTop: 8,
+                            alignSelf: "flex-start",
+                            backgroundColor: colors.surfaceVariant,
+                            paddingHorizontal: 8,
+                            paddingVertical: 4,
+                            borderRadius: 6,
+                            borderWidth: 1,
+                            borderColor: colors.outlineVariant,
+                          }}>
+                          <Text style={{ fontSize: 11, color: colors.primary, fontWeight: "600" }}>
+                            Reset All Flags Today
+                          </Text>
+                        </TouchableOpacity>
+                      ) : null}
+                    </View>
+                  )}
+                </View>
+              )}
 
             {/* API Key Input (Never pre-populated with stored or bundled keys) */}
             <Text
@@ -1272,6 +1583,7 @@ export const SettingsScreen: React.FC = () => {
                 {isTestingAi ? "Testing Connection..." : "Test API Key"}
               </Text>
             </TouchableOpacity>
+            </ScrollView>
 
             {/* Action Buttons */}
             <View style={styles.modalActions}>

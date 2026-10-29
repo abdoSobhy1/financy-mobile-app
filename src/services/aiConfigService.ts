@@ -9,6 +9,14 @@
  */
 
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import {
+  getActiveGeminiModelInfo,
+  getAvailableGeminiModels,
+  markModelRateLimited,
+  recordModelSuccess,
+  isRateLimitError,
+} from "./geminiQuotaService";
+import { isInfiniteOcrUserSync } from "./ocrRateLimitService";
 
 export type AIProvider = "gemini" | "groq" | "openai" | "free";
 
@@ -39,23 +47,63 @@ function getBundledKeys(): string[] {
 export async function getAIConfigStatus(): Promise<{
   provider: AIProvider;
   hasCustomKey: boolean;
+  hasBundledKey: boolean;
+  activeModel: string;
+  isFallbackModel?: boolean;
+  availableGeminiModelsCount?: number;
+  totalGeminiModelsCount?: number;
+  rateLimitedModels?: string[];
 }> {
+  const bundledKeys = getBundledKeys();
+  const hasBundled = bundledKeys.length > 0;
   try {
     const raw = await AsyncStorage.getItem(AI_CONFIG_KEY);
+    let provider: AIProvider = "gemini";
+    let isCustom = false;
+    let preferredModel = "gemini-3.6-flash";
+
     if (raw) {
       const parsed: AIConfig = JSON.parse(raw);
       const trimmedKey = parsed?.apiKey?.trim() || "";
-      const bundledKeys = getBundledKeys();
-      const isCustom = trimmedKey.length > 0 && !bundledKeys.includes(trimmedKey);
+      isCustom = trimmedKey.length > 0 && !bundledKeys.includes(trimmedKey);
+      provider = parsed?.provider || "gemini";
+      preferredModel = parsed?.model || (parsed?.provider === "groq" ? "llama-3.3-70b-versatile" : "gemini-3.6-flash");
+    }
+
+    if (provider === "gemini") {
+      const geminiInfo = await getActiveGeminiModelInfo(preferredModel);
       return {
-        provider: parsed?.provider || "gemini",
+        provider: "gemini",
         hasCustomKey: isCustom,
+        hasBundledKey: hasBundled,
+        activeModel: geminiInfo.activeModel,
+        isFallbackModel: geminiInfo.isFallback,
+        availableGeminiModelsCount: geminiInfo.availableCount,
+        totalGeminiModelsCount: geminiInfo.totalModels,
+        rateLimitedModels: geminiInfo.rateLimitedModels,
       };
     }
+
+    return {
+      provider,
+      hasCustomKey: isCustom,
+      hasBundledKey: hasBundled,
+      activeModel: preferredModel,
+    };
   } catch (e) {
     console.warn("[AIConfigService] Failed to read stored config status:", e);
   }
-  return { provider: "gemini", hasCustomKey: false };
+  const defaultInfo = await getActiveGeminiModelInfo("gemini-3.6-flash");
+  return {
+    provider: "gemini",
+    hasCustomKey: false,
+    hasBundledKey: hasBundled,
+    activeModel: defaultInfo.activeModel,
+    isFallbackModel: defaultInfo.isFallback,
+    availableGeminiModelsCount: defaultInfo.availableCount,
+    totalGeminiModelsCount: defaultInfo.totalModels,
+    rateLimitedModels: defaultInfo.rateLimitedModels,
+  };
 }
 
 /**
@@ -90,10 +138,10 @@ export async function getAIConfig(): Promise<AIConfig> {
     console.warn("[AIConfigService] Failed to read stored config:", e);
   }
 
-  // Fallback to environment variables
+  // Fallback to git-ignored environment variables (.env / EAS secrets)
   const geminiKey = process.env.EXPO_PUBLIC_GEMINI_API_KEY || process.env.GEMINI_API_KEY;
   if (geminiKey) {
-    return { provider: "gemini", apiKey: geminiKey, model: "gemini-3.6-flash" };
+    return { provider: "gemini", apiKey: geminiKey.trim(), model: "gemini-3.6-flash" };
   }
   const groqKey = process.env.EXPO_PUBLIC_GROQ_API_KEY || process.env.GROQ_API_KEY;
   if (groqKey) {
@@ -137,23 +185,51 @@ export async function testAIConnection(
     const timeoutId = setTimeout(() => controller.abort(), 8000);
 
     if (provider === "gemini") {
-      const model = config.model ? config.model.toLowerCase() : "gemini-3.6-flash";
-      const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey.trim()}`;
-      const res = await fetch(url, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          contents: [{ parts: [{ text: "Respond with the word OK." }] }],
-        }),
-        signal: controller.signal,
-      });
-      clearTimeout(timeoutId);
-      const data = await res.json();
-      if (!res.ok) {
-        const err = data.error?.message || `HTTP ${res.status}`;
-        return { success: false, message: `Gemini Error: ${err}` };
+      const preferred = config.model ? config.model.toLowerCase().trim() : "gemini-3.6-flash";
+      const available = await getAvailableGeminiModels(preferred);
+      const candidates = available.length > 0 ? available : [preferred];
+
+      let lastErr = "";
+      for (const model of candidates) {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 8000);
+        try {
+          const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey.trim()}`;
+          const res = await fetch(url, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              contents: [{ parts: [{ text: "Respond with the word OK." }] }],
+            }),
+            signal: controller.signal,
+          });
+          clearTimeout(timeoutId);
+          const data = await res.json();
+          if (!res.ok) {
+            const err = data.error?.message || `HTTP ${res.status}`;
+            if (isRateLimitError(res.status, data.error, err)) {
+              await markModelRateLimited(model, err);
+              lastErr = `${model} daily quota reached`;
+              continue; // Try next fallback model
+            }
+            lastErr = `${model} error: ${err}`;
+            continue;
+          }
+          await recordModelSuccess(model);
+          const isDevOwner = isInfiniteOcrUserSync();
+          const fallbackNote = model !== preferred ? ` (Auto-fallback from ${preferred})` : "";
+          return {
+            success: true,
+            message: isDevOwner
+              ? `Google Gemini connected successfully! 🚀\nUsing: ${model}${fallbackNote}`
+              : "Google Gemini connection successful! 🚀",
+          };
+        } catch (err: any) {
+          clearTimeout(timeoutId);
+          lastErr = err.name === "AbortError" ? `${model} timed out` : err.message || "Network error";
+        }
       }
-      return { success: true, message: "Google Gemini connection successful! 🚀" };
+      return { success: false, message: `Gemini Error: ${lastErr || "All candidate models failed"}` };
     }
 
     if (provider === "groq") {

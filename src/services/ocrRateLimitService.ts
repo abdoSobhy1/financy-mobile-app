@@ -176,6 +176,21 @@ export function getCachedOcrQuotaSync(): OcrQuotaStatus | null {
 }
 
 /**
+ * Returns true synchronously if the current user has verified infinite OCR scans in cache.
+ */
+export function isInfiniteOcrUserSync(): boolean {
+  return Boolean(getCachedOcrQuotaSync()?.isUnlimited);
+}
+
+/**
+ * Returns true if the current user is verified as the owner/unlimited user.
+ */
+export async function isInfiniteOcrUser(): Promise<boolean> {
+  const status = await getOcrQuotaStatus({ fast: true });
+  return Boolean(status.isUnlimited);
+}
+
+/**
  * Pre-warms the local + cloud OCR quota in the background without blocking the UI.
  */
 export function prefetchOcrQuota(): void {

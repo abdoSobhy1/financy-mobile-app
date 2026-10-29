@@ -14,6 +14,7 @@ import { LinearGradient } from "expo-linear-gradient";
 import { useSelector } from "react-redux";
 import { RootState } from "../../store";
 import { useAppTheme } from "../ui/ThemeProvider";
+import { ToastOverlay } from "../ui";
 import { WalletAccount } from "../../types";
 
 export type FilterPeriod =
@@ -535,6 +536,7 @@ export const TransactionFilterModal: React.FC<TransactionFilterModalProps> = ({
           </View>
         </View>
       </View>
+      <ToastOverlay />
     </Modal>
   );
 };
@@ -692,6 +694,7 @@ export const CustomDateRangeModal: React.FC<CustomDateRangeModalProps> = ({
           </ScrollView>
         </View>
       </View>
+      <ToastOverlay />
     </Modal>
   );
 };

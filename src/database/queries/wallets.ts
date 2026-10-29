@@ -162,11 +162,53 @@ export class WalletRepository {
     }
   }
 
+  public async cleanupDuplicateWallets(): Promise<void> {
+    try {
+      const database = this.db.getDatabase();
+      const allRows = (await database.getAllAsync(
+        "SELECT * FROM wallets WHERE (deleted = 0 OR deleted IS NULL) ORDER BY created_at ASC",
+      )) as WalletTable[];
+
+      const seen = new Map<string, WalletTable>();
+
+      for (const row of allRows) {
+        if (!row.id || row.id.startsWith("default_")) continue;
+        const key = `${(row.name || "").trim().toLowerCase()}_${row.type}`;
+        if (!seen.has(key)) {
+          seen.set(key, row);
+        } else {
+          const original = seen.get(key)!;
+          const timeDiff = Math.abs(
+            new Date(row.created_at).getTime() - new Date(original.created_at).getTime(),
+          );
+          // If created within 60 seconds with identical name and type, it was created by double submission
+          if (timeDiff <= 60000) {
+            console.log(
+              `[WalletRepository] Merging duplicate wallet "${row.name}" (${row.id}) into (${original.id})`,
+            );
+            await database.runAsync(
+              "UPDATE transactions SET account_id = ? WHERE account_id = ?",
+              [original.id, row.id],
+            );
+            await database.runAsync(
+              "UPDATE transactions SET to_account_id = ? WHERE to_account_id = ?",
+              [original.id, row.id],
+            );
+            await database.runAsync("DELETE FROM wallets WHERE id = ?", [row.id]);
+          }
+        }
+      }
+    } catch (e) {
+      console.warn("Failed to cleanup duplicate wallets:", e);
+    }
+  }
+
   async getAllWallets(options?: {
     includeArchived?: boolean;
     includeDeleted?: boolean;
   }): Promise<WalletAccount[]> {
     await this.ensureInitialized();
+    await this.cleanupDuplicateWallets();
     const database = this.db.getDatabase();
 
     const conditions: string[] = [];

@@ -11,17 +11,28 @@ import {
 import { fetchDebts } from "../store/slices/debtsSlice";
 import { fetchBudgets } from "../store/slices/budgetsSlice";
 
+import { isWalletRelatedTransaction } from "../utils";
+export { isWalletRelatedTransaction };
+
 export const useTransactionActions = () => {
   const dispatch = useDispatch<AppDispatch>();
   const navigation = useNavigation<any>();
 
   const handleEdit = (transaction: Transaction) => {
+    if (isWalletRelatedTransaction(transaction)) {
+      AlertService.alert("Notice", "Wallet-related transactions cannot be edited directly.");
+      return;
+    }
     navigation.navigate("AddTransaction" as never, {
       editTransaction: transaction,
     } as never);
   };
 
   const handleDuplicate = async (transaction: Transaction) => {
+    if (isWalletRelatedTransaction(transaction)) {
+      AlertService.alert("Notice", "Wallet-related transactions cannot be duplicated.");
+      return;
+    }
     try {
       await dispatch(duplicateTransaction(transaction.id)).unwrap();
     } catch (err) {
@@ -51,34 +62,48 @@ export const useTransactionActions = () => {
   };
 
   const handleTransactionPress = (transaction: Transaction) => {
+    const isWalletRelated = isWalletRelatedTransaction(transaction);
+
     if (Platform.OS === "ios") {
+      const options = isWalletRelated
+        ? ["Cancel", "Delete"]
+        : ["Cancel", "Edit", "Duplicate", "Delete"];
+      const destructiveIndex = isWalletRelated ? 1 : 3;
+
       ActionSheetIOS.showActionSheetWithOptions(
         {
-          options: ["Cancel", "Edit", "Duplicate", "Delete"],
-          destructiveButtonIndex: 3,
+          options,
+          destructiveButtonIndex: destructiveIndex,
           cancelButtonIndex: 0,
           title: transaction.description || "Transaction",
         },
         (buttonIndex) => {
-          if (buttonIndex === 1) handleEdit(transaction);
-          if (buttonIndex === 2) handleDuplicate(transaction);
-          if (buttonIndex === 3) handleDelete(transaction);
+          if (isWalletRelated) {
+            if (buttonIndex === 1) handleDelete(transaction);
+          } else {
+            if (buttonIndex === 1) handleEdit(transaction);
+            if (buttonIndex === 2) handleDuplicate(transaction);
+            if (buttonIndex === 3) handleDelete(transaction);
+          }
         },
       );
     } else {
+      const alertButtons: any[] = [];
+      if (!isWalletRelated) {
+        alertButtons.push({ text: "Edit", onPress: () => handleEdit(transaction) });
+        alertButtons.push({ text: "Duplicate", onPress: () => handleDuplicate(transaction) });
+      }
+      alertButtons.push({
+        text: "Delete",
+        onPress: () => handleDelete(transaction),
+        style: "destructive",
+      });
+      alertButtons.push({ text: "Cancel", style: "cancel" });
+
       AlertService.alert(
         transaction.description || "Transaction",
         "What would you like to do?",
-        [
-          { text: "Edit", onPress: () => handleEdit(transaction) },
-          { text: "Duplicate", onPress: () => handleDuplicate(transaction) },
-          {
-            text: "Delete",
-            onPress: () => handleDelete(transaction),
-            style: "destructive",
-          },
-          { text: "Cancel", style: "cancel" },
-        ],
+        alertButtons,
       );
     }
   };

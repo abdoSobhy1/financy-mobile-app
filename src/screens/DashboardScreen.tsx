@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect } from "react";
+import React, { useState, useCallback, useEffect, useRef } from "react";
 import {
   View,
   Text,
@@ -10,7 +10,7 @@ import {
   TextInput,
 } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useNavigation, useFocusEffect } from "@react-navigation/native";
 import { StackNavigationProp } from "@react-navigation/stack";
 import { useSelector, useDispatch } from "react-redux";
@@ -64,6 +64,7 @@ const getAlphaColor = (color: string, hexAlpha: string = "1F") => {
 export const DashboardScreen: React.FC = () => {
   const navigation = useNavigation<DashboardNavigationProp>();
   const dispatch = useDispatch<AppDispatch>();
+  const insets = useSafeAreaInsets();
   const { colors, typography, spacing, radius, isDark } =
     useAppTheme();
   const tabBarHeight = useTabBarHeight();
@@ -173,6 +174,7 @@ export const DashboardScreen: React.FC = () => {
 
       const loadDashboardData = async () => {
         try {
+          const fetchResult = await dispatch(fetchTransactions()).unwrap();
           const { start, end } = await getCurrentBillingPeriod();
           if (!isActive) return;
 
@@ -182,9 +184,11 @@ export const DashboardScreen: React.FC = () => {
           );
           setDaysLeftInPeriod(daysRemaining);
 
-          const allTransactions = Object.values(transactions).filter(
-            (t) => !t.deleted,
-          );
+          const allTransactions: Transaction[] = (
+            Array.isArray(fetchResult)
+              ? fetchResult
+              : Object.values(fetchResult || {})
+          ).filter((t: any) => !t.deleted) as Transaction[];
 
           // Load Wallets & Compute Live Balances (Current Period Values)
           const loadedWallets = await walletService.getWallets();
@@ -378,7 +382,7 @@ export const DashboardScreen: React.FC = () => {
       return () => {
         isActive = false;
       };
-    }, [transactions, categoriesMap, budgetsMap]),
+    }, [dispatch, categoriesMap, budgetsMap]),
   );
 
   const computeTopExpenseCategories = (
@@ -554,11 +558,15 @@ export const DashboardScreen: React.FC = () => {
     setShowAddWalletModal(true);
   };
 
+  const isCreatingWalletRef = useRef(false);
+
   const handleCreateWalletSubmit = async (values: WalletEditorFormValues) => {
+    if (isCreatingWalletRef.current) return;
     if (!values.name.trim()) {
       showError("Please enter an account name");
       return;
     }
+    isCreatingWalletRef.current = true;
     const initBal = parseFloat(values.initialBalance.replace(/,/g, "")) || 0;
     try {
       const updatedWallets = await walletService.addWallet({
@@ -569,15 +577,37 @@ export const DashboardScreen: React.FC = () => {
         initialBalance: initBal,
         isSecret: values.isSecret,
       });
-      const allTransactions = Object.values(transactions).filter((t) => !t.deleted);
+      const fetchResult = await dispatch(fetchTransactions()).unwrap();
+      const allTransactions: Transaction[] = (
+        Array.isArray(fetchResult)
+          ? fetchResult
+          : Object.values(fetchResult || {})
+      ).filter((t: any) => !t.deleted) as Transaction[];
       setWallets(updatedWallets);
       setWalletBalances(
         walletService.calculateWalletBalances(updatedWallets, allTransactions),
       );
+      const secretWalletIds = walletService.getSecretWalletIds(updatedWallets);
+      const isSecretExcluded = (t: Transaction) =>
+        walletService.isSecretTransactionExcluded(t, secretWalletIds);
+      const nonSecretTransactions = allTransactions.filter(
+        (t) => !isSecretExcluded(t),
+      );
+      const sortedRecent = [...nonSecretTransactions]
+        .sort(
+          (a, b) =>
+            new Date(b.date).getTime() - new Date(a.date).getTime() ||
+            new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+        )
+        .slice(0, 5);
+      setRecentTransactions(sortedRecent);
       setShowAddWalletModal(false);
       showSuccess(`Created "${values.name.trim()}"`);
-    } catch {
+    } catch (error) {
+      console.error("[DashboardScreen] Failed to create account:", error);
       showError("Failed to create account");
+    } finally {
+      isCreatingWalletRef.current = false;
     }
   };
 
@@ -638,9 +668,11 @@ export const DashboardScreen: React.FC = () => {
   const { strokePath, fillPath } = generateSmoothPath(balanceHistory, CARD_WIDTH, 80);
 
   return (
-    <SafeAreaView
-      style={[styles.container, { backgroundColor: colors.background }]}
-      edges={["top"]}>
+    <View
+      style={[
+        styles.container,
+        { backgroundColor: colors.background, paddingTop: insets.top },
+      ]}>
       <StatusBar barStyle={isDark ? "light-content" : "dark-content"} />
 
       {/* Shared App Header */}
@@ -1415,6 +1447,20 @@ export const DashboardScreen: React.FC = () => {
                 ? wallets.find((w) => w.id === tx.toAccountId)
                 : null;
 
+              const transferTitle = fromWallet?.name && toWallet?.name
+                ? `${fromWallet.name} → ${toWallet.name}`
+                : tx.description?.replace(/^Transfer:\s*/i, "") || "Transfer";
+
+              const transferSubtitle = fromWallet?.name && toWallet?.name
+                ? `${fromWallet.name} → ${toWallet.name} • ${formatDate(tx.date)}`
+                : tx.description
+                ? `${tx.description.replace(/^Transfer:\s*/i, "")} • ${formatDate(tx.date)}`
+                : `Transfer • ${formatDate(tx.date)}`;
+
+              const reconcileSubtitle = fromWallet?.name
+                ? `${fromWallet.name} • Reconcile • ${formatDate(tx.date)}`
+                : `Reconcile • ${formatDate(tx.date)}`;
+
               return (
                 <TouchableOpacity
                   key={tx.id}
@@ -1437,12 +1483,14 @@ export const DashboardScreen: React.FC = () => {
                         isTransfer
                           ? ("swap-horizontal-outline" as any)
                           : isAdjustment
-                          ? ("build-outline" as any)
+                          ? ("wallet-outline" as any)
                           : (((category as any)?.icon || "receipt-outline") as any)
                       }
                       colorName={
-                        isTransfer || isAdjustment
+                        isTransfer
                           ? "bluegrey"
+                          : isAdjustment
+                          ? "teal"
                           : (category?.color as any) || "bluegrey"
                       }
                       size={44}
@@ -1453,7 +1501,7 @@ export const DashboardScreen: React.FC = () => {
                         style={{ fontSize: 15, fontWeight: "600", color: colors.onBackground, marginBottom: 3 }}
                         numberOfLines={1}>
                         {isTransfer
-                          ? tx.description || `${fromWallet?.name || "Wallet"} → ${toWallet?.name || "Wallet"}`
+                          ? tx.description || transferTitle
                           : isAdjustment
                           ? "Balance adjustment"
                           : tx.description || category?.name || "Transaction"}
@@ -1462,9 +1510,9 @@ export const DashboardScreen: React.FC = () => {
                         style={{ fontSize: 13, color: colors.onSurfaceVariant }}
                         numberOfLines={1}>
                         {isTransfer
-                          ? `${fromWallet?.name || "Wallet"} → ${toWallet?.name || "Wallet"} • ${formatDate(tx.date)}`
+                          ? transferSubtitle
                           : isAdjustment
-                          ? `${fromWallet?.name || "Wallet"} • Reconcile • ${formatDate(tx.date)}`
+                          ? reconcileSubtitle
                           : `${category?.name || "Uncategorized"} • ${formatDate(tx.date)}`}
                       </Text>
                     </View>
@@ -1579,7 +1627,7 @@ export const DashboardScreen: React.FC = () => {
         onScanComplete={handleScanComplete}
       />
 
-    </SafeAreaView>
+    </View>
   );
 };
 

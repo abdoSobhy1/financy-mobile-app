@@ -113,7 +113,7 @@ export const CustomKeypad: React.FC<CustomKeypadProps> = ({
         </View>
       ))}
 
-      {(onEvaluate || onSubmit) && (
+      {(onEvaluate || onClose || onSubmit) && (
         <View style={styles.actionRow}>
           {onClear && (
             <TouchableOpacity
@@ -140,12 +140,14 @@ export const CustomKeypad: React.FC<CustomKeypadProps> = ({
             onPress={() => {
               if (hasOperator && onEvaluate) {
                 onEvaluate();
+              } else if (onClose) {
+                onClose();
               } else if (onSubmit) {
                 onSubmit();
               }
             }}>
             <Ionicons
-              name={hasOperator ? "calculator-outline" : "checkmark-circle"}
+              name={hasOperator ? "calculator-outline" : "checkmark-outline"}
               size={20}
               color={colors.onPrimaryContainer}
               style={{ marginRight: 6 }}
@@ -155,7 +157,7 @@ export const CustomKeypad: React.FC<CustomKeypadProps> = ({
                 styles.submitText,
                 { color: colors.onPrimaryContainer },
               ]}>
-              {hasOperator ? "Calculate (=)" : "Save Transaction"}
+              {hasOperator ? "Calculate (=)" : "Done"}
             </Text>
           </TouchableOpacity>
         </View>

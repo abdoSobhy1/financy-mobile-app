@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo } from "react";
+import React, { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import {
   View,
   Text,
@@ -20,9 +20,8 @@ import { fetchTransactions } from "../store/slices/transactionsSlice";
 import { useAppTheme } from "../components/ui/ThemeProvider";
 import { AppHeader } from "../components/ui/AppHeader";
 import { IconChip } from "../components/ui/IconChip";
-import { Card, useToast, Switch, WalletEditorModal, WalletEditorFormValues, TransferModal } from "../components/ui";
+import { Card, useToast, Switch, WalletEditorModal, WalletEditorFormValues, TransferModal, ToastOverlay } from "../components/ui";
 import { formatCurrency } from "../utils";
-import { getCurrentBillingPeriod } from "../utils/billingPeriod";
 import { AlertService } from "../services/AlertService";
 
 const { width } = Dimensions.get("window");
@@ -50,7 +49,6 @@ export const WalletManagementScreen: React.FC = () => {
   const [walletBalances, setWalletBalances] = useState<Record<string, number>>({});
   const [activeType, setActiveType] = useState<"all" | WalletType | "secret" | "archived">("all");
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
-  const [periodMode, setPeriodMode] = useState<"period" | "allTime">("allTime");
 
   // Move Modal state
   const [showMoveModal, setShowMoveModal] = useState(false);
@@ -70,19 +68,10 @@ export const WalletManagementScreen: React.FC = () => {
     try {
       const list = await walletService.getWallets({ includeArchived: true });
       const allTx = Object.values(transactions).filter((t) => !t.deleted);
-      const { start, end } = await getCurrentBillingPeriod();
-      const periodTxs = allTx.filter((t) => {
-        const d = new Date(t.date);
-        return d >= start && d <= end;
-      });
 
       setWallets(list);
       setWalletBalances(
-        walletService.calculateWalletBalances(
-          list,
-          periodMode === "period" ? periodTxs : allTx,
-          { periodOnly: periodMode === "period" },
-        ),
+        walletService.calculateWalletBalances(list, allTx),
       );
       const activeList = list.filter((w) => !w.archived);
       if (activeList.length >= 2) {
@@ -92,7 +81,7 @@ export const WalletManagementScreen: React.FC = () => {
     } catch (e) {
       console.warn("Failed to load wallets:", e);
     }
-  }, [transactions, periodMode]);
+  }, [transactions]);
 
   useEffect(() => {
     dispatch(fetchTransactions());
@@ -127,21 +116,25 @@ export const WalletManagementScreen: React.FC = () => {
     setShowEditorModal(true);
   };
 
+  const isSavingWalletRef = useRef(false);
+
   const handleSaveWallet = async (values: WalletEditorFormValues) => {
+    if (isSavingWalletRef.current) return;
+
     if (!values.name.trim()) {
       showError("Please enter an account name");
       return;
     }
 
+    isSavingWalletRef.current = true;
     const initBal = parseFloat(values.initialBalance.replace(/,/g, "")) || 0;
     try {
       if (editingWallet) {
         const enteredBal = parseFloat(values.initialBalance.replace(/,/g, "")) || 0;
         const currentBal = walletBalances[editingWallet.id] || 0;
         const diff = enteredBal - currentBal;
-        const txCount = await walletService.countTransactionsForWallet(editingWallet.id);
 
-        if (txCount > 0 && Math.abs(diff) > 0.001) {
+        if (Math.abs(diff) > 0.001) {
           const { db } = await import("../database/queries");
           await db.transactions.createTransaction({
             amount: Math.abs(diff),
@@ -160,9 +153,10 @@ export const WalletManagementScreen: React.FC = () => {
           icon: values.icon,
           color: values.color,
           isSecret: values.isSecret,
-          initialBalance: txCount === 0 ? enteredBal : editingWallet.initialBalance,
+          initialBalance: editingWallet.initialBalance || 0,
         });
         await loadWallets();
+        setShowEditorModal(false);
         showSuccess(`Reconciled and updated "${values.name.trim()}"`);
       } else {
         await walletService.addWallet({
@@ -173,12 +167,16 @@ export const WalletManagementScreen: React.FC = () => {
           initialBalance: initBal,
           isSecret: values.isSecret,
         });
+        await dispatch(fetchTransactions());
         await loadWallets();
+        setShowEditorModal(false);
         showSuccess(`Created "${values.name.trim()}"`);
       }
-      setShowEditorModal(false);
-    } catch {
+    } catch (err) {
+      console.error("[WalletManagementScreen] Failed to save account:", err);
       showError("Failed to save account");
+    } finally {
+      isSavingWalletRef.current = false;
     }
   };
 
@@ -306,9 +304,7 @@ export const WalletManagementScreen: React.FC = () => {
                   opacity: 0.8,
                 },
               ]}>
-              {periodMode === "period"
-                ? "CURRENT PERIOD BALANCE"
-                : "TOTAL BALANCE (ALL TIME)"}
+              TOTAL BALANCE
             </Text>
             <View
               style={{
@@ -336,67 +332,11 @@ export const WalletManagementScreen: React.FC = () => {
                 color: colors.onPrimaryContainer,
                 fontSize: 34,
                 fontWeight: "900",
-                marginBottom: spacing.xs,
+                marginBottom: spacing.md,
               },
             ]}>
             {formatCurrency(totalNetWorth)}
           </Text>
-
-          {/* Period Mode Toggle Selector */}
-          <View
-            style={{
-              flexDirection: "row",
-              backgroundColor: isDark ? "rgba(0,0,0,0.12)" : "rgba(255,255,255,0.75)",
-              borderRadius: 14,
-              padding: 3,
-              marginBottom: spacing.md,
-              alignSelf: "flex-start",
-              borderWidth: isDark ? 0 : 1,
-              borderColor: isDark ? "transparent" : getAlphaColor(colors.onPrimaryContainer, "1F"),
-            }}>
-            <TouchableOpacity
-              onPress={() => setPeriodMode("period")}
-              style={{
-                paddingHorizontal: 12,
-                paddingVertical: 6,
-                borderRadius: 11,
-                backgroundColor:
-                  periodMode === "period" ? colors.primary : "transparent",
-              }}>
-              <Text
-                style={{
-                  fontSize: 12,
-                  fontWeight: "700",
-                  color:
-                    periodMode === "period"
-                      ? colors.onPrimary
-                      : colors.onPrimaryContainer,
-                }}>
-                This Period
-              </Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              onPress={() => setPeriodMode("allTime")}
-              style={{
-                paddingHorizontal: 12,
-                paddingVertical: 6,
-                borderRadius: 11,
-                backgroundColor:
-                  periodMode === "allTime" ? colors.primary : "transparent",
-              }}>
-              <Text
-                style={{
-                  fontSize: 12,
-                  fontWeight: "700",
-                  color:
-                    periodMode === "allTime"
-                      ? colors.onPrimary
-                      : colors.onPrimaryContainer,
-                }}>
-                All Time
-              </Text>
-            </TouchableOpacity>
-          </View>
 
           {/* Transfer & Add Action Buttons inside Header Card */}
           <View style={{ flexDirection: "row", gap: spacing.sm }}>
@@ -1034,6 +974,7 @@ export const WalletManagementScreen: React.FC = () => {
             </View>
           </View>
         </View>
+        <ToastOverlay />
       </Modal>
     </SafeAreaView>
   );

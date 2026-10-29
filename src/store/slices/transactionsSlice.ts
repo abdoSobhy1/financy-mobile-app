@@ -143,6 +143,16 @@ export const deleteTransaction = createAsyncThunk(
   },
 );
 
+export const deleteMultipleTransactions = createAsyncThunk(
+  "transactions/deleteMultipleTransactions",
+  async (ids: string[]) => {
+    for (const id of ids) {
+      await db.transactions.deleteTransaction(id);
+    }
+    return ids;
+  },
+);
+
 export const duplicateTransaction = createAsyncThunk(
   "transactions/duplicateTransaction",
   async (id: string) => {
@@ -270,6 +280,23 @@ const transactionsSlice = createSlice({
       .addCase(deleteTransaction.rejected, (state, action) => {
         state.loading = false;
         state.error = action.error.message || "Failed to delete transaction";
+      })
+      .addCase(deleteMultipleTransactions.pending, (state) => {
+        state.loading = true;
+        state.error = null;
+      })
+      .addCase(deleteMultipleTransactions.fulfilled, (state, action) => {
+        state.loading = false;
+        const ids = action.payload;
+        const idSet = new Set(ids);
+        ids.forEach((id) => {
+          delete state.items[id];
+        });
+        state.ids = state.ids.filter((transactionId) => !idSet.has(transactionId));
+      })
+      .addCase(deleteMultipleTransactions.rejected, (state, action) => {
+        state.loading = false;
+        state.error = action.error.message || "Failed to delete transactions";
       });
 
     // Duplicate transaction

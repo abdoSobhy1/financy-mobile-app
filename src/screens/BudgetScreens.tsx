@@ -9,7 +9,7 @@ import {
   StatusBar,
   Alert,
 } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { useSafeAreaInsets, SafeAreaView } from "react-native-safe-area-context";
 import { useAppTheme } from "../components/ui/ThemeProvider";
 import { Ionicons } from "@expo/vector-icons";
 import { useTabBarHeight, IconChip, Screen, AppHeader, Shimmer } from "../components/ui";
@@ -35,6 +35,7 @@ export const BudgetListScreen: React.FC = () => {
   const dispatch = useDispatch<AppDispatch>();
   const navigation = useNavigation<BudgetListNavigationProp>();
   const tabBarHeight = useTabBarHeight();
+  const insets = useSafeAreaInsets();
   
   const [refreshing, setRefreshing] = useState(false);
   const [progressLoaded, setProgressLoaded] = useState(false);
@@ -266,6 +267,42 @@ export const BudgetListScreen: React.FC = () => {
             </Text>
           </View>
         </View>
+
+        {/* Section header for category budgets with in-flow Add Button */}
+        <View
+          style={{
+            flexDirection: "row",
+            justifyContent: "space-between",
+            alignItems: "center",
+            marginTop: spacing.md,
+            marginBottom: spacing.xs,
+            paddingHorizontal: 4,
+          }}>
+          <Text style={[typography.h3, { color: colors.onBackground }]}>
+            Budgets ({ids.length})
+          </Text>
+          <TouchableOpacity
+            style={{
+              flexDirection: "row",
+              alignItems: "center",
+              gap: 4,
+              backgroundColor: colors.primaryContainer,
+              paddingHorizontal: 12,
+              paddingVertical: 6,
+              borderRadius: 16,
+            }}
+            onPress={() => navigation.navigate("BudgetForm", {})}>
+            <Ionicons name="add" size={18} color={colors.onPrimaryContainer} />
+            <Text
+              style={{
+                fontSize: 13,
+                fontWeight: "600",
+                color: colors.onPrimaryContainer,
+              }}>
+              Add Budget
+            </Text>
+          </TouchableOpacity>
+        </View>
       </View>
     );
   };
@@ -409,27 +446,17 @@ export const BudgetListScreen: React.FC = () => {
   );
 
   return (
-    <SafeAreaView style={[styles.safeArea, { backgroundColor: colors.background }]} edges={["top"]}>
-      <StatusBar barStyle={isDark ? "light-content" : "dark-content"} backgroundColor="transparent" translucent />
-      <AppHeader
-        title="Budgets"
-        rightAction={
-          <TouchableOpacity
-            onPress={() => navigation.navigate("BudgetForm", {})}
-            style={{
-              width: 40,
-              height: 40,
-              borderRadius: 20,
-              backgroundColor: colors.surfaceVariant,
-              alignItems: "center",
-              justifyContent: "center",
-            }}
-            accessibilityLabel="Create new budget"
-          >
-            <Ionicons name="add" size={22} color={colors.onBackground} />
-          </TouchableOpacity>
-        }
+    <View
+      style={[
+        styles.safeArea,
+        { backgroundColor: colors.background, paddingTop: insets.top },
+      ]}>
+      <StatusBar
+        barStyle={isDark ? "light-content" : "dark-content"}
+        backgroundColor="transparent"
+        translucent
       />
+      <AppHeader title="Budgets" />
       
       <FlatList
         data={ids}
@@ -443,7 +470,7 @@ export const BudgetListScreen: React.FC = () => {
         }
         showsVerticalScrollIndicator={false}
       />
-    </SafeAreaView>
+    </View>
   );
 };
 
@@ -453,6 +480,7 @@ export const BudgetDetailsScreen: React.FC = () => {
   const navigation = useNavigation<StackNavigationProp<BudgetStackParamList, "BudgetDetails">>();
   const dispatch = useDispatch<AppDispatch>();
   const tabBarHeight = useTabBarHeight();
+  const insets = useSafeAreaInsets();
 
   const { budgetId } = route.params;
   const budget = useSelector((state: RootState) => state.budgets.items[budgetId]);
@@ -558,7 +586,11 @@ export const BudgetDetailsScreen: React.FC = () => {
   };
 
   return (
-    <SafeAreaView style={[styles.safeArea, { backgroundColor: colors.background }]} edges={["top"]}>
+    <View
+      style={[
+        styles.safeArea,
+        { backgroundColor: colors.background, paddingTop: insets.top },
+      ]}>
       <StatusBar barStyle={isDark ? "light-content" : "dark-content"} backgroundColor="transparent" translucent />
       <View style={styles.detailsHeader}>
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.headerBtn}>
@@ -652,7 +684,7 @@ export const BudgetDetailsScreen: React.FC = () => {
           </View>
         }
       />
-    </SafeAreaView>
+    </View>
   );
 };
 

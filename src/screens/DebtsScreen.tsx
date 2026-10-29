@@ -8,7 +8,7 @@ import {
   ActivityIndicator,
   StatusBar,
 } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { useDispatch, useSelector } from "react-redux";
 import { useAppTheme } from "../components/ui/ThemeProvider";
@@ -31,6 +31,7 @@ const DebtsScreen: React.FC = () => {
   const dispatch = useDispatch<AppDispatch>();
   const tabBarHeight = useTabBarHeight();
   const navigation = useNavigation<DebtsScreenNavigationProp>();
+  const insets = useSafeAreaInsets();
 
   const { items, ids, loading } = useSelector(
     (state: RootState) => state.debts
@@ -112,9 +113,8 @@ const DebtsScreen: React.FC = () => {
   );
 
   return (
-    <SafeAreaView
-      style={{ flex: 1, backgroundColor: colors.background }}
-      edges={["top"]}>
+    <View
+      style={{ flex: 1, backgroundColor: colors.background, paddingTop: insets.top }}>
       <StatusBar
         barStyle={isDark ? "light-content" : "dark-content"}
         backgroundColor="transparent"
@@ -557,7 +557,7 @@ const DebtsScreen: React.FC = () => {
           )}
         </View>
       </ScrollView>
-    </SafeAreaView>
+    </View>
   );
 };
 

@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import { View, Text, AppState, Platform } from "react-native";
 import { Provider } from "react-redux";
-import { SafeAreaProvider } from "react-native-safe-area-context";
+import { SafeAreaProvider, initialWindowMetrics } from "react-native-safe-area-context";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { BottomSheetModalProvider } from "@gorhom/bottom-sheet";
 import * as SplashScreen from "expo-splash-screen";
@@ -282,7 +282,7 @@ export default function App() {
   }, []);
   if (dbError) {
     return (
-      <SafeAreaProvider>
+      <SafeAreaProvider initialMetrics={initialWindowMetrics}>
         <View
           style={{
             flex: 1,
@@ -315,7 +315,7 @@ export default function App() {
 
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
-      <SafeAreaProvider>
+      <SafeAreaProvider initialMetrics={initialWindowMetrics}>
         <ShimmerProvider duration={1000}>
           <Provider store={store}>
             <ThemeProvider>

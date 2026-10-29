@@ -8,7 +8,7 @@ import {
   StyleSheet,
   StatusBar,
 } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import Svg, { Circle, G } from "react-native-svg";
 import { useNavigation } from "@react-navigation/native";
@@ -20,6 +20,7 @@ import { useTabBarHeight, FilterChips, IconChip } from "../../components/ui";
 import { formatCurrency } from "../../utils";
 
 export const AnalysisScreen: React.FC = () => {
+  const insets = useSafeAreaInsets();
   const {
     colors,
     typography,
@@ -552,9 +553,8 @@ export const AnalysisScreen: React.FC = () => {
   };
 
   return (
-    <SafeAreaView
-      style={{ flex: 1, backgroundColor: colors.background }}
-      edges={["top"]}>
+    <View
+      style={{ flex: 1, backgroundColor: colors.background, paddingTop: insets.top }}>
       <StatusBar
         barStyle={isDark ? "light-content" : "dark-content"}
         backgroundColor="transparent"
@@ -592,7 +592,7 @@ export const AnalysisScreen: React.FC = () => {
         {renderCashFlowTrend()}
         {renderBudgetHealth()}
       </ScrollView>
-    </SafeAreaView>
+    </View>
   );
 };
 

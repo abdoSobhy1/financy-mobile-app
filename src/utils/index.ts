@@ -246,6 +246,23 @@ export const generateId = (): string => {
   return Math.random().toString(36).substring(2) + Date.now().toString(36);
 };
 
+export const isWalletRelatedTransaction = (transaction: {
+  type?: string;
+  description?: string;
+  category?: string;
+}): boolean => {
+  if (transaction.type === "transfer") return true;
+  if (
+    transaction.description === "Balance adjustment" ||
+    transaction.description?.toLowerCase().includes("balance adjustment") ||
+    transaction.description?.toLowerCase().includes("reconcil") ||
+    transaction.category === "Adjustment"
+  ) {
+    return true;
+  }
+  return false;
+};
+
 // Array utilities
 export const groupBy = <T>(array: T[], key: keyof T | ((item: T) => string)): Record<string, T[]> => {
   return array.reduce((groups, item) => {

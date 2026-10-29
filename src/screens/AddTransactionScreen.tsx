@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useMemo } from "react";
 import {
   View,
   StyleSheet,
@@ -6,9 +6,11 @@ import {
   TextInput,
   Text,
   TouchableOpacity,
+  TouchableWithoutFeedback,
   KeyboardAvoidingView,
   Platform,
   Keyboard,
+  BackHandler,
   ActivityIndicator,
   Animated,
   Easing,
@@ -46,6 +48,8 @@ import {
 } from "../components/ui";
 import { formatCurrency } from "../utils";
 import { walletService } from "../services/walletService";
+import { isWalletRelatedTransaction } from "../hooks/useTransactionActions";
+import { useUnsavedChanges } from "../hooks";
 
 type NavigationProp = StackNavigationProp<
   TransactionStackParamList,
@@ -173,6 +177,73 @@ export const AddTransactionScreen: React.FC = () => {
   const amountInputRef = useRef<TextInput>(null);
   const descriptionInputRef = useRef<TextInput>(null);
   const noteInputRef = useRef<TextInput>(null);
+  const showKeypadRef = useRef(showKeypad);
+
+  useEffect(() => {
+    showKeypadRef.current = showKeypad;
+  }, [showKeypad]);
+
+  const hasChanges = useMemo(() => {
+    if (editTransaction) {
+      const origAmount = editTransaction.amount?.toString() || "";
+      const origType = editTransaction.type || "expense";
+      const origCat = editTransaction.categoryId || "";
+      const origBudget = editTransaction.budgetId || "";
+      const origAccount = editTransaction.accountId || "default_cash";
+      const origDesc = editTransaction.description || "";
+      const origNote = editTransaction.note || "";
+
+      return (
+        amountStr !== origAmount ||
+        type !== origType ||
+        categoryId !== origCat ||
+        budgetId !== origBudget ||
+        accountId !== origAccount ||
+        description !== origDesc ||
+        note !== origNote
+      );
+    } else {
+      const hasAmount = amountStr.trim() !== "" && amountStr !== "0";
+      const hasDesc = description.trim() !== "";
+      const hasNote = note.trim() !== "";
+      const changedType = type !== (prefilledData?.type || "expense");
+      const changedCategory =
+        categoryId !== (prefilledData?.categoryId || initialCategoryId || "");
+      const changedBudget = budgetId !== (prefilledData?.budgetId || "");
+
+      return (
+        hasAmount ||
+        hasDesc ||
+        hasNote ||
+        changedType ||
+        changedCategory ||
+        changedBudget
+      );
+    }
+  }, [
+    editTransaction,
+    amountStr,
+    type,
+    categoryId,
+    budgetId,
+    accountId,
+    description,
+    note,
+    prefilledData,
+    initialCategoryId,
+  ]);
+
+  const { markAsSaved, resetSaved } = useUnsavedChanges({
+    hasChanges,
+    isEditing: !!editTransaction,
+    onInterceptBack: () => {
+      if (showKeypadRef.current) {
+        setShowKeypad(false);
+        return true;
+      }
+      return false;
+    },
+  });
 
   useEffect(() => {
     dispatch(fetchCategories());
@@ -184,6 +255,11 @@ export const AddTransactionScreen: React.FC = () => {
     }
 
     if (editTransaction) {
+      if (isWalletRelatedTransaction(editTransaction)) {
+        showError("Wallet-related transactions cannot be edited directly");
+        navigation.goBack();
+        return;
+      }
       setAmountStr(editTransaction.amount.toString());
       setType(editTransaction.type);
       setCategoryId(editTransaction.categoryId || "");
@@ -233,6 +309,7 @@ export const AddTransactionScreen: React.FC = () => {
   }, [editTransaction, prefilledData, initialCategoryId, dispatch]);
 
   const handleCategorySelect = (id: string) => {
+    if (showKeypad) setShowKeypad(false);
     setCategoryId(id);
     if (formErrors.category) {
       setFormErrors((prev) => ({ ...prev, category: undefined }));
@@ -243,6 +320,10 @@ export const AddTransactionScreen: React.FC = () => {
   const evaluatedAmount = evaluateMath(amountStr);
 
   const handleKeypadPress = (key: string) => {
+    if (key === "=") {
+      handleEvaluateExpression();
+      return;
+    }
     if (formErrors.amount) {
       setFormErrors((prev) => ({ ...prev, amount: undefined }));
     }
@@ -364,8 +445,10 @@ export const AddTransactionScreen: React.FC = () => {
             : AsyncStorage.removeItem(LAST_BUDGET_KEY),
         ]).catch(() => {});
       }
+      markAsSaved();
       navigation.goBack();
     } catch (error) {
+      resetSaved();
       console.error(error);
       showError("Failed to save transaction");
     }
@@ -388,166 +471,193 @@ export const AddTransactionScreen: React.FC = () => {
         style={{ flex: 1 }}
         behavior={Platform.OS === "ios" ? "padding" : undefined}>
         {/* Custom Top Bar */}
-        <View style={styles.topBar}>
-          <TouchableOpacity
-            style={[
-              styles.iconButton,
-              { backgroundColor: colors.surfaceVariant },
-            ]}
-            onPress={() => navigation.goBack()}>
-            <Ionicons name="close" size={24} color={colors.onSurfaceVariant} />
-          </TouchableOpacity>
-          <Text style={[styles.title, { color: colors.onBackground }]}>
-            {editTransaction ? "Edit Transaction" : "New Transaction"}
-          </Text>
-          <TouchableOpacity
-            style={[
-              styles.iconButton,
-              { backgroundColor: colors.primaryContainer },
-            ]}
-            onPress={handleSave}>
-            <Ionicons
-              name="checkmark"
-              size={24}
-              color={colors.onPrimaryContainer}
-            />
-          </TouchableOpacity>
-        </View>
+        <TouchableWithoutFeedback
+          onPress={() => {
+            if (showKeypad) setShowKeypad(false);
+            Keyboard.dismiss();
+          }}
+          accessible={false}>
+          <View style={styles.topBar}>
+            <TouchableOpacity
+              style={[
+                styles.iconButton,
+                { backgroundColor: colors.surfaceVariant },
+              ]}
+              onPress={() => {
+                if (showKeypad) setShowKeypad(false);
+                navigation.goBack();
+              }}>
+              <Ionicons name="close" size={24} color={colors.onSurfaceVariant} />
+            </TouchableOpacity>
+            <Text style={[styles.title, { color: colors.onBackground }]}>
+              {editTransaction ? "Edit Transaction" : "New Transaction"}
+            </Text>
+            <TouchableOpacity
+              style={[
+                styles.iconButton,
+                { backgroundColor: colors.primaryContainer },
+              ]}
+              onPress={() => {
+                if (showKeypad) setShowKeypad(false);
+                handleSave();
+              }}>
+              <Ionicons
+                name="checkmark"
+                size={24}
+                color={colors.onPrimaryContainer}
+              />
+            </TouchableOpacity>
+          </View>
+        </TouchableWithoutFeedback>
 
         <ScrollView
           contentContainerStyle={{
             padding: spacing.lg,
             paddingBottom: showKeypad ? KEYPAD_HEIGHT + spacing.md : spacing.xxl,
           }}
+          keyboardDismissMode="on-drag"
+          onScrollBeginDrag={() => {
+            if (showKeypad) setShowKeypad(false);
+          }}
           keyboardShouldPersistTaps="handled">
-          {/* Segmented Control */}
-          <View
-            style={[
-              styles.segmentContainer,
-              {
-                backgroundColor: colors.surfaceVariant,
-                borderRadius: radius.pill,
-                marginBottom: spacing.xl,
-              },
-            ]}>
-            {["income", "expense"].map((t) => {
-              const isActive = type === t;
-              return (
-                <TouchableOpacity
-                  key={t}
+          <TouchableWithoutFeedback
+            onPress={() => {
+              if (showKeypad) setShowKeypad(false);
+              Keyboard.dismiss();
+            }}
+            accessible={false}>
+            <View>
+              {/* Segmented Control */}
+              <View
+                style={[
+                  styles.segmentContainer,
+                  {
+                    backgroundColor: colors.surfaceVariant,
+                    borderRadius: radius.pill,
+                    marginBottom: spacing.xl,
+                  },
+                ]}>
+                {["income", "expense"].map((t) => {
+                  const isActive = type === t;
+                  return (
+                    <TouchableOpacity
+                      key={t}
+                      style={[
+                        styles.segmentButton,
+                        {
+                          borderRadius: radius.pill,
+                          backgroundColor: isActive
+                            ? colors.surface
+                            : "transparent",
+                        },
+                      ]}
+                      onPress={() => {
+                        if (showKeypad) setShowKeypad(false);
+                        setType(t as TransactionType);
+                      }}>
+                      <Text
+                        style={[
+                          typography.bodyMedium,
+                          {
+                            color: isActive
+                              ? colors.onBackground
+                              : colors.onSurfaceVariant,
+                            fontWeight: isActive ? "700" : "500",
+                            textTransform: "capitalize",
+                          },
+                        ]}>
+                        {t}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+
+              {/* Amount Section — Tactile Calculator Display */}
+              <TouchableOpacity
+                activeOpacity={0.85}
+                style={styles.amountSection}
+                onPress={() => {
+                  Keyboard.dismiss();
+                  setShowKeypad(true);
+                }}>
+                <Text
                   style={[
-                    styles.segmentButton,
-                    {
-                      borderRadius: radius.pill,
-                      backgroundColor: isActive
-                        ? colors.surface
-                        : "transparent",
-                    },
-                  ]}
-                  onPress={() => setType(t as TransactionType)}>
+                    typography.bodyMedium,
+                    { color: colors.onSurfaceVariant, marginBottom: 6 },
+                  ]}>
+                  Amount
+                </Text>
+                <View style={styles.amountRow}>
+                  <View style={styles.amountTextContainer}>
+                    <Text
+                      style={[
+                        styles.currencySymbol,
+                        { color: colors.onSurfaceVariant },
+                      ]}>
+                      {currencySymbol.trim()}
+                    </Text>
+                    <Text
+                      style={[
+                        styles.amountValue,
+                        {
+                          color: amountStr
+                            ? type === "income"
+                              ? colors.tertiary
+                              : colors.onBackground
+                            : colors.onSurfaceVariant,
+                        },
+                      ]}
+                      numberOfLines={1}
+                      adjustsFontSizeToFit>
+                      {amountDisplay}
+                    </Text>
+                  </View>
+                </View>
+
+                {/* Live Math Preview Pill */}
+                {hasMathOperator && evaluatedAmount > 0 ? (
+                  <TouchableOpacity
+                    onPress={handleEvaluateExpression}
+                    style={{
+                      marginTop: 8,
+                      paddingHorizontal: 12,
+                      paddingVertical: 4,
+                      borderRadius: 12,
+                      backgroundColor: colors.secondaryContainer,
+                    }}>
+                    <Text
+                      style={[
+                        typography.label,
+                        { color: colors.onSecondaryContainer },
+                      ]}>
+                      = {formatCurrency(evaluatedAmount)} (Tap to resolve)
+                    </Text>
+                  </TouchableOpacity>
+                ) : (
                   <Text
                     style={[
-                      typography.bodyMedium,
-                      {
-                        color: isActive
-                          ? colors.onBackground
-                          : colors.onSurfaceVariant,
-                        fontWeight: isActive ? "700" : "500",
-                        textTransform: "capitalize",
-                      },
+                      typography.bodySmall,
+                      { color: colors.onSurfaceVariant, marginTop: 4, opacity: 0.7 },
                     ]}>
-                    {t}
+                    {showKeypad
+                      ? "Tap outside to dismiss • or use Done below"
+                      : "Tap amount to open calculator keypad"}
                   </Text>
-                </TouchableOpacity>
-              );
-            })}
-          </View>
-
-          {/* Amount Section — Tactile Calculator Display */}
-          <TouchableOpacity
-            activeOpacity={0.85}
-            style={styles.amountSection}
-            onPress={() => {
-              Keyboard.dismiss();
-              setShowKeypad((prev) => !prev);
-            }}>
-            <Text
-              style={[
-                typography.bodyMedium,
-                { color: colors.onSurfaceVariant, marginBottom: 6 },
-              ]}>
-              Amount
-            </Text>
-            <View style={styles.amountRow}>
-              <View style={styles.amountTextContainer}>
-                <Text
-                  style={[
-                    styles.currencySymbol,
-                    { color: colors.onSurfaceVariant },
-                  ]}>
-                  {currencySymbol.trim()}
-                </Text>
-                <Text
-                  style={[
-                    styles.amountValue,
-                    {
-                      color: amountStr
-                        ? type === "income"
-                          ? colors.tertiary
-                          : colors.onBackground
-                        : colors.onSurfaceVariant,
-                    },
-                  ]}
-                  numberOfLines={1}
-                  adjustsFontSizeToFit>
-                  {amountDisplay}
-                </Text>
-              </View>
-            </View>
-
-            {/* Live Math Preview Pill */}
-            {hasMathOperator && evaluatedAmount > 0 ? (
-              <TouchableOpacity
-                onPress={handleEvaluateExpression}
-                style={{
-                  marginTop: 8,
-                  paddingHorizontal: 12,
-                  paddingVertical: 4,
-                  borderRadius: 12,
-                  backgroundColor: colors.secondaryContainer,
-                }}>
-                <Text
-                  style={[
-                    typography.label,
-                    { color: colors.onSecondaryContainer },
-                  ]}>
-                  = {formatCurrency(evaluatedAmount)} (Tap to resolve)
-                </Text>
+                )}
+                {formErrors.amount ? (
+                  <Text
+                    style={{
+                      color: colors.error,
+                      fontSize: 13,
+                      fontWeight: "600",
+                      marginTop: 6,
+                      textAlign: "center",
+                    }}>
+                    {formErrors.amount}
+                  </Text>
+                ) : null}
               </TouchableOpacity>
-            ) : (
-              <Text
-                style={[
-                  typography.bodySmall,
-                  { color: colors.onSurfaceVariant, marginTop: 4, opacity: 0.7 },
-                ]}>
-                {showKeypad
-                  ? "Tap to hide keypad • or use calculator below"
-                  : "Tap amount to open calculator keypad"}
-              </Text>
-            )}
-            {formErrors.amount ? (
-              <Text
-                style={{
-                  color: colors.error,
-                  fontSize: 13,
-                  fontWeight: "600",
-                  marginTop: 6,
-                  textAlign: "center",
-                }}>
-                {formErrors.amount}
-              </Text>
-            ) : null}
-          </TouchableOpacity>
 
           {/* Categories — Color-coded chips + Quick Create */}
           <Text
@@ -566,6 +676,11 @@ export const AddTransactionScreen: React.FC = () => {
             horizontal
             showsHorizontalScrollIndicator={false}
             keyboardShouldPersistTaps="handled"
+            keyboardDismissMode="on-drag"
+            style={{ flexGrow: 0 }}
+            onScrollBeginDrag={() => {
+              if (showKeypad) setShowKeypad(false);
+            }}
             contentContainerStyle={{
               gap: spacing.sm,
               marginBottom: spacing.lg,
@@ -613,7 +728,10 @@ export const AddTransactionScreen: React.FC = () => {
 
             {/* Quick "+ New" Category Chip */}
             <TouchableOpacity
-              onPress={() => setShowCreateCategoryModal(true)}
+              onPress={() => {
+                if (showKeypad) setShowKeypad(false);
+                setShowCreateCategoryModal(true);
+              }}
               activeOpacity={0.75}
               style={[
                 styles.categoryChip,
@@ -670,12 +788,18 @@ export const AddTransactionScreen: React.FC = () => {
                 horizontal
                 showsHorizontalScrollIndicator={false}
                 keyboardShouldPersistTaps="handled"
+                keyboardDismissMode="on-drag"
+                style={{ flexGrow: 0 }}
+                onScrollBeginDrag={() => {
+                  if (showKeypad) setShowKeypad(false);
+                }}
                 contentContainerStyle={{
                   gap: spacing.sm,
                   marginBottom: spacing.lg,
                 }}>
                 <TouchableOpacity
                   onPress={() => {
+                    if (showKeypad) setShowKeypad(false);
                     setBudgetId("");
                     setManualBudgetSelected(true);
                   }}
@@ -721,6 +845,7 @@ export const AddTransactionScreen: React.FC = () => {
                       <TouchableOpacity
                         key={b.id}
                         onPress={() => {
+                          if (showKeypad) setShowKeypad(false);
                           setBudgetId(b.id);
                           setManualBudgetSelected(true);
                         }}
@@ -786,6 +911,11 @@ export const AddTransactionScreen: React.FC = () => {
                   horizontal
                   showsHorizontalScrollIndicator={false}
                   keyboardShouldPersistTaps="handled"
+                  keyboardDismissMode="on-drag"
+                  style={{ flexGrow: 0 }}
+                  onScrollBeginDrag={() => {
+                    if (showKeypad) setShowKeypad(false);
+                  }}
                   contentContainerStyle={{
                     gap: spacing.sm,
                     marginBottom: spacing.lg,
@@ -796,7 +926,10 @@ export const AddTransactionScreen: React.FC = () => {
                     return (
                       <TouchableOpacity
                         key={w.id}
-                        onPress={() => setAccountId(w.id)}
+                        onPress={() => {
+                          if (showKeypad) setShowKeypad(false);
+                          setAccountId(w.id);
+                        }}
                         style={[
                           styles.categoryChip,
                           {
@@ -923,7 +1056,7 @@ export const AddTransactionScreen: React.FC = () => {
                     if (showMore) {
                       noteInputRef.current?.focus();
                     } else {
-                      handleSave();
+                      Keyboard.dismiss();
                     }
                   }}
                 />
@@ -939,7 +1072,10 @@ export const AddTransactionScreen: React.FC = () => {
                   borderBottomWidth: 0,
                 },
               ]}
-              onPress={() => setShowDatePicker(true)}>
+              onPress={() => {
+                if (showKeypad) setShowKeypad(false);
+                setShowDatePicker(true);
+              }}>
               <View
                 style={[
                   styles.optionIcon,
@@ -977,7 +1113,10 @@ export const AddTransactionScreen: React.FC = () => {
           {/* More Options */}
           <TouchableOpacity
             style={styles.moreOptionsBtn}
-            onPress={() => setShowMore(!showMore)}>
+            onPress={() => {
+              if (showKeypad) setShowKeypad(false);
+              setShowMore(!showMore);
+            }}>
             <Text
               style={[
                 typography.bodyMedium,
@@ -1009,10 +1148,12 @@ export const AddTransactionScreen: React.FC = () => {
                 numberOfLines={3}
                 inputStyle={{ height: 80 }}
                 returnKeyType="done"
-                onSubmitEditing={handleSave}
+                onSubmitEditing={() => Keyboard.dismiss()}
               />
             </View>
           )}
+            </View>
+          </TouchableWithoutFeedback>
         </ScrollView>
 
         {isKeypadMounted && (
@@ -1031,7 +1172,6 @@ export const AddTransactionScreen: React.FC = () => {
               onBackspace={handleKeypadBackspace}
               onClear={handleKeypadClear}
               onEvaluate={handleEvaluateExpression}
-              onSubmit={handleSave}
               onClose={() => setShowKeypad(false)}
               hasOperator={hasMathOperator}
             />

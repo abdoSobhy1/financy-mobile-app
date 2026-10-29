@@ -3,7 +3,7 @@ import { View, Text, StyleSheet, TouchableOpacity } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { UI } from "../../constants";
 import { Transaction, Category } from "../../types";
-import { formatCurrency, formatDate } from "../../utils";
+import { formatCurrency, formatDate, isWalletRelatedTransaction } from "../../utils";
 
 interface TransactionCardProps {
   transaction: Transaction;
@@ -57,15 +57,17 @@ export const TransactionCard: React.FC<TransactionCardProps> = ({
 
       {/* Quick actions (swipe-alternative) */}
       <View style={styles.actions}>
-        <TouchableOpacity
-          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-          onPress={() => onDuplicate(transaction)}>
-          <Ionicons
-            name="copy-outline"
-            size={16}
-            color={UI.COLORS.TEXT_MUTED}
-          />
-        </TouchableOpacity>
+        {!isWalletRelatedTransaction(transaction) && (
+          <TouchableOpacity
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            onPress={() => onDuplicate(transaction)}>
+            <Ionicons
+              name="copy-outline"
+              size={16}
+              color={UI.COLORS.TEXT_MUTED}
+            />
+          </TouchableOpacity>
+        )}
         <TouchableOpacity
           hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
           onPress={() => onDelete(transaction)}>

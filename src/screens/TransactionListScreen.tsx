@@ -1,5 +1,5 @@
 import { AlertService } from "../services/AlertService";
-import React, { useEffect, useState, useMemo, useCallback } from "react";
+import React, { useEffect, useState, useMemo, useCallback, useRef } from "react";
 import {
   View,
   Text,
@@ -14,35 +14,43 @@ import {
   ScrollView,
   TextInput,
   Modal,
+  LayoutAnimation,
+  UIManager,
+  Animated,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+
+if (Platform.OS === "android" && UIManager.setLayoutAnimationEnabledExperimental) {
+  UIManager.setLayoutAnimationEnabledExperimental(true);
+}
 import { useDispatch, useSelector } from "react-redux";
 import { useNavigation, useFocusEffect } from "@react-navigation/native";
 import { StackNavigationProp } from "@react-navigation/stack";
 import { RootState, AppDispatch } from "../store";
 import {
   fetchTransactions,
+  deleteMultipleTransactions,
 } from "../store/slices/transactionsSlice";
 import { fetchCategories } from "../store/slices/categoriesSlice";
 import { fetchBudgets } from "../store/slices/budgetsSlice";
+import { fetchDebts } from "../store/slices/debtsSlice";
+import { fetchSettings } from "../store/slices/settingsSlice";
 import { Transaction, TransactionStackParamList, WalletAccount } from "../types";
 import { walletService } from "../services/walletService";
 import { useAppTheme } from "../components/ui/ThemeProvider";
-import { useTabBarHeight, IconChip } from "../components/ui";
+import { useTabBarHeight, IconChip, useToast, ToastOverlay } from "../components/ui";
 import { AppHeader } from "../components/ui/AppHeader";
 import { useTransactionActions } from "../hooks/useTransactionActions";
 
-import { formatCurrency } from "../utils";
+import { formatCurrency, getDateRangeForBillingPeriod } from "../utils";
 import {
   format,
   isToday,
   isYesterday,
   startOfDay,
   endOfDay,
-  startOfMonth,
-  endOfMonth,
-  subMonths,
+  subDays,
   startOfYear,
   endOfYear,
 } from "date-fns";
@@ -65,11 +73,225 @@ type TimeFilter =
   | "custom";
 type TypeFilter = "All" | "Income" | "Expense" | "Transfer";
 
+const AnimatedTouchable = Animated.createAnimatedComponent(TouchableOpacity);
+
+interface TransactionRowItemProps {
+  tx: Transaction;
+  cat: any;
+  walletsMap: Record<string, any>;
+  secretWalletIds: Set<string>;
+  isAdjustment: boolean;
+  isFirst: boolean;
+  isLast: boolean;
+  isOnlyOne: boolean;
+  isSelected: boolean;
+  isSelectionMode: boolean;
+  onPress: () => void;
+  onLongPress: () => void;
+  colors: any;
+  styles: any;
+}
+
+const TransactionRowItem: React.FC<TransactionRowItemProps> = React.memo(
+  ({
+    tx,
+    cat,
+    walletsMap,
+    secretWalletIds,
+    isAdjustment,
+    isFirst,
+    isLast,
+    isOnlyOne,
+    isSelected,
+    isSelectionMode,
+    onPress,
+    onLongPress,
+    colors,
+    styles,
+  }) => {
+    const anim = useRef(
+      new Animated.Value(isSelectionMode && isSelected ? 1 : 0),
+    ).current;
+
+    useEffect(() => {
+      Animated.timing(anim, {
+        toValue: isSelectionMode && isSelected ? 1 : 0,
+        duration: 180,
+        useNativeDriver: false,
+      }).start();
+    }, [isSelected, isSelectionMode]);
+
+    const animatedBg = anim.interpolate({
+      inputRange: [0, 1],
+      outputRange: ["transparent", colors.surfaceVariant],
+    });
+
+    const isIncome = tx.type === "income";
+    const isTransfer = tx.type === "transfer";
+    const fromWallet = tx.accountId ? walletsMap[tx.accountId] : null;
+    const toWallet = tx.toAccountId ? walletsMap[tx.toAccountId] : null;
+
+    const transferTitle =
+      fromWallet?.name && toWallet?.name
+        ? `${fromWallet.name} → ${toWallet.name}`
+        : tx.description?.replace(/^Transfer:\s*/i, "") || "Transfer";
+
+    const transferSubtitle =
+      fromWallet?.name && toWallet?.name
+        ? `${fromWallet.name} → ${toWallet.name} • ${format(new Date(tx.date), "hh:mm a")}`
+        : tx.description && tx.description.includes("->")
+        ? `${tx.description.replace(/^Transfer:\s*/i, "")} • ${format(new Date(tx.date), "hh:mm a")}`
+        : `Transfer • ${format(new Date(tx.date), "hh:mm a")}`;
+
+    const reconcileSubtitle = fromWallet?.name
+      ? `${fromWallet.name} • Reconcile • ${format(new Date(tx.date), "hh:mm a")}`
+      : `Reconcile • ${format(new Date(tx.date), "hh:mm a")}`;
+
+    const selectedRadiusStyle = isOnlyOne
+      ? { borderRadius: 18 }
+      : isFirst
+      ? {
+          borderTopLeftRadius: 18,
+          borderTopRightRadius: 18,
+          borderBottomLeftRadius: 3,
+          borderBottomRightRadius: 3,
+        }
+      : isLast
+      ? {
+          borderBottomLeftRadius: 18,
+          borderBottomRightRadius: 18,
+          borderTopLeftRadius: 3,
+          borderTopRightRadius: 3,
+        }
+      : {
+          borderRadius: 3,
+        };
+
+    return (
+      <View key={tx.id}>
+        <AnimatedTouchable
+          style={[
+            styles.txRow,
+            { backgroundColor: animatedBg },
+            selectedRadiusStyle,
+          ]}
+          onPress={onPress}
+          onLongPress={onLongPress}
+          activeOpacity={0.7}>
+          {/* Animated Icon Box: smooth cross-fade between icon and checkmark */}
+          <View
+            style={{
+              width: 44,
+              height: 44,
+              marginRight: 14,
+              justifyContent: "center",
+              alignItems: "center",
+            }}>
+            <Animated.View
+              style={{
+                position: "absolute",
+                opacity: anim.interpolate({
+                  inputRange: [0, 1],
+                  outputRange: [1, 0],
+                }),
+              }}>
+              <IconChip
+                icon={
+                  isTransfer
+                    ? ("swap-horizontal-outline" as any)
+                    : isAdjustment
+                    ? ("wallet-outline" as any)
+                    : ((((cat as any)?.icon as any) || "receipt-outline") as any)
+                }
+                color={
+                  isTransfer
+                    ? colors.onSurfaceVariant
+                    : isAdjustment
+                    ? "teal"
+                    : cat?.color || colors.primary
+                }
+                size="md"
+              />
+            </Animated.View>
+
+            <Animated.View
+              style={[
+                styles.iconBadge,
+                {
+                  position: "absolute",
+                  marginRight: 0,
+                  backgroundColor: colors.primary,
+                  opacity: anim,
+                  transform: [
+                    {
+                      scale: anim.interpolate({
+                        inputRange: [0, 1],
+                        outputRange: [0.65, 1],
+                      }),
+                    },
+                  ],
+                },
+              ]}
+              pointerEvents={isSelected ? "auto" : "none"}>
+              <Ionicons name="checkmark" size={22} color={colors.onPrimary} />
+            </Animated.View>
+          </View>
+
+          <View style={styles.txCenterCol}>
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+              <Text
+                style={[styles.txTitleText, { flexShrink: 1 }]}
+                numberOfLines={1}>
+                {isTransfer
+                  ? tx.description || transferTitle
+                  : isAdjustment
+                  ? "Balance adjustment"
+                  : tx.description || cat?.name || "Transaction"}
+              </Text>
+              {Boolean(tx.receiptUri) && (
+                <Ionicons
+                  name="attach-outline"
+                  size={15}
+                  color={colors.primary}
+                />
+              )}
+            </View>
+            <Text style={styles.txSubtitleText} numberOfLines={1}>
+              {isTransfer
+                ? transferSubtitle
+                : isAdjustment
+                ? reconcileSubtitle
+                : `${cat?.name || "Uncategorized"} • ${format(new Date(tx.date), "hh:mm a")}`}
+              {walletService.isSecretTransaction(tx, secretWalletIds)
+                ? " • 🔒 Secret"
+                : ""}
+            </Text>
+          </View>
+
+          <View style={styles.txRightCol}>
+            <Text
+              style={[
+                styles.txAmountText,
+                isIncome && !isAdjustment && styles.txAmountIncome,
+                (isTransfer || isAdjustment) && { color: colors.onSurface },
+              ]}>
+              {isTransfer || isAdjustment ? "" : isIncome ? "+" : "-"}
+              {formatCurrency(tx.amount)}
+            </Text>
+          </View>
+        </AnimatedTouchable>
+        {!isLast && <View style={styles.separator} />}
+      </View>
+    );
+  },
+);
+
 export const TransactionListScreen: React.FC = () => {
   const dispatch = useDispatch<AppDispatch>();
   const navigation = useNavigation<NavigationProp>();
   const { colors, typography, spacing, radius, isDark } = useAppTheme();
   const tabBarHeight = useTabBarHeight();
+  const insets = useSafeAreaInsets();
   const { handleTransactionPress } = useTransactionActions();
 
   const { items: transactionsMap, loading } = useSelector(
@@ -78,6 +300,10 @@ export const TransactionListScreen: React.FC = () => {
   const { items: categories } = useSelector(
     (state: RootState) => state.categories,
   );
+  const { data: settingsData } = useSelector(
+    (state: RootState) => state.settings,
+  );
+  const { showSuccess, showError, showInfo } = useToast();
 
   const [refreshing, setRefreshing] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
@@ -92,6 +318,11 @@ export const TransactionListScreen: React.FC = () => {
   const [selectedWalletIds, setSelectedWalletIds] = useState<Set<string>>(
     new Set(),
   );
+
+  // Multi-select state
+  const [isSelectionMode, setIsSelectionMode] = useState<boolean>(false);
+  const [selectedTxIds, setSelectedTxIds] = useState<Set<string>>(new Set());
+  const [isDeletingBulk, setIsDeletingBulk] = useState<boolean>(false);
 
   // Filter Modal state
   const [showFilterModal, setShowFilterModal] = useState(false);
@@ -120,8 +351,12 @@ export const TransactionListScreen: React.FC = () => {
     useState<Date>(customStartDate);
   const [tempCustomEndDate, setTempCustomEndDate] =
     useState<Date>(customEndDate);
-  const [wallets, setWallets] = useState<WalletAccount[]>([]);
-  const [secretWalletIds, setSecretWalletIds] = useState<Set<string>>(new Set());
+  const [wallets, setWallets] = useState<WalletAccount[]>(() =>
+    walletService.getCachedWallets(),
+  );
+  const [secretWalletIds, setSecretWalletIds] = useState<Set<string>>(() =>
+    walletService.getSecretWalletIds(walletService.getCachedWallets()),
+  );
 
   const walletsMap = useMemo(() => {
     const map: Record<string, WalletAccount> = {};
@@ -145,6 +380,7 @@ export const TransactionListScreen: React.FC = () => {
     dispatch(fetchTransactions());
     dispatch(fetchCategories());
     dispatch(fetchBudgets());
+    dispatch(fetchSettings());
     loadSecretWalletIds();
   }, [dispatch]);
 
@@ -152,6 +388,7 @@ export const TransactionListScreen: React.FC = () => {
     useCallback(() => {
       dispatch(fetchTransactions());
       dispatch(fetchBudgets());
+      dispatch(fetchSettings());
       loadSecretWalletIds();
     }, [dispatch]),
   );
@@ -161,6 +398,7 @@ export const TransactionListScreen: React.FC = () => {
     await Promise.all([
       dispatch(fetchTransactions()),
       dispatch(fetchBudgets()),
+      dispatch(fetchSettings()),
       loadSecretWalletIds(),
     ]);
     setRefreshing(false);
@@ -233,21 +471,57 @@ export const TransactionListScreen: React.FC = () => {
     [transactionsMap],
   );
 
+  const isWalletReconciliation = useCallback((t: Transaction) => {
+    return (
+      t.description === "Balance adjustment" ||
+      t.description?.toLowerCase().includes("balance adjustment") ||
+      t.description?.toLowerCase().includes("reconcil") ||
+      (t as any).category === "Adjustment"
+    );
+  }, []);
+
+  const isExcludedFromCalculations = useCallback(
+    (t: Transaction) => {
+      if (walletService.isSecretTransactionExcluded(t, secretWalletIds)) return true;
+      if (isWalletReconciliation(t)) return true;
+      if (t.type === "transfer") return true;
+      return false;
+    },
+    [secretWalletIds, isWalletReconciliation],
+  );
+
+  const toggleSelectTx = useCallback((id: string) => {
+    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+    setSelectedTxIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
+      return next;
+    });
+  }, []);
+
   const filteredTransactions = useMemo(() => {
     const now = new Date();
     let startDate: Date | undefined;
     let endDate: Date | undefined;
+    const billingStartDay = settingsData?.billingPeriodStartDay ?? 1;
 
     if (timeFilter === "Today") {
       startDate = startOfDay(now);
       endDate = endOfDay(now);
     } else if (timeFilter === "This Month") {
-      startDate = startOfMonth(now);
-      endDate = endOfMonth(now);
+      const currentPeriod = getDateRangeForBillingPeriod(billingStartDay, now);
+      startDate = currentPeriod.start;
+      endDate = currentPeriod.end;
     } else if (timeFilter === "Last Month") {
-      const lastMonth = subMonths(now, 1);
-      startDate = startOfMonth(lastMonth);
-      endDate = endOfMonth(lastMonth);
+      const currentPeriod = getDateRangeForBillingPeriod(billingStartDay, now);
+      const prevPeriodEnd = subDays(currentPeriod.start, 1);
+      const prevPeriod = getDateRangeForBillingPeriod(billingStartDay, prevPeriodEnd);
+      startDate = prevPeriod.start;
+      endDate = prevPeriod.end;
     } else if (timeFilter === "Year") {
       startDate = startOfYear(now);
       endDate = endOfYear(now);
@@ -308,7 +582,71 @@ export const TransactionListScreen: React.FC = () => {
     selectedWalletIds,
     searchQuery,
     categories,
+    settingsData?.billingPeriodStartDay,
+    customStartDate,
+    customEndDate,
   ]);
+
+  const handleSelectAll = useCallback(() => {
+    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+    if (selectedTxIds.size === filteredTransactions.length && filteredTransactions.length > 0) {
+      setSelectedTxIds(new Set());
+    } else {
+      setSelectedTxIds(new Set(filteredTransactions.map((t) => t.id)));
+    }
+  }, [selectedTxIds.size, filteredTransactions]);
+
+  const handleLongPressTx = useCallback((tx: Transaction) => {
+    if (!isSelectionMode) {
+      LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+      setIsSelectionMode(true);
+      setSelectedTxIds(new Set([tx.id]));
+    }
+  }, [isSelectionMode]);
+
+  const exitSelectionMode = useCallback(() => {
+    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+    setIsSelectionMode(false);
+    setSelectedTxIds(new Set());
+  }, []);
+
+  const handleMassDelete = useCallback(() => {
+    if (selectedTxIds.size === 0) {
+      showInfo("No transactions selected");
+      return;
+    }
+
+    const count = selectedTxIds.size;
+    AlertService.alert(
+      "Delete Transactions",
+      `Are you sure you want to delete ${count} selected ${count === 1 ? "transaction" : "transactions"}? This action cannot be undone.`,
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Delete",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              setIsDeletingBulk(true);
+              const idsArray = Array.from(selectedTxIds);
+              await dispatch(deleteMultipleTransactions(idsArray)).unwrap();
+              dispatch(fetchBudgets());
+              dispatch(fetchDebts());
+              LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+              setSelectedTxIds(new Set());
+              setIsSelectionMode(false);
+              showSuccess(`Deleted ${count} ${count === 1 ? "transaction" : "transactions"}`);
+            } catch (err: any) {
+              console.error("Failed to delete transactions:", err);
+              showError("Failed to delete selected transactions");
+            } finally {
+              setIsDeletingBulk(false);
+            }
+          },
+        },
+      ],
+    );
+  }, [selectedTxIds, dispatch, showSuccess, showError, showInfo]);
 
   const groupedTransactions = useMemo(() => {
     const groups: { [key: string]: Transaction[] } = {};
@@ -327,10 +665,9 @@ export const TransactionListScreen: React.FC = () => {
     return Object.keys(groups).map((title) => {
       const data = groups[title];
       const dailyTotal = data.reduce((sum, t) => {
-        if (walletService.isSecretTransactionExcluded(t, secretWalletIds)) return sum;
-        if (t.description === "Balance adjustment") return sum;
+        if (isExcludedFromCalculations(t)) return sum;
         if (t.type === "income") return sum + t.amount;
-        if (t.type === "expense" || (t.type === "transfer" && Boolean(t.budgetId))) return sum - t.amount;
+        if (t.type === "expense") return sum - t.amount;
         return sum;
       }, 0);
 
@@ -341,17 +678,14 @@ export const TransactionListScreen: React.FC = () => {
         data: [{ id: title, items: data }],
       };
     });
-  }, [filteredTransactions, secretWalletIds]);
-
-
+  }, [filteredTransactions, isExcludedFromCalculations]);
 
   const totalAmount = useMemo(() => {
     return filteredTransactions.reduce((sum, t) => {
-      if (walletService.isSecretTransactionExcluded(t, secretWalletIds)) return sum;
-      if (t.description === "Balance adjustment") return sum;
+      if (isExcludedFromCalculations(t)) return sum;
       return t.type === "income" ? sum + t.amount : sum - t.amount;
     }, 0);
-  }, [filteredTransactions, secretWalletIds]);
+  }, [filteredTransactions, isExcludedFromCalculations]);
 
   const allCategoriesList = useMemo(
     () => Object.values(categories).filter((c) => c && !c.deleted),
@@ -361,13 +695,27 @@ export const TransactionListScreen: React.FC = () => {
   const styles = useMemo(() => createStyles(colors), [colors]);
 
   return (
-    <SafeAreaView
-      style={{ flex: 1, backgroundColor: colors.background }}
-      edges={["top"]}>
+    <View
+      style={{ flex: 1, backgroundColor: colors.background, paddingTop: insets.top }}>
       <StatusBar barStyle={isDark ? "light-content" : "dark-content"} />
 
       {/* Standard App Header */}
-      <AppHeader title="Transactions" />
+      {isSelectionMode ? (
+        <AppHeader
+          title={`${selectedTxIds.size} Selected`}
+          showSettings={false}
+          rightAction={
+            <TouchableOpacity
+              onPress={exitSelectionMode}
+              style={{ paddingHorizontal: 12, paddingVertical: 6 }}
+              activeOpacity={0.7}>
+              <Text style={{ color: colors.primary, fontWeight: "700", fontSize: 16 }}>Done</Text>
+            </TouchableOpacity>
+          }
+        />
+      ) : (
+        <AppHeader title="Transactions" />
+      )}
 
       <View style={styles.topContainer}>
         {/* Search Bar & Filter */}
@@ -415,6 +763,62 @@ export const TransactionListScreen: React.FC = () => {
             )}
           </TouchableOpacity>
         </View>
+
+        {/* Multi-Select Action Banner */}
+        {isSelectionMode && (
+          <View
+            style={{
+              flexDirection: "row",
+              justifyContent: "space-between",
+              alignItems: "center",
+              backgroundColor: colors.surfaceVariant,
+              paddingHorizontal: spacing.md,
+              paddingVertical: spacing.sm,
+              borderRadius: radius.md,
+              marginTop: 6,
+              marginBottom: 4,
+            }}>
+            <TouchableOpacity
+              onPress={handleSelectAll}
+              style={{ flexDirection: "row", alignItems: "center", gap: 6 }}
+              activeOpacity={0.7}>
+              <Ionicons
+                name={
+                  selectedTxIds.size === filteredTransactions.length && filteredTransactions.length > 0
+                    ? "checkbox"
+                    : "square-outline"
+                }
+                size={20}
+                color={colors.primary}
+              />
+              <Text style={{ fontSize: 13, fontWeight: "600", color: colors.onSurfaceVariant }}>
+                {selectedTxIds.size === filteredTransactions.length && filteredTransactions.length > 0
+                  ? "Deselect All"
+                  : `Select All (${filteredTransactions.length})`}
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              onPress={handleMassDelete}
+              disabled={selectedTxIds.size === 0 || isDeletingBulk}
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                gap: 6,
+                backgroundColor: selectedTxIds.size > 0 ? colors.error : colors.outlineVariant,
+                paddingHorizontal: 12,
+                paddingVertical: 7,
+                borderRadius: radius.sm,
+                opacity: selectedTxIds.size > 0 ? 1 : 0.5,
+              }}
+              activeOpacity={0.7}>
+              <Ionicons name="trash-outline" size={16} color={colors.onError} />
+              <Text style={{ fontSize: 13, fontWeight: "700", color: colors.onError }}>
+                {isDeletingBulk ? "Deleting..." : `Delete (${selectedTxIds.size})`}
+              </Text>
+            </TouchableOpacity>
+          </View>
+        )}
 
         {/* Segmented Control for Transaction Type (All | Income | Expense | Transfer) */}
         <View style={styles.segmentedControl}>
@@ -512,79 +916,36 @@ export const TransactionListScreen: React.FC = () => {
           <View style={styles.cardGroupContainer}>
             {item.items.map((tx, idx) => {
               const cat = tx.categoryId ? categories[tx.categoryId] : null;
-              const isIncome = tx.type === "income";
-              const isTransfer = tx.type === "transfer";
-              const isAdjustment = tx.description === "Balance adjustment";
-              const fromWallet = tx.accountId ? walletsMap[tx.accountId] : null;
-              const toWallet = tx.toAccountId ? walletsMap[tx.toAccountId] : null;
+              const isAdjustment = isWalletReconciliation(tx);
+              const isFirst = idx === 0;
               const isLast = idx === item.items.length - 1;
+              const isOnlyOne = item.items.length === 1;
+              const isSelected = selectedTxIds.has(tx.id);
 
               return (
-                <View key={tx.id}>
-                  <TouchableOpacity
-                    style={styles.txRow}
-                    onPress={() => handleTransactionPress(tx)}
-                    activeOpacity={0.7}>
-                    <IconChip
-                      icon={
-                        isTransfer
-                          ? ("swap-horizontal-outline" as any)
-                          : isAdjustment
-                          ? ("build-outline" as any)
-                          : ((((cat as any)?.icon as any) || "receipt-outline") as any)
-                      }
-                      color={
-                        isTransfer || isAdjustment
-                          ? colors.onSurfaceVariant
-                          : cat?.color || colors.primary
-                      }
-                      size="md"
-                      style={{ marginRight: 14 }}
-                    />
-
-                    <View style={styles.txCenterCol}>
-                      <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
-                        <Text style={[styles.txTitleText, { flexShrink: 1 }]} numberOfLines={1}>
-                          {isTransfer
-                            ? tx.description || `${fromWallet?.name || "Wallet"} → ${toWallet?.name || "Wallet"}`
-                            : isAdjustment
-                            ? "Balance adjustment"
-                            : tx.description || cat?.name || "Transaction"}
-                        </Text>
-                        {Boolean(tx.receiptUri) && (
-                          <Ionicons
-                            name="attach-outline"
-                            size={15}
-                            color={colors.primary}
-                          />
-                        )}
-                      </View>
-                      <Text style={styles.txSubtitleText} numberOfLines={1}>
-                        {isTransfer
-                          ? `${fromWallet?.name || "Wallet"} → ${toWallet?.name || "Wallet"} • ${format(new Date(tx.date), "hh:mm a")}`
-                          : isAdjustment
-                          ? `${fromWallet?.name || "Wallet"} • Reconcile • ${format(new Date(tx.date), "hh:mm a")}`
-                          : `${cat?.name || "Uncategorized"} • ${format(new Date(tx.date), "hh:mm a")}`}
-                        {walletService.isSecretTransaction(tx, secretWalletIds)
-                          ? " • 🔒 Secret"
-                          : ""}
-                      </Text>
-                    </View>
-
-                    <View style={styles.txRightCol}>
-                      <Text
-                        style={[
-                          styles.txAmountText,
-                          isIncome && !isAdjustment && styles.txAmountIncome,
-                          (isTransfer || isAdjustment) && { color: colors.onSurface },
-                        ]}>
-                        {isTransfer || isAdjustment ? "" : isIncome ? "+" : "-"}
-                        {formatCurrency(tx.amount)}
-                      </Text>
-                    </View>
-                  </TouchableOpacity>
-                  {!isLast && <View style={styles.separator} />}
-                </View>
+                <TransactionRowItem
+                  key={tx.id}
+                  tx={tx}
+                  cat={cat}
+                  walletsMap={walletsMap}
+                  secretWalletIds={secretWalletIds}
+                  isAdjustment={isAdjustment}
+                  isFirst={isFirst}
+                  isLast={isLast}
+                  isOnlyOne={isOnlyOne}
+                  isSelected={isSelected}
+                  isSelectionMode={isSelectionMode}
+                  onPress={() => {
+                    if (isSelectionMode) {
+                      toggleSelectTx(tx.id);
+                    } else {
+                      handleTransactionPress(tx);
+                    }
+                  }}
+                  onLongPress={() => handleLongPressTx(tx)}
+                  colors={colors}
+                  styles={styles}
+                />
               );
             })}
           </View>
@@ -653,7 +1014,8 @@ export const TransactionListScreen: React.FC = () => {
         }}
         onClose={() => setShowCustomDateModal(false)}
       />
-    </SafeAreaView>
+      <ToastOverlay />
+    </View>
   );
 };
 
@@ -790,15 +1152,17 @@ const createStyles = (colors: any) =>
       borderRadius: 24,
       marginHorizontal: 20,
       marginBottom: 8,
-      paddingVertical: 6,
+      paddingVertical: 4,
+      paddingHorizontal: 4,
       borderWidth: 1,
       borderColor: colors.outlineVariant,
     },
     txRow: {
       flexDirection: "row",
       alignItems: "center",
-      paddingHorizontal: 16,
-      paddingVertical: 12,
+      paddingHorizontal: 12,
+      paddingVertical: 10,
+      marginVertical: 1,
     },
     iconBadge: {
       width: 44,
@@ -838,7 +1202,7 @@ const createStyles = (colors: any) =>
     separator: {
       height: 1,
       backgroundColor: colors.outlineVariant,
-      marginHorizontal: 16,
+      marginHorizontal: 12,
     },
     emptyContainer: {
       paddingTop: 60,

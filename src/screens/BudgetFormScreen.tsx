@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useMemo } from "react";
 import {
   View,
   Text,
@@ -8,6 +8,7 @@ import {
   ScrollView,
   KeyboardAvoidingView,
   Platform,
+  Keyboard,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useRoute, useNavigation, RouteProp } from "@react-navigation/native";
@@ -24,6 +25,7 @@ import {
 } from "../store/slices/budgetsSlice";
 import { BudgetStackParamList } from "../types";
 import { AlertService } from "../services/AlertService";
+import { useUnsavedChanges } from "../hooks";
 
 type NavigationProp = StackNavigationProp<BudgetStackParamList, "BudgetForm">;
 type RouteParam = RouteProp<BudgetStackParamList, "BudgetForm">;
@@ -36,9 +38,7 @@ const BudgetFormScreen: React.FC = () => {
     colors,
     typography,
     spacing,
-    radius,
     currencySymbol,
-    resolveCategoryColor,
   } = useAppTheme();
   const { showSuccess, showError } = useToast();
 
@@ -46,17 +46,9 @@ const BudgetFormScreen: React.FC = () => {
   const budget = useSelector((state: RootState) =>
     budgetId && state.budgets ? state.budgets.items[budgetId] : null,
   );
-  const categoriesMap = useSelector(
-    (state: RootState) => state.categories.items,
-  );
-  const expenseCategories = Object.values(categoriesMap).filter(
-    (c) => !c.deleted && c.type === "expense",
-  );
 
   const [amountStr, setAmountStr] = useState("");
   const [name, setName] = useState("");
-  const [categoryId, setCategoryId] = useState<string | undefined>(undefined);
-  const [period, setPeriod] = useState<"weekly" | "monthly">("monthly");
   const [alertsEnabled, setAlertsEnabled] = useState(true);
   const [formErrors, setFormErrors] = useState<{
     amount?: string;
@@ -71,11 +63,34 @@ const BudgetFormScreen: React.FC = () => {
     if (budget) {
       setAmountStr(budget.amount.toString());
       setName(budget.name);
-      setCategoryId(budget.categoryId);
-      setPeriod(budget.period || "monthly");
       setAlertsEnabled(budget.alertsEnabled ?? true);
     }
   }, [budget]);
+
+  const hasChanges = useMemo(() => {
+    if (budget) {
+      const origAmount = budget.amount?.toString() || "";
+      const origName = budget.name || "";
+      const origAlerts = budget.alertsEnabled ?? true;
+
+      return (
+        amountStr !== origAmount ||
+        name !== origName ||
+        alertsEnabled !== origAlerts
+      );
+    } else {
+      return (
+        amountStr.trim() !== "" ||
+        name.trim() !== "" ||
+        !alertsEnabled
+      );
+    }
+  }, [budget, amountStr, name, alertsEnabled]);
+
+  const { markAsSaved, resetSaved } = useUnsavedChanges({
+    hasChanges,
+    isEditing: !!budget,
+  });
 
   const validate = (): boolean => {
     const newErrors: { amount?: string; name?: string } = {};
@@ -106,8 +121,8 @@ const BudgetFormScreen: React.FC = () => {
     const budgetData = {
       name: name.trim(),
       amount: num.toString(),
-      categoryId: categoryId || undefined,
-      period,
+      categoryId: undefined,
+      period: "monthly" as const,
       resetDay: 1,
       alertsEnabled,
     };
@@ -123,8 +138,10 @@ const BudgetFormScreen: React.FC = () => {
         await dispatch(addBudget(budgetData)).unwrap();
         showSuccess("Budget created successfully!");
       }
+      markAsSaved();
       navigation.goBack();
     } catch (error) {
+      resetSaved();
       console.error(error);
       showError("Failed to save budget");
     } finally {
@@ -147,8 +164,10 @@ const BudgetFormScreen: React.FC = () => {
               setLoading(true);
               await dispatch(deleteBudget(budget.id)).unwrap();
               showSuccess("Budget deleted successfully!");
+              markAsSaved();
               navigation.goBack();
             } catch (e) {
+              resetSaved();
               showError("Failed to delete budget");
             } finally {
               setLoading(false);
@@ -213,54 +232,6 @@ const BudgetFormScreen: React.FC = () => {
             paddingBottom: spacing.xxl,
           }}
           keyboardShouldPersistTaps="handled">
-          {/* Segmented Control matching AddTransactionScreen */}
-          <View
-            style={[
-              styles.segmentContainer,
-              {
-                backgroundColor: colors.surfaceVariant,
-                borderRadius: radius.pill,
-                marginBottom: spacing.xl,
-              },
-            ]}>
-            {(
-              [
-                { key: "monthly", label: "Monthly" },
-                { key: "weekly", label: "Weekly" },
-              ] as const
-            ).map((p) => {
-              const isActive = period === p.key;
-              return (
-                <TouchableOpacity
-                  key={p.key}
-                  style={[
-                    styles.segmentButton,
-                    {
-                      borderRadius: radius.pill,
-                      backgroundColor: isActive
-                        ? colors.surface
-                        : "transparent",
-                    },
-                  ]}
-                  onPress={() => setPeriod(p.key)}>
-                  <Text
-                    style={[
-                      typography.bodyMedium,
-                      {
-                        color: isActive
-                          ? colors.onBackground
-                          : colors.onSurfaceVariant,
-                        fontWeight: isActive ? "700" : "500",
-                        textTransform: "capitalize",
-                      },
-                    ]}>
-                    {p.label}
-                  </Text>
-                </TouchableOpacity>
-              );
-            })}
-          </View>
-
           {/* Amount Section — Tactile Display */}
           <View style={styles.amountSection}>
             <Text
@@ -306,127 +277,10 @@ const BudgetFormScreen: React.FC = () => {
                 />
               </View>
             </View>
-            <Text
-              style={[
-                typography.bodySmall,
-                { color: colors.onSurfaceVariant, marginTop: 4, opacity: 0.7 },
-              ]}>
-              {period === "weekly"
-                ? "Resets every Monday"
-                : "Resets on the 1st of every month"}
-            </Text>
             {formErrors.amount ? (
               <Text style={styles.errorText}>{formErrors.amount}</Text>
             ) : null}
           </View>
-
-          {/* Categories — Color-coded chips matching AddTransactionScreen */}
-          <Text
-            style={[
-              typography.label,
-              {
-                color: colors.onSurfaceVariant,
-                marginBottom: spacing.sm,
-                textTransform: "uppercase",
-                letterSpacing: 0.8,
-              },
-            ]}>
-            Category
-          </Text>
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            keyboardShouldPersistTaps="handled"
-            contentContainerStyle={{
-              gap: spacing.sm,
-              marginBottom: spacing.lg,
-            }}>
-            {/* All / General chip */}
-            <TouchableOpacity
-              onPress={() => setCategoryId(undefined)}
-              activeOpacity={0.75}
-              style={[
-                styles.categoryChip,
-                {
-                  backgroundColor: !categoryId
-                    ? colors.primaryContainer
-                    : colors.surfaceVariant,
-                  borderColor: !categoryId
-                    ? colors.primaryContainer
-                    : colors.outlineVariant,
-                },
-              ]}>
-              <Ionicons
-                name="apps-outline"
-                size={18}
-                color={
-                  !categoryId
-                    ? colors.onPrimaryContainer
-                    : colors.onSurfaceVariant
-                }
-                style={{ marginRight: 6 }}
-              />
-              <Text
-                style={[
-                  typography.bodyMedium,
-                  {
-                    color: !categoryId
-                      ? colors.onPrimaryContainer
-                      : colors.onBackground,
-                    fontWeight: !categoryId ? "700" : "500",
-                  },
-                ]}>
-                All / General
-              </Text>
-            </TouchableOpacity>
-
-            {/* Expense categories */}
-            {expenseCategories.map((cat) => {
-              const isSelected = categoryId === cat.id;
-              const catTheme = resolveCategoryColor((cat as any).color);
-              return (
-                <TouchableOpacity
-                  key={cat.id}
-                  onPress={() => {
-                    setCategoryId(cat.id);
-                    if (!name.trim()) {
-                      setName(cat.name);
-                    }
-                  }}
-                  activeOpacity={0.75}
-                  style={[
-                    styles.categoryChip,
-                    {
-                      backgroundColor: isSelected
-                        ? catTheme.bgColor
-                        : colors.surfaceVariant,
-                      borderColor: isSelected
-                        ? catTheme.iconColor
-                        : colors.outlineVariant,
-                    },
-                  ]}>
-                  <Ionicons
-                    name={((cat as any).icon || "pricetag") as any}
-                    size={18}
-                    color={catTheme.iconColor}
-                    style={{ marginRight: 6 }}
-                  />
-                  <Text
-                    style={[
-                      typography.bodyMedium,
-                      {
-                        color: isSelected
-                          ? catTheme.iconColor
-                          : colors.onBackground,
-                        fontWeight: isSelected ? "700" : "500",
-                      },
-                    ]}>
-                    {cat.name}
-                  </Text>
-                </TouchableOpacity>
-              );
-            })}
-          </ScrollView>
 
           {/* Options Grouped Card matching AddTransactionScreen */}
           <View
@@ -465,7 +319,7 @@ const BudgetFormScreen: React.FC = () => {
                     typography.bodyMedium,
                     { color: colors.onBackground, padding: 0 },
                   ]}
-                  placeholder="Budget Name (e.g. Groceries)"
+                  placeholder="Budget Name (e.g. Monthly Budget)"
                   placeholderTextColor={colors.onSurfaceVariant}
                   value={name}
                   onChangeText={(val) => {
@@ -475,7 +329,7 @@ const BudgetFormScreen: React.FC = () => {
                     }
                   }}
                   returnKeyType="done"
-                  onSubmitEditing={handleSave}
+                  onSubmitEditing={() => Keyboard.dismiss()}
                 />
               </View>
             </View>
@@ -586,18 +440,10 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
   },
-  segmentContainer: {
-    flexDirection: "row",
-    padding: 4,
-  },
-  segmentButton: {
-    flex: 1,
-    paddingVertical: 10,
-    alignItems: "center",
-  },
   amountSection: {
     alignItems: "center",
-    marginBottom: 24,
+    marginTop: 12,
+    marginBottom: 28,
   },
   amountRow: {
     flexDirection: "row",
@@ -619,14 +465,6 @@ const styles = StyleSheet.create({
     textAlign: "center",
     minWidth: 150,
     padding: 0,
-  },
-  categoryChip: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: 24,
-    borderWidth: 1,
   },
   optionsCard: {
     borderRadius: 24,

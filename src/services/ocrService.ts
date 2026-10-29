@@ -795,13 +795,16 @@ function parseSingleLineItem(line: string): OcrReceiptItem | null {
   // e.g. "2740 كلارينس سيروم عيون توتال ليفت"
   const ltr1Match = trimmed.match(/^(\d+(?:[.,]\d{1,2})?)\s+([^\d\s.,].*)$/);
   if (ltr1Match) {
-    const price = parseFloat(ltr1Match[1].replace(",", "."));
+    const priceStr = ltr1Match[1];
+    const price = parseFloat(priceStr.replace(",", "."));
     const name = ltr1Match[2].trim();
     if (
       price > 0 &&
+      price < 250000 &&
       name.length >= 2 &&
       /[^\d\s.,_-]/.test(name) &&
-      !/^(?:صافي|إجمالي|كاشير|فاتورة|المرجع|التاريخ)/i.test(name)
+      !/[:#/=-]\s*$/.test(name) &&
+      !isReceiptMetadataOrTotal(name)
     ) {
       return {
         id: `item_${Math.random().toString(36).substring(2, 9)}`,
@@ -840,15 +843,39 @@ function parseSingleLineItem(line: string): OcrReceiptItem | null {
 
   // 8. Pattern C: [Name] [Price]
   // e.g. "French Fries 180.00" or "Heineken 55.00"
+  // Must be a genuine product name, NOT an order slip / ID / reference / date / timestamp!
   const patternC =
     /^(.*?)\s+([0-9]{1,3}(?:,[0-9]{3})*(?:\.[0-9]{1,2})?|[0-9]+(?:\.[0-9]{1,2})?)$/;
   match = trimmed.match(patternC);
   if (match) {
     const name = match[1].trim();
-    const priceStr = match[2].replace(/,/g, "");
-    const price = parseFloat(priceStr);
+    const rawPriceStr = match[2];
+    const cleanPriceStr = rawPriceStr.replace(/,/g, "");
+    const price = parseFloat(cleanPriceStr);
+
+    // General safeguards against non-item document text:
+    // a. Name must not end with a key-value punctuation separator like '/', ':', '#', '-', '='
+    const endsWithSeparator = /[:#/=-]\s*$/.test(name);
+
+    // b. Unformatted numbers with 6+ digits (e.g. 48683612) are order #, slips, phone #, or barcodes
+    const isUnformattedIdNumber = !rawPriceStr.includes(".") && !rawPriceStr.includes(",") && cleanPriceStr.length >= 6;
+
+    // c. 4-digit numbers looking like years (1990-2050) when preceded by date/time words
+    const isYearOrTime = /^(?:19\d{2}|20\d{2})$/.test(cleanPriceStr) && /(?:date|time|تاريخ|وقت|print|am|pm)/i.test(name);
+
+    // d. Plausibility limit for single-item retail prices without table columns
+    const isAstronomicalPrice = price > 250000;
+
+    // e. Name must not contain identifier labels (e.g. "اذن صرف رقم", "Order #", "Ref No")
+    const hasIdentifierLabel = /(?:رقم|اذن|إذن|امر|أمر|طلب|فاتورة|كود|مسلسل|سند|شحنة|order|slip|invoice|ref|code|id|no\.)(?:[\s:#/=-]|$)/i.test(name);
+
     if (
       price > 0 &&
+      !isAstronomicalPrice &&
+      !isUnformattedIdNumber &&
+      !isYearOrTime &&
+      !endsWithSeparator &&
+      !hasIdentifierLabel &&
       name.length >= 2 &&
       /[^\d\s.,_-]/.test(name) &&
       !isReceiptMetadataOrTotal(name)
@@ -1091,10 +1118,40 @@ export function parseReceiptText(
     }
   }
 
-  // If items exist and either amount wasn't found or amount is inconsistent with multi-item sum
+  // 4c. Universal Sanity & Statistical Outlier Filtering:
+  // Discard spurious lines (e.g. order numbers, phone numbers, timestamps, tax codes)
+  let validItems = [...items];
+
+  // If a keyword-based total (amount) was detected (e.g. from الصافي / Total):
+  // Filter out any item whose price exceeds the grand total by > 50% (mathematically impossible)
+  if (amount && amount > 0) {
+    const detectedTotal = amount;
+    validItems = validItems.filter((it) => it.price <= detectedTotal * 1.5);
+  }
+
+  // Statistical outlier filter for remaining items (e.g. slips or IDs that slipped past regex)
+  if (validItems.length >= 3) {
+    const sortedPrices = validItems.map((it) => it.price).sort((a, b) => a - b);
+    const medianPrice = sortedPrices[Math.floor(sortedPrices.length / 2)];
+    if (medianPrice > 0) {
+      validItems = validItems.filter(
+        (it) => !(it.price > 50 * medianPrice && it.price >= 50000)
+      );
+    }
+  }
+
+  // Replace items array in-place with validated items
+  items.splice(0, items.length, ...validItems);
+
+  // 4d. Total Amount Calculation:
+  // Items sum is computed from validated line items.
   if (items.length > 0) {
     itemsSum = Math.round(items.reduce((acc, it) => acc + it.price, 0) * 100) / 100;
-    if (!amount || (items.length >= 2 && Math.abs(amount - itemsSum) > itemsSum * 0.4)) {
+    // If no explicit grand total keyword was found, derive amount from items sum.
+    // If an explicit grand total was found and items sum is closely aligned, adopt items sum for decimal accuracy.
+    if (!amount) {
+      amount = itemsSum;
+    } else if (Math.abs(amount - itemsSum) <= 5) {
       amount = itemsSum;
     }
   }
