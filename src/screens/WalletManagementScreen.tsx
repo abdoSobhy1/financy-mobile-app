@@ -20,7 +20,7 @@ import { fetchTransactions } from "../store/slices/transactionsSlice";
 import { useAppTheme } from "../components/ui/ThemeProvider";
 import { AppHeader } from "../components/ui/AppHeader";
 import { IconChip } from "../components/ui/IconChip";
-import { Card, useToast, Switch, WalletEditorModal, WalletEditorFormValues } from "../components/ui";
+import { Card, useToast, Switch, WalletEditorModal, WalletEditorFormValues, TransferModal } from "../components/ui";
 import { formatCurrency } from "../utils";
 import { getCurrentBillingPeriod } from "../utils/billingPeriod";
 import { AlertService } from "../services/AlertService";
@@ -40,7 +40,7 @@ export const WalletManagementScreen: React.FC = () => {
   const { colors, typography, spacing, radius, isDark, currencySymbol } =
     useAppTheme();
   const dispatch = useDispatch<AppDispatch>();
-  const { showSuccess, showError } = useToast();
+  const { showSuccess, showError, showInfo } = useToast();
 
   const transactions = useSelector(
     (state: RootState) => state.transactions.items,
@@ -50,7 +50,7 @@ export const WalletManagementScreen: React.FC = () => {
   const [walletBalances, setWalletBalances] = useState<Record<string, number>>({});
   const [activeType, setActiveType] = useState<"all" | WalletType | "secret" | "archived">("all");
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
-  const [periodMode, setPeriodMode] = useState<"period" | "allTime">("period");
+  const [periodMode, setPeriodMode] = useState<"period" | "allTime">("allTime");
 
   // Move Modal state
   const [showMoveModal, setShowMoveModal] = useState(false);
@@ -65,7 +65,6 @@ export const WalletManagementScreen: React.FC = () => {
   const [showTransferModal, setShowTransferModal] = useState(false);
   const [fromWalletId, setFromWalletId] = useState("");
   const [toWalletId, setToWalletId] = useState("");
-  const [transferAmount, setTransferAmount] = useState("");
 
   const loadWallets = useCallback(async () => {
     try {
@@ -134,14 +133,15 @@ export const WalletManagementScreen: React.FC = () => {
       return;
     }
 
-    const initBal = parseFloat(values.initialBalance) || 0;
+    const initBal = parseFloat(values.initialBalance.replace(/,/g, "")) || 0;
     try {
       if (editingWallet) {
-        const enteredBal = parseFloat(values.initialBalance) || 0;
+        const enteredBal = parseFloat(values.initialBalance.replace(/,/g, "")) || 0;
         const currentBal = walletBalances[editingWallet.id] || 0;
         const diff = enteredBal - currentBal;
+        const txCount = await walletService.countTransactionsForWallet(editingWallet.id);
 
-        if (Math.abs(diff) > 0.001) {
+        if (txCount > 0 && Math.abs(diff) > 0.001) {
           const { db } = await import("../database/queries");
           await db.transactions.createTransaction({
             amount: Math.abs(diff),
@@ -160,6 +160,7 @@ export const WalletManagementScreen: React.FC = () => {
           icon: values.icon,
           color: values.color,
           isSecret: values.isSecret,
+          initialBalance: txCount === 0 ? enteredBal : editingWallet.initialBalance,
         });
         await loadWallets();
         showSuccess(`Reconciled and updated "${values.name.trim()}"`);
@@ -251,41 +252,14 @@ export const WalletManagementScreen: React.FC = () => {
     }
   };
 
-  const handleTransferSubmit = async () => {
-    const amt = parseFloat(transferAmount);
-    if (!amt || amt <= 0) {
-      showError("Please enter a valid transfer amount");
+  const handleOpenTransfer = (initialFrom?: string) => {
+    const visibleWallets = walletService.getVisibleWallets(wallets);
+    if (visibleWallets.length < 2) {
+      showInfo("Please create another account first to make transfers.");
       return;
     }
-    if (fromWalletId === toWalletId) {
-      showError("Source and destination accounts must be different");
-      return;
-    }
-
-    const { start, end } = await getCurrentBillingPeriod();
-    const allTx = Object.values(transactions).filter((t) => !t.deleted);
-    const periodTxs = allTx.filter((t) => {
-      const d = new Date(t.date);
-      return d >= start && d <= end;
-    });
-
-    const updated = await walletService.transferBetweenWallets(
-      fromWalletId,
-      toWalletId,
-      amt,
-    );
-    await dispatch(fetchTransactions());
-    setWallets(updated);
-    setWalletBalances(
-      walletService.calculateWalletBalances(
-        updated,
-        periodMode === "period" ? periodTxs : allTx,
-        { periodOnly: periodMode === "period" },
-      ),
-    );
-    setTransferAmount("");
-    setShowTransferModal(false);
-    showSuccess("Transfer completed successfully");
+    if (initialFrom) setFromWalletId(initialFrom);
+    setShowTransferModal(true);
   };
 
   // ── Render ──────────────────────────────────────────────────────────
@@ -427,7 +401,7 @@ export const WalletManagementScreen: React.FC = () => {
           {/* Transfer & Add Action Buttons inside Header Card */}
           <View style={{ flexDirection: "row", gap: spacing.sm }}>
             <TouchableOpacity
-              onPress={() => setShowTransferModal(true)}
+              onPress={() => handleOpenTransfer()}
               style={{
                 flex: 1,
                 flexDirection: "row",
@@ -695,10 +669,7 @@ export const WalletManagementScreen: React.FC = () => {
                           />
                         </TouchableOpacity>
                         <TouchableOpacity
-                          onPress={() => {
-                            setFromWalletId(wallet.id);
-                            setShowTransferModal(true);
-                          }}
+                          onPress={() => handleOpenTransfer(wallet.id)}
                           hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
                           <Ionicons
                             name="swap-horizontal"
@@ -926,171 +897,17 @@ export const WalletManagementScreen: React.FC = () => {
         onSave={handleSaveWallet}
       />
 
-      {/* Wallet-to-Wallet Transfer Modal */}
-      <Modal
+      {/* Reusable Wallet-to-Wallet Transfer Modal */}
+      <TransferModal
         visible={showTransferModal}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setShowTransferModal(false)}>
-        <View style={styles.modalOverlay}>
-          <View
-            style={[
-              styles.modalCard,
-              {
-                backgroundColor: colors.surface,
-                borderColor: colors.outlineVariant,
-              },
-            ]}>
-            <View
-              style={{
-                flexDirection: "row",
-                justifyContent: "space-between",
-                alignItems: "center",
-                marginBottom: spacing.md,
-              }}>
-              <Text
-                style={[
-                  typography.h3,
-                  { color: colors.onSurface, fontWeight: "800" },
-                ]}>
-                Transfer Between Accounts
-              </Text>
-              <TouchableOpacity onPress={() => setShowTransferModal(false)}>
-                <Ionicons name="close" size={24} color={colors.onSurfaceVariant} />
-              </TouchableOpacity>
-            </View>
-
-            <Text
-              style={{
-                fontSize: 12,
-                fontWeight: "700",
-                color: colors.onSurfaceVariant,
-                marginBottom: 6,
-              }}>
-              FROM ACCOUNT
-            </Text>
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={{ gap: 8, marginBottom: spacing.md }}>
-              {wallets.map((w) => {
-                const selected = w.id === fromWalletId;
-                return (
-                  <TouchableOpacity
-                    key={`from_${w.id}`}
-                    onPress={() => setFromWalletId(w.id)}
-                    style={{
-                      paddingHorizontal: 14,
-                      paddingVertical: 8,
-                      borderRadius: 14,
-                      backgroundColor: selected
-                        ? colors.primaryContainer
-                        : colors.surfaceVariant,
-                    }}>
-                    <Text
-                      style={{
-                        fontSize: 13,
-                        fontWeight: "700",
-                        color: selected
-                          ? colors.onPrimaryContainer
-                          : colors.onSurface,
-                      }}>
-                      {w.name}
-                    </Text>
-                  </TouchableOpacity>
-                );
-              })}
-            </ScrollView>
-
-            <Text
-              style={{
-                fontSize: 12,
-                fontWeight: "700",
-                color: colors.onSurfaceVariant,
-                marginBottom: 6,
-              }}>
-              TO ACCOUNT
-            </Text>
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={{ gap: 8, marginBottom: spacing.md }}>
-              {wallets.map((w) => {
-                const selected = w.id === toWalletId;
-                return (
-                  <TouchableOpacity
-                    key={`to_${w.id}`}
-                    onPress={() => setToWalletId(w.id)}
-                    style={{
-                      paddingHorizontal: 14,
-                      paddingVertical: 8,
-                      borderRadius: 14,
-                      backgroundColor: selected
-                        ? colors.primaryContainer
-                        : colors.surfaceVariant,
-                    }}>
-                    <Text
-                      style={{
-                        fontSize: 13,
-                        fontWeight: "700",
-                        color: selected
-                          ? colors.onPrimaryContainer
-                          : colors.onSurface,
-                      }}>
-                      {w.name}
-                    </Text>
-                  </TouchableOpacity>
-                );
-              })}
-            </ScrollView>
-
-            <Text
-              style={{
-                fontSize: 12,
-                fontWeight: "700",
-                color: colors.onSurfaceVariant,
-                marginBottom: 6,
-              }}>
-              TRANSFER AMOUNT ({currencySymbol.trim()})
-            </Text>
-            <TextInput
-              style={{
-                backgroundColor: colors.surfaceVariant,
-                borderRadius: 14,
-                paddingHorizontal: 14,
-                paddingVertical: 12,
-                color: colors.onSurface,
-                fontSize: 18,
-                fontWeight: "800",
-                marginBottom: spacing.lg,
-              }}
-              value={transferAmount}
-              onChangeText={setTransferAmount}
-              placeholder="0.00"
-              placeholderTextColor={colors.onSurfaceVariant}
-              keyboardType="decimal-pad"
-            />
-
-            <TouchableOpacity
-              onPress={handleTransferSubmit}
-              style={{
-                backgroundColor: colors.primary,
-                borderRadius: 16,
-                paddingVertical: 14,
-                alignItems: "center",
-              }}>
-              <Text
-                style={{
-                  color: colors.onPrimary,
-                  fontWeight: "800",
-                  fontSize: 15,
-                }}>
-                Confirm Transfer
-              </Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </Modal>
+        onClose={() => setShowTransferModal(false)}
+        wallets={wallets}
+        initialFromWalletId={fromWalletId}
+        initialToWalletId={toWalletId}
+        onSuccess={async () => {
+          await loadWallets();
+        }}
+      />
 
       {/* Move Transactions & Delete Modal */}
       <Modal

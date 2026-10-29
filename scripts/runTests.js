@@ -3,59 +3,63 @@ const path = require("path");
 const ts = require("typescript");
 const Module = require("module");
 
-// Mock native/React Native dependencies when running unit tests in plain Node
-const origRequire = Module.prototype.require;
-Module.prototype.require = function (id) {
-  if (id === "react-native" || id === "react-native/index.js") {
-    return { Platform: { OS: "android" }, NativeModules: {} };
+const mockImagePicker = {
+  launchCameraAsync: () => Promise.resolve({ canceled: true, assets: [] }),
+  launchImageLibraryAsync: () => Promise.resolve({ canceled: true, assets: [] }),
+  requestCameraPermissionsAsync: () => Promise.resolve({ granted: true, status: "granted" }),
+  requestMediaLibraryPermissionsAsync: () => Promise.resolve({ granted: true, status: "granted" }),
+};
+const mockDocPicker = {
+  getDocumentAsync: () => Promise.resolve({ canceled: true, assets: [] }),
+};
+const mockNetInfo = {
+  fetch: () => Promise.resolve({ isConnected: true }),
+};
+const mockAsyncStorage = {
+  __esModule: true,
+  default: {
+    getItem: () => Promise.resolve(null),
+    setItem: () => Promise.resolve(),
+    removeItem: () => Promise.resolve(),
+  },
+};
+const mockFileSystem = {
+  readAsStringAsync: () => Promise.resolve(""),
+  EncodingType: { Base64: "base64" },
+};
+const mockTextRec = {
+  default: { recognize: () => Promise.resolve([]) },
+};
+const mockImgManip = {
+  manipulateAsync: () => Promise.resolve({ base64: "", width: 1080, height: 1920, uri: "" }),
+  SaveFormat: { JPEG: "jpeg", PNG: "png" },
+};
+const mockDocScan = {
+  default: { scanDocument: () => Promise.resolve({ scannedImages: [], status: "success" }) },
+  ResponseType: { Base64: "base64", ImageFilePath: "imageFilePath" },
+  ScanDocumentResponseStatus: { Success: "success", Cancel: "cancel" },
+};
+
+// Intercept Module._load which Node uses internally for all CJS require calls
+const origLoad = Module._load;
+Module._load = function (request, parent, isMain) {
+  if (typeof request === "string") {
+    if (request === "react-native" || request.startsWith("react-native/")) {
+      return { Platform: { OS: "android" }, NativeModules: {}, Image: { getSize: (u, cb) => cb(1000, 1000) } };
+    }
+    if (request.includes("@react-native-community/netinfo")) return mockNetInfo;
+    if (request.includes("@react-native-async-storage/async-storage")) return mockAsyncStorage;
+    if (request.includes("expo-file-system")) return mockFileSystem;
+    if (request.includes("@dariyd/react-native-text-recognition")) return mockTextRec;
+    if (request.includes("expo-image-manipulator")) return mockImgManip;
+    if (request.includes("react-native-document-scanner-plugin")) return mockDocScan;
+    if (request.includes("expo-image-picker")) return mockImagePicker;
+    if (request.includes("expo-document-picker")) return mockDocPicker;
+    if (request.includes("expo-sqlite")) return { openDatabaseSync: () => ({ execSync: () => {}, getAllSync: () => [], getFirstSync: () => null, runSync: () => ({}) }) };
+    if (request.includes("expo-modules-core")) return { requireNativeModule: () => ({}), NativeModulesProxy: {}, EventEmitter: class {} };
+    if (request.includes("expo-crypto")) return { randomUUID: () => "mock-uuid" };
   }
-  if (id === "@react-native-community/netinfo") {
-    return { fetch: () => Promise.resolve({ isConnected: true }) };
-  }
-  if (id === "@react-native-async-storage/async-storage") {
-    const store = new Map();
-    const api = {
-      getItem: (k) => Promise.resolve(store.has(k) ? store.get(k) : null),
-      setItem: (k, v) => { store.set(k, v); return Promise.resolve(); },
-      removeItem: (k) => { store.delete(k); return Promise.resolve(); },
-    };
-    return { __esModule: true, default: api, ...api };
-  }
-  if (id === "expo-file-system/legacy") {
-    return { readAsStringAsync: () => Promise.resolve(""), EncodingType: { Base64: "base64" } };
-  }
-  if (id === "@dariyd/react-native-text-recognition") {
-    return { default: { recognize: () => Promise.resolve([]) } };
-  }
-  if (id === "expo-image-manipulator") {
-    return {
-      manipulateAsync: () => Promise.resolve({ base64: "", width: 1080, height: 1920, uri: "" }),
-      SaveFormat: { JPEG: "jpeg", PNG: "png" },
-    };
-  }
-  if (id === "react-native-document-scanner-plugin") {
-    return {
-      default: {
-        scanDocument: () => Promise.resolve({ scannedImages: [], status: "success" }),
-      },
-      ResponseType: { Base64: "base64", ImageFilePath: "imageFilePath" },
-      ScanDocumentResponseStatus: { Success: "success", Cancel: "cancel" },
-    };
-  }
-  if (id === "expo-image-picker") {
-    return {
-      launchCameraAsync: () => Promise.resolve({ canceled: true, assets: [] }),
-      launchImageLibraryAsync: () => Promise.resolve({ canceled: true, assets: [] }),
-      requestCameraPermissionsAsync: () => Promise.resolve({ granted: true, status: "granted" }),
-      requestMediaLibraryPermissionsAsync: () => Promise.resolve({ granted: true, status: "granted" }),
-    };
-  }
-  if (id === "expo-document-picker") {
-    return {
-      getDocumentAsync: () => Promise.resolve({ canceled: true, assets: [] }),
-    };
-  }
-  return origRequire.apply(this, arguments);
+  return origLoad.apply(this, arguments);
 };
 
 // Register .ts require hook using typescript

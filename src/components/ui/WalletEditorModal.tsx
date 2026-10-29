@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import {
   View,
   Text,
@@ -78,9 +78,14 @@ export const WalletEditorModal: React.FC<WalletEditorModalProps> = ({
   const [formColor, setFormColor] = useState("blue");
   const [formInitialBalance, setFormInitialBalance] = useState("");
   const [formIsSecret, setFormIsSecret] = useState(false);
+  const [errors, setErrors] = useState<{ name?: string; initialBalance?: string }>({});
+
+  const nameInputRef = useRef<TextInput>(null);
+  const balanceInputRef = useRef<TextInput>(null);
 
   useEffect(() => {
     if (visible) {
+      setErrors({});
       if (editingWallet) {
         setFormName(editingWallet.name);
         setFormType(editingWallet.type);
@@ -102,12 +107,34 @@ export const WalletEditorModal: React.FC<WalletEditorModalProps> = ({
   }, [visible, editingWallet, currentBalance]);
 
   const handleSave = () => {
+    const trimmedName = formName.trim();
+    const newErrors: { name?: string; initialBalance?: string } = {};
+
+    if (!trimmedName) {
+      newErrors.name = "Account name is required";
+    }
+
+    const cleanedBalance = formInitialBalance.trim().replace(/,/g, "");
+    if (cleanedBalance && isNaN(Number(cleanedBalance))) {
+      newErrors.initialBalance = "Please enter a valid amount";
+    }
+
+    if (Object.keys(newErrors).length > 0) {
+      setErrors(newErrors);
+      if (newErrors.name) {
+        nameInputRef.current?.focus();
+      } else if (newErrors.initialBalance) {
+        balanceInputRef.current?.focus();
+      }
+      return;
+    }
+
     onSave({
-      name: formName,
+      name: trimmedName,
       type: formType,
       icon: formIcon,
       color: formColor,
-      initialBalance: formInitialBalance,
+      initialBalance: cleanedBalance,
       isSecret: formIsSecret,
     });
   };
@@ -196,6 +223,7 @@ export const WalletEditorModal: React.FC<WalletEditorModalProps> = ({
               ACCOUNT NAME
             </Text>
             <TextInput
+              ref={nameInputRef}
               style={{
                 backgroundColor: colors.surfaceVariant,
                 borderRadius: 14,
@@ -203,13 +231,34 @@ export const WalletEditorModal: React.FC<WalletEditorModalProps> = ({
                 paddingVertical: 12,
                 color: colors.onSurface,
                 fontSize: 15,
-                marginBottom: spacing.md,
+                borderWidth: 1,
+                borderColor: errors.name ? colors.error : "transparent",
+                marginBottom: errors.name ? 4 : spacing.md,
               }}
               value={formName}
-              onChangeText={setFormName}
+              onChangeText={(text) => {
+                setFormName(text);
+                if (errors.name) {
+                  setErrors((prev) => ({ ...prev, name: undefined }));
+                }
+              }}
               placeholder="e.g. CIB Salary, Vodafone Cash, Cash Safe"
               placeholderTextColor={colors.onSurfaceVariant}
+              returnKeyType="next"
+              blurOnSubmit={false}
+              onSubmitEditing={() => balanceInputRef.current?.focus()}
             />
+            {errors.name && (
+              <Text
+                style={{
+                  color: colors.error,
+                  fontSize: 12,
+                  fontWeight: "600",
+                  marginBottom: spacing.md,
+                }}>
+                {errors.name}
+              </Text>
+            )}
 
             {/* Account Type */}
             <Text
@@ -339,6 +388,7 @@ export const WalletEditorModal: React.FC<WalletEditorModalProps> = ({
                 : `INITIAL BALANCE (${currencySymbol.trim()})`}
             </Text>
             <TextInput
+              ref={balanceInputRef}
               style={{
                 backgroundColor: colors.surfaceVariant,
                 borderRadius: 14,
@@ -347,14 +397,34 @@ export const WalletEditorModal: React.FC<WalletEditorModalProps> = ({
                 color: colors.onSurface,
                 fontSize: 16,
                 fontWeight: "700",
-                marginBottom: 4,
+                borderWidth: 1,
+                borderColor: errors.initialBalance ? colors.error : "transparent",
+                marginBottom: errors.initialBalance ? 4 : 4,
               }}
               value={formInitialBalance}
-              onChangeText={setFormInitialBalance}
+              onChangeText={(text) => {
+                setFormInitialBalance(text);
+                if (errors.initialBalance) {
+                  setErrors((prev) => ({ ...prev, initialBalance: undefined }));
+                }
+              }}
               placeholder="0.00"
               placeholderTextColor={colors.onSurfaceVariant}
               keyboardType="decimal-pad"
+              returnKeyType="done"
+              onSubmitEditing={handleSave}
             />
+            {errors.initialBalance && (
+              <Text
+                style={{
+                  color: colors.error,
+                  fontSize: 12,
+                  fontWeight: "600",
+                  marginBottom: 4,
+                }}>
+                {errors.initialBalance}
+              </Text>
+            )}
             <Text
               style={{
                 fontSize: 11,

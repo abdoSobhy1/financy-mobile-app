@@ -30,3 +30,5 @@ export { Shimmer } from "./Shimmer";
 export * from "./CustomKeypad";
 export { WalletEditorModal, WALLET_ICONS, WALLET_COLORS } from "./WalletEditorModal";
 export type { WalletEditorFormValues } from "./WalletEditorModal";
+export { TransferModal } from "../wallet/TransferModal";
+export type { TransferModalProps } from "../wallet/TransferModal";

@@ -17,7 +17,7 @@ import * as ImagePicker from "expo-image-picker";
 import * as DocumentPicker from "expo-document-picker";
 import { Category, TransactionType } from "../types";
 import { guessCategoryId } from "../utils/categoryDictionary";
-import { AIService } from "./aiService";
+import { AIService, isReceiptMetadataOrTotal } from "./aiService";
 import { getAIConfig } from "./aiConfigService";
 import { getOcrQuotaStatus, consumeOcrQuota } from "./ocrRateLimitService";
 
@@ -650,8 +650,8 @@ function parseSingleLineItem(line: string): OcrReceiptItem | null {
   const trimmed = line.trim();
   if (!trimmed || trimmed.length < 3) return null;
 
-  // Ignore header rows, table column headers, discounts, tax, total keywords
-  if (isTableHeaderRow(trimmed)) return null;
+  // Ignore header rows, table column headers, discounts, tax, totals, receipt numbers
+  if (isTableHeaderRow(trimmed) || isReceiptMetadataOrTotal(trimmed)) return null;
 
   const ignorePatterns = [
     /^(?:تاريخ|date|time|chk|check|tbl|table|gst|guest|طاولة|فاتورة|كاشير|cashier|الكاتب|مبيعات|س\.ت|ب\.ض)/i,
@@ -722,7 +722,7 @@ function parseSingleLineItem(line: string): OcrReceiptItem | null {
       qty > 0 &&
       name.length >= 2 &&
       /[^\d\s.,_-]/.test(name) &&
-      !/^(?:صافي|إجمالي|المجموع|كاشير|فاتورة|subtotal|total|tax|discount|service|gst|table|chk|tbl)/i.test(name)
+      !isReceiptMetadataOrTotal(name)
     ) {
       let unitPrice: number | undefined = undefined;
       if (qty > 1 && price > 0) {
@@ -851,7 +851,7 @@ function parseSingleLineItem(line: string): OcrReceiptItem | null {
       price > 0 &&
       name.length >= 2 &&
       /[^\d\s.,_-]/.test(name) &&
-      !/^(?:صافي|إجمالي|المجموع|كاشير|فاتورة|subtotal|total|tax|discount|service|gst|table|chk|tbl)/i.test(name)
+      !isReceiptMetadataOrTotal(name)
     ) {
       return {
         id: `item_${Math.random().toString(36).substring(2, 9)}`,
@@ -1066,8 +1066,9 @@ export function parseReceiptText(
   const items: OcrReceiptItem[] = [];
   let itemsSum: number | undefined;
   for (const line of lines) {
+    if (isReceiptMetadataOrTotal(line)) continue;
     const it = parseSingleLineItem(line);
-    if (it) {
+    if (it && !isReceiptMetadataOrTotal(it.name)) {
       // Guess category for each individual item
       it.categoryId = guessCategoryId(it.name, categories);
       items.push(it);

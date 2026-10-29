@@ -583,15 +583,31 @@ export class DatabaseManager {
 
     // Check if default data already exists
     const settingsResult = await this.db.getFirstAsync("SELECT COUNT(*) as count FROM settings");
-    const categoriesResult = await this.db.getFirstAsync("SELECT COUNT(*) as count FROM categories");
 
-    // Insert default settings if none exist
+    // Insert default settings if none exist (initialized to epoch 0 so cloud settings always take precedence)
     if (settingsResult && (settingsResult as any).count === 0) {
       await this.db.runAsync(`
-        INSERT INTO settings (id, billing_period_start_day, currency, firebase_sync, theme)
-        VALUES ('default', 28, 'USD', 0, 'dark')
+        INSERT INTO settings (id, billing_period_start_day, currency, firebase_sync, theme, created_at, updated_at, sync_updated_at, sync_status)
+        VALUES ('default', 1, 'USD', 0, 'dark', '1970-01-01T00:00:00.000Z', '1970-01-01T00:00:00.000Z', 0, 'synced')
       `);
+    } else {
+      // Fix legacy untouched 28 default to 1 if it was never modified and synced
+      try {
+        await this.db.runAsync(`
+          UPDATE settings 
+          SET billing_period_start_day = 1 
+          WHERE id = 'default' AND billing_period_start_day = 28 AND (sync_updated_at <= 0 OR sync_updated_at IS NULL);
+        `);
+      } catch {}
     }
+
+    // Purge any stale sync_log operations attempting to push the legacy 28 default to cloud
+    try {
+      await this.db.runAsync(`
+        DELETE FROM sync_log 
+        WHERE table_name = 'settings' AND payload LIKE '%"billingPeriodStartDay":28%';
+      `);
+    } catch {}
 
     // Skip inserting default categories - let user create their own
     // Categories will be empty on first run, user can create custom categories
@@ -637,11 +653,13 @@ export class DatabaseManager {
       DELETE FROM transactions;
       DELETE FROM budgets;
       UPDATE settings SET 
-        billing_period_start_day = 28,
+        billing_period_start_day = 1,
         currency = 'USD',
         firebase_sync = 0,
         theme = 'dark',
-        updated_at = datetime('now')
+        updated_at = '1970-01-01T00:00:00.000Z',
+        sync_updated_at = 0,
+        sync_status = 'synced'
       WHERE id = 'default';
     `);
 

@@ -2,7 +2,7 @@
  * AI Configuration Service — Manages user API keys for Cloud AI
  *
  * Supports:
- * - Google Gemini (1.5 Flash / 2.0 Flash) — 100% Free at aistudio.google.com
+ * - Google Gemini (gemini-3.6-flash) — 100% Free at aistudio.google.com
  * - Groq (Llama 3.3 70B) — Free at console.groq.com
  * - OpenAI (GPT-4o-mini)
  * - Public Fallback (No key)
@@ -93,7 +93,7 @@ export async function getAIConfig(): Promise<AIConfig> {
   // Fallback to environment variables
   const geminiKey = process.env.EXPO_PUBLIC_GEMINI_API_KEY || process.env.GEMINI_API_KEY;
   if (geminiKey) {
-    return { provider: "gemini", apiKey: geminiKey, model: "gemini-3.5-flash-lite" };
+    return { provider: "gemini", apiKey: geminiKey, model: "gemini-3.6-flash" };
   }
   const groqKey = process.env.EXPO_PUBLIC_GROQ_API_KEY || process.env.GROQ_API_KEY;
   if (groqKey) {
@@ -104,7 +104,7 @@ export async function getAIConfig(): Promise<AIConfig> {
     return { provider: "openai", apiKey: openaiKey, model: "gpt-4o-mini" };
   }
 
-  return { provider: "gemini", apiKey: "", model: "gemini-3.5-flash-lite" };
+  return { provider: "gemini", apiKey: "", model: "gemini-3.6-flash" };
 }
 
 export async function saveAIConfig(config: AIConfig): Promise<void> {
@@ -137,7 +137,7 @@ export async function testAIConnection(
     const timeoutId = setTimeout(() => controller.abort(), 8000);
 
     if (provider === "gemini") {
-      const model = config.model || "gemini-3.5-flash-lite";
+      const model = config.model ? config.model.toLowerCase() : "gemini-3.6-flash";
       const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey.trim()}`;
       const res = await fetch(url, {
         method: "POST",

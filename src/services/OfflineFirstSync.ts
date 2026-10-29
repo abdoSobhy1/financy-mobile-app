@@ -387,6 +387,16 @@ class OfflineFirstSync {
   }
 
   /**
+   * Cancel any scheduled retry (called on sign-out so the old user's queue isn't pushed later)
+   */
+  public cancelScheduledRetry(): void {
+    if (this.retryTimeout) {
+      clearTimeout(this.retryTimeout);
+      this.retryTimeout = null;
+    }
+  }
+
+  /**
    * Schedule a retry after a delay
    */
   private scheduleRetry(retryCount: number = 0): void {
@@ -811,12 +821,12 @@ class OfflineFirstSync {
           pushResult.errors.push(pushErr?.message || String(pushErr));
         }
 
-        // 6. Update settings.syncUpdatedAt
+        // 6. Update settings.syncUpdatedAt (with skipSync to avoid queuing an operation in sync_log)
         try {
           const { SettingsRepository } = await import("../database/queries/settings");
           const settingsRepo = new SettingsRepository();
           const now = Date.now();
-          await settingsRepo.updateSettings({ syncUpdatedAt: now });
+          await settingsRepo.updateSettings({ syncUpdatedAt: now }, { skipSync: true });
         } catch (e) {
           console.warn("Could not update syncUpdatedAt setting:", e);
         }
@@ -1253,15 +1263,23 @@ class OfflineFirstSync {
               (localDoc as any).sync_updated_at ?? (localDoc as any).updated_at,
             );
 
-            if (cloudUpdatedAt > localUpdatedAt || localUpdatedAt === 0) {
+            // Special rule for settings: if local is an untouched default placeholder, cloud settings ALWAYS win
+            const isSettingsTable = tableName === "settings";
+            const localIsUntouchedDefault =
+              isSettingsTable &&
+              (!(localDoc as any).sync_updated_at ||
+                (localDoc as any).sync_updated_at === 0 ||
+                (localDoc as any).sync_status === "synced");
+
+            if (cloudUpdatedAt > localUpdatedAt || localUpdatedAt === 0 || localIsUntouchedDefault) {
               console.log(
-                `🔄 Updating ${tableName}: ${cloudDoc.id} (cloud: ${cloudUpdatedAt}, local: ${localUpdatedAt})`,
+                `🔄 Updating ${tableName}: ${cloudDoc.id} (cloud: ${cloudUpdatedAt}, local: ${localUpdatedAt}, isDefault: ${localIsUntouchedDefault})`,
               );
               await this.updateLocalDocumentFromCloud(tableName, cloudDoc);
               result.updated++;
             } else {
               console.log(
-                `⏭️  Skipping ${tableName}: ${cloudDoc.id} (local is up to date)`,
+                `⏭️ Skipping ${tableName}: ${cloudDoc.id} (local is up to date)`,
               );
             }
           }
@@ -1277,6 +1295,17 @@ class OfflineFirstSync {
       console.log(
         `✅ ${collectionName} sync completed: ${result.created} created, ${result.updated} updated`,
       );
+
+      if (tableName === "settings" && result.updated + result.created > 0) {
+        try {
+          const { store } = await import("../store");
+          const { fetchSettings } = await import("../store/slices/settingsSlice");
+          store.dispatch(fetchSettings());
+        } catch (e) {
+          console.warn("Could not dispatch fetchSettings after cloud restore:", e);
+        }
+      }
+
       return result;
     } catch (error) {
       console.error(`❌ Failed to sync ${collectionName}:`, error);
@@ -1651,6 +1680,20 @@ class OfflineFirstSync {
             );
 
             if (localUpdatedAt > cloudUpdatedAt) {
+              // Special rule for settings: NEVER overwrite existing cloud settings with an untouched local default
+              if (
+                tableName === "settings" &&
+                (!(localDoc as any).sync_updated_at ||
+                  (localDoc as any).sync_updated_at === 0 ||
+                  (localDoc as any).sync_status === "synced")
+              ) {
+                console.log(
+                  `⏭️ Skipping cloud settings push (local is default placeholder, cloud already exists)`,
+                );
+                result.skipped++;
+                continue;
+              }
+
               console.log(
                 `⬆️ Updating cloud ${tableName}: ${(localDoc as any).id} (local: ${localUpdatedAt}, cloud: ${cloudUpdatedAt})`,
               );

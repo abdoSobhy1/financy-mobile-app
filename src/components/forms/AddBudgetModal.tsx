@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from "react";
-import { View, Text, StyleSheet } from "react-native";
+import React, { useState, useEffect, useRef } from "react";
+import { View, Text, StyleSheet, TextInput } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useDispatch, useSelector } from "react-redux";
 import { RootState, AppDispatch } from "../../store";
@@ -28,6 +28,10 @@ export const AddBudgetModal: React.FC<AddBudgetModalProps> = ({ visible, onClose
   });
 
   const [errors, setErrors] = useState<Partial<Record<keyof BudgetFormData, string>>>({});
+
+  const nameRef = useRef<TextInput>(null);
+  const amountRef = useRef<TextInput>(null);
+  const resetDayRef = useRef<TextInput>(null);
 
   useEffect(() => {
     if (visible) {
@@ -113,11 +117,15 @@ export const AddBudgetModal: React.FC<AddBudgetModalProps> = ({ visible, onClose
           <View style={styles.fieldGroup}>
             <Text style={styles.label}>Budget Name</Text>
             <Input
+              ref={nameRef}
               value={formData.name}
               onChangeText={(value) => updateFormData("name", value)}
               placeholder="e.g., Groceries, Entertainment, Gas"
               error={errors.name}
               maxLength={VALIDATION.BUDGET.MAX_NAME_LENGTH}
+              returnKeyType="next"
+              blurOnSubmit={false}
+              onSubmitEditing={() => amountRef.current?.focus()}
             />
           </View>
 
@@ -125,11 +133,15 @@ export const AddBudgetModal: React.FC<AddBudgetModalProps> = ({ visible, onClose
           <View style={styles.fieldGroup}>
             <Text style={styles.label}>Monthly Amount</Text>
             <Input
+              ref={amountRef}
               value={formData.amount}
               onChangeText={(value) => updateFormData("amount", value)}
               placeholder="0.00"
               keyboardType="decimal-pad"
               error={errors.amount}
+              returnKeyType="next"
+              blurOnSubmit={false}
+              onSubmitEditing={() => resetDayRef.current?.focus()}
             />
           </View>
 
@@ -138,11 +150,14 @@ export const AddBudgetModal: React.FC<AddBudgetModalProps> = ({ visible, onClose
             <Text style={styles.label}>Reset Day of Month</Text>
             <Text style={styles.helpText}>Budget will reset on this day each month (1-28)</Text>
             <Input
+              ref={resetDayRef}
               value={formData.resetDay.toString()}
               onChangeText={(value) => updateFormData("resetDay", parseInt(value) || 1)}
               placeholder="1"
               keyboardType="number-pad"
               error={errors.resetDay}
+              returnKeyType="done"
+              onSubmitEditing={handleSubmit}
             />
           </View>
 

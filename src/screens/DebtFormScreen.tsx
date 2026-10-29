@@ -30,7 +30,7 @@ const DebtFormScreen: React.FC = () => {
   const { colors } = useAppTheme();
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }} edges={["top"]}>
+    <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }} edges={["top", "bottom"]}>
       <DebtForm debt={debt} onSuccess={handleSuccess} onCancel={handleCancel} />
     </SafeAreaView>
   );

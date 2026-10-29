@@ -95,6 +95,11 @@ export const walletService = {
     cachedWallets = [];
   },
 
+  async refreshCache(): Promise<WalletAccount[]> {
+    this.clearCache();
+    return this.getWallets();
+  },
+
   isSecretWallet(wallet?: WalletAccount | null): boolean {
     if (!wallet) return false;
     return Boolean(wallet.isSecret || (wallet as any).type === "secret");

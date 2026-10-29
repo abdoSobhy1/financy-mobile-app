@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import {
   View,
   Text,
@@ -9,16 +9,21 @@ import {
   KeyboardAvoidingView,
   Platform,
 } from "react-native";
-import { Switch } from "../components/ui";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useRoute, useNavigation, RouteProp } from "@react-navigation/native";
 import { StackNavigationProp } from "@react-navigation/stack";
 import { useDispatch, useSelector } from "react-redux";
 import { Ionicons } from "@expo/vector-icons";
-import { useAppTheme, resolveCategoryColor } from "../components/ui/ThemeProvider";
+import { useAppTheme } from "../components/ui/ThemeProvider";
+import { Switch, useToast } from "../components/ui";
 import { AppDispatch, RootState } from "../store";
-import { addBudget, updateBudget } from "../store/slices/budgetsSlice";
+import {
+  addBudget,
+  updateBudget,
+  deleteBudget,
+} from "../store/slices/budgetsSlice";
 import { BudgetStackParamList } from "../types";
+import { AlertService } from "../services/AlertService";
 
 type NavigationProp = StackNavigationProp<BudgetStackParamList, "BudgetForm">;
 type RouteParam = RouteProp<BudgetStackParamList, "BudgetForm">;
@@ -27,15 +32,25 @@ const BudgetFormScreen: React.FC = () => {
   const route = useRoute<RouteParam>();
   const navigation = useNavigation<NavigationProp>();
   const dispatch = useDispatch<AppDispatch>();
-  const { colors, typography, spacing, radius, currencySymbol, isDark } = useAppTheme();
+  const {
+    colors,
+    typography,
+    spacing,
+    radius,
+    currencySymbol,
+    resolveCategoryColor,
+  } = useAppTheme();
+  const { showSuccess, showError } = useToast();
 
   const { budgetId } = (route.params as { budgetId?: string }) || {};
   const budget = useSelector((state: RootState) =>
-    budgetId && state.budgets ? state.budgets.items[budgetId] : null
+    budgetId && state.budgets ? state.budgets.items[budgetId] : null,
   );
-  const categoriesMap = useSelector((state: RootState) => state.categories.items);
+  const categoriesMap = useSelector(
+    (state: RootState) => state.categories.items,
+  );
   const expenseCategories = Object.values(categoriesMap).filter(
-    (c) => !c.deleted && c.type === "expense"
+    (c) => !c.deleted && c.type === "expense",
   );
 
   const [amountStr, setAmountStr] = useState("");
@@ -43,6 +58,14 @@ const BudgetFormScreen: React.FC = () => {
   const [categoryId, setCategoryId] = useState<string | undefined>(undefined);
   const [period, setPeriod] = useState<"weekly" | "monthly">("monthly");
   const [alertsEnabled, setAlertsEnabled] = useState(true);
+  const [formErrors, setFormErrors] = useState<{
+    amount?: string;
+    name?: string;
+  }>({});
+  const [loading, setLoading] = useState(false);
+
+  const amountInputRef = useRef<TextInput>(null);
+  const nameInputRef = useRef<TextInput>(null);
 
   useEffect(() => {
     if (budget) {
@@ -54,166 +77,350 @@ const BudgetFormScreen: React.FC = () => {
     }
   }, [budget]);
 
-  const handleSave = async () => {
-    const amount = Number(amountStr);
-    if (!amount || isNaN(amount)) {
-      alert("Please enter a valid amount");
-      return;
+  const validate = (): boolean => {
+    const newErrors: { amount?: string; name?: string } = {};
+    const num = Number(amountStr.replace(/,/g, ""));
+    if (!amountStr.trim() || isNaN(num) || num <= 0) {
+      newErrors.amount = "Please enter a valid amount greater than 0";
     }
     if (!name.trim()) {
-      alert("Please enter a budget name");
-      return;
+      newErrors.name = "Please enter a budget name";
     }
 
+    setFormErrors(newErrors);
+    if (newErrors.amount) {
+      showError(newErrors.amount);
+      return false;
+    }
+    if (newErrors.name) {
+      showError(newErrors.name);
+      return false;
+    }
+    return true;
+  };
+
+  const handleSave = async () => {
+    if (!validate()) return;
+
+    const num = Number(amountStr.replace(/,/g, ""));
     const budgetData = {
       name: name.trim(),
-      amount: amount.toString(),
-      categoryId,
+      amount: num.toString(),
+      categoryId: categoryId || undefined,
       period,
-      resetDay: 1, // Monthly default
+      resetDay: 1,
       alertsEnabled,
     };
 
     try {
+      setLoading(true);
       if (budget) {
-        await dispatch(updateBudget({ id: budget.id, updates: budgetData })).unwrap();
+        await dispatch(
+          updateBudget({ id: budget.id, updates: budgetData }),
+        ).unwrap();
+        showSuccess("Budget updated successfully!");
       } else {
         await dispatch(addBudget(budgetData)).unwrap();
+        showSuccess("Budget created successfully!");
       }
       navigation.goBack();
     } catch (error) {
       console.error(error);
-      alert("Failed to save budget");
+      showError("Failed to save budget");
+    } finally {
+      setLoading(false);
     }
   };
 
+  const handleDelete = () => {
+    if (!budget) return;
+    AlertService.alert(
+      "Delete Budget",
+      `Are you sure you want to delete "${budget.name}"? This action cannot be undone.`,
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Delete",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              setLoading(true);
+              await dispatch(deleteBudget(budget.id)).unwrap();
+              showSuccess("Budget deleted successfully!");
+              navigation.goBack();
+            } catch (e) {
+              showError("Failed to delete budget");
+            } finally {
+              setLoading(false);
+            }
+          },
+        },
+      ],
+    );
+  };
+
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }} edges={["top", "bottom"]}>
-      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : undefined}>
-        
-        {/* Top Bar */}
+    <SafeAreaView
+      style={{ flex: 1, backgroundColor: colors.background }}
+      edges={["top", "bottom"]}>
+      <KeyboardAvoidingView
+        style={{ flex: 1 }}
+        behavior={Platform.OS === "ios" ? "padding" : undefined}>
+        {/* Custom Top Bar matching AddTransactionScreen */}
         <View style={styles.topBar}>
-          <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
-            <Ionicons name="arrow-back" size={24} color={colors.onBackground} />
+          <TouchableOpacity
+            style={[
+              styles.iconButton,
+              { backgroundColor: colors.surfaceVariant },
+            ]}
+            onPress={() => navigation.goBack()}>
+            <Ionicons name="close" size={24} color={colors.onSurfaceVariant} />
           </TouchableOpacity>
-          <Text style={[typography.h2, { color: colors.onBackground }]}>
+          <Text style={[styles.title, { color: colors.onBackground }]}>
             {budget ? "Edit Budget" : "New Budget"}
           </Text>
-          <View style={{ width: 40 }} />
+          <View style={{ flexDirection: "row", gap: 8, alignItems: "center" }}>
+            {budget && (
+              <TouchableOpacity
+                style={[
+                  styles.iconButton,
+                  { backgroundColor: "rgba(239, 68, 68, 0.12)" },
+                ]}
+                onPress={handleDelete}
+                disabled={loading}>
+                <Ionicons name="trash-outline" size={20} color={colors.error} />
+              </TouchableOpacity>
+            )}
+            <TouchableOpacity
+              style={[
+                styles.iconButton,
+                { backgroundColor: colors.primaryContainer },
+              ]}
+              onPress={handleSave}
+              disabled={loading}>
+              <Ionicons
+                name="checkmark"
+                size={24}
+                color={colors.onPrimaryContainer}
+              />
+            </TouchableOpacity>
+          </View>
         </View>
 
-        <ScrollView contentContainerStyle={{ padding: spacing.lg, paddingBottom: spacing.xxl }}>
-          
-          {/* Amount Input */}
-          <View style={styles.amountContainer}>
-            <Text style={[styles.currencySymbol, { color: colors.onSurfaceVariant }]}>
-              {currencySymbol}
-            </Text>
-            <TextInput
-              style={[styles.amountInput, { color: amountStr ? colors.onBackground : colors.onSurfaceVariant }]}
-              placeholder="0.00"
-              placeholderTextColor={colors.onSurfaceVariant}
-              keyboardType="decimal-pad"
-              value={amountStr}
-              onChangeText={setAmountStr}
-              autoFocus={!budget}
-            />
-          </View>
-
-          {/* Name Input */}
+        <ScrollView
+          contentContainerStyle={{
+            padding: spacing.lg,
+            paddingBottom: spacing.xxl,
+          }}
+          keyboardShouldPersistTaps="handled">
+          {/* Segmented Control matching AddTransactionScreen */}
           <View
             style={[
-              styles.inputCard,
+              styles.segmentContainer,
               {
                 backgroundColor: colors.surfaceVariant,
-                borderColor: colors.outlineVariant,
-                borderRadius: radius.lg,
+                borderRadius: radius.pill,
                 marginBottom: spacing.xl,
               },
-            ]}
-          >
-            <TextInput
-              style={[typography.bodyMedium, { color: colors.onBackground, padding: spacing.md, textAlign: "center" }]}
-              placeholder="Budget Name (e.g. Groceries)"
-              placeholderTextColor={colors.onSurfaceVariant}
-              value={name}
-              onChangeText={setName}
-            />
+            ]}>
+            {(
+              [
+                { key: "monthly", label: "Monthly" },
+                { key: "weekly", label: "Weekly" },
+              ] as const
+            ).map((p) => {
+              const isActive = period === p.key;
+              return (
+                <TouchableOpacity
+                  key={p.key}
+                  style={[
+                    styles.segmentButton,
+                    {
+                      borderRadius: radius.pill,
+                      backgroundColor: isActive
+                        ? colors.surface
+                        : "transparent",
+                    },
+                  ]}
+                  onPress={() => setPeriod(p.key)}>
+                  <Text
+                    style={[
+                      typography.bodyMedium,
+                      {
+                        color: isActive
+                          ? colors.onBackground
+                          : colors.onSurfaceVariant,
+                        fontWeight: isActive ? "700" : "500",
+                        textTransform: "capitalize",
+                      },
+                    ]}>
+                    {p.label}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
           </View>
 
-          {/* Linked Category Section */}
-          <Text style={[styles.sectionTitle, typography.label, { color: colors.onSurfaceVariant }]}>
-            LINKED CATEGORY (OPTIONAL)
+          {/* Amount Section — Tactile Display */}
+          <View style={styles.amountSection}>
+            <Text
+              style={[
+                typography.bodyMedium,
+                { color: colors.onSurfaceVariant, marginBottom: 6 },
+              ]}>
+              Budget Limit
+            </Text>
+            <View style={styles.amountRow}>
+              <View style={styles.amountTextContainer}>
+                <Text
+                  style={[
+                    styles.currencySymbol,
+                    { color: colors.onSurfaceVariant },
+                  ]}>
+                  {currencySymbol.trim()}
+                </Text>
+                <TextInput
+                  ref={amountInputRef}
+                  style={[
+                    styles.amountValue,
+                    {
+                      color: amountStr
+                        ? colors.onBackground
+                        : colors.onSurfaceVariant,
+                    },
+                  ]}
+                  placeholder="0.00"
+                  placeholderTextColor={colors.onSurfaceVariant}
+                  keyboardType="decimal-pad"
+                  value={amountStr}
+                  onChangeText={(val) => {
+                    setAmountStr(val);
+                    if (formErrors.amount) {
+                      setFormErrors((prev) => ({ ...prev, amount: undefined }));
+                    }
+                  }}
+                  autoFocus={!budget}
+                  returnKeyType="next"
+                  blurOnSubmit={false}
+                  onSubmitEditing={() => nameInputRef.current?.focus()}
+                />
+              </View>
+            </View>
+            <Text
+              style={[
+                typography.bodySmall,
+                { color: colors.onSurfaceVariant, marginTop: 4, opacity: 0.7 },
+              ]}>
+              {period === "weekly"
+                ? "Resets every Monday"
+                : "Resets on the 1st of every month"}
+            </Text>
+            {formErrors.amount ? (
+              <Text style={styles.errorText}>{formErrors.amount}</Text>
+            ) : null}
+          </View>
+
+          {/* Categories — Color-coded chips matching AddTransactionScreen */}
+          <Text
+            style={[
+              typography.label,
+              {
+                color: colors.onSurfaceVariant,
+                marginBottom: spacing.sm,
+                textTransform: "uppercase",
+                letterSpacing: 0.8,
+              },
+            ]}>
+            Category
           </Text>
           <ScrollView
             horizontal
             showsHorizontalScrollIndicator={false}
-            contentContainerStyle={{ gap: 8, marginBottom: 32 }}
-          >
+            keyboardShouldPersistTaps="handled"
+            contentContainerStyle={{
+              gap: spacing.sm,
+              marginBottom: spacing.lg,
+            }}>
+            {/* All / General chip */}
             <TouchableOpacity
+              onPress={() => setCategoryId(undefined)}
+              activeOpacity={0.75}
               style={[
                 styles.categoryChip,
                 {
-                  backgroundColor: !categoryId ? colors.primary : colors.surfaceVariant,
-                  borderColor: !categoryId ? colors.primary : colors.outlineVariant,
+                  backgroundColor: !categoryId
+                    ? colors.primaryContainer
+                    : colors.surfaceVariant,
+                  borderColor: !categoryId
+                    ? colors.primaryContainer
+                    : colors.outlineVariant,
                 },
-              ]}
-              onPress={() => setCategoryId(undefined)}
-            >
+              ]}>
               <Ionicons
                 name="apps-outline"
-                size={16}
-                color={!categoryId ? colors.onPrimary : colors.onSurfaceVariant}
+                size={18}
+                color={
+                  !categoryId
+                    ? colors.onPrimaryContainer
+                    : colors.onSurfaceVariant
+                }
                 style={{ marginRight: 6 }}
               />
               <Text
                 style={[
-                  typography.bodySmall,
+                  typography.bodyMedium,
                   {
-                    color: !categoryId ? colors.onPrimary : colors.onBackground,
+                    color: !categoryId
+                      ? colors.onPrimaryContainer
+                      : colors.onBackground,
                     fontWeight: !categoryId ? "700" : "500",
                   },
-                ]}
-              >
+                ]}>
                 All / General
               </Text>
             </TouchableOpacity>
 
+            {/* Expense categories */}
             {expenseCategories.map((cat) => {
-              const selected = categoryId === cat.id;
-              const resolved = resolveCategoryColor(cat.color, isDark);
+              const isSelected = categoryId === cat.id;
+              const catTheme = resolveCategoryColor((cat as any).color);
               return (
                 <TouchableOpacity
                   key={cat.id}
-                  style={[
-                    styles.categoryChip,
-                    {
-                      backgroundColor: selected ? resolved.fg : colors.surfaceVariant,
-                      borderColor: selected ? resolved.fg : colors.outlineVariant,
-                    },
-                  ]}
                   onPress={() => {
                     setCategoryId(cat.id);
                     if (!name.trim()) {
                       setName(cat.name);
                     }
                   }}
-                >
+                  activeOpacity={0.75}
+                  style={[
+                    styles.categoryChip,
+                    {
+                      backgroundColor: isSelected
+                        ? catTheme.bgColor
+                        : colors.surfaceVariant,
+                      borderColor: isSelected
+                        ? catTheme.iconColor
+                        : colors.outlineVariant,
+                    },
+                  ]}>
                   <Ionicons
-                    name={(cat.icon as any) || "pricetag-outline"}
-                    size={16}
-                    color={selected ? "#0C0E12" : resolved.fg}
+                    name={((cat as any).icon || "pricetag") as any}
+                    size={18}
+                    color={catTheme.iconColor}
                     style={{ marginRight: 6 }}
                   />
                   <Text
                     style={[
-                      typography.bodySmall,
+                      typography.bodyMedium,
                       {
-                        color: selected ? "#0C0E12" : colors.onBackground,
-                        fontWeight: selected ? "700" : "500",
+                        color: isSelected
+                          ? catTheme.iconColor
+                          : colors.onBackground,
+                        fontWeight: isSelected ? "700" : "500",
                       },
-                    ]}
-                  >
+                    ]}>
                     {cat.name}
                   </Text>
                 </TouchableOpacity>
@@ -221,71 +428,139 @@ const BudgetFormScreen: React.FC = () => {
             })}
           </ScrollView>
 
-          {/* Time Period Section */}
-          <Text style={[styles.sectionTitle, typography.label, { color: colors.onSurfaceVariant }]}>
-            TIME PERIOD
-          </Text>
-          <View style={styles.periodRow}>
-            <TouchableOpacity
+          {/* Options Grouped Card matching AddTransactionScreen */}
+          <View
+            style={[
+              styles.optionsCard,
+              {
+                backgroundColor: colors.surfaceVariant,
+                borderColor: colors.outlineVariant,
+                borderWidth: 1,
+              },
+            ]}>
+            {/* Budget Name */}
+            <View
               style={[
-                styles.periodCard,
+                styles.optionRow,
                 {
-                  backgroundColor: colors.surfaceVariant,
-                  borderColor: period === "weekly" ? colors.primary : colors.outlineVariant,
+                  borderBottomColor: colors.outlineVariant,
+                  borderBottomWidth: 1,
                 },
-              ]}
-              onPress={() => setPeriod("weekly")}
-            >
-              <Text style={[typography.bodyLarge, { color: colors.onBackground, fontWeight: "600", marginBottom: 4 }]}>
-                Weekly
-              </Text>
-              <Text style={[typography.bodySmall, { color: colors.onSurfaceVariant }]}>Reset every Mon</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={[
-                styles.periodCard,
-                {
-                  backgroundColor: colors.surfaceVariant,
-                  borderColor: period === "monthly" ? colors.primary : colors.outlineVariant,
-                },
-              ]}
-              onPress={() => setPeriod("monthly")}
-            >
-              <Text style={[typography.bodyLarge, { color: colors.onBackground, fontWeight: "600", marginBottom: 4 }]}>
-                Monthly
-              </Text>
-              <Text style={[typography.bodySmall, { color: colors.onSurfaceVariant }]}>Reset 1st of month</Text>
-            </TouchableOpacity>
-          </View>
-
-          {/* Alerts Toggle */}
-          <View style={[styles.alertsCard, { backgroundColor: colors.surfaceVariant, borderColor: colors.outlineVariant, borderWidth: 1 }]}>
-            <View style={{ flex: 1 }}>
-              <Text style={[typography.bodyLarge, { color: colors.onBackground, fontWeight: "500", marginBottom: 4 }]}>
-                Overspending Alerts
-              </Text>
-              <Text style={[typography.bodySmall, { color: colors.onSurfaceVariant }]}>Notify when 80% reached</Text>
+              ]}>
+              <View
+                style={[
+                  styles.optionIcon,
+                  { backgroundColor: colors.surface },
+                ]}>
+                <Ionicons
+                  name="pencil-outline"
+                  size={20}
+                  color={colors.primary}
+                />
+              </View>
+              <View style={styles.optionContent}>
+                <TextInput
+                  ref={nameInputRef}
+                  style={[
+                    typography.bodyMedium,
+                    { color: colors.onBackground, padding: 0 },
+                  ]}
+                  placeholder="Budget Name (e.g. Groceries)"
+                  placeholderTextColor={colors.onSurfaceVariant}
+                  value={name}
+                  onChangeText={(val) => {
+                    setName(val);
+                    if (formErrors.name) {
+                      setFormErrors((prev) => ({ ...prev, name: undefined }));
+                    }
+                  }}
+                  returnKeyType="done"
+                  onSubmitEditing={handleSave}
+                />
+              </View>
             </View>
-            <Switch
-              value={alertsEnabled}
-              onValueChange={setAlertsEnabled}
-            />
+
+            {/* Overspending Alerts */}
+            <View
+              style={[
+                styles.optionRow,
+                {
+                  borderBottomColor: "transparent",
+                  borderBottomWidth: 0,
+                },
+              ]}>
+              <View
+                style={[
+                  styles.optionIcon,
+                  { backgroundColor: colors.surface },
+                ]}>
+                <Ionicons
+                  name="notifications-outline"
+                  size={20}
+                  color={colors.primary}
+                />
+              </View>
+              <View style={styles.optionContent}>
+                <Text
+                  style={[
+                    typography.bodyMedium,
+                    { color: colors.onBackground, fontWeight: "600" },
+                  ]}>
+                  Overspending Alerts
+                </Text>
+                <Text
+                  style={[
+                    typography.bodySmall,
+                    { color: colors.onSurfaceVariant, marginTop: 2 },
+                  ]}>
+                  Notify when 80% reached
+                </Text>
+              </View>
+              <Switch
+                value={alertsEnabled}
+                onValueChange={setAlertsEnabled}
+              />
+            </View>
           </View>
+          {formErrors.name ? (
+            <Text
+              style={[
+                styles.errorText,
+                {
+                  marginTop: -16,
+                  marginBottom: spacing.lg,
+                  marginLeft: 8,
+                  textAlign: "left",
+                },
+              ]}>
+              {formErrors.name}
+            </Text>
+          ) : null}
 
-        </ScrollView>
-
-        <View style={styles.footer}>
+          {/* Action Button at bottom */}
           <TouchableOpacity
-            style={[styles.saveButton, { backgroundColor: colors.primary }]}
+            style={[
+              styles.submitButton,
+              {
+                backgroundColor: colors.primaryContainer,
+                opacity: loading ? 0.7 : 1,
+              },
+            ]}
             onPress={handleSave}
-          >
-            <Text style={[typography.bodyLarge, { color: colors.onPrimary, fontWeight: "700" }]}>
-              {budget ? "Update Budget" : "Create Budget"}
+            disabled={loading}>
+            <Text
+              style={[
+                typography.bodyLarge,
+                { color: colors.onPrimaryContainer, fontWeight: "700" },
+              ]}>
+              {loading
+                ? "Saving..."
+                : budget
+                ? "Update Budget"
+                : "Create Budget"}
             </Text>
           </TouchableOpacity>
-        </View>
-
+        </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>
   );
@@ -294,77 +569,100 @@ const BudgetFormScreen: React.FC = () => {
 const styles = StyleSheet.create({
   topBar: {
     flexDirection: "row",
-    alignItems: "center",
     justifyContent: "space-between",
+    alignItems: "center",
     paddingHorizontal: 20,
     paddingTop: 10,
     paddingBottom: 20,
   },
-  backButton: {
+  title: {
+    fontSize: 18,
+    fontWeight: "700",
+  },
+  iconButton: {
     width: 40,
     height: 40,
+    borderRadius: 20,
     justifyContent: "center",
+    alignItems: "center",
   },
-  amountContainer: {
+  segmentContainer: {
+    flexDirection: "row",
+    padding: 4,
+  },
+  segmentButton: {
+    flex: 1,
+    paddingVertical: 10,
+    alignItems: "center",
+  },
+  amountSection: {
+    alignItems: "center",
+    marginBottom: 24,
+  },
+  amountRow: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    marginVertical: 32,
+  },
+  amountTextContainer: {
+    flexDirection: "row",
+    alignItems: "baseline",
   },
   currencySymbol: {
     fontSize: 32,
-    fontWeight: "600",
-    marginRight: 8,
-  },
-  amountInput: {
-    fontSize: 56,
     fontWeight: "700",
+    marginRight: 4,
+  },
+  amountValue: {
+    fontSize: 48,
+    fontWeight: "800",
     textAlign: "center",
     minWidth: 150,
-  },
-  inputCard: {
-    marginBottom: 32,
-    borderWidth: 1,
-  },
-  sectionTitle: {
-    letterSpacing: 1,
-    marginBottom: 16,
+    padding: 0,
   },
   categoryChip: {
     flexDirection: "row",
     alignItems: "center",
-    paddingHorizontal: 14,
+    paddingHorizontal: 16,
     paddingVertical: 10,
+    borderRadius: 24,
+    borderWidth: 1,
+  },
+  optionsCard: {
+    borderRadius: 24,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    marginBottom: 24,
+  },
+  optionRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingVertical: 12,
+  },
+  optionIcon: {
+    width: 40,
+    height: 40,
     borderRadius: 20,
-    borderWidth: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    marginRight: 16,
   },
-  periodRow: {
-    flexDirection: "row",
-    gap: 12,
-    marginBottom: 32,
-  },
-  periodCard: {
+  optionContent: {
     flex: 1,
-    padding: 16,
-    borderRadius: 16,
-    borderWidth: 1,
-    alignItems: "center",
+    justifyContent: "center",
   },
-  alertsCard: {
-    flexDirection: "row",
+  submitButton: {
+    paddingVertical: 16,
+    borderRadius: 24,
     alignItems: "center",
-    padding: 16,
-    borderRadius: 16,
-    marginBottom: 32,
+    marginTop: 8,
   },
-  footer: {
-    padding: 20,
-    paddingBottom: 40,
-  },
-  saveButton: {
-    paddingVertical: 18,
-    borderRadius: 30,
-    alignItems: "center",
+  errorText: {
+    color: "#EF4444",
+    fontSize: 13,
+    fontWeight: "600",
+    marginTop: 6,
+    textAlign: "center",
   },
 });
 

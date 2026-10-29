@@ -39,7 +39,7 @@ export const VoiceVerifyScreen: React.FC = () => {
   const { showSuccess, showError } = useToast();
 
   const source = route.params?.source || "voice";
-  const receiptSummary = route.params?.receiptSummary;
+  const [summary, setSummary] = useState(route.params?.receiptSummary);
   const rawText = route.params?.rawText || "";
   const imageUri = route.params?.imageUri;
 
@@ -57,6 +57,12 @@ export const VoiceVerifyScreen: React.FC = () => {
       setParsedTransactions(route.params.parsedTransactions);
     }
   }, [route.params?.parsedTransactions]);
+
+  useEffect(() => {
+    if (route.params?.receiptSummary) {
+      setSummary(route.params.receiptSummary);
+    }
+  }, [route.params?.receiptSummary]);
 
   const [editingIndex, setEditingIndex] = useState<number | null>(null);
   const [editData, setEditData] = useState<{
@@ -76,10 +82,19 @@ export const VoiceVerifyScreen: React.FC = () => {
     (state: RootState) => state.budgets
   );
 
-  const totalAmount = useMemo(
-    () => parsedTransactions.reduce((sum, t) => sum + (t.amount || 0), 0),
+  const itemsSum = useMemo(
+    () => Math.round(parsedTransactions.reduce((sum, t) => sum + (t.amount || 0), 0) * 100) / 100,
     [parsedTransactions]
   );
+
+  const discount = summary?.discount || 0;
+
+  const totalAmount = useMemo(() => {
+    if (discount > 0) {
+      return Math.max(0, Math.round((itemsSum - discount) * 100) / 100);
+    }
+    return itemsSum;
+  }, [itemsSum, discount]);
 
   const handleQuickCreateCategory = async (data: {
     name: string;
@@ -113,10 +128,10 @@ export const VoiceVerifyScreen: React.FC = () => {
             amount: (t.amount || 0).toString(),
             type: t.type || "expense",
             description: t.description || "",
-            date: t.date || receiptSummary?.date || new Date(),
+            date: t.date || summary?.date || new Date(),
             categoryId: t.categoryId || "",
             budgetId: t.budgetId,
-            note: t.note || (receiptSummary?.merchant ? `From: ${receiptSummary.merchant}` : ""),
+            note: t.note || (summary?.merchant ? `From: ${summary.merchant}` : ""),
           })
         ).unwrap()
       );
@@ -131,9 +146,9 @@ export const VoiceVerifyScreen: React.FC = () => {
   // ── Save as 1 combined transaction ──────────────────────────────────
   const handleSaveAsSingle = async () => {
     try {
-      const singleAmount = receiptSummary?.totalAmount || totalAmount;
+      const singleAmount = totalAmount;
       const merchant =
-        receiptSummary?.merchant || parsedTransactions[0]?.description || "Receipt Total";
+        summary?.merchant || parsedTransactions[0]?.description || "Receipt Total";
       const itemsListNote = parsedTransactions
         .map((t) => `• ${t.description || "Item"}: ${formatCurrency(t.amount || 0)}`)
         .join("\n");
@@ -144,7 +159,7 @@ export const VoiceVerifyScreen: React.FC = () => {
           amount: singleAmount.toString(),
           type: "expense",
           description: merchant,
-          date: receiptSummary?.date || parsedTransactions[0]?.date || new Date(),
+          date: summary?.date || parsedTransactions[0]?.date || new Date(),
           categoryId: firstCatId,
           note: `Receipt items (${parsedTransactions.length}):\n${itemsListNote}`,
         })
@@ -239,7 +254,7 @@ export const VoiceVerifyScreen: React.FC = () => {
           type: aiResult.type || "expense",
           description:
             it.quantity && it.quantity > 1 ? `${it.quantity}x ${it.name}` : it.name,
-          date: aiResult.date || receiptSummary?.date || new Date(),
+          date: aiResult.date || summary?.date || new Date(),
           note: aiResult.description ? `From: ${aiResult.description}` : undefined,
           confidence: 0.98,
           rawText: `${it.name} ${it.price}`,
@@ -248,6 +263,14 @@ export const VoiceVerifyScreen: React.FC = () => {
           unitPrice: it.unitPrice,
         }));
         setParsedTransactions(newParsed);
+        setSummary((prev: any) => ({
+          ...prev,
+          merchant: aiResult.description || prev?.merchant,
+          date: aiResult.date || prev?.date,
+          discount: aiResult.discount || prev?.discount,
+          totalAmount: aiResult.amount,
+          itemsSum: aiResult.itemsSum,
+        }));
         showSuccess(`AI Vision extracted ${newParsed.length} items!`);
       } else {
         showError("AI could not detect items");
@@ -275,9 +298,9 @@ export const VoiceVerifyScreen: React.FC = () => {
           <Text style={[typography.h3, { color: colors.onBackground }]}>
             {source === "ocr" ? "Verify Receipt Items" : "Verify Transactions"}
           </Text>
-          {source === "ocr" && receiptSummary?.merchant && (
+          {source === "ocr" && summary?.merchant && (
             <Text style={[typography.label, { color: colors.primary, marginTop: 2 }]}>
-              {receiptSummary.merchant}
+              {summary.merchant}
             </Text>
           )}
         </View>
@@ -300,11 +323,11 @@ export const VoiceVerifyScreen: React.FC = () => {
                   {parsedTransactions.length} Items Detected
                 </Text>
               </View>
-              {receiptSummary?.date && (
+              {summary?.date && (
                 <View style={styles.dateBadge}>
                   <Ionicons name="calendar-outline" size={14} color={colors.onSurfaceVariant} />
                   <Text style={[typography.label, { color: colors.onSurfaceVariant, marginLeft: 4 }]}>
-                    {new Date(receiptSummary.date).toLocaleDateString()}
+                    {new Date(summary.date).toLocaleDateString()}
                   </Text>
                 </View>
               )}
@@ -314,7 +337,7 @@ export const VoiceVerifyScreen: React.FC = () => {
               <View style={styles.statBox}>
                 <Text style={[typography.label, { color: colors.onSurfaceVariant }]}>Receipt Total</Text>
                 <Text style={[typography.bodyLarge, { color: colors.onSurface, fontWeight: "700" }]}>
-                  {formatCurrency(receiptSummary?.totalAmount || totalAmount)}
+                  {formatCurrency(totalAmount)}
                 </Text>
               </View>
 
@@ -323,17 +346,17 @@ export const VoiceVerifyScreen: React.FC = () => {
               <View style={styles.statBox}>
                 <Text style={[typography.label, { color: colors.onSurfaceVariant }]}>Items Sum</Text>
                 <Text style={[typography.bodyLarge, { color: colors.onSurface, fontWeight: "700" }]}>
-                  {formatCurrency(receiptSummary?.itemsSum || totalAmount)}
+                  {formatCurrency(itemsSum)}
                 </Text>
               </View>
 
-              {receiptSummary?.discount ? (
+              {discount > 0 ? (
                 <>
                   <View style={styles.statDivider} />
                   <View style={styles.statBox}>
                     <Text style={[typography.label, { color: colors.error }]}>Discount</Text>
                     <Text style={[typography.bodyLarge, { color: colors.error, fontWeight: "700" }]}>
-                      -{formatCurrency(receiptSummary.discount)}
+                      -{formatCurrency(discount)}
                     </Text>
                   </View>
                 </>
@@ -479,7 +502,7 @@ export const VoiceVerifyScreen: React.FC = () => {
               <Ionicons name="receipt-outline" size={18} color={colors.primary} />
               <Text
                 style={[typography.bodyMedium, { color: colors.primary, fontWeight: "700", marginLeft: 6 }]}>
-                Save as 1 Total ({formatCurrency(receiptSummary?.totalAmount || totalAmount)})
+                Save as 1 Total ({formatCurrency(totalAmount)})
               </Text>
             </TouchableOpacity>
 

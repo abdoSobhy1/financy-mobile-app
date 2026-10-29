@@ -132,17 +132,18 @@ export class SettingsRepository {
 
   private async createDefaultSettings(options?: { skipSync?: boolean }): Promise<Settings> {
     const database = this.db.getDatabase();
-    const now = new Date().toISOString();
+    const epoch = "1970-01-01T00:00:00.000Z";
 
     const defaultSettings: Settings = {
       id: "default",
-      billingPeriodStartDay: 28,
+      billingPeriodStartDay: 1,
       currency: "USD",
       firebaseSync: false,
       theme: "light",
-      createdAt: now,
-      updatedAt: now,
-      syncUpdatedAt: Date.now(),
+      createdAt: epoch,
+      updatedAt: epoch,
+      syncUpdatedAt: 0,
+      syncStatus: "synced",
     };
 
     const tableData = toSettingsTable(defaultSettings);
@@ -161,16 +162,15 @@ export class SettingsRepository {
         tableData.theme,
         defaultSettings.createdAt,
         defaultSettings.updatedAt,
-        tableData.sync_updated_at,
+        0,
         tableData.deleted,
-        tableData.sync_status,
+        "synced",
       ]
     );
 
-    // Log sync operation for Firebase sync
-    if (!options?.skipSync) {
-      await offlineFirstSync.logOperation("settings", "default", "insert", defaultSettings);
-    }
+    // Note: Creating initial default placeholder settings locally must NEVER queue
+    // an overwrite to Firebase. Real user updates (via updateSettings/updateBillingPeriodStartDay)
+    // will log their own operations.
 
     return defaultSettings;
   }
@@ -183,7 +183,7 @@ export class SettingsRepository {
       `
       UPDATE settings 
       SET 
-        billing_period_start_day = 28,
+        billing_period_start_day = 1,
         currency = 'USD',
         firebase_sync = 0,
         theme = 'dark',
@@ -205,7 +205,7 @@ export class SettingsRepository {
   async getCurrentBillingPeriod(): Promise<{ start: Date; end: Date }> {
     const settings = await this.getSettings();
     const today = new Date();
-    const startDay = settings.billingPeriodStartDay;
+    const startDay = settings.billingPeriodStartDay || 1;
 
     let periodStart: Date;
     let periodEnd: Date;
@@ -226,7 +226,7 @@ export class SettingsRepository {
   async getPreviousBillingPeriod(): Promise<{ start: Date; end: Date }> {
     const settings = await this.getSettings();
     const today = new Date();
-    const startDay = settings.billingPeriodStartDay;
+    const startDay = settings.billingPeriodStartDay || 1;
 
     let periodStart: Date;
     let periodEnd: Date;
@@ -247,7 +247,7 @@ export class SettingsRepository {
   async getNextBillingPeriod(): Promise<{ start: Date; end: Date }> {
     const settings = await this.getSettings();
     const today = new Date();
-    const startDay = settings.billingPeriodStartDay;
+    const startDay = settings.billingPeriodStartDay || 1;
 
     let periodStart: Date;
     let periodEnd: Date;

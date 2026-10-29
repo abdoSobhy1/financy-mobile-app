@@ -11,6 +11,7 @@ import { fetchCategories } from "./categoriesSlice";
 import { fetchDebts } from "./debtsSlice";
 import { fetchSettings } from "./settingsSlice";
 import { ToastService } from "../../components/ui/ToastProvider";
+import { syncService } from "../../services/syncService";
 
 // Initial state
 const initialState: SyncState = {
@@ -76,8 +77,9 @@ export const initializeSync = createAsyncThunk("sync/initialize", async (_, { di
 });
 
 export const stopSync = createAsyncThunk("sync/stop", async () => {
-  // Note: OfflineFirstSync runs automatically, no need to stop
-  // Just return current status
+  // Really stop the polling timers + queued work of the previous user
+  syncService.stopSync();
+  offlineFirstSync.cancelScheduledRetry();
   return await offlineFirstSync.getSyncStatus();
 });
 

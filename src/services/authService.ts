@@ -28,6 +28,32 @@ export class AuthService {
   private static readonly SESSION_KEY = "financy_user_session";
   private static readonly SESSION_DURATION = 30 * 24 * 60 * 60 * 1000; // 30 days in milliseconds
   private static readonly LAST_USER_KEY = "financy_last_user_id";
+  // True while signOut() is running, so the auth listener can't resurrect the stored session
+  private signingOut = false;
+  // Per-user leftovers that used to survive sign-out
+  private static readonly USER_SCOPED_KEYS = [
+    "financy_user_profile_v1",
+    "lastUsedCategoryId",
+    "lastUsedBudgetId",
+    "lastUsedAccountId",
+    "@financy/last_used_category",
+    "@financy/last_used_budget",
+    "overspendingAlertDismissed",
+    "@financy_sync_tracking",
+    "@financy_ai_config",
+  ];
+
+  // Stop polling/queues that belong to the outgoing user
+  private async stopBackgroundSync(): Promise<void> {
+    try {
+      const { syncService } = await import("./syncService");
+      syncService.resetState();
+      const { offlineFirstSync } = await import("./OfflineFirstSync");
+      offlineFirstSync.cancelScheduledRetry();
+    } catch (e) {
+      console.warn("Failed to stop background sync:", e);
+    }
+  }
 
   private constructor() {}
 
@@ -94,6 +120,7 @@ export class AuthService {
             `👤 Session user changed from ${lastUserId || "none"} to ${user.uid}. Resetting local database for clean session.`,
           );
           try {
+            await this.stopBackgroundSync();
             const dbManager = DatabaseManager.getInstance();
             await dbManager.ensureInitialized();
             await dbManager.resetDatabase();
@@ -346,17 +373,22 @@ export class AuthService {
 
   // Sign out
   public async signOut(): Promise<void> {
+    this.signingOut = true;
     try {
+      // 1. Stop the outgoing user's background work before anything else
+      await this.stopBackgroundSync();
+
+      // 2. Drop the persisted session FIRST. Firebase's listener fires as soon as signOut()
+      //    runs, and it falls back to the stored session - which used to re-emit the old user.
+      await this.clearStoredSession();
+      await AsyncStorage.removeItem(AuthService.LAST_USER_KEY);
+
+      // 3. Sign out of Firebase
       if (this.getAuth().currentUser) {
         await signOut(this.getAuth());
       }
 
-      // Clear stored session
-      await this.clearStoredSession();
-      await AsyncStorage.removeItem("financy_user_profile_v1");
-      await AsyncStorage.removeItem(AuthService.LAST_USER_KEY);
-
-      // Reset local SQLite database on sign out so no data leaks across sessions or flashes on next login
+      // 4. Reset local SQLite database so no data leaks across sessions
       try {
         const dbManager = DatabaseManager.getInstance();
         await dbManager.ensureInitialized();
@@ -365,22 +397,24 @@ export class AuthService {
         console.warn("Failed to reset local database on sign out:", dbResetErr);
       }
 
-      // Clear user preferences
+      // 5. Clear everything else that was scoped to this user
       try {
+        await AsyncStorage.multiRemove(AuthService.USER_SCOPED_KEYS);
         const { clearUserPreferences } =
           await import("../utils/userPreferences");
         await clearUserPreferences();
+        const { walletService } = await import("./walletService");
+        walletService.clearCache();
       } catch (prefError) {
-        console.warn(
-          "Failed to clear user preferences on sign out:",
-          prefError,
-        );
+        console.warn("Failed to clear user-scoped data on sign out:", prefError);
       }
 
       console.log("User signed out successfully");
     } catch (error) {
       console.error("Sign out error:", error);
       throw new Error("Failed to sign out");
+    } finally {
+      this.signingOut = false;
     }
   }
 
@@ -408,6 +442,12 @@ export class AuthService {
         // Ensure session save and any required database reset complete BEFORE notifying UI listeners
         await this.saveSession(user);
         callback(user);
+        return;
+      }
+
+      // Signing out: report "no user" immediately, never the stored one
+      if (this.signingOut) {
+        callback(null);
         return;
       }
 

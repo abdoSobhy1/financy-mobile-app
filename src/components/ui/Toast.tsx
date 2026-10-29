@@ -5,7 +5,11 @@ import {
   StyleSheet,
   Animated,
   TouchableOpacity,
+  TouchableWithoutFeedback,
   Dimensions,
+  Platform,
+  StatusBar,
+  Modal as RNModal,
 } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons } from "@expo/vector-icons";
@@ -72,7 +76,7 @@ export const Toast: React.FC<ToastProps> = ({ toast, onDismiss, index }) => {
   const { colors } = useAppTheme();
   const styles = React.useMemo(() => getStyles(colors), [colors]);
 
-  const translateY = useRef(new Animated.Value(80)).current;
+  const translateY = useRef(new Animated.Value(-60)).current;
   const opacity = useRef(new Animated.Value(0)).current;
   const scale = useRef(new Animated.Value(0.9)).current;
 
@@ -109,7 +113,7 @@ export const Toast: React.FC<ToastProps> = ({ toast, onDismiss, index }) => {
   const handleDismiss = () => {
     Animated.parallel([
       Animated.timing(translateY, {
-        toValue: 80,
+        toValue: -60,
         duration: 200,
         useNativeDriver: true,
       }),
@@ -129,6 +133,11 @@ export const Toast: React.FC<ToastProps> = ({ toast, onDismiss, index }) => {
     });
   };
 
+  const topOffset =
+    (Platform.OS === "android" ? (StatusBar.currentHeight || 24) : 50) +
+    12 +
+    index * 76;
+
   return (
     <Animated.View
       style={[
@@ -138,7 +147,7 @@ export const Toast: React.FC<ToastProps> = ({ toast, onDismiss, index }) => {
           borderColor: theme.border,
           transform: [{ translateY }, { scale }],
           opacity,
-          bottom: 100 + index * 80,
+          top: topOffset,
         },
       ]}>
       <View style={styles.content}>
@@ -287,9 +296,27 @@ export const useToast = () => {
 
   const clearAllToasts = () => setToasts([]);
 
-  const ToastComponent = () => (
-    <ToastContainer toasts={toasts} onDismiss={dismissToast} />
-  );
+  const ToastComponent = () => {
+    if (toasts.length === 0) return null;
+    return (
+      <RNModal
+        visible={toasts.length > 0}
+        transparent
+        animationType="none"
+        statusBarTranslucent
+        onRequestClose={clearAllToasts}>
+        <TouchableWithoutFeedback onPress={clearAllToasts}>
+          <View style={StyleSheet.absoluteFill} pointerEvents="box-none">
+            <TouchableWithoutFeedback>
+              <View style={StyleSheet.absoluteFill} pointerEvents="box-none">
+                <ToastContainer toasts={toasts} onDismiss={dismissToast} />
+              </View>
+            </TouchableWithoutFeedback>
+          </View>
+        </TouchableWithoutFeedback>
+      </RNModal>
+    );
+  };
 
   return {
     showToast,

@@ -1,5 +1,5 @@
 import { AlertService } from "../services/AlertService";
-import React, { useState } from "react";
+import React, { useState, useRef } from "react";
 import {
   View,
   Text,
@@ -32,15 +32,39 @@ export const SignInScreen: React.FC = () => {
   const [isSignUp, setIsSignUp] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [focusedField, setFocusedField] = useState<string | null>(null);
+  const [errors, setErrors] = useState<{ name?: string; email?: string; password?: string }>({});
+
+  const nameRef = useRef<TextInput>(null);
+  const emailRef = useRef<TextInput>(null);
+  const passwordRef = useRef<TextInput>(null);
 
   const dispatch = useDispatch<AppDispatch>();
   const { loading } = useSelector((state: RootState) => state.auth);
 
+  const validateEmail = (val: string) => {
+    return /\S+@\S+\.\S+/.test(val);
+  };
+
   const handleSignIn = async () => {
-    if (!email.trim() || !password.trim()) {
-      AlertService.alert("Error", "Please fill in all fields");
+    const newErrors: { name?: string; email?: string; password?: string } = {};
+    if (!email.trim()) {
+      newErrors.email = "Email is required";
+    } else if (!validateEmail(email.trim())) {
+      newErrors.email = "Please enter a valid email address";
+    }
+
+    if (!password.trim()) {
+      newErrors.password = "Password is required";
+    }
+
+    if (Object.keys(newErrors).length > 0) {
+      setErrors(newErrors);
+      if (newErrors.email) emailRef.current?.focus();
+      else if (newErrors.password) passwordRef.current?.focus();
       return;
     }
+
+    setErrors({});
     try {
       await dispatch(signIn({ email: email.trim(), password })).unwrap();
       // Automatically trigger sync with Firebase database right after successful login
@@ -59,14 +83,30 @@ export const SignInScreen: React.FC = () => {
   };
 
   const handleSignUp = async () => {
-    if (!email.trim() || !password.trim() || !displayName.trim()) {
-      AlertService.alert("Error", "Please fill in all fields");
+    const newErrors: { name?: string; email?: string; password?: string } = {};
+    if (!displayName.trim()) {
+      newErrors.name = "Name is required";
+    }
+    if (!email.trim()) {
+      newErrors.email = "Email is required";
+    } else if (!validateEmail(email.trim())) {
+      newErrors.email = "Please enter a valid email address";
+    }
+    if (!password.trim()) {
+      newErrors.password = "Password is required";
+    } else if (password.length < 6) {
+      newErrors.password = "Password must be at least 6 characters long";
+    }
+
+    if (Object.keys(newErrors).length > 0) {
+      setErrors(newErrors);
+      if (newErrors.name) nameRef.current?.focus();
+      else if (newErrors.email) emailRef.current?.focus();
+      else if (newErrors.password) passwordRef.current?.focus();
       return;
     }
-    if (password.length < 6) {
-      AlertService.alert("Error", "Password must be at least 6 characters long");
-      return;
-    }
+
+    setErrors({});
     try {
       await dispatch(
         signUp({
@@ -156,19 +196,34 @@ export const SignInScreen: React.FC = () => {
               <Text style={[typography.label, { color: colors.onSurfaceVariant, marginBottom: 8 }]}>Name</Text>
               <View style={[
                 styles.inputContainer, 
-                { backgroundColor: colors.surfaceVariant, borderColor: focusedField === "name" ? colors.primary : colors.outlineVariant }
+                {
+                  backgroundColor: colors.surfaceVariant,
+                  borderColor: errors.name ? colors.error : focusedField === "name" ? colors.primary : colors.outlineVariant,
+                }
               ]}>
                 <Ionicons name="person-outline" size={20} color={colors.onSurfaceVariant} style={styles.inputIcon} />
                 <TextInput
+                  ref={nameRef}
                   style={[styles.input, { color: colors.onBackground }]}
                   placeholder="John Doe"
                   placeholderTextColor={colors.onSurfaceVariant}
                   value={displayName}
-                  onChangeText={setDisplayName}
+                  onChangeText={(text) => {
+                    setDisplayName(text);
+                    if (errors.name) setErrors((prev) => ({ ...prev, name: undefined }));
+                  }}
+                  returnKeyType="next"
+                  blurOnSubmit={false}
+                  onSubmitEditing={() => emailRef.current?.focus()}
                   onFocus={() => setFocusedField("name")}
                   onBlur={() => setFocusedField(null)}
                 />
               </View>
+              {errors.name && (
+                <Text style={{ color: colors.error, fontSize: 12, marginTop: 4, fontWeight: "600" }}>
+                  {errors.name}
+                </Text>
+              )}
             </View>
           )}
 
@@ -176,37 +231,61 @@ export const SignInScreen: React.FC = () => {
             <Text style={[typography.label, { color: colors.onSurfaceVariant, marginBottom: 8 }]}>Email</Text>
             <View style={[
               styles.inputContainer, 
-              { backgroundColor: colors.surfaceVariant, borderColor: focusedField === "email" ? colors.primary : colors.outlineVariant }
+              {
+                backgroundColor: colors.surfaceVariant,
+                borderColor: errors.email ? colors.error : focusedField === "email" ? colors.primary : colors.outlineVariant,
+              }
             ]}>
               <Ionicons name="mail-outline" size={20} color={colors.onSurfaceVariant} style={styles.inputIcon} />
               <TextInput
+                ref={emailRef}
                 style={[styles.input, { color: colors.onBackground }]}
                 placeholder="name@example.com"
                 placeholderTextColor={colors.onSurfaceVariant}
                 value={email}
-                onChangeText={setEmail}
+                onChangeText={(text) => {
+                  setEmail(text);
+                  if (errors.email) setErrors((prev) => ({ ...prev, email: undefined }));
+                }}
                 keyboardType="email-address"
                 autoCapitalize="none"
+                returnKeyType="next"
+                blurOnSubmit={false}
+                onSubmitEditing={() => passwordRef.current?.focus()}
                 onFocus={() => setFocusedField("email")}
                 onBlur={() => setFocusedField(null)}
               />
             </View>
+            {errors.email && (
+              <Text style={{ color: colors.error, fontSize: 12, marginTop: 4, fontWeight: "600" }}>
+                {errors.email}
+              </Text>
+            )}
           </View>
 
           <View>
             <Text style={[typography.label, { color: colors.onSurfaceVariant, marginBottom: 8 }]}>Password</Text>
             <View style={[
               styles.inputContainer, 
-              { backgroundColor: colors.surfaceVariant, borderColor: focusedField === "password" ? colors.primary : colors.outlineVariant }
+              {
+                backgroundColor: colors.surfaceVariant,
+                borderColor: errors.password ? colors.error : focusedField === "password" ? colors.primary : colors.outlineVariant,
+              }
             ]}>
               <Ionicons name="lock-closed-outline" size={20} color={colors.onSurfaceVariant} style={styles.inputIcon} />
               <TextInput
+                ref={passwordRef}
                 style={[styles.input, { color: colors.onBackground }]}
                 placeholder="••••••••"
                 placeholderTextColor={colors.onSurfaceVariant}
                 value={password}
-                onChangeText={setPassword}
+                onChangeText={(text) => {
+                  setPassword(text);
+                  if (errors.password) setErrors((prev) => ({ ...prev, password: undefined }));
+                }}
                 secureTextEntry={!showPassword}
+                returnKeyType="done"
+                onSubmitEditing={isSignUp ? handleSignUp : handleSignIn}
                 onFocus={() => setFocusedField("password")}
                 onBlur={() => setFocusedField(null)}
               />
@@ -214,6 +293,11 @@ export const SignInScreen: React.FC = () => {
                 <Ionicons name={showPassword ? "eye-off-outline" : "eye-outline"} size={20} color={colors.onSurfaceVariant} />
               </TouchableOpacity>
             </View>
+            {errors.password && (
+              <Text style={{ color: colors.error, fontSize: 12, marginTop: 4, fontWeight: "600" }}>
+                {errors.password}
+              </Text>
+            )}
           </View>
 
           {!isSignUp && (

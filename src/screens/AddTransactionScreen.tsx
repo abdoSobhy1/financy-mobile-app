@@ -168,9 +168,11 @@ export const AddTransactionScreen: React.FC = () => {
 
   const [showCreateCategoryModal, setShowCreateCategoryModal] = useState(false);
   const [amountFocused, setAmountFocused] = useState(false);
+  const [formErrors, setFormErrors] = useState<{ amount?: string; category?: string }>({});
 
   const amountInputRef = useRef<TextInput>(null);
   const descriptionInputRef = useRef<TextInput>(null);
+  const noteInputRef = useRef<TextInput>(null);
 
   useEffect(() => {
     dispatch(fetchCategories());
@@ -232,12 +234,18 @@ export const AddTransactionScreen: React.FC = () => {
 
   const handleCategorySelect = (id: string) => {
     setCategoryId(id);
+    if (formErrors.category) {
+      setFormErrors((prev) => ({ ...prev, category: undefined }));
+    }
   };
 
   const hasMathOperator = /[+\-*/×÷]/.test(amountStr.slice(1));
   const evaluatedAmount = evaluateMath(amountStr);
 
   const handleKeypadPress = (key: string) => {
+    if (formErrors.amount) {
+      setFormErrors((prev) => ({ ...prev, amount: undefined }));
+    }
     setAmountStr((prev) => {
       const isOp = ["+", "-", "*", "/"].includes(key);
       if (isOp) {
@@ -306,14 +314,22 @@ export const AddTransactionScreen: React.FC = () => {
 
   const handleSave = async () => {
     const finalAmount = evaluateMath(amountStr);
+    const newErrors: { amount?: string; category?: string } = {};
+
     if (!finalAmount || isNaN(finalAmount) || finalAmount <= 0) {
+      newErrors.amount = "Please enter a valid amount greater than 0";
       showError("Please enter a valid amount");
-      return;
     }
     if (!categoryId) {
+      newErrors.category = "Please select or create a category";
       showError("Please select or create a category");
+    }
+
+    if (Object.keys(newErrors).length > 0) {
+      setFormErrors(newErrors);
       return;
     }
+    setFormErrors({});
 
     const finalDescription =
       description.trim() ? description : categories[categoryId]?.name || "";
@@ -519,6 +535,18 @@ export const AddTransactionScreen: React.FC = () => {
                   : "Tap amount to open calculator keypad"}
               </Text>
             )}
+            {formErrors.amount ? (
+              <Text
+                style={{
+                  color: colors.error,
+                  fontSize: 13,
+                  fontWeight: "600",
+                  marginTop: 6,
+                  textAlign: "center",
+                }}>
+                {formErrors.amount}
+              </Text>
+            ) : null}
           </TouchableOpacity>
 
           {/* Categories — Color-coded chips + Quick Create */}
@@ -610,6 +638,18 @@ export const AddTransactionScreen: React.FC = () => {
               </Text>
             </TouchableOpacity>
           </ScrollView>
+          {formErrors.category ? (
+            <Text
+              style={{
+                color: colors.error,
+                fontSize: 13,
+                fontWeight: "600",
+                marginBottom: spacing.md,
+                marginLeft: 4,
+              }}>
+              {formErrors.category}
+            </Text>
+          ) : null}
 
           {/* Budgets (Visible by default for expenses) */}
           {Object.values(budgets).length > 0 && type !== "income" && (
@@ -877,7 +917,15 @@ export const AddTransactionScreen: React.FC = () => {
                   value={description}
                   onFocus={() => setShowKeypad(false)}
                   onChangeText={setDescription}
-                  returnKeyType="done"
+                  returnKeyType={showMore ? "next" : "done"}
+                  blurOnSubmit={false}
+                  onSubmitEditing={() => {
+                    if (showMore) {
+                      noteInputRef.current?.focus();
+                    } else {
+                      handleSave();
+                    }
+                  }}
                 />
               </View>
             </View>
@@ -951,6 +999,7 @@ export const AddTransactionScreen: React.FC = () => {
           {showMore && (
             <View style={{ gap: spacing.md, marginBottom: spacing.xl }}>
               <Input
+                ref={noteInputRef}
                 label="Note"
                 placeholder="Additional details..."
                 value={note}
@@ -959,6 +1008,8 @@ export const AddTransactionScreen: React.FC = () => {
                 multiline
                 numberOfLines={3}
                 inputStyle={{ height: 80 }}
+                returnKeyType="done"
+                onSubmitEditing={handleSave}
               />
             </View>
           )}

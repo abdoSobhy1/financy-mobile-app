@@ -4,7 +4,7 @@
  * Supports:
  * - Direct Multimodal Vision: Sends resized receipt images (capped at 1080w/1920h)
  *   directly to Google Gemini for 100% accurate OCR + item extraction.
- * - Google Gemini (gemini-3.5-flash-lite / 500 requests per day)
+ * - Google Gemini (Gemini-3.6-Flash / 500 requests per day)
  * - Groq (Llama 3.3 70B)
  * - OpenAI (GPT-4o-mini)
  */
@@ -142,11 +142,11 @@ async function callChatModel(
   const config = await getAIConfig();
   const apiKey = config.apiKey ? config.apiKey.trim() : "";
 
-  // 1. Google Gemini (Preferred: 500 free requests/day with gemini-3.5-flash-lite)
+  // 1. Google Gemini (Preferred: 500 free requests/day with Gemini-3.6-Flash)
   if (config.provider === "gemini" && apiKey) {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 20000);
-    const model = config.model || "gemini-3.5-flash-lite";
+    const model = config.model ? config.model.toLowerCase() : "gemini-3.6-flash";
 
     const parts: any[] = [
       { text: `${systemPrompt}\n\n[USER INSTRUCTION]:\n${userPrompt}` },
@@ -372,26 +372,110 @@ export async function parseWithAI(rawText: string): Promise<ParsedTransaction> {
   }
 }
 
+// ── Metadata & Exclusion Filter ──────────────────────────────────────────
+
+/**
+ * Returns true if a given line or extracted item name represents receipt metadata,
+ * totals, tax, fees, payment info, cashier, or table info rather than an actual
+ * purchased product or service.
+ */
+export function isReceiptMetadataOrTotal(text: string): boolean {
+  if (!text) return true;
+  const t = text.trim();
+  if (t.length < 2) return true;
+
+  // 1. Totals, subtotals, balance, net amounts
+  if (
+    /^(?:grand\s*)?total\b/i.test(t) ||
+    /^sub\s*total\b/i.test(t) ||
+    /^net\s*(?:total|amount|due)?\b/i.test(t) ||
+    /^balance\s*(?:due)?\b/i.test(t) ||
+    /^amount\s*due\b/i.test(t) ||
+    /^(?:المجموع|الإجمالي|الاجمالي|الصافي|صافي\s*المبلغ|المبلغ\s*المطلوب|المطلوب\s*سداده|المجموع\s*الكلي)(?:[\s:#\d]|$|\b)/i.test(t)
+  ) {
+    return true;
+  }
+
+  // 2. Receipt / Invoice / Order / Check / Bill numbers / IDs
+  if (
+    /^(?:receipt|rec|invoice|inv|bill|order|chk|check|ticket|txn|trans)\s*(?:#|no\.?|num\.?|id|code)?\s*[:#]?\s*\d+/i.test(t) ||
+    /^(?:receipt|rec|invoice|inv|bill|order|chk|check|ticket)\s*(?:#|no\.?|num\.?|number)\b/i.test(t) ||
+    /^(?:رقم\s*(?:الفاتورة|الإيصال|الشيك|الطلب|العملية|الحساب)|فاتورة\s*رقم|إيصال\s*رقم|طلب\s*رقم|شيك\s*رقم)(?:[\s:#\d]|$|\b)/i.test(t)
+  ) {
+    return true;
+  }
+
+  // 3. Tax, VAT, service charges, delivery fees, discount
+  if (
+    /^(?:vat|tax|gst|hst|sales\s*tax|service\s*charge|service|delivery\s*fee|discount|promo|tip|surcharge)\b/i.test(t) ||
+    /^(?:ضريبة(\s*القيمة\s*المضافة)?|الضريبة|خدمة|رسوم\s*خدمة|رسوم\s*توصيل|خصم|تخفيض)(?:[\s:#\d%]|$|\b)/i.test(t)
+  ) {
+    return true;
+  }
+
+  // 4. Payment / Tender methods & change
+  if (
+    /^(?:cash|visa|mastercard|mada|knet|credit\s*card|debit\s*card|paid|change\s*due|change|tendered|customer\s*paid)\b/i.test(t) ||
+    /^(?:نقداً|كاش|فيزا|ماستركارد|مدى|المدفوع|المسدد|الباقي|متبقي|المدفوعات)(?:[\s:#\d]|$|\b)/i.test(t)
+  ) {
+    return true;
+  }
+
+  // 5. Staff, table, station, terminal, tax ID, phone, URL, greetings
+  if (
+    /^(?:cashier|server|waiter|operator|terminal|pos|table|guest|tbl|station)\b/i.test(t) ||
+    /^(?:كاشير|طاولة|ترابيزة|ويتر|مستخدم|نقطة\s*بيع|محطة)(?:[\s:#\d]|$|\b)/i.test(t) ||
+    /^(?:tel|phone|mobile|fax|cr\s*#|trn|tax\s*id)\b/i.test(t) ||
+    /^(?:س\.ت|ب\.ض|الرقم\s*الضريبي|السجل\s*التجاري)(?:[\s:#\d]|$|\b)/i.test(t) ||
+    /^(?:thank\s*you|welcome)\b/i.test(t) ||
+    /^(?:شكراً\s*(?:لزيارتكم)?|أهلاً\s*بكم)(?:[\s:#\d]|$|\b)/i.test(t)
+  ) {
+    return true;
+  }
+
+  return false;
+}
+
 // ── Multi-Entry Receipt Parser Prompt ────────────────────────────────────
 
-const RECEIPT_SYSTEM_PROMPT = `You are an expert financial receipt, bill and invoice parser with vision capabilities.
-Your job is to read this receipt (from text or image), recognize all purchased items, merchant/store name, date, and totals.
-The receipt may be in English, Arabic, or mixed.
+const RECEIPT_SYSTEM_PROMPT = `You are an expert financial receipt, bill, and invoice parser with advanced document understanding and vision capabilities.
+Your primary task is to understand the context and layout of the receipt and extract ONLY the actual purchased line items (products, goods, foods, beverages, or services).
 
-Rules:
-1. Extract ALL purchased items:
-   - "name": Clean item description (without leading/trailing quantity, price, or table metadata). Keep internal numbers like "Golden Sirt 3" or sizes.
+DOCUMENT ARCHITECTURE & CONTEXTUAL UNDERSTANDING:
+Every retail receipt or bill is structured into three distinct semantic zones. You must distinguish between them:
+
+1. HEADER ZONE (Operational Metadata — NOT Items):
+   - Contains: Store/business name, branch location, date, time, receipt/invoice #, order #, table #, cashier/operator name, and tax registration IDs (TRN/CR).
+   - Context: These identify the transaction event and merchant. They are NEVER goods bought by the customer. Do not put them in "items".
+
+2. BODY ZONE (Purchased Goods / Services — THE ONLY ITEMS):
+   - Contains: The itemized rows of actual products, dishes, groceries, retail goods, or services bought by the customer.
+   - The Customer Bag Test: "Did the customer pay for this specific merchandise to consume, own, or take with them?"
+     Examples: "Milk 1L", "Latte", "Golden Sirt 3", "Beef Carpaccio", "Shampoo", "T-Shirt".
+   - This Body Zone is the ONLY source for the "items" array!
+
+3. FOOTER & SETTLEMENT ZONE (Financial Totals & Payment — NOT Items):
+   - Contains: Subtotal, VAT / sales tax, service charge, delivery fee, discounts, final grand total, payment method (Cash, Visa, MasterCard, etc.), customer paid, change returned, and greetings/return policy.
+   - Context: These represent financial accounting and payment settlement. They are the mathematical result of the items, NOT items themselves!
+   - Mathematical Consistency: Line item prices add up to the total. Putting the total or subtotal into "items" doubles or corrupts the sum, which is mathematically invalid.
+
+EXTRACTION RULES:
+1. "items" Array:
+   - Extract ONLY line items from the BODY ZONE.
+   - "name": Clean item description (e.g., "Latte Large", "Beef Carpaccio", "Milk 1L"). Do not prepend numbering like "1." or append price text.
    - "quantity": Number of units purchased (default 1).
-   - "price": Total price for this line item.
-   - "unitPrice": Price per single unit (or price / quantity).
-   - "categoryHint": Suggested category (e.g., Food & Dining, Groceries, Shopping, Electronics, Health, Cafe).
-2. "merchant": The store/business name from the top header (or null if not visible).
-3. "date": Date in "YYYY-MM-DD" format (or null if not visible).
-4. "total": Net/Grand total amount to pay (or null if not visible).
-5. "discount": Discount amount if present (or null).
-6. "type": "expense" or "income" (default "expense").
+   - "price": Total final price for this line item.
+   - "unitPrice": Unit price (or price / quantity).
+   - "categoryHint": Appropriate category (e.g. Groceries, Food & Dining, Shopping, Health, Cafe).
 
-Return ONLY valid JSON matching this schema:
+2. Top-Level Root Fields:
+   - "merchant": Business/store name from Header (or null).
+   - "date": Date in "YYYY-MM-DD" format (or null).
+   - "total": Final grand total / net amount to pay from the Footer (or null).
+   - "discount": Explicit discount amount if printed separately (or null).
+   - "type": "expense" (default) or "income".
+
+Return ONLY valid JSON:
 {
   "merchant": string or null,
   "date": "YYYY-MM-DD" or null,
@@ -407,14 +491,29 @@ Return ONLY valid JSON matching this schema:
       "categoryHint": string or null
     }
   ]
-}`;
+};`;
 
 function buildOcrResultFromExtracted(
   extracted: AIExtractedReceipt,
   categories: Record<string, Category>,
   rawTextSource: string
 ): OcrReceiptResult {
-  const items: OcrReceiptItem[] = (extracted.items || []).map((it) => {
+  let fallbackGrandTotal: number | undefined;
+
+  // Filter out any totals, receipt numbers, taxes or metadata lines that slipped into items
+  const validExtractedItems = (extracted.items || []).filter((it) => {
+    if (!it.name) return false;
+    const nameTrimmed = it.name.trim();
+    if (isReceiptMetadataOrTotal(nameTrimmed)) {
+      if (!fallbackGrandTotal && /total|المجموع|الإجمالي|الصافي/i.test(nameTrimmed) && it.price > 0) {
+        fallbackGrandTotal = it.price;
+      }
+      return false;
+    }
+    return true;
+  });
+
+  const items: OcrReceiptItem[] = validExtractedItems.map((it) => {
     const qty = it.quantity && it.quantity > 0 ? it.quantity : 1;
     const price = typeof it.price === "number" ? it.price : parseFloat(String(it.price));
     const unitPrice =
@@ -434,7 +533,7 @@ function buildOcrResultFromExtracted(
   const itemsSum =
     items.length > 0 ? Math.round(items.reduce((sum, it) => sum + it.price, 0) * 100) / 100 : undefined;
 
-  let grandTotal = extracted.total || undefined;
+  let grandTotal = extracted.total || fallbackGrandTotal || undefined;
   if (!grandTotal && itemsSum) {
     grandTotal = itemsSum;
   }
@@ -494,7 +593,9 @@ export async function parseReceiptWithAI(
     throw new Error("No internet connection for AI enhancement");
   }
 
-  const content = await callChatModel(RECEIPT_SYSTEM_PROMPT, rawText);
+  const userPrompt = `Understand the receipt layout and context. Extract ONLY the purchased goods/services from the line-item body into 'items'. Exclude all header metadata (receipt/invoice #, cashier, table) and footer settlement data (total, subtotal, tax, cash, change).\n\nReceipt Text:\n${rawText}`;
+
+  const content = await callChatModel(RECEIPT_SYSTEM_PROMPT, userPrompt);
   const cleaned = cleanJsonContent(content);
   const extracted: AIExtractedReceipt = JSON.parse(cleaned);
 
@@ -516,9 +617,12 @@ export async function parseReceiptImageWithAI(
   const prepared = await prepareReceiptImage(imageUri);
   console.log(`[AIService] Image prepared: ${prepared.width}x${prepared.height}, size: ~${Math.round(prepared.base64.length / 1024)} KB`);
 
+  const userPrompt =
+    "Understand the receipt layout and context. Extract ONLY the purchased goods/services from the line-item body into 'items'. Exclude all header metadata (receipt/invoice #, cashier, table) and footer settlement data (total, subtotal, tax, cash, change).";
+
   const content = await callChatModel(
     RECEIPT_SYSTEM_PROMPT,
-    "Read this receipt image and extract all purchased items, quantities, prices, store name, date, and total.",
+    userPrompt,
     prepared
   );
 
@@ -535,4 +639,5 @@ export const AIService = {
   parseWithAI,
   parseReceiptWithAI,
   parseReceiptImageWithAI,
+  isReceiptMetadataOrTotal,
 };

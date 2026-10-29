@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import {
   View,
   Text,
@@ -78,6 +78,8 @@ export const CategoryCreationModal: React.FC<CategoryCreationModalProps> = ({
   const [catType, setCatType] = useState<"income" | "expense">(
     type || "expense"
   );
+  const [nameError, setNameError] = useState("");
+  const nameInputRef = useRef<TextInput>(null);
 
   // Pre-fill when initialData changes (edit mode) or modal opens
   useEffect(() => {
@@ -86,6 +88,7 @@ export const CategoryCreationModal: React.FC<CategoryCreationModalProps> = ({
       setColor(initialData?.color ?? PREDEFINED_COLORS[0]);
       setIcon((initialData as any)?.icon ?? CATEGORY_ICONS[0]);
       setCatType(initialData?.type ?? type ?? "expense");
+      setNameError("");
     }
   }, [visible, initialData, type]);
 
@@ -93,7 +96,11 @@ export const CategoryCreationModal: React.FC<CategoryCreationModalProps> = ({
   const modalTitle = title ?? (isEdit ? "Edit Category" : "Create New Category");
 
   const handleSave = () => {
-    if (!name.trim()) return;
+    if (!name.trim()) {
+      setNameError("Category name is required");
+      nameInputRef.current?.focus();
+      return;
+    }
     onCreateCategory({ name: name.trim(), type: catType, color, icon });
     handleClose();
   };
@@ -155,14 +162,39 @@ export const CategoryCreationModal: React.FC<CategoryCreationModalProps> = ({
           {/* ── Name Input ── */}
           <Text style={styles.label}>Category Name</Text>
           <TextInput
+            ref={nameInputRef}
             value={name}
-            onChangeText={setName}
+            onChangeText={(t) => {
+              setName(t);
+              if (nameError) setNameError("");
+            }}
             placeholder="e.g. Subscriptions"
             placeholderTextColor="#666"
-            style={[styles.input, { backgroundColor: "#27272A", color: "#FFF" }]}
+            style={[
+              styles.input,
+              {
+                backgroundColor: "#27272A",
+                color: "#FFF",
+                borderWidth: 1,
+                borderColor: nameError ? colors.error : "transparent",
+              },
+            ]}
             maxLength={50}
             returnKeyType="done"
+            onSubmitEditing={handleSave}
           />
+          {nameError ? (
+            <Text
+              style={{
+                color: colors.error,
+                fontSize: 12,
+                fontWeight: "600",
+                marginTop: 4,
+                marginBottom: 8,
+              }}>
+              {nameError}
+            </Text>
+          ) : null}
 
           {/* ── Icon Picker ── */}
           <Text style={styles.label}>Select Icon</Text>

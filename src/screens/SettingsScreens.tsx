@@ -165,8 +165,8 @@ export const SettingsScreen: React.FC = () => {
   const [showBillingDayPicker, setShowBillingDayPicker] = useState(false);
   const [showCurrencyPicker, setShowCurrencyPicker] = useState(false);
   const [showThemePicker, setShowThemePicker] = useState(false);
-  const [selectedBillingDay, setSelectedBillingDay] = useState(28);
-  const [billingDayInput, setBillingDayInput] = useState<string>("28");
+  const [selectedBillingDay, setSelectedBillingDay] = useState(1);
+  const [billingDayInput, setBillingDayInput] = useState<string>("1");
   const [debugClickCount, setDebugClickCount] = useState(0);
   const [showDebugSection, setShowDebugSection] = useState(false);
   const [debugLoggingEnabled, setDebugLoggingEnabled] =
@@ -199,7 +199,7 @@ export const SettingsScreen: React.FC = () => {
   const [showAiKeySecret, setShowAiKeySecret] = useState(false);
 
   const isGuest = Boolean(user?.isGuest || user?.uid === "guest");
-  const currentBillingDay = settings.data?.billingPeriodStartDay || 28;
+  const currentBillingDay = settings.data?.billingPeriodStartDay || 1;
 
   // ── Effects ─────────────────────────────────────────────────────
   useEffect(() => {
@@ -238,6 +238,7 @@ export const SettingsScreen: React.FC = () => {
     const updated: AIConfig = {
       provider: selectedAiProvider,
       apiKey: trimmed,
+      model: selectedAiProvider === "gemini" ? "gemini-3.6-flash" : undefined,
     };
     await saveAIConfig(updated);
     setAiKeyInput("");
@@ -852,7 +853,7 @@ export const SettingsScreen: React.FC = () => {
                 ]}
                 value={billingDayInput}
                 onChangeText={(text) => setBillingDayInput(text.replace(/[^0-9]/g, ""))}
-                placeholder="e.g. 28"
+                placeholder="e.g. 1"
                 placeholderTextColor={colors.onSurfaceVariant}
                 keyboardType="number-pad"
                 maxLength={2}

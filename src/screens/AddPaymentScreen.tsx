@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import {
   View,
   Text,
@@ -52,6 +52,11 @@ const AddPaymentScreen: React.FC = () => {
   });
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(false);
+
+  const amountRef = useRef<TextInput>(null);
+  const principalRef = useRef<TextInput>(null);
+  const interestRef = useRef<TextInput>(null);
+  const noteRef = useRef<TextInput>(null);
 
   // Auto-calculate principal/interest split
   useEffect(() => {
@@ -233,19 +238,24 @@ const AddPaymentScreen: React.FC = () => {
       <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "center", marginVertical: 32 }}>
         <Text style={{ fontSize: 32, fontWeight: "600", marginRight: 8, color: colors.onSurfaceVariant }}>{currencySymbol}</Text>
         <TextInput
+          ref={amountRef}
           style={{ fontSize: 56, fontWeight: "700", textAlign: "center", minWidth: 150, color: paymentData.amount ? colors.onBackground : colors.onSurfaceVariant }}
           placeholder="0.00"
           placeholderTextColor={colors.onSurfaceVariant}
           keyboardType="decimal-pad"
           value={paymentData.amount}
-          onChangeText={(text) =>
+          onChangeText={(text) => {
+            if (errors.amount) setErrors((prev) => ({ ...prev, amount: "" }));
             setPaymentData((prev) => ({
               ...prev,
               amount: text,
               principal: "",
               interest: "",
-            }))
-          }
+            }));
+          }}
+          returnKeyType="next"
+          blurOnSubmit={false}
+          onSubmitEditing={() => principalRef.current?.focus()}
         />
       </View>
       {errors.amount && (
@@ -265,14 +275,19 @@ const AddPaymentScreen: React.FC = () => {
             </View>
             <View style={[styles.splitInputWrap, { backgroundColor: colors.surface }]}>
               <TextInput
+                ref={principalRef}
                 style={[styles.splitInput, { color: colors.onSurface }]}
                 placeholder="0.00"
                 placeholderTextColor="rgba(128,128,128,0.5)"
                 value={paymentData.principal}
-                onChangeText={(text) =>
-                  setPaymentData((prev) => ({ ...prev, principal: text }))
-                }
+                onChangeText={(text) => {
+                  if (errors.split) setErrors((prev) => ({ ...prev, split: "" }));
+                  setPaymentData((prev) => ({ ...prev, principal: text }));
+                }}
                 keyboardType="decimal-pad"
+                returnKeyType="next"
+                blurOnSubmit={false}
+                onSubmitEditing={() => interestRef.current?.focus()}
               />
             </View>
           </View>
@@ -286,14 +301,19 @@ const AddPaymentScreen: React.FC = () => {
             </View>
             <View style={[styles.splitInputWrap, { backgroundColor: colors.surface }]}>
               <TextInput
+                ref={interestRef}
                 style={[styles.splitInput, { color: colors.onSurface }]}
                 placeholder="0.00"
                 placeholderTextColor="rgba(128,128,128,0.5)"
                 value={paymentData.interest}
-                onChangeText={(text) =>
-                  setPaymentData((prev) => ({ ...prev, interest: text }))
-                }
+                onChangeText={(text) => {
+                  if (errors.split) setErrors((prev) => ({ ...prev, split: "" }));
+                  setPaymentData((prev) => ({ ...prev, interest: text }));
+                }}
                 keyboardType="decimal-pad"
+                returnKeyType="next"
+                blurOnSubmit={false}
+                onSubmitEditing={() => noteRef.current?.focus()}
               />
             </View>
           </View>
@@ -317,6 +337,7 @@ const AddPaymentScreen: React.FC = () => {
         <Text style={[typography.label, { color: colors.onSurfaceVariant, marginBottom: spacing.xs, marginLeft: spacing.sm }]}>Notes (Optional)</Text>
         <View style={{ borderWidth: 1, borderColor: "rgba(255,255,255,0.05)", backgroundColor: colors.surfaceVariant, borderRadius: radius.lg }}>
           <TextInput
+            ref={noteRef}
             style={[typography.bodyMedium, { color: colors.onBackground, padding: spacing.md, textAlign: "center", minHeight: 80 }]}
             placeholder="Payment note or reference..."
             placeholderTextColor={colors.onSurfaceVariant}
@@ -325,6 +346,7 @@ const AddPaymentScreen: React.FC = () => {
             setPaymentData((prev) => ({ ...prev, note: text }))
           }
           multiline
+          returnKeyType="done"
         />
         </View>
       </View>

@@ -60,6 +60,8 @@ export class SyncService {
   private deviceId: string = "";
   private lastSyncTimestamp: number = 0;
   private syncInitializedAt: number = 0;
+  // Bumped every time sync is stopped; in-flight polls compare against it and drop their results
+  private syncGeneration: number = 0;
 
   private constructor() {
     this.deviceId = ""; // Will be initialized async
@@ -261,12 +263,25 @@ export class SyncService {
   public stopSync(): void {
     console.log("Stopping Firebase sync...");
 
+    this.syncGeneration++;
     this.unsubscribers.forEach((unsubscribe) => {
       unsubscribe();
     });
     this.unsubscribers.clear();
 
     console.log("Firebase sync stopped");
+  }
+
+  /**
+   * Forget everything that belongs to the current user. Call on sign-out / user switch.
+   */
+  public resetState(): void {
+    this.stopSync();
+    this.syncQueue = [];
+    this.failedInserts = [];
+    this.lastSyncTimestamp = 0;
+    this.syncInitializedAt = 0;
+    this.syncInProgress = false;
   }
 
   private getDb(): Firestore {
@@ -362,6 +377,9 @@ export class SyncService {
   private async startSyncListeners(): Promise<void> {
     const userId = await authService.requireUserIdAsync();
 
+    // Never stack timers: kill whatever the previous session left running first
+    this.stopSync();
+
     // Listen to each collection
     const startPromises = Object.values(COLLECTIONS).map((collectionName) =>
       this.startCollectionListener(userId, collectionName),
@@ -397,6 +415,7 @@ export class SyncService {
     }, 600000); // Poll every 10 minutes (600,000ms)
 
     // Store the interval ID so we can clear it later
+    this.unsubscribers.get(collectionName)?.();
     this.unsubscribers.set(collectionName, () => {
       clearInterval(pollInterval);
     });
@@ -411,6 +430,7 @@ export class SyncService {
     userId: string,
     collectionName: CollectionName,
   ): Promise<void> {
+    const generation = this.syncGeneration;
     try {
       const collectionRef = collection(
         this.getDb(),
@@ -435,6 +455,21 @@ export class SyncService {
 
       const snapshot = await getDocs(changesQuery);
 
+      // The user may have signed out / switched while the request was in flight.
+      // Writing these docs now would put the old user's data into the new user's database.
+      let stillCurrent = generation === this.syncGeneration;
+      if (stillCurrent) {
+        try {
+          stillCurrent = (await authService.requireUserIdAsync()) === userId;
+        } catch {
+          stillCurrent = false;
+        }
+      }
+      if (!stillCurrent) {
+        console.log(`⏭️ Dropping stale ${collectionName} poll for ${userId}`);
+        return;
+      }
+
       if (snapshot.docs.length > 0) {
         console.log(
           `� Found ${snapshot.docs.length} changed documents in ${collectionName}`,
@@ -442,6 +477,7 @@ export class SyncService {
 
         // Process each changed document
         for (const docSnapshot of snapshot.docs) {
+          if (generation !== this.syncGeneration) return;
           const docData = docSnapshot.data() as FirestoreDocument<any>;
           const docId = docSnapshot.id;
 
@@ -770,6 +806,16 @@ export class SyncService {
         shouldTakeRemote = true;
       } else {
         decision = "KEEP_LOCAL_TIMESTAMP";
+      }
+    }
+
+    // Special rule for settings: if local is untouched default, cloud settings always win
+    if (collectionName === "settings") {
+      const isLocalUntouched = !localDoc?.sync_updated_at || localDoc.sync_updated_at === 0 || localDoc.sync_status === "synced";
+      if (isLocalUntouched) {
+        decision = "UPDATE_LOCAL_SETTINGS_UNTOUCHED";
+        shouldTakeRemote = true;
+        shouldSkipDueToSameDevice = false;
       }
     }
 
@@ -1622,6 +1668,32 @@ export class SyncService {
           await walletUpdateRepo.updateWallet(doc.id, doc.data as any, {
             skipSync: true,
           });
+          break;
+
+        case "settings":
+          console.log(`⚙️ Processing settings for local update:`);
+          const { cleanSettingsData: cleanSettingsUpdateData } = await import(
+            "../utils/validation"
+          );
+          const safeSettingsUpdate = cleanSettingsUpdateData(doc.data || doc);
+          safeSettingsUpdate.syncStatus = "synced";
+
+          const settingsUpdateRepo = new (
+            await import("../database/queries/settings")
+          ).SettingsRepository();
+
+          await settingsUpdateRepo.updateSettings(
+            {
+              billingPeriodStartDay: safeSettingsUpdate.billingPeriodStartDay,
+              currency: safeSettingsUpdate.currency,
+              firebaseSync: safeSettingsUpdate.firebaseSync,
+              theme: safeSettingsUpdate.theme,
+              syncUpdatedAt: safeSettingsUpdate.syncUpdatedAt,
+              syncStatus: "synced",
+            },
+            { skipSync: true },
+          );
+          console.log(`✅ Settings update completed successfully`);
           break;
 
         default:

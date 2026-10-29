@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useMemo } from "react";
-import { View } from "react-native";
+import React, { useState, useEffect, useMemo, useRef } from "react";
+import { View, TextInput } from "react-native";
 import { useDispatch, useSelector } from "react-redux";
 import { useNavigation } from "@react-navigation/native";
 import { useToast, CategorySelector } from "../../ui";
@@ -51,6 +51,10 @@ export const BudgetForm: React.FC<BudgetFormProps> = ({
   });
 
   const [errors, setErrors] = useState<Record<string, string>>({});
+
+  const nameRef = useRef<TextInput>(null);
+  const amountRef = useRef<TextInput>(null);
+  const resetDayRef = useRef<TextInput>(null);
 
   // Load categories on mount
   useEffect(() => {
@@ -167,6 +171,7 @@ export const BudgetForm: React.FC<BudgetFormProps> = ({
       loading={loading}
       isValid={isFormValid}>
       <FormField
+        ref={nameRef}
         label="Budget Name"
         icon="wallet-outline"
         required
@@ -175,9 +180,13 @@ export const BudgetForm: React.FC<BudgetFormProps> = ({
         onChangeText={(text) => updateField("name", text)}
         error={errors.name}
         autoFocus={!isEditing}
+        returnKeyType="next"
+        blurOnSubmit={false}
+        onSubmitEditing={() => amountRef.current?.focus()}
       />
 
       <FormField
+        ref={amountRef}
         label="Amount"
         icon="cash-outline"
         required
@@ -186,6 +195,9 @@ export const BudgetForm: React.FC<BudgetFormProps> = ({
         onChangeText={(text) => updateField("amount", text)}
         keyboardType="numeric"
         error={errors.amount}
+        returnKeyType="next"
+        blurOnSubmit={false}
+        onSubmitEditing={() => resetDayRef.current?.focus()}
       />
 
       {/* Category Selection */}
@@ -209,6 +221,7 @@ export const BudgetForm: React.FC<BudgetFormProps> = ({
 
       {/* Reset Day Input */}
       <FormField
+        ref={resetDayRef}
         label="Reset Day"
         value={formData.resetDay}
         onChangeText={(value) => updateField("resetDay", value)}
@@ -217,6 +230,8 @@ export const BudgetForm: React.FC<BudgetFormProps> = ({
         icon="calendar"
         required={true}
         error={errors.resetDay}
+        returnKeyType="done"
+        onSubmitEditing={handleSubmit}
       />
     </UnifiedForm>
   );

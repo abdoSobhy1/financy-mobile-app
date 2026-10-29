@@ -18,27 +18,31 @@ interface InputProps extends Omit<TextInputProps, "style"> {
   required?: boolean;
 }
 
-const Input: React.FC<InputProps> = ({
-  label,
-  error,
-  hint,
-  leftIcon,
-  rightIcon,
-  containerStyle,
-  inputStyle,
-  labelStyle,
-  errorStyle,
-  variant = "default",
-  size = "medium",
-  required = false,
-  secureTextEntry,
-  onFocus,
-  onBlur,
-  ...textInputProps
-}) => {
-  const { colors, typography, radius, spacing } = useAppTheme();
-  const [isFocused, setIsFocused] = useState(false);
-  const [isSecure, setIsSecure] = useState(secureTextEntry);
+const Input = React.forwardRef<TextInput, InputProps>(
+  (
+    {
+      label,
+      error,
+      hint,
+      leftIcon,
+      rightIcon,
+      containerStyle,
+      inputStyle,
+      labelStyle,
+      errorStyle,
+      variant = "default",
+      size = "medium",
+      required = false,
+      secureTextEntry,
+      onFocus,
+      onBlur,
+      ...textInputProps
+    },
+    ref,
+  ) => {
+    const { colors, typography, radius, spacing } = useAppTheme();
+    const [isFocused, setIsFocused] = useState(false);
+    const [isSecure, setIsSecure] = useState(secureTextEntry);
 
   const handleFocus = (e: any) => {
     setIsFocused(true);
@@ -113,6 +117,7 @@ const Input: React.FC<InputProps> = ({
         {leftIcon && <View style={{ marginRight: spacing.sm }}>{leftIcon}</View>}
 
         <TextInput
+          ref={ref}
           style={[{ flex: 1, fontSize: 16, color: colors.onSurface, padding: 0 }, inputStyle]}
           placeholderTextColor={colors.onSurfaceVariant}
           secureTextEntry={isSecure}
@@ -134,7 +139,9 @@ const Input: React.FC<InputProps> = ({
       {hint && !error && <Text style={[typography.bodySmall, { color: colors.onSurfaceVariant, marginTop: spacing.xs }]}>{hint}</Text>}
     </View>
   );
-};
+});
+
+Input.displayName = "Input";
 
 const styles = StyleSheet.create({
   inputContainer: {

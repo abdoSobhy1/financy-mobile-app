@@ -5,6 +5,7 @@ import { fetchBudgets } from "../store/slices/budgetsSlice";
 import { fetchTransactions } from "../store/slices/transactionsSlice";
 import { fetchCategories } from "../store/slices/categoriesSlice";
 import { fetchDebts } from "../store/slices/debtsSlice";
+import { fetchSettings } from "../store/slices/settingsSlice";
 import { syncService } from "../services/syncService";
 import { CollectionName } from "../types";
 
@@ -40,6 +41,14 @@ export const useSyncDataRefresh = () => {
           case "debts":
             await dispatch(fetchDebts()).unwrap();
             break;
+          case "settings":
+            await dispatch(fetchSettings()).unwrap();
+            break;
+          case "wallets": {
+            const { walletService } = await import("../services/walletService");
+            await walletService.refreshCache();
+            break;
+          }
           default:
             console.warn(`Unknown collection for Redux refresh: ${collectionName}`);
         }
