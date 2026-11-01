@@ -94,10 +94,11 @@ export const CategoryCreationModal: React.FC<CategoryCreationModalProps> = ({
     }
   }, [visible, initialData, type]);
 
-  const isEdit = !!initialData;
+  const isEdit = !!initialData && !!(initialData.name?.trim() || (initialData as any).id);
   const modalTitle = title ?? (isEdit ? "Edit Category" : "Create New Category");
 
   const hasChanges = useMemo(() => {
+    if (!visible) return false;
     if (isEdit && initialData) {
       const origName = initialData.name || "";
       const origColor = initialData.color || PREDEFINED_COLORS[0];
@@ -112,11 +113,13 @@ export const CategoryCreationModal: React.FC<CategoryCreationModalProps> = ({
     } else {
       return name.trim() !== "";
     }
-  }, [isEdit, initialData, name, color, icon, catType, type]);
+  }, [visible, isEdit, initialData, name, color, icon, catType, type]);
 
   const { confirmExit } = useUnsavedChanges({
     hasChanges,
     isEditing: isEdit,
+    isModal: true,
+    enabled: visible,
   });
 
   const handleSave = () => {

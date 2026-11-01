@@ -360,7 +360,7 @@ export const SignInScreen: React.FC = () => {
               },
             ]}
           >
-            Offline local storage only • Cloud backup disabled • 3 AI receipt scans/day
+            Offline local storage only • Cloud backup disabled
           </Text>
 
         </View>

@@ -10,7 +10,7 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 import { useNavigation, useRoute, RouteProp } from "@react-navigation/native";
 import { StackNavigationProp } from "@react-navigation/stack";
-import { TransactionStackParamList } from "../types";
+import { TransactionStackParamList, ParsedTransaction } from "../types";
 import { useAppTheme } from "../components/ui/ThemeProvider";
 import Animated, {
   useSharedValue,
@@ -35,7 +35,8 @@ import { RootState } from "../store";
 type NavigationProp = StackNavigationProp<TransactionStackParamList>;
 type VoiceInputRouteProp = RouteProp<TransactionStackParamList, "VoiceInput">;
 const NUM_BARS = 5;
-const SILENCE_TIMEOUT_MS = 3000;
+const SILENCE_TIMEOUT_MS = 4500;
+const INITIAL_SILENCE_TIMEOUT_MS = 10000;
 
 export const VoiceInputScreen: React.FC = () => {
   const navigation = useNavigation<NavigationProp>();
@@ -54,6 +55,8 @@ export const VoiceInputScreen: React.FC = () => {
   const transactions = Object.values(transactionsMap);
   
   const transcriptRef = useRef("");
+  const finalizedSegmentsRef = useRef("");
+  const interimSegmentRef = useRef("");
   const isNavigatingRef = useRef(false);
   const silenceTimeoutRef = useRef<any>(null);
 
@@ -63,27 +66,43 @@ export const VoiceInputScreen: React.FC = () => {
 
   const processTranscript = async (finalTranscript: string) => {
     if (isNavigatingRef.current) return;
-    isNavigatingRef.current = true;
     
     stopAnimations();
     clearSilenceTimeout();
     
-    if (finalTranscript.trim()) {
+    const textToProcess = finalTranscript.trim();
+    if (textToProcess) {
+      isNavigatingRef.current = true;
       const categoriesList = categories.map((c) => ({ id: c.id, name: c.name }));
-      const parsed = parseVoiceInput(finalTranscript, categoriesList, undefined, budgets, transactions);
+      const parsed = parseVoiceInput(textToProcess, categoriesList, undefined, budgets, transactions);
       
       if (parsed && parsed.length > 0) {
         // Merge with any existing transactions passed from VoiceVerify
         // Always use replace to keep a flat navigation stack
         const merged = [...existingTransactions, ...parsed];
-        navigation.replace("VoiceVerify", { parsedTransactions: merged });
+        navigation.replace("VoiceVerify", { parsedTransactions: merged, rawText: textToProcess });
+        return;
+      } else {
+        // Fallback: create draft transaction with transcribed description so user input is never lost
+        const fallbackTx: ParsedTransaction = {
+          amount: 0,
+          type: "expense",
+          description: textToProcess,
+          date: new Date(),
+          confidence: 0.5,
+          rawText: textToProcess,
+        };
+        const merged = [...existingTransactions, fallbackTx];
+        navigation.replace("VoiceVerify", { parsedTransactions: merged, rawText: textToProcess });
         return;
       }
     }
     
     if (existingTransactions.length > 0) {
+      isNavigatingRef.current = true;
       navigation.replace("VoiceVerify", { parsedTransactions: existingTransactions });
     } else {
+      isNavigatingRef.current = true;
       navigation.goBack();
     }
   };
@@ -95,37 +114,91 @@ export const VoiceInputScreen: React.FC = () => {
     }
   };
 
-  const resetSilenceTimeout = () => {
+  const resetSilenceTimeout = (durationMs = SILENCE_TIMEOUT_MS) => {
     clearSilenceTimeout();
     silenceTimeoutRef.current = setTimeout(() => {
       handleStop();
-    }, SILENCE_TIMEOUT_MS);
+    }, durationMs);
   };
 
   useSpeechRecognitionEvent("start", () => {
     setIsListening(true);
-    resetSilenceTimeout();
+    resetSilenceTimeout(INITIAL_SILENCE_TIMEOUT_MS);
   });
   
   useSpeechRecognitionEvent("end", () => {
     setIsListening(false);
     clearSilenceTimeout();
-    if (transcriptRef.current) {
+    stopAnimations();
+    if (transcriptRef.current.trim()) {
       processTranscript(transcriptRef.current);
     }
   });
 
   useSpeechRecognitionEvent("result", (event) => {
-    const text = event.results[0]?.transcript || "";
-    setTranscript(text);
-    transcriptRef.current = text;
-    // Reset silence timeout whenever we get a new result
-    resetSilenceTimeout();
+    const incomingRaw = event.results[0]?.transcript || "";
+    const incoming = incomingRaw.trim();
+    if (!incoming) {
+      // Do not wipe or reset state if recognizer emits an empty result
+      return;
+    }
+
+    const isFinal = Boolean(event.isFinal);
+    const finalized = finalizedSegmentsRef.current.trim();
+
+    // Determine if incoming transcript is cumulative (iOS / some engines where whole speech is returned)
+    // or segmented (Android continuous EXTRA_SEGMENTED_SESSION where each segment returns only new words)
+    const normalizedFinal = finalized.replace(/[.,!?:;،؟\s]+$/, "").trim();
+    const isCumulative =
+      normalizedFinal.length > 0 &&
+      (incoming.startsWith(finalized) ||
+        incoming.startsWith(normalizedFinal) ||
+        incoming.toLowerCase().startsWith(normalizedFinal.toLowerCase()));
+
+    let currentFullText = "";
+
+    if (isCumulative) {
+      // Cumulative stream: incoming already contains previous speech
+      currentFullText = incoming;
+      if (isFinal) {
+        finalizedSegmentsRef.current = incoming;
+        interimSegmentRef.current = "";
+      } else {
+        interimSegmentRef.current = incoming;
+      }
+    } else {
+      // Segmented stream: incoming covers only the new segment and must be appended to finalized speech
+      if (isFinal) {
+        const updatedFinalized = finalized ? `${finalized} ${incoming}` : incoming;
+        finalizedSegmentsRef.current = updatedFinalized;
+        interimSegmentRef.current = "";
+        currentFullText = updatedFinalized;
+      } else {
+        interimSegmentRef.current = incoming;
+        currentFullText = finalized ? `${finalized} ${incoming}` : incoming;
+      }
+    }
+
+    transcriptRef.current = currentFullText;
+    setTranscript(currentFullText);
+
+    // Reset silence timeout whenever we receive new recognized speech
+    resetSilenceTimeout(SILENCE_TIMEOUT_MS);
   });
 
   useSpeechRecognitionEvent("error", (event) => {
     console.warn("Speech recognition error:", event.error, event.message);
-    // If online recognition failed due to network, fallback to on-device offline recognition
+
+    // If speech was already captured, do not discard it on error (e.g. timeout or network)
+    if (transcriptRef.current.trim()) {
+      setIsListening(false);
+      clearSilenceTimeout();
+      stopAnimations();
+      processTranscript(transcriptRef.current);
+      return;
+    }
+
+    // If online recognition failed due to network before any speech, fallback to on-device offline recognition
     if (event.error === "network" && !isOffline) {
       setIsOffline(true);
       try {
@@ -136,6 +209,11 @@ export const VoiceInputScreen: React.FC = () => {
           continuous: true,
           requiresOnDeviceRecognition: true,
           addsPunctuation: true,
+          androidIntentOptions: {
+            EXTRA_SPEECH_INPUT_COMPLETE_SILENCE_LENGTH_MILLIS: 5000,
+            EXTRA_SPEECH_INPUT_POSSIBLY_COMPLETE_SILENCE_LENGTH_MILLIS: 5000,
+            EXTRA_SPEECH_INPUT_MINIMUM_LENGTH_MILLIS: 30000,
+          },
         });
         return;
       } catch (err) {
@@ -144,6 +222,7 @@ export const VoiceInputScreen: React.FC = () => {
     }
     setIsListening(false);
     clearSilenceTimeout();
+    stopAnimations();
   });
 
   const startAnimations = () => {
@@ -193,6 +272,9 @@ export const VoiceInputScreen: React.FC = () => {
 
       setTranscript("");
       transcriptRef.current = "";
+      finalizedSegmentsRef.current = "";
+      interimSegmentRef.current = "";
+      isNavigatingRef.current = false;
       
       startAnimations();
 
@@ -203,25 +285,48 @@ export const VoiceInputScreen: React.FC = () => {
         continuous: true,
         requiresOnDeviceRecognition: offline,
         addsPunctuation: true,
+        androidIntentOptions: {
+          EXTRA_SPEECH_INPUT_COMPLETE_SILENCE_LENGTH_MILLIS: 5000,
+          EXTRA_SPEECH_INPUT_POSSIBLY_COMPLETE_SILENCE_LENGTH_MILLIS: 5000,
+          EXTRA_SPEECH_INPUT_MINIMUM_LENGTH_MILLIS: 30000,
+        },
       });
     } catch (error) {
       console.error("[VoiceInput] Start error:", error);
       stopAnimations();
+      setIsListening(false);
     }
   }, []);
 
   useEffect(() => {
     startListening();
     return () => {
-      ExpoSpeechRecognitionModule.stop();
+      try {
+        ExpoSpeechRecognitionModule.stop();
+      } catch (e) {}
       stopAnimations();
       clearSilenceTimeout();
     };
   }, [startListening]);
 
   const handleStop = async () => {
-    ExpoSpeechRecognitionModule.stop();
+    clearSilenceTimeout();
+    try {
+      await ExpoSpeechRecognitionModule.stop();
+    } catch (e) {}
     processTranscript(transcriptRef.current);
+  };
+
+  const handleContentPress = () => {
+    if (isListening) {
+      handleStop();
+    } else {
+      if (transcriptRef.current.trim()) {
+        processTranscript(transcriptRef.current);
+      } else {
+        startListening();
+      }
+    }
   };
 
   const ringAnimStyle = useAnimatedStyle(() => ({
@@ -239,8 +344,12 @@ export const VoiceInputScreen: React.FC = () => {
           onPress={() => {
             isNavigatingRef.current = true;
             transcriptRef.current = "";
+            finalizedSegmentsRef.current = "";
+            interimSegmentRef.current = "";
             clearSilenceTimeout();
-            ExpoSpeechRecognitionModule.stop();
+            try {
+              ExpoSpeechRecognitionModule.stop();
+            } catch (e) {}
             if (existingTransactions.length > 0) {
               navigation.replace("VoiceVerify", { parsedTransactions: existingTransactions });
             } else {
@@ -255,7 +364,7 @@ export const VoiceInputScreen: React.FC = () => {
       <TouchableOpacity 
         style={styles.content} 
         activeOpacity={1} 
-        onPress={handleStop}
+        onPress={handleContentPress}
       >
         <View style={styles.micWrapper}>
           <Animated.View style={[styles.pulseRing, { borderColor: colors.primaryContainer, backgroundColor: colors.primaryContainer + "33" }, ringAnimStyle]} />
@@ -265,10 +374,22 @@ export const VoiceInputScreen: React.FC = () => {
         </View>
 
         <Text style={[typography.h3, { color: colors.onBackground, marginBottom: 8 }]}>
-          {isOffline ? "Listening (Offline • العربية)" : "Listening (العربية)..."}
+          {isListening
+            ? isOffline
+              ? "Listening (Offline • العربية)"
+              : "Listening (العربية)..."
+            : transcript
+            ? "Ready to Verify"
+            : "Tap to Start"}
         </Text>
         <Text style={[typography.caption, { color: colors.onSurfaceVariant, marginBottom: 20 }]}>
-          {isOffline ? "On-device Arabic speech recognition active" : "Speak your transaction in Arabic (e.g. صرفت 150 قهوة)"}
+          {isListening
+            ? isOffline
+              ? "On-device Arabic speech recognition active"
+              : "Speak your transaction in Arabic (e.g. صرفت 150 قهوة)"
+            : transcript
+            ? "Tap anywhere to continue"
+            : "Tap mic to speak your transaction"}
         </Text>
         
         {transcript ? (
@@ -293,7 +414,11 @@ export const VoiceInputScreen: React.FC = () => {
         </View>
 
         <Text style={[typography.label, { color: colors.onSurfaceVariant, position: "absolute", bottom: 60 }]}>
-          Tap anywhere to stop
+          {isListening
+            ? "Tap anywhere to stop"
+            : transcript
+            ? "Tap anywhere to continue"
+            : "Tap mic to start"}
         </Text>
       </TouchableOpacity>
     </SafeAreaView>

@@ -175,8 +175,10 @@ export const TransferModal: React.FC<TransferModalProps> = ({
   };
 
   const { confirmExit } = useUnsavedChanges({
-    hasChanges: transferAmount.trim() !== "",
+    hasChanges: visible && transferAmount.trim() !== "",
     title: "Discard Transfer",
+    isModal: true,
+    enabled: visible,
   });
 
   // Only wallets other than fromWalletId can be selected as destination

@@ -73,6 +73,8 @@ export const VoiceInputButton: React.FC<VoiceInputButtonProps> = ({
   const silenceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const countdownRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const transcriptRef = useRef<string>("");
+  const finalizedSegmentsRef = useRef<string>("");
+  const interimSegmentRef = useRef<string>("");
   const bottomSheetRef = useRef<BottomSheetModal>(null);
   const snapPoints = useMemo(() => ["45%"], []);
 
@@ -218,15 +220,53 @@ export const VoiceInputButton: React.FC<VoiceInputButtonProps> = ({
 
       // Reset transcript for next time
       setTranscript("");
+      transcriptRef.current = "";
+      finalizedSegmentsRef.current = "";
+      interimSegmentRef.current = "";
     },
     [categories, lastCategoryId, onResult],
   );
 
   // Speech recognition events
   useSpeechRecognitionEvent("result", (event) => {
-    const text = event.results[0]?.transcript ?? "";
-    setTranscript(text);
-    transcriptRef.current = text;
+    const incomingRaw = event.results[0]?.transcript ?? "";
+    const incoming = incomingRaw.trim();
+    if (!incoming) return;
+
+    const isFinal = Boolean(event.isFinal);
+    const finalized = finalizedSegmentsRef.current.trim();
+
+    const normalizedFinal = finalized.replace(/[.,!?:;،؟\s]+$/, "").trim();
+    const isCumulative =
+      normalizedFinal.length > 0 &&
+      (incoming.startsWith(finalized) ||
+        incoming.startsWith(normalizedFinal) ||
+        incoming.toLowerCase().startsWith(normalizedFinal.toLowerCase()));
+
+    let currentFullText = "";
+
+    if (isCumulative) {
+      currentFullText = incoming;
+      if (isFinal) {
+        finalizedSegmentsRef.current = incoming;
+        interimSegmentRef.current = "";
+      } else {
+        interimSegmentRef.current = incoming;
+      }
+    } else {
+      if (isFinal) {
+        const updatedFinalized = finalized ? `${finalized} ${incoming}` : incoming;
+        finalizedSegmentsRef.current = updatedFinalized;
+        interimSegmentRef.current = "";
+        currentFullText = updatedFinalized;
+      } else {
+        interimSegmentRef.current = incoming;
+        currentFullText = finalized ? `${finalized} ${incoming}` : incoming;
+      }
+    }
+
+    transcriptRef.current = currentFullText;
+    setTranscript(currentFullText);
 
     // Clear existing silence timer
     if (silenceTimerRef.current) {
@@ -234,16 +274,20 @@ export const VoiceInputButton: React.FC<VoiceInputButtonProps> = ({
     }
 
     // Set new silence timer (buffer before stopping)
-    // If no new speech for 2 seconds, consider it done
     silenceTimerRef.current = setTimeout(() => {
-      if (isListeningRef.current && text.trim()) {
-        finishRecording(text);
+      if (isListeningRef.current && currentFullText.trim()) {
+        finishRecording(currentFullText);
       }
-    }, 2000);
+    }, 4000);
   });
 
   useSpeechRecognitionEvent("error", (event) => {
     console.warn("[VoiceInput] Error:", event.error, event.message);
+    const textToFinish = transcriptRef.current.trim();
+    if (textToFinish) {
+      finishRecording(textToFinish);
+      return;
+    }
     setIsListening(false);
     isListeningRef.current = false;
     bottomSheetRef.current?.dismiss();
@@ -287,6 +331,8 @@ export const VoiceInputButton: React.FC<VoiceInputButtonProps> = ({
 
       setTranscript("");
       transcriptRef.current = "";
+      finalizedSegmentsRef.current = "";
+      interimSegmentRef.current = "";
       setTimeLeft(60);
       setIsOffline(false);
       setIsListening(true);
@@ -311,6 +357,11 @@ export const VoiceInputButton: React.FC<VoiceInputButtonProps> = ({
         interimResults: true,
         continuous: true,
         addsPunctuation: true,
+        androidIntentOptions: {
+          EXTRA_SPEECH_INPUT_COMPLETE_SILENCE_LENGTH_MILLIS: 5000,
+          EXTRA_SPEECH_INPUT_POSSIBLY_COMPLETE_SILENCE_LENGTH_MILLIS: 5000,
+          EXTRA_SPEECH_INPUT_MINIMUM_LENGTH_MILLIS: 30000,
+        },
       });
     } catch (error) {
       console.error("[VoiceInput] Start error:", error);
@@ -326,15 +377,16 @@ export const VoiceInputButton: React.FC<VoiceInputButtonProps> = ({
     if (countdownRef.current) clearInterval(countdownRef.current);
 
     // Process the transcript before stopping
-    if (transcript.trim()) {
-      finishRecording(transcript);
+    const textToFinish = transcriptRef.current.trim();
+    if (textToFinish) {
+      finishRecording(textToFinish);
     } else {
       ExpoSpeechRecognitionModule.stop();
       setIsListening(false);
       isListeningRef.current = false;
       bottomSheetRef.current?.dismiss();
     }
-  }, [transcript, finishRecording]);
+  }, [finishRecording]);
 
   const handlePress = () => {
     if (isListening) {

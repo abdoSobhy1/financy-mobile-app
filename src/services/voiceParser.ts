@@ -14,6 +14,7 @@
  */
 
 import { ParsedTransaction, TransactionType } from "../types";
+import { guessCategoryId } from "../utils/categoryDictionary";
 
 // ── Arabic-Eastern ↔ Western digit conversion ───────────────────────────
 
@@ -390,16 +391,21 @@ function extractDescription(remaining: string, originalText: string): string {
 
 // ── Category matching ──────────────────────────────────────────────────
 
-function findCategory(
+export function findCategory(
   text: string,
-  categories: { id: string; name: string }[],
+  categories: { id: string; name: string }[] | Record<string, any>,
   transactions: any[] = [],
   defaultCategoryId?: string,
 ): { id: string | undefined; matchedText: string | undefined } {
   const normalizedText = text.toLowerCase();
 
+  const categoryList: { id: string; name: string }[] = Array.isArray(categories)
+    ? categories
+    : Object.values(categories).map((c: any) => ({ id: c.id, name: c.name }));
+
   // First pass: try full category name match
-  for (const category of categories) {
+  for (const category of categoryList) {
+    if (!category?.name) continue;
     const catName = category.name.toLowerCase();
     if (normalizedText.includes(catName)) {
       console.log("🏷️ Full match:", category.name);
@@ -408,47 +414,50 @@ function findCategory(
   }
 
   // Second pass: ML History matching
-  const categoryScores: Record<string, number> = {};
-  const inputWords = normalizedText.split(/\s+/).filter(w => w.length > 2);
-  let hasHistoryMatch = false;
+  if (transactions && transactions.length > 0) {
+    const categoryScores: Record<string, number> = {};
+    const inputWords = normalizedText.split(/\s+/).filter((w) => w.length > 2);
+    let hasHistoryMatch = false;
 
-  for (const tx of transactions) {
-    if (!tx.description || !tx.categoryId) continue;
-    const txDesc = tx.description.toLowerCase();
-    
-    let matchCount = 0;
-    for (const word of inputWords) {
-      if (txDesc.includes(word)) {
-        matchCount++;
+    for (const tx of transactions) {
+      if (!tx.description || !tx.categoryId) continue;
+      const txDesc = tx.description.toLowerCase();
+
+      let matchCount = 0;
+      for (const word of inputWords) {
+        if (txDesc.includes(word)) {
+          matchCount++;
+        }
+      }
+
+      if (matchCount > 0) {
+        categoryScores[tx.categoryId] = (categoryScores[tx.categoryId] || 0) + matchCount;
+        hasHistoryMatch = true;
       }
     }
-    
-    if (matchCount > 0) {
-      categoryScores[tx.categoryId] = (categoryScores[tx.categoryId] || 0) + matchCount;
-      hasHistoryMatch = true;
+
+    if (hasHistoryMatch) {
+      let maxScore = 0;
+      let bestCatId: string | undefined;
+      for (const [catId, score] of Object.entries(categoryScores)) {
+        if (score > maxScore) {
+          maxScore = score;
+          bestCatId = catId;
+        }
+      }
+
+      if (bestCatId) {
+        console.log("🧠 ML match:", bestCatId, "with score", maxScore);
+        return { id: bestCatId, matchedText: undefined };
+      }
     }
   }
 
-  if (hasHistoryMatch) {
-    let maxScore = 0;
-    let bestCatId: string | undefined;
-    for (const [catId, score] of Object.entries(categoryScores)) {
-      if (score > maxScore) {
-        maxScore = score;
-        bestCatId = catId;
-      }
-    }
-    
-    if (bestCatId) {
-      console.log("🧠 ML match:", bestCatId, "with score", maxScore);
-      return { id: bestCatId, matchedText: undefined };
-    }
-  }
-
-  // Second pass: try partial match (any single word from category name)
+  // Third pass: try partial match (any single word from category name)
   // Sort by word length descending so longer/more specific words match first
   const candidates: { id: string; word: string; catName: string }[] = [];
-  for (const category of categories) {
+  for (const category of categoryList) {
+    if (!category?.name) continue;
     const words = category.name.split(/\s+/).filter((w) => w.length > 1);
     for (const word of words) {
       candidates.push({ id: category.id, word, catName: category.name });
@@ -463,7 +472,27 @@ function findCategory(
     }
   }
 
+  // Fourth pass: Dictionary fallback matching
+  try {
+    const categoriesMap = Array.isArray(categories)
+      ? categories.reduce((acc, c: any) => ({ ...acc, [c.id]: c }), {})
+      : categories;
+    const dictGuess = guessCategoryId(text, categoriesMap);
+    if (dictGuess) {
+      return { id: dictGuess, matchedText: undefined };
+    }
+  } catch (e) {}
+
   return { id: defaultCategoryId, matchedText: undefined };
+}
+
+export function detectCategory(
+  text: string,
+  categories: { id: string; name: string }[] | Record<string, any>,
+  transactions: any[] = [],
+  defaultCategoryId?: string,
+): string | undefined {
+  return findCategory(text, categories, transactions, defaultCategoryId).id;
 }
 
 function parseSingleTransaction(

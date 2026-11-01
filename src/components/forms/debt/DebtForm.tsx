@@ -217,9 +217,12 @@ export const DebtForm: React.FC<DebtFormProps> = ({
         showSuccess("Debt added successfully!");
       }
 
-      onSuccess?.();
       markAsSaved();
-      navigation.goBack();
+      if (onSuccess) {
+        onSuccess();
+      } else {
+        navigation.goBack();
+      }
     } catch (error) {
       resetSaved();
       console.error("Debt operation error:", error);
@@ -248,9 +251,12 @@ export const DebtForm: React.FC<DebtFormProps> = ({
               setLoading(true);
               await dispatch(deleteDebt(debt.id)).unwrap();
               showSuccess("Debt deleted successfully!");
-              onSuccess?.();
               markAsSaved();
-              navigation.goBack();
+              if (onSuccess) {
+                onSuccess();
+              } else {
+                navigation.goBack();
+              }
             } catch (error) {
               resetSaved();
               console.error("Debt deletion error:", error);

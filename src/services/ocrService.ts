@@ -17,6 +17,7 @@ import * as ImagePicker from "expo-image-picker";
 import * as DocumentPicker from "expo-document-picker";
 import { Category, TransactionType } from "../types";
 import { guessCategoryId } from "../utils/categoryDictionary";
+import { detectCategory } from "./voiceParser";
 import { AIService, isReceiptMetadataOrTotal } from "./aiService";
 import { getAIConfig } from "./aiConfigService";
 import { getOcrQuotaStatus, consumeOcrQuota } from "./ocrRateLimitService";
@@ -562,13 +563,13 @@ function parseInstaPaySlip(
   if (reference) noteDetails.push(`Ref: ${reference}`);
   if (recipient) noteDetails.push(`To: ${recipient}`);
 
-  // Guess category based on note (e.g. "نفقات المعيشة" -> Living / Expenses)
+  // Detect category based on note (using voice/ML category matching algorithm)
   let categoryId: string | undefined;
   if (note) {
-    categoryId = guessCategoryId(note, categories);
+    categoryId = detectCategory(note, categories);
   }
   if (!categoryId) {
-    categoryId = guessCategoryId("مصاريف", categories) || guessCategoryId("اخرى", categories);
+    categoryId = detectCategory("مصاريف", categories) || detectCategory("اخرى", categories);
   }
 
   const debugLines: OcrLineDebug[] = [];
@@ -1096,8 +1097,8 @@ export function parseReceiptText(
     if (isReceiptMetadataOrTotal(line)) continue;
     const it = parseSingleLineItem(line);
     if (it && !isReceiptMetadataOrTotal(it.name)) {
-      // Guess category for each individual item
-      it.categoryId = guessCategoryId(it.name, categories);
+      // Detect category for each individual item using voice/ML category matching
+      it.categoryId = detectCategory(it.name, categories);
       items.push(it);
     }
   }
@@ -1114,7 +1115,7 @@ export function parseReceiptText(
   for (const it of items) {
     if (it.name === "Item" && orphanNames.length > 0) {
       it.name = orphanNames.shift()!;
-      it.categoryId = guessCategoryId(it.name, categories);
+      it.categoryId = detectCategory(it.name, categories);
     }
   }
 
@@ -1214,7 +1215,7 @@ export function parseReceiptText(
 
   // 6. Category Assignment for overall receipt
   if (merchant) {
-    categoryId = guessCategoryId(merchant, categories);
+    categoryId = detectCategory(merchant, categories);
   }
   if (!categoryId && items.length > 0) {
     // If multiple items, use the most frequent category among items
@@ -1231,7 +1232,7 @@ export function parseReceiptText(
   }
   if (!categoryId) {
     for (const line of lines.slice(0, 10)) {
-      const guessed = guessCategoryId(line, categories);
+      const guessed = detectCategory(line, categories);
       if (guessed) {
         categoryId = guessed;
         break;

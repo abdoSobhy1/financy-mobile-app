@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useMemo } from "react";
+import React, { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import {
   View,
   StyleSheet,
@@ -123,16 +123,44 @@ export const AddTransactionScreen: React.FC = () => {
   const [date, setDate] = useState<Date>(new Date());
   const [showDatePicker, setShowDatePicker] = useState(false);
   const KEYPAD_HEIGHT = 350;
-  const [showKeypad, setShowKeypad] = useState<boolean>(!editTransaction);
-  const [isKeypadMounted, setIsKeypadMounted] = useState<boolean>(!editTransaction);
+  const shouldInitialFocusAmount = !openCreateCategory;
+  const [showKeypad, setShowKeypad] = useState<boolean>(shouldInitialFocusAmount);
+  const [isKeypadMounted, setIsKeypadMounted] = useState<boolean>(shouldInitialFocusAmount);
   const keypadTranslateY = useRef(
-    new Animated.Value(!editTransaction ? 0 : KEYPAD_HEIGHT)
+    new Animated.Value(shouldInitialFocusAmount ? 0 : KEYPAD_HEIGHT)
   ).current;
   const keypadOpacity = useRef(
-    new Animated.Value(!editTransaction ? 1 : 0)
+    new Animated.Value(shouldInitialFocusAmount ? 1 : 0)
   ).current;
+  const [amountFocused, setAmountFocused] = useState<boolean>(shouldInitialFocusAmount);
+
+  // Blinking cursor for focused amount input
+  const cursorOpacity = useRef(new Animated.Value(1)).current;
+  useEffect(() => {
+    if (showKeypad) {
+      const blinkAnimation = Animated.loop(
+        Animated.sequence([
+          Animated.timing(cursorOpacity, {
+            toValue: 0,
+            duration: 500,
+            useNativeDriver: true,
+          }),
+          Animated.timing(cursorOpacity, {
+            toValue: 1,
+            duration: 500,
+            useNativeDriver: true,
+          }),
+        ])
+      );
+      blinkAnimation.start();
+      return () => blinkAnimation.stop();
+    } else {
+      cursorOpacity.setValue(0);
+    }
+  }, [showKeypad]);
 
   useEffect(() => {
+    setAmountFocused(showKeypad);
     if (showKeypad) {
       setIsKeypadMounted(true);
       Animated.parallel([
@@ -171,13 +199,68 @@ export const AddTransactionScreen: React.FC = () => {
   }, [showKeypad]);
 
   const [showCreateCategoryModal, setShowCreateCategoryModal] = useState(false);
-  const [amountFocused, setAmountFocused] = useState(false);
   const [formErrors, setFormErrors] = useState<{ amount?: string; category?: string }>({});
 
-  const amountInputRef = useRef<TextInput>(null);
+  const scrollViewRef = useRef<ScrollView>(null);
   const descriptionInputRef = useRef<TextInput>(null);
   const noteInputRef = useRef<TextInput>(null);
   const showKeypadRef = useRef(showKeypad);
+
+  const [optionsCardY, setOptionsCardY] = useState(0);
+  const [noteY, setNoteY] = useState(0);
+  const [keyboardHeight, setKeyboardHeight] = useState(0);
+  const [isKeyboardVisible, setIsKeyboardVisible] = useState(false);
+
+  const scrollToDescription = useCallback(() => {
+    setTimeout(() => {
+      if (optionsCardY > 0) {
+        scrollViewRef.current?.scrollTo({
+          y: Math.max(0, optionsCardY - 30),
+          animated: true,
+        });
+      } else {
+        scrollViewRef.current?.scrollToEnd({ animated: true });
+      }
+    }, 100);
+  }, [optionsCardY]);
+
+  const scrollToNote = useCallback(() => {
+    setTimeout(() => {
+      if (noteY > 0) {
+        scrollViewRef.current?.scrollTo({
+          y: Math.max(0, noteY - 30),
+          animated: true,
+        });
+      } else {
+        scrollViewRef.current?.scrollToEnd({ animated: true });
+      }
+    }, 100);
+  }, [noteY]);
+
+  useEffect(() => {
+    const showEvent = Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow";
+    const hideEvent = Platform.OS === "ios" ? "keyboardWillHide" : "keyboardDidHide";
+
+    const showSub = Keyboard.addListener(showEvent, (e) => {
+      setIsKeyboardVisible(true);
+      setKeyboardHeight(e.endCoordinates.height);
+      if (descriptionInputRef.current?.isFocused()) {
+        scrollToDescription();
+      } else if (noteInputRef.current?.isFocused()) {
+        scrollToNote();
+      }
+    });
+
+    const hideSub = Keyboard.addListener(hideEvent, () => {
+      setIsKeyboardVisible(false);
+      setKeyboardHeight(0);
+    });
+
+    return () => {
+      showSub.remove();
+      hideSub.remove();
+    };
+  }, [scrollToDescription, scrollToNote]);
 
   useEffect(() => {
     showKeypadRef.current = showKeypad;
@@ -268,7 +351,10 @@ export const AddTransactionScreen: React.FC = () => {
       setDescription(editTransaction.description || "");
       setNote(editTransaction.note || "");
       setDate(new Date(editTransaction.date));
-      setShowKeypad(false);
+      if (shouldInitialFocusAmount) {
+        setShowKeypad(true);
+        setAmountFocused(true);
+      }
     } else if (prefilledData) {
       if (prefilledData.amount) setAmountStr(prefilledData.amount.toString());
       if (prefilledData.type) setType(prefilledData.type);
@@ -511,18 +597,29 @@ export const AddTransactionScreen: React.FC = () => {
         </TouchableWithoutFeedback>
 
         <ScrollView
+          ref={scrollViewRef}
           contentContainerStyle={{
             padding: spacing.lg,
-            paddingBottom: showKeypad ? KEYPAD_HEIGHT + spacing.md : spacing.xxl,
+            paddingBottom: showKeypad
+              ? KEYPAD_HEIGHT + spacing.md
+              : isKeyboardVisible
+              ? Math.max(keyboardHeight, 280) + spacing.xl
+              : spacing.xxl,
           }}
           keyboardDismissMode="on-drag"
           onScrollBeginDrag={() => {
-            if (showKeypad) setShowKeypad(false);
+            if (showKeypad) {
+              setShowKeypad(false);
+              setAmountFocused(false);
+            }
           }}
           keyboardShouldPersistTaps="handled">
           <TouchableWithoutFeedback
             onPress={() => {
-              if (showKeypad) setShowKeypad(false);
+              if (showKeypad) {
+                setShowKeypad(false);
+                setAmountFocused(false);
+              }
               Keyboard.dismiss();
             }}
             accessible={false}>
@@ -552,7 +649,10 @@ export const AddTransactionScreen: React.FC = () => {
                         },
                       ]}
                       onPress={() => {
-                        if (showKeypad) setShowKeypad(false);
+                        if (showKeypad) {
+                          setShowKeypad(false);
+                          setAmountFocused(false);
+                        }
                         setType(t as TransactionType);
                       }}>
                       <Text
@@ -580,20 +680,35 @@ export const AddTransactionScreen: React.FC = () => {
                 onPress={() => {
                   Keyboard.dismiss();
                   setShowKeypad(true);
+                  setAmountFocused(true);
+                  scrollViewRef.current?.scrollTo({ y: 0, animated: true });
                 }}>
                 <Text
                   style={[
                     typography.bodyMedium,
-                    { color: colors.onSurfaceVariant, marginBottom: 6 },
+                    {
+                      color: amountFocused ? colors.primary : colors.onSurfaceVariant,
+                      marginBottom: 6,
+                      fontWeight: amountFocused ? "700" : "500",
+                    },
                   ]}>
                   Amount
                 </Text>
-                <View style={styles.amountRow}>
+                <View
+                  style={[
+                    styles.amountRow,
+                    amountFocused && {
+                      paddingHorizontal: spacing.md,
+                      paddingVertical: 4,
+                      borderRadius: radius.md,
+                      backgroundColor: colors.surfaceVariant + "40",
+                    },
+                  ]}>
                   <View style={styles.amountTextContainer}>
                     <Text
                       style={[
                         styles.currencySymbol,
-                        { color: colors.onSurfaceVariant },
+                        { color: amountFocused ? colors.primary : colors.onSurfaceVariant },
                       ]}>
                       {currencySymbol.trim()}
                     </Text>
@@ -612,6 +727,19 @@ export const AddTransactionScreen: React.FC = () => {
                       adjustsFontSizeToFit>
                       {amountDisplay}
                     </Text>
+                    {showKeypad && (
+                      <Animated.View
+                        style={{
+                          width: 3,
+                          height: 38,
+                          backgroundColor: colors.primary,
+                          borderRadius: 1.5,
+                          marginLeft: 4,
+                          alignSelf: "center",
+                          opacity: cursorOpacity,
+                        }}
+                      />
+                    )}
                   </View>
                 </View>
 
@@ -1010,6 +1138,7 @@ export const AddTransactionScreen: React.FC = () => {
 
           {/* Options Grouped Card */}
           <View
+            onLayout={(e) => setOptionsCardY(e.nativeEvent.layout.y)}
             style={[
               styles.optionsCard,
               {
@@ -1048,7 +1177,12 @@ export const AddTransactionScreen: React.FC = () => {
                   placeholder="Add a description..."
                   placeholderTextColor={colors.onSurfaceVariant}
                   value={description}
-                  onFocus={() => setShowKeypad(false)}
+                  onFocus={() => {
+                    setShowKeypad(false);
+                    setIsKeypadMounted(false);
+                    setAmountFocused(false);
+                    scrollToDescription();
+                  }}
                   onChangeText={setDescription}
                   returnKeyType={showMore ? "next" : "done"}
                   blurOnSubmit={false}
@@ -1073,7 +1207,10 @@ export const AddTransactionScreen: React.FC = () => {
                 },
               ]}
               onPress={() => {
-                if (showKeypad) setShowKeypad(false);
+                if (showKeypad) {
+                  setShowKeypad(false);
+                  setAmountFocused(false);
+                }
                 setShowDatePicker(true);
               }}>
               <View
@@ -1114,7 +1251,10 @@ export const AddTransactionScreen: React.FC = () => {
           <TouchableOpacity
             style={styles.moreOptionsBtn}
             onPress={() => {
-              if (showKeypad) setShowKeypad(false);
+              if (showKeypad) {
+                setShowKeypad(false);
+                setAmountFocused(false);
+              }
               setShowMore(!showMore);
             }}>
             <Text
@@ -1136,13 +1276,20 @@ export const AddTransactionScreen: React.FC = () => {
           </TouchableOpacity>
 
           {showMore && (
-            <View style={{ gap: spacing.md, marginBottom: spacing.xl }}>
+            <View
+              onLayout={(e) => setNoteY(e.nativeEvent.layout.y)}
+              style={{ gap: spacing.md, marginBottom: spacing.xl }}>
               <Input
                 ref={noteInputRef}
                 label="Note"
                 placeholder="Additional details..."
                 value={note}
-                onFocus={() => setShowKeypad(false)}
+                onFocus={() => {
+                  setShowKeypad(false);
+                  setIsKeypadMounted(false);
+                  setAmountFocused(false);
+                  scrollToNote();
+                }}
                 onChangeText={setNote}
                 multiline
                 numberOfLines={3}

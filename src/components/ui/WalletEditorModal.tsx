@@ -161,6 +161,7 @@ export const WalletEditorModal: React.FC<WalletEditorModalProps> = ({
   };
 
   const hasChanges = useMemo(() => {
+    if (!visible) return false;
     if (editingWallet) {
       const origName = editingWallet.name || "";
       const origType = editingWallet.type || "bank";
@@ -183,6 +184,7 @@ export const WalletEditorModal: React.FC<WalletEditorModalProps> = ({
       );
     }
   }, [
+    visible,
     editingWallet,
     formName,
     formType,
@@ -195,6 +197,8 @@ export const WalletEditorModal: React.FC<WalletEditorModalProps> = ({
   const { confirmExit } = useUnsavedChanges({
     hasChanges,
     isEditing: !!editingWallet,
+    isModal: true,
+    enabled: visible,
   });
 
   return (

@@ -111,8 +111,10 @@ export const AddBudgetModal: React.FC<AddBudgetModalProps> = ({ visible, onClose
   };
 
   const { confirmExit } = useUnsavedChanges({
-    hasChanges: formData.name.trim() !== "" || formData.amount.trim() !== "",
+    hasChanges: visible && (formData.name.trim() !== "" || formData.amount.trim() !== ""),
     title: "Discard Budget",
+    isModal: true,
+    enabled: visible,
   });
 
   return (

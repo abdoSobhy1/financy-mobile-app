@@ -10,6 +10,7 @@ export interface UseUnsavedChangesOptions {
   title?: string;
   message?: string;
   enabled?: boolean;
+  isModal?: boolean;
 }
 
 export function useUnsavedChanges({
@@ -19,6 +20,7 @@ export function useUnsavedChanges({
   title = "Discard Changes",
   message,
   enabled = true,
+  isModal = false,
 }: UseUnsavedChangesOptions) {
   let navigation: any = null;
   try {
@@ -37,6 +39,18 @@ export function useUnsavedChanges({
 
   const alertMessage = message || defaultMessage;
 
+  const hasChangesRef = useRef(hasChanges);
+  hasChangesRef.current = hasChanges;
+
+  const alertMessageRef = useRef(alertMessage);
+  alertMessageRef.current = alertMessage;
+
+  const titleRef = useRef(title);
+  titleRef.current = title;
+
+  const enabledRef = useRef(enabled);
+  enabledRef.current = enabled;
+
   const markAsSaved = useCallback(() => {
     isSavingRef.current = true;
   }, []);
@@ -47,12 +61,12 @@ export function useUnsavedChanges({
 
   const confirmExit = useCallback(
     (onExit?: () => void) => {
-      if (!enabled || !hasChanges) {
+      if (!enabledRef.current || !hasChangesRef.current || isSavingRef.current) {
         onExit?.();
         return true;
       }
 
-      AlertService.alert(title, alertMessage, [
+      AlertService.alert(titleRef.current, alertMessageRef.current, [
         { text: "Keep Editing", style: "cancel" },
         {
           text: "Discard",
@@ -65,7 +79,7 @@ export function useUnsavedChanges({
       ]);
       return false;
     },
-    [enabled, hasChanges, title, alertMessage]
+    []
   );
 
   // Hardware back button interception (e.g. for closing custom keypad or other overlays)
@@ -83,9 +97,9 @@ export function useUnsavedChanges({
     return () => sub.remove();
   }, [enabled, onInterceptBack]);
 
-  // React Navigation beforeRemove interception
+  // React Navigation beforeRemove interception (ONLY for screen routes, NEVER for modals)
   useEffect(() => {
-    if (!enabled || !navigation) return;
+    if (!enabled || !navigation || isModal) return;
 
     const unsubscribe = navigation.addListener("beforeRemove", (e: any) => {
       if (isSavingRef.current) {
@@ -97,13 +111,13 @@ export function useUnsavedChanges({
         return;
       }
 
-      if (!hasChanges) {
+      if (!hasChangesRef.current) {
         return;
       }
 
       e.preventDefault();
 
-      AlertService.alert(title, alertMessage, [
+      AlertService.alert(titleRef.current, alertMessageRef.current, [
         { text: "Keep Editing", style: "cancel" },
         {
           text: "Discard",
@@ -117,7 +131,7 @@ export function useUnsavedChanges({
     });
 
     return unsubscribe;
-  }, [navigation, enabled, hasChanges, title, alertMessage]);
+  }, [navigation, enabled, isModal]);
 
   return {
     confirmExit,

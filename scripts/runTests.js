@@ -136,3 +136,4 @@ require("../src/__tests__/transactionCalculationsAndFilters.test.ts");
 require("../src/__tests__/ocrService.test.ts");
 require("../src/__tests__/smsParser.test.ts");
 require("../src/__tests__/smsService.test.ts");
+require("../src/__tests__/voiceAndCategoryDetection.test.ts");

@@ -14,6 +14,7 @@ import * as FileSystem from "expo-file-system/legacy";
 import NetInfo from "@react-native-community/netinfo";
 import { Category, ParsedTransaction, TransactionType } from "../types";
 import { guessCategoryId } from "../utils/categoryDictionary";
+import { detectCategory } from "./voiceParser";
 import { getAIConfig } from "./aiConfigService";
 import {
   getAvailableGeminiModels,
@@ -526,7 +527,6 @@ EXTRACTION RULES:
    - "quantity": Number of units purchased (default 1).
    - "price": Total final price for this line item.
    - "unitPrice": Unit price (or price / quantity).
-   - "categoryHint": Appropriate category (e.g. Groceries, Food & Dining, Shopping, Health, Cafe).
 
 2. Top-Level Root Fields:
    - "merchant": Business/store name from Header (or null).
@@ -547,8 +547,7 @@ Return ONLY valid JSON:
       "name": string,
       "quantity": number,
       "price": number,
-      "unitPrice": number,
-      "categoryHint": string or null
+      "unitPrice": number
     }
   ]
 };`;
@@ -585,7 +584,7 @@ function buildOcrResultFromExtracted(
       quantity: qty,
       price: isNaN(price) ? 0 : price,
       unitPrice,
-      categoryId: guessCategoryId(it.categoryHint || it.name, categories),
+      categoryId: detectCategory(it.name, categories),
       selected: true,
     };
   });
@@ -693,10 +692,137 @@ export async function parseReceiptImageWithAI(
   return buildOcrResultFromExtracted(extracted, categories, summaryText);
 }
 
+// ── Spoken Voice Transcript Analyzer (Gemini AI) ─────────────────────────
+
+const VOICE_ANALYSIS_SYSTEM_PROMPT = `أنت مساعد مالي ذكي متخصص في استخراج المعاملات المالية من النصوص الصوتية المسجلة (بالعربية أو الإنجليزية).
+مهمتك هي تحليل النص المنطوق واستخراج كل معاملة مالية مذكورة فيه بدقة.
+قد يحتوي التسجيل على معاملة واحدة أو عدة معاملات منفصلة (مثل: "صرفت 50 سوبرماركت و 20 مواصلات وكمان 100 بنزين").
+
+قواعد الاستخراج:
+1. استخرج كل معاملة كعنصر مستقل في مصفوفة "transactions".
+2. لكل معاملة استخرج:
+   - "amount": رقم المبلغ كقيمة رقمية (مثل 50 أو 150.5). إذا لم يُذكر مبلغ ضع 0.
+   - "type": "expense" أو "income" (المصروف هو الافتراضي، والدخل للمعاملات مثل: استلمت، راتب، قبضت، مكسب، تحويل لي).
+   - "description": وصف واضح ونظيف للمعاملة (اسم المكان أو السلعة أو الغرض مثل: "سوبرماركت"، "بنزين"، "قهوة ومطعم")، احتفظ به بنفس لغة النص الأصلية بدون إضافة كلمات زائدة مثل "صرفت" أو "دفعت".
+   - "date": تاريخ المعاملة بصيغة "YYYY-MM-DD" إذا ذكر تاريخ معين، أو null إذا لم يذكر تاريخ محدد.
+
+تنبيه هام جداً:
+- لا تقم بتخمين أو وضع أي حقل للفئات (Categories). سيتم تحديد الفئات تلقائياً بواسطة نظام الحسابات الخاص بنا.
+- أعد النتيجة كـ JSON فقط (بدون أي علامات markdown أو شرح إضافي) بالشكل التالي:
+{
+  "transactions": [
+    {
+      "amount": 150,
+      "type": "expense",
+      "description": "سوبرماركت",
+      "date": null
+    }
+  ]
+}`;
+
+export async function parseVoiceWithAI(
+  rawText: string,
+  categories: Record<string, Category> = {},
+  transactions: any[] = [],
+  budgets: any[] = []
+): Promise<ParsedTransaction[]> {
+  const online = await isOnline();
+  if (!online) {
+    throw new Error("No internet connection for AI enhancement");
+  }
+
+  const userPrompt = `حلل هذا النص الصوتي واستخرج المعاملات المالية منه:\n\n"${rawText}"`;
+  const content = await callChatModel(VOICE_ANALYSIS_SYSTEM_PROMPT, userPrompt);
+  const cleaned = cleanJsonContent(content);
+
+  let extractedItems: Array<{
+    amount?: number | string;
+    type?: string;
+    description?: string;
+    date?: string | null;
+  }> = [];
+
+  try {
+    const parsedJson = JSON.parse(cleaned);
+    if (Array.isArray(parsedJson.transactions)) {
+      extractedItems = parsedJson.transactions;
+    } else if (Array.isArray(parsedJson.items)) {
+      extractedItems = parsedJson.items;
+    } else if (parsedJson.amount !== undefined || parsedJson.description) {
+      extractedItems = [parsedJson];
+    }
+  } catch (parseErr) {
+    console.error("[AIService] Failed to parse JSON from AI response:", cleaned);
+    throw new Error("Failed to interpret AI response as transactions");
+  }
+
+  if (extractedItems.length === 0) {
+    throw new Error("AI could not detect any transactions in the transcript");
+  }
+
+  const resultList: ParsedTransaction[] = [];
+  const budgetsList = Array.isArray(budgets) ? budgets : Object.values(budgets);
+
+  for (const item of extractedItems) {
+    const rawAmt = typeof item.amount === "number" ? item.amount : parseFloat(String(item.amount || "0"));
+    const amount = isNaN(rawAmt) ? 0 : rawAmt;
+    const type: TransactionType = item.type === "income" ? "income" : "expense";
+    const description = (item.description || "").trim() || rawText.trim();
+
+    // Category detection: strictly through local category algorithm, NOT the AI!
+    const categoryId = detectCategory(description, categories, transactions);
+
+    // Budget matching based on detected category
+    let budgetId: string | undefined;
+    if (categoryId && budgetsList.length > 0) {
+      const directBudget = budgetsList.find((b: any) => b.categoryId === categoryId);
+      if (directBudget) {
+        budgetId = directBudget.id;
+      } else {
+        const budgetScores: Record<string, number> = {};
+        for (const tx of transactions) {
+          if (tx.categoryId === categoryId && tx.budgetId) {
+            budgetScores[tx.budgetId] = (budgetScores[tx.budgetId] || 0) + 1;
+          }
+        }
+        let maxScore = 0;
+        for (const [bId, score] of Object.entries(budgetScores)) {
+          if (score > maxScore) {
+            maxScore = score;
+            budgetId = bId;
+          }
+        }
+      }
+    }
+
+    let parsedDate: Date = new Date();
+    if (item.date) {
+      const d = new Date(item.date);
+      if (!isNaN(d.getTime())) {
+        parsedDate = d;
+      }
+    }
+
+    resultList.push({
+      amount,
+      type,
+      description,
+      date: parsedDate,
+      categoryId,
+      budgetId,
+      confidence: 0.98,
+      rawText: `${description} ${amount > 0 ? amount : ""}`.trim() || rawText,
+    });
+  }
+
+  return resultList;
+}
+
 export const AIService = {
   isOnline,
   prepareReceiptImage,
   parseWithAI,
+  parseVoiceWithAI,
   parseReceiptWithAI,
   parseReceiptImageWithAI,
   isReceiptMetadataOrTotal,

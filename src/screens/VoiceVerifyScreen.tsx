@@ -27,6 +27,7 @@ import { RootState, AppDispatch } from "../store";
 import { addTransaction } from "../store/slices/transactionsSlice";
 import { addCategory, fetchCategories } from "../store/slices/categoriesSlice";
 import { AIService } from "../services/aiService";
+import { detectCategory } from "../services/voiceParser";
 
 type NavigationProp = StackNavigationProp<TransactionStackParamList>;
 type VoiceVerifyRouteProp = RouteProp<TransactionStackParamList, "VoiceVerify">;
@@ -81,6 +82,9 @@ export const VoiceVerifyScreen: React.FC = () => {
   const { items: budgetsMap, ids: budgetIds } = useSelector(
     (state: RootState) => state.budgets
   );
+  const budgets = useMemo(() => Object.values(budgetsMap), [budgetsMap]);
+  const transactionsMap = useSelector((state: RootState) => state.transactions.items);
+  const transactions = useMemo(() => Object.values(transactionsMap), [transactionsMap]);
 
   const itemsSum = useMemo(
     () => Math.round(parsedTransactions.reduce((sum, t) => sum + (t.amount || 0), 0) * 100) / 100,
@@ -236,6 +240,26 @@ export const VoiceVerifyScreen: React.FC = () => {
     }
     setIsEnhancingAI(true);
     try {
+      const voiceText = rawText || parsedTransactions.map((t) => t.rawText).filter(Boolean).join(" و ");
+
+      if (source === "voice" || (!imageUri && voiceText && source !== "ocr")) {
+        // Voice transcription AI re-parsing with Gemini
+        const newParsed = await AIService.parseVoiceWithAI(
+          voiceText,
+          categoriesMap,
+          transactions,
+          budgets
+        );
+        if (newParsed && newParsed.length > 0) {
+          setParsedTransactions(newParsed);
+          showSuccess(`AI extracted ${newParsed.length} transaction${newParsed.length !== 1 ? "s" : ""}!`);
+        } else {
+          showError("AI could not detect transactions from the transcript");
+        }
+        return;
+      }
+
+      // OCR Image / Text enhancement
       let aiResult: any;
       if (imageUri) {
         // Send the actual resized image (1080w max) directly to Gemini Vision!
@@ -258,7 +282,7 @@ export const VoiceVerifyScreen: React.FC = () => {
           note: aiResult.description ? `From: ${aiResult.description}` : undefined,
           confidence: 0.98,
           rawText: `${it.name} ${it.price}`,
-          categoryId: it.categoryId,
+          categoryId: detectCategory(it.name, categoriesMap, transactions) || it.categoryId,
           quantity: it.quantity,
           unitPrice: it.unitPrice,
         }));
@@ -276,7 +300,7 @@ export const VoiceVerifyScreen: React.FC = () => {
         showError("AI could not detect items");
       }
     } catch (err: any) {
-      showError(err?.message || "AI Vision enhancement failed");
+      showError(err?.message || "AI enhancement failed");
     } finally {
       setIsEnhancingAI(false);
     }
@@ -391,6 +415,69 @@ export const VoiceVerifyScreen: React.FC = () => {
                 </Text>
               </TouchableOpacity>
             ) : null}
+          </Card>
+        )}
+
+        {/* Voice Spoken Transcript & AI Re-parse Banner */}
+        {source === "voice" && (rawText || parsedTransactions.length > 0) && (
+          <Card
+            variant="elevated"
+            style={StyleSheet.flatten([
+              styles.summaryBanner,
+              { backgroundColor: colors.surface, borderColor: colors.outlineVariant, marginBottom: 16 },
+            ])}>
+            <View style={styles.summaryTopRow}>
+              <View style={styles.summaryBadge}>
+                <Ionicons name="mic" size={16} color={colors.primary} />
+                <Text style={[typography.label, { color: colors.primary, marginLeft: 6, fontWeight: "700" }]}>
+                  Spoken Audio Transcript
+                </Text>
+              </View>
+              <View style={styles.dateBadge}>
+                <Ionicons name="sparkles-outline" size={14} color={colors.primary} />
+                <Text style={[typography.label, { color: colors.primary, marginLeft: 4, fontWeight: "600" }]}>
+                  Gemini AI
+                </Text>
+              </View>
+            </View>
+
+            {rawText ? (
+              <Text
+                style={[
+                  typography.bodyMedium,
+                  { color: colors.onSurface, marginTop: 10, marginBottom: 12, lineHeight: 22, fontStyle: "italic" },
+                ]}>
+                "{rawText}"
+              </Text>
+            ) : null}
+
+            <TouchableOpacity
+              style={[
+                styles.inspectBtn,
+                {
+                  backgroundColor: colors.primaryContainer,
+                  marginTop: rawText ? 0 : 8,
+                  justifyContent: "center",
+                  paddingHorizontal: 14,
+                  paddingVertical: 10,
+                  borderRadius: 10,
+                },
+              ]}
+              onPress={handleEnhanceWithAI}
+              disabled={isEnhancingAI}>
+              {isEnhancingAI ? (
+                <ActivityIndicator size="small" color={colors.onPrimaryContainer} />
+              ) : (
+                <Ionicons name="sparkles" size={18} color={colors.onPrimaryContainer} />
+              )}
+              <Text
+                style={[
+                  typography.label,
+                  { color: colors.onPrimaryContainer, fontWeight: "700", marginLeft: 8 },
+                ]}>
+                {isEnhancingAI ? "Analyzing with Gemini AI..." : "Re-parse with AI"}
+              </Text>
+            </TouchableOpacity>
           </Card>
         )}
 
