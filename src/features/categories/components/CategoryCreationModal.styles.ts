@@ -1,0 +1,113 @@
+import { StyleSheet } from "react-native";
+
+export const styles = StyleSheet.create({
+  overlay: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  backdrop: {
+    position: 'absolute',
+    top: 0,
+    bottom: 0,
+    left: 0,
+    right: 0,
+    backgroundColor: "rgba(0,0,0,0.75)",
+  },
+  card: {
+    width: "90%",
+    maxWidth: 400,
+    borderRadius: 36,
+    padding: 24,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.3,
+    shadowRadius: 20,
+    elevation: 10,
+  },
+  title: {
+    fontSize: 22,
+    fontWeight: "600",
+    marginBottom: 24,
+  },
+  label: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: "#E4E4E7",
+    marginBottom: 10,
+    letterSpacing: 0.5,
+  },
+  input: {
+    height: 56,
+    borderRadius: 28,
+    paddingHorizontal: 20,
+    fontSize: 16,
+    marginBottom: 24,
+  },
+  scrollWrapper: {
+    marginBottom: 24,
+    marginHorizontal: -24,
+  },
+  scrollContent: {
+    paddingHorizontal: 24,
+    gap: 12,
+  },
+  iconScrollContent: {
+    paddingHorizontal: 24,
+    gap: 12,
+    flexDirection: "column",
+    flexWrap: "wrap",
+    height: 200,
+    alignContent: "flex-start",
+  },
+  iconCircle: {
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  colorOuter: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    borderWidth: 2,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  colorInner: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+  },
+  saveBtn: {
+    flexDirection: "row",
+    height: 56,
+    borderRadius: 28,
+    alignItems: "center",
+    justifyContent: "center",
+    marginTop: 8,
+    gap: 8,
+  },
+  saveBtnText: {
+    fontSize: 16,
+    fontWeight: "700",
+    color: "#111",
+  },
+  typeRow: {
+    flexDirection: "row",
+    gap: 12,
+    marginBottom: 24,
+  },
+  typePill: {
+    flex: 1,
+    height: 44,
+    borderRadius: 22,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  typeText: {
+    fontSize: 14,
+    fontWeight: "600",
+  },
+});

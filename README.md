@@ -65,35 +65,33 @@ Manual expense tracking usually fails after a few days because logging every cof
 
 ## 📂 Project Architecture
 
+Financy uses a feature-based structure. Each feature owns its screens, components, hooks, services, state, and repositories as needed.
+
 ```text
-financy/
-├── App.tsx                         # App bootstrap, DB init, migrations, sync & SMS listeners
-├── plugins/
-│   └── withSmsDetection.js         # Custom Expo config plugin for Android SMS broadcast receiver
-├── src/
-│   ├── components/
-│   │   ├── analysis/               # SVG Line, Pie & Custom Chart cards
-│   │   ├── import/                 # Multi-step Excel/CSV Import Wizard steps
-│   │   ├── input/                  # Voice input button & waveform feedback
-│   │   ├── receipt/                # Receipt scanner & itemized review modal
-│   │   ├── transactions/           # Transaction cards, filter bars & stats header
-│   │   └── ui/                     # Design system primitives (Theme, Keypad, Modals, Shimmer)
-│   ├── database/
-│   │   ├── index.ts                # SQLite singleton & schema initialization
-│   │   ├── migrations/             # Incremental SQLite schema migrations
-│   │   └── queries/                # Typed data-access queries (transactions, budgets, wallets, debts)
-│   ├── services/
-│   │   ├── OfflineFirstSync.ts     # Outbox queue processor & Firestore delta synchronization
-│   │   ├── smsParser.ts            # Arabic/English bank & InstaPay SMS extraction engine
-│   │   ├── voiceParser.ts          # Offline bilingual NLP parser for spoken transactions
-│   │   ├── ocrService.ts           # On-device ML Kit OCR & receipt/slip parser
-│   │   ├── aiService.ts            # Multimodal AI receipt & text extraction (Gemini / Groq / OpenAI)
-│   │   └── walletService.ts        # Multi-wallet & secret wallet balance engine
-│   ├── screens/                    # Feature screens (Dashboard, Transactions, Budgets, Debts, Analysis)
-│   ├── store/                      # Redux Toolkit store & entity slices
-│   └── utils/                      # Category dictionary, billing period math, export/backup utilities
-└── firestore-rules.txt             # User-isolated Firestore security rules
+src/
+├── app/                 # Bootstrap, root navigation, Redux store composition
+├── features/            # Product features and their UI/application logic
+│   ├── analysis/
+│   ├── auth/
+│   ├── budgets/
+│   ├── categories/
+│   ├── dashboard/
+│   ├── debts/
+│   ├── import/
+│   ├── receipts/
+│   ├── settings/
+│   ├── sms/
+│   ├── transactions/
+│   ├── voice/
+│   └── wallets/
+├── infrastructure/      # SQLite, Firebase, sync, AI, notifications, device APIs
+└── shared/              # Feature-independent UI, theme, forms, hooks, contracts
+tests/unit/              # Versioned regression tests
 ```
+
+Screen hooks coordinate state and actions; views render layout and styling. Shared code cannot import features or infrastructure. See [Architecture](docs/ARCHITECTURE.md) for ownership rules, examples, and current boundaries.
+
+Provider API keys are not stored in Expo `EXPO_PUBLIC_*` variables. Hosted Gemini uses an authenticated Cloudflare Worker; see [API key handling](docs/SECURITY.md) for secret setup and deployment.
 
 ---
 
@@ -121,7 +119,7 @@ Copy `.env.example` to `.env` in the root directory:
 cp .env.example .env
 ```
 
-Fill in your optional Firebase and AI keys in `.env` (the app works 100% offline with local SQLite even without Firebase or AI keys configured):
+Fill in the optional Firebase client configuration in `.env` (the app works offline with local SQLite without it). Do not put AI provider keys in Expo environment variables; see [API key handling](docs/SECURITY.md):
 
 ```env
 # Optional: Firebase Cloud Sync
@@ -132,9 +130,9 @@ EXPO_PUBLIC_FIREBASE_STORAGE_BUCKET=your_project_id.firebasestorage.app
 EXPO_PUBLIC_FIREBASE_MESSAGING_SENDER_ID=your_messaging_sender_id
 EXPO_PUBLIC_FIREBASE_APP_ID=your_firebase_app_id
 
-# Optional: Cloud AI Assistant (can also be set in-app via Settings -> Cloud AI Assistant)
-EXPO_PUBLIC_GEMINI_API_KEY=your_gemini_api_key
 ```
+
+To enable hosted Gemini, deploy the Cloudflare Worker and set `EXPO_PUBLIC_GEMINI_WORKER_URL` in the app's `.env`. Store `GEMINI_API_KEY` as a Worker secret. Personal provider keys entered in Settings are stored with Expo SecureStore.
 
 ### 3. Run Development Build
 
@@ -153,7 +151,7 @@ npm start
 
 ## 🧪 Testing & Verification
 
-Run the automated test suite (covering the SMS parser, voice parser, billing period math, and sync conflict resolution):
+Run the automated test suite (covering SMS/voice parsing, receipt extraction, quotas, wallet balances, and billing-period filtering):
 
 ```bash
 npm test
@@ -162,10 +160,12 @@ npm test
 Type-check the codebase:
 
 ```bash
-npx tsc --noEmit
+npm run typecheck
 ```
 
 ---
+
+Run architecture checks, type checking, and tests together with `npm run check`. These checks also run in GitHub Actions.
 
 ## 📦 Building for Production (EAS)
 

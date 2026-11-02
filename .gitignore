@@ -78,8 +78,6 @@ scripts/organize-plan*.json
 
 # Test files
 test-*
-*.test.*
-__tests__/
 coverage/
 
 # Temporary export files
@@ -98,3 +96,5 @@ database-*
 # Environment files
 .env
 !.env.example
+.dev.vars
+.dev.vars.*

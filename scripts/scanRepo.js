@@ -4,7 +4,7 @@ const path = require("path");
 const ROOT = path.resolve(__dirname, "..");
 const OUT = path.resolve(__dirname, "scan-report.json");
 
-const EXCLUDE_DIRS = new Set(["node_modules", "dist", "build", ".expo", ".next", ".git", "android", "ios", "gradle", "functions/lib"]);
+const EXCLUDE_DIRS = new Set(["node_modules", "dist", "build", ".expo", ".next", ".git", "android", "ios", "gradle"]);
 const EXT_TYPE_MAP = {
   ".ts": "script",
   ".tsx": "component",

@@ -4,6 +4,9 @@
   "main": "index.ts",
   "scripts": {
     "test": "node ./scripts/runTests.js",
+    "typecheck": "tsc --noEmit && tsc --project tests/tsconfig.json",
+    "check:architecture": "node ./scripts/checkArchitecture.cjs",
+    "check": "npm run check:architecture && npm run typecheck && npm test",
     "postinstall": "patch-package",
     "start": "expo start",
     "android": "expo run:android",
@@ -42,6 +45,7 @@
     "expo-image-picker": "~57.0.20",
     "expo-linear-gradient": "~57.0.1",
     "expo-notifications": "~57.0.7",
+    "expo-secure-store": "~57.0.4",
     "expo-sharing": "~57.0.7",
     "expo-splash-screen": "~57.0.5",
     "expo-sqlite": "~57.0.1",

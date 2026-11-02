@@ -2,7 +2,7 @@
 
 > **Purpose:** A developer (or new AI session with zero context) can read this document and fully reimplement the entire backend layer — database, sync, state, services — into a new app shell without reading any original source files.
 >
-> **Verified against:** all source files in src/database/, src/services/, src/store/, src/utils/, src/types/, src/constants/ as of 2026-07-30.
+> **Behavioral reference:** originally reviewed on 2026-07-30. File paths have been updated for the feature-based structure; see [Architecture](ARCHITECTURE.md) for the current layout and dependency boundaries. This document is not a fresh verification of every behavior described below.
 
 ---
 
@@ -44,7 +44,7 @@
 
 ## 2. Data Model and Types
 
-All types live in src/types/index.ts.
+All types live in src/shared/types/index.ts.
 
 ### 2.1 Core Entity Interfaces
 
@@ -142,7 +142,7 @@ SETTINGS:      "settings"
 
 ## 3. Database Schema and Migrations
 
-**File:** src/database/index.ts
+**File:** src/infrastructure/database/index.ts
 **Class:** DatabaseManager (singleton, getInstance())
 **SQLite file:** financy.db
 **Initialization:** ensureInitialized() opens DB, runs PRAGMA journal_mode = WAL, creates tables, runs migrations.
@@ -329,7 +329,7 @@ All use ALTER TABLE ... ADD COLUMN wrapped in try/catch.
 
 ## 4. Repository Layer (Query API)
 
-**Entry:** src/database/queries/index.ts
+**Entry:** src/infrastructure/database/repositories.ts
 Exports: db = { transactions, categories, budgets, debts, settings }
 Each repository calls await dbManager.ensureInitialized() at the start of every method.
 
@@ -344,7 +344,7 @@ interface SyncOptions {
 
 Default (no options): writes to sync_log, calls syncService.syncLocalChanges() asynchronously.
 
-### 4.2 TransactionRepository (src/database/queries/transactions.ts)
+### 4.2 TransactionRepository (src/features/transactions/repositories/transactionsRepository.ts)
 
 - createTransaction(data, options?): Promise<Transaction>
 - getAllTransactions(filters?): Promise<Transaction[]>
@@ -357,7 +357,7 @@ Default (no options): writes to sync_log, calls syncService.syncLocalChanges() a
 - duplicateTransaction(id): Promise<Transaction> — new ID, sets duplicatedAt = now
 - getTransactionStats(): Promise<{ totalIncome, totalExpenses, totalTransactions }>
 
-### 4.3 CategoryRepository (src/database/queries/categories.ts)
+### 4.3 CategoryRepository (src/features/categories/repositories/categoriesRepository.ts)
 
 - createCategory(data, options?): Promise<Category>
 - getAllCategories(): Promise<Category[]>            WHERE deleted = 0 OR deleted IS NULL
@@ -370,7 +370,7 @@ Default (no options): writes to sync_log, calls syncService.syncLocalChanges() a
 - getTopSpendingCategories(limit?): Promise<Array<{ category, totalSpent }>>
   JOIN transactions on category_id, SUM(amount) WHERE type='expense'
 
-### 4.4 BudgetRepository (src/database/queries/budgets.ts)
+### 4.4 BudgetRepository (src/features/budgets/repositories/budgetsRepository.ts)
 
 - createBudget(data, options?): Promise<Budget>
 - getAllBudgets(): Promise<Budget[]>
@@ -383,7 +383,7 @@ Default (no options): writes to sync_log, calls syncService.syncLocalChanges() a
   spent = SUM(transactions.amount WHERE type='expense' AND budget_id=budget.id)
 - getBudgetSpendingByCategory(budgetId): Promise<Array<{ categoryId, categoryName, totalSpent }>>
 
-### 4.5 DebtRepository (src/database/queries/debts.ts)
+### 4.5 DebtRepository (src/features/debts/repositories/debtsRepository.ts)
 
 - createDebt(data, options?): Promise<Debt>
 - getAllDebts(): Promise<Debt[]>
@@ -404,7 +404,7 @@ Default (no options): writes to sync_log, calls syncService.syncLocalChanges() a
 - getPaymentHistory(startDate?, endDate?): Promise<DebtPayment[]>
 - getDebtSummary(): Promise<{ totalDebt, totalPaid, activeDebts, paidOffDebts, monthlyMinimumPayments }>
 
-### 4.6 SettingsRepository (src/database/queries/settings.ts)
+### 4.6 SettingsRepository (src/features/settings/repositories/settingsRepository.ts)
 
 - getSettings(): Promise<Settings>          Selects WHERE id='default'; inserts defaults if none
 - updateSettings(updates, options?): Promise<Settings>
@@ -427,9 +427,9 @@ Default settings row: id="default", billingPeriodStartDay=28, currency="USD", fi
 ### 5.1 Overview
 
 Two interacting singletons:
-1. **OfflineFirstSync** (src/services/OfflineFirstSync.ts) — exported as offlineFirstSync
+1. **OfflineFirstSync** (src/infrastructure/sync/OfflineFirstSync.ts) — exported as offlineFirstSync
    Local operation buffer, sync queue processor, cloud restore orchestrator.
-2. **SyncService** (src/services/syncService.ts) — exported as syncService
+2. **SyncService** (src/infrastructure/sync/syncService.ts) — exported as syncService
    Direct Firestore I/O, polling, conflict resolution.
 
 Repositories call offlineFirstSync.logOperation(). OfflineFirstSync delegates Firestore I/O to SyncService.
@@ -551,7 +551,7 @@ Transaction field mapping (both camelCase and snake_case from Firebase accepted)
 - categoryId: dataWithId.categoryId || dataWithId.category_id
 - budgetId: dataWithId.budgetId || dataWithId.budget_id
 
-### 5.11 EntityManager (src/services/EntityManager.ts)
+### 5.11 EntityManager (src/infrastructure/database/EntityManager.ts)
 
 Singleton: entityManager. Wraps repository calls with validation/cleaning and duplicate-detection.
 
@@ -565,7 +565,7 @@ Singleton: entityManager. Wraps repository calls with validation/cleaning and du
 - createCategoryFromSync(data): Promise<Category>
 - checkForDuplicates(): Promise<{ debts, budgets, categories }>
 
-### 5.12 SyncTracker (src/services/SyncTracker.ts)
+### 5.12 SyncTracker (src/infrastructure/sync/SyncTracker.ts)
 
 Singleton: syncTracker. In-memory item-level sync state. Persisted to AsyncStorage key @financy_sync_tracking.
 NOT the primary sync mechanism — used for diagnostics.
@@ -583,12 +583,12 @@ Collections tracked: transactions, categories, budgets, bills, debts
 
 ## 6. Redux State Layer
 
-**File:** src/store/index.ts
+**File:** src/app/store/index.ts
 Store slices: transactions, budgets, categories, settings, debts, auth, sync, analysis
 All data slices use normalized { items: Record<string, Entity>, ids: string[] } shape.
 SerializableCheck configured to ignore "persist/PERSIST".
 
-### 6.1 transactionsSlice (src/store/slices/transactionsSlice.ts)
+### 6.1 transactionsSlice (src/features/transactions/store/transactionsSlice.ts)
 
 State shape:
 - items: Record<string, Transaction>
@@ -609,7 +609,7 @@ Synchronous reducers:
 - setFilters, clearFilters, clearError
 - markSynced(id): sets items[id].syncStatus = "synced"
 
-### 6.2 budgetsSlice (src/store/slices/budgetsSlice.ts)
+### 6.2 budgetsSlice (src/features/budgets/store/budgetsSlice.ts)
 
 State shape:
 - items: Record<string, Budget>, ids: string[]
@@ -627,7 +627,7 @@ Synchronous reducers:
 - updateBudgetBalance({ budgetId, amount, isIncome }): adjusts currentBalance + recalculates progress
 - markSynced(id)
 
-### 6.3 categoriesSlice (src/store/slices/categoriesSlice.ts)
+### 6.3 categoriesSlice (src/features/categories/store/categoriesSlice.ts)
 
 State shape:
 - items: Record<string, Category>, ids: string[]
@@ -645,7 +645,7 @@ Async thunks:
 Synchronous reducers: clearError, markSynced(id)
 Exported selector: selectAllCategories = (state) => Object.values(state.categories.items)
 
-### 6.4 debtsSlice (src/store/slices/debtsSlice.ts)
+### 6.4 debtsSlice (src/features/debts/store/debtsSlice.ts)
 
 State shape:
 - items: Record<string, Debt>, ids: string[]
@@ -667,7 +667,7 @@ Synchronous reducers:
 - clearError, clearPayments
 - markSynced(id): covers both items[] and payments[]
 
-### 6.5 settingsSlice (src/store/slices/settingsSlice.ts)
+### 6.5 settingsSlice (src/features/settings/store/settingsSlice.ts)
 
 State shape:
 - data: Settings | null
@@ -683,7 +683,7 @@ Async thunks:
 
 Synchronous reducers: clearError
 
-### 6.6 authSlice (src/store/slices/authSlice.ts)
+### 6.6 authSlice (src/features/auth/store/authSlice.ts)
 
 State: AuthState (user, loading, error, isAuthenticated)
 
@@ -696,7 +696,7 @@ Async thunks:
 
 Synchronous reducers: setUser(user), clearError, setLoading(bool)
 
-### 6.7 syncSlice (src/store/slices/syncSlice.ts)
+### 6.7 syncSlice (src/infrastructure/sync/store/syncSlice.ts)
 
 State: SyncState (isOnline, lastSync, pendingOperations, syncInProgress, error)
 
@@ -716,7 +716,7 @@ Synchronous reducers:
 
 ## 7. Supporting Services
 
-### 7.1 AuthService (src/services/authService.ts)
+### 7.1 AuthService (src/features/auth/services/authService.ts)
 
 Singleton: authService. Firebase email/password + rolling 30-day AsyncStorage session cache.
 
@@ -743,7 +743,7 @@ Firestore user document created on sign-up at users/{uid}:
 { email, displayName, createdAt: serverTimestamp(), updatedAt: serverTimestamp(),
   role: "user", settings: { currency: "USD", theme: "dark", language: "en" } }
 
-### 7.2 Firebase Initialization (src/services/firebase.ts)
+### 7.2 Firebase Initialization (src/infrastructure/firebase/client.ts)
 
 - initializeFirebase(): { app, auth, db }
 - getFirebaseAuth(): Auth
@@ -757,7 +757,7 @@ Config constants:
 
 Auth: initializeAuth with getReactNativePersistence(AsyncStorage). Falls back to getAuth() if already initialized.
 
-### 7.3 NotificationService (src/services/notificationService.ts)
+### 7.3 NotificationService (src/infrastructure/notifications/notificationService.ts)
 
 Singleton: NotificationService.getInstance()
 
@@ -780,7 +780,7 @@ Methods:
 - sendBillReminder(bill): Promise<void>
 - scheduleAllNotifications(): Promise<void>
 
-### 7.4 VoiceParser (src/services/voiceParser.ts) — offline, no network
+### 7.4 VoiceParser (src/features/voice/services/voiceParser.ts) — offline, no network
 
 `
 parseVoiceInput(
@@ -809,7 +809,7 @@ Processing pipeline per segment:
 Multi-transaction splitting regex:
 /\s*(?:,|،|[.]\s|(?<=^|\s)و\s*(?:كمان|بعدين)?|and\s|also\s|then\s|plus\s|كمان\s|بعدين\s)\s*/i
 
-### 7.5 SmsParser (src/services/smsParser.ts)
+### 7.5 SmsParser (src/features/sms/services/smsParser.ts)
 
 `
 isBankSender(sender: string): boolean
@@ -838,7 +838,7 @@ Date patterns:
 - يوم MM-DD (2-part, NBE InstaPay format)
 - Fallback: today
 
-### 7.6 SmsService (src/services/smsService.ts)
+### 7.6 SmsService (src/features/sms/services/smsService.ts)
 
 Singleton: smsService. Android-only (gracefully no-ops on iOS).
 
@@ -851,7 +851,7 @@ Singleton: smsService. Android-only (gracefully no-ops on iOS).
 - addTransactionListener(cb: (tx) => void): () => void   returns unsubscribe fn
 - consumePendingTransactions(): ParsedTransaction[]       clears internal queue
 
-### 7.7 AIService (src/services/aiService.ts) — online fallback
+### 7.7 AIService (src/infrastructure/ai/aiService.ts) — online fallback
 
 - isOnline(): Promise<boolean>
 - parseWithAI(rawText: string): Promise<ParsedTransaction>
@@ -862,7 +862,7 @@ Singleton: smsService. Android-only (gracefully no-ops on iOS).
   Success: confidence = min(matchedFields/3 + 0.2, 1)
   System prompt is Arabic; expects JSON response with: amount, type, description, date (YYYY-MM-DD), categoryHint
 
-### 7.8 ExcelImportService (src/services/excelImportService.ts)
+### 7.8 ExcelImportService (src/features/import/services/excelImportService.ts)
 
 class ExcelImportService {
   constructor(onProgressUpdate?: (progress: ImportProgress) => void)
@@ -896,7 +896,7 @@ Date parsing order in ExcelImportService and in validation.ts safeParseDate:
 
 ### 8.1 getDateRangeForBillingPeriod (core billing-period logic)
 
-Location: src/utils/index.ts
+Location: src/shared/utils/index.ts
 
 `
 function getDateRangeForBillingPeriod(
@@ -919,7 +919,7 @@ Called by every billing-period query in SettingsRepository and billingPeriod.ts 
 
 ### 8.2 billingPeriod.ts Async Helpers
 
-Location: src/utils/billingPeriod.ts
+Location: src/features/budgets/utils/billingPeriod.ts
 
 All load billingPeriodStartDay from db.settings.getSettings(), delegate to getDateRangeForBillingPeriod.
 Fall back to startDay=1 on error.
@@ -932,7 +932,7 @@ Fall back to startDay=1 on error.
 
 ### 8.3 findMatchingBudgetForCategory
 
-Location: src/utils/budgetMatching.ts
+Location: src/features/budgets/utils/budgetMatching.ts
 
 `
 function findMatchingBudgetForCategory(
@@ -945,7 +945,7 @@ Accepts both Redux normalized Record<string, Budget> and plain Budget[] array.
 Returns first budget where budget.categoryId === categoryId.
 Used by smsParser.ts and screen-level budget auto-selection.
 
-### 8.4 Validation Helpers (src/utils/validation.ts)
+### 8.4 Validation Helpers (src/shared/utils/validation.ts)
 
 Validators (throw on invalid):
 - validateTransactionData(transaction): void
@@ -994,7 +994,7 @@ safeParseDate(dateValue: any): string | null
 
 ### 8.5 Device ID and Tracking
 
-src/utils/deviceId.ts:
+src/infrastructure/device/deviceId.ts:
 - getDeviceId(): Promise<string>
   AsyncStorage key: @financy/device_id
   Format: device_{Date.now()}_{random 9 chars}
@@ -1002,13 +1002,13 @@ src/utils/deviceId.ts:
   Fallback on storage error: session_{timestamp}_{random} (not persisted)
 - clearDeviceIdCache(): void  (for testing)
 
-src/utils/deviceTracking.ts:
+src/infrastructure/device/deviceTracking.ts:
 - addDeviceTracking<T>(data: T): Promise<T & { lastModifiedBy: string; lastModifiedAt: number }>
   Calls getDeviceId(); injects lastModifiedBy + Date.now() as lastModifiedAt
 - hasDeviceTracking(data): boolean
 - getDeviceTrackingInfo(data): { deviceId, timestamp } | null
 
-### 8.6 General Utilities (src/utils/index.ts)
+### 8.6 General Utilities (src/shared/utils/index.ts)
 
 Currency:
 - formatCurrency(amount, currency?, locale?): string  Intl.NumberFormat; fallback $ symbol
@@ -1055,7 +1055,7 @@ Misc:
 
 ## 9. Constants
 
-File: src/constants/index.ts
+File: src/shared/constants/index.ts
 
 `
 DATABASE       = { NAME: "financy.db", VERSION: 1 }

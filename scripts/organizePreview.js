@@ -31,6 +31,11 @@ function proposeNewPath(rel) {
   if (parts[0] === "src") {
     const top = parts[1];
     switch (top) {
+      case "app":
+      case "features":
+      case "infrastructure":
+      case "shared":
+        return n;
       case "components":
         return n;
       case "screens":
@@ -72,7 +77,7 @@ function main() {
   const files = glob.sync("**/*.{ts,tsx,js,jsx,png,jpg,svg,json}", {
     cwd: ROOT,
     nodir: true,
-    ignore: ["node_modules/**", "android/**", "ios/**", "build/**", "dist/**", "__trash__/**", "functions/lib/**"],
+    ignore: ["node_modules/**", "android/**", "ios/**", "build/**", "dist/**", "__trash__/**"],
   });
   const plan = [];
   for (const f of files) {

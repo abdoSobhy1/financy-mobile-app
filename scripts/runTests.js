@@ -16,6 +16,7 @@ const mockNetInfo = {
   fetch: () => Promise.resolve({ isConnected: true }),
 };
 const storageMap = new Map();
+const secureStorageMap = new Map();
 const mockAsyncStorage = {
   __esModule: true,
   default: {
@@ -23,6 +24,18 @@ const mockAsyncStorage = {
     setItem: (key, val) => { storageMap.set(key, String(val)); return Promise.resolve(); },
     removeItem: (key) => { storageMap.delete(key); return Promise.resolve(); },
     clear: () => { storageMap.clear(); return Promise.resolve(); },
+  },
+};
+const mockSecureStore = {
+  WHEN_UNLOCKED_THIS_DEVICE_ONLY: "WHEN_UNLOCKED_THIS_DEVICE_ONLY",
+  getItemAsync: (key) => Promise.resolve(secureStorageMap.get(key) || null),
+  setItemAsync: (key, value) => {
+    secureStorageMap.set(key, String(value));
+    return Promise.resolve();
+  },
+  deleteItemAsync: (key) => {
+    secureStorageMap.delete(key);
+    return Promise.resolve();
   },
 };
 const mockNotifications = {
@@ -83,6 +96,7 @@ Module._load = function (request, parent, isMain) {
     }
     if (request.includes("@react-native-community/netinfo")) return mockNetInfo;
     if (request.includes("@react-native-async-storage/async-storage")) return mockAsyncStorage;
+    if (request === "expo-secure-store") return mockSecureStore;
     if (request === "expo-notifications" || request.includes("expo-notifications")) return mockNotifications;
     if (request.includes("expo-file-system")) return mockFileSystem;
     if (request.includes("@dariyd/react-native-text-recognition")) return mockTextRec;
@@ -130,10 +144,11 @@ require.extensions[".ts"] = function (module, filename) {
 };
 
 // Run the unit tests
-require("../src/__tests__/geminiQuotaService.test.ts");
-require("../src/__tests__/calculateWalletBalances.test.ts");
-require("../src/__tests__/transactionCalculationsAndFilters.test.ts");
-require("../src/__tests__/ocrService.test.ts");
-require("../src/__tests__/smsParser.test.ts");
-require("../src/__tests__/smsService.test.ts");
-require("../src/__tests__/voiceAndCategoryDetection.test.ts");
+require("../tests/unit/geminiQuotaService.test.ts");
+require("../tests/unit/aiConfigService.test.ts");
+require("../tests/unit/calculateWalletBalances.test.ts");
+require("../tests/unit/transactionCalculationsAndFilters.test.ts");
+require("../tests/unit/ocrService.test.ts");
+require("../tests/unit/smsParser.test.ts");
+require("../tests/unit/smsService.test.ts");
+require("../tests/unit/voiceAndCategoryDetection.test.ts");

@@ -21,7 +21,7 @@ function propose(rel) {
   const parts = rel.split("/");
   if (
     parts[1] &&
-    ["components", "screens", "hooks", "contexts", "services", "utils", "constants", "types", "store", "navigation", "database"].includes(parts[1])
+    ["app", "features", "infrastructure", "shared", "components", "screens", "hooks", "contexts", "services", "utils", "constants", "types", "store", "navigation", "database"].includes(parts[1])
   )
     return rel;
   const filename = parts[parts.length - 1];
