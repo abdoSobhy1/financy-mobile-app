@@ -227,7 +227,6 @@ export const TransactionListScreen: React.FC = () => {
         }}
         onClose={() => setShowCustomDateModal(false)}
       />
-      <ToastOverlay />
     </View>
   );
 };

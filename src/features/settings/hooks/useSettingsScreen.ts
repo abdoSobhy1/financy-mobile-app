@@ -27,11 +27,11 @@ import { exportDatabaseToJSON } from "../../import/utils/databaseExport";
 import { db } from "../../../infrastructure/database/repositories";
 import { useAuth } from "../../auth/providers/AuthContext";
 import { useSync } from "../../../infrastructure/sync/providers/SyncProvider";
-import { getDebugMode } from "../../../shared/utils/logger";
 import { getDeviceId } from "../../../infrastructure/device/deviceId";
 import { signOut, setUser } from "../../auth/store/authSlice";
 import { authService } from "../../auth/services/authService";
 import { getSmsDetectionEnabled, setSmsDetectionEnabled, smsService } from "../../sms/services/smsService";
+import { subscribeSmsConfig } from "../../sms/services/smsConfigService";
 
 type SettingsScreenNavigationProp = StackNavigationProp<SettingsStackParamList>;
 
@@ -58,10 +58,6 @@ export function useSettingsScreen() {
   const [showThemePicker, setShowThemePicker] = useState(false);
   const [selectedBillingDay, setSelectedBillingDay] = useState(1);
   const [billingDayInput, setBillingDayInput] = useState<string>("1");
-  const [debugClickCount, setDebugClickCount] = useState(0);
-  const [showDebugSection, setShowDebugSection] = useState(false);
-  const [debugLoggingEnabled, setDebugLoggingEnabled] =
-    useState(getDebugMode());
   const [addCategoryModalVisible, setAddCategoryModalVisible] = useState(false);
   const [showFirebaseCleanup, setShowFirebaseCleanup] = useState(false);
   const [showCategoryManagement, setShowCategoryManagement] = useState(false);
@@ -119,6 +115,10 @@ export function useSettingsScreen() {
   const currentBillingDay = settings.data?.billingPeriodStartDay || 1;
 
   // ── Effects ─────────────────────────────────────────────────────
+  useEffect(() => subscribeSmsConfig(() => {
+    getSmsDetectionEnabled().then(setSmsEnabled);
+  }), []);
+
   useEffect(() => {
     if (settings.data) {
       setSelectedBillingDay(settings.data.billingPeriodStartDay);
@@ -213,7 +213,7 @@ export function useSettingsScreen() {
       await NotificationService.getInstance().saveSettings({
         transactionReminders: value,
       });
-      showSuccess(value ? "Daily reminders enabled" : "Daily reminders disabled");
+      showSuccess(value ? "Daily reminders enabled" : "Daily reminders disabled", 3500, undefined, "settings-reminders");
     } catch {
       showError("Failed to update reminder settings");
     }
@@ -305,17 +305,6 @@ export function useSettingsScreen() {
 
   const handleComingSoon = (feature: string) => {
     AlertService.alert("Coming Soon", `The ${feature} feature is not yet available. Stay tuned!`, [{ text: "OK" }]);
-  };
-
-  const handleVersionClick = () => {
-    const n = debugClickCount + 1;
-    setDebugClickCount(n);
-    if (n >= 6) {
-      setShowDebugSection(true);
-      showSuccess("Debug section enabled!");
-    } else if (n >= 3) {
-      showSuccess(`${6 - n} more taps to enable debug`);
-    }
   };
 
   // ── Sync Now (bidirectional) ────────────────────────────────────
@@ -566,7 +555,6 @@ export function useSettingsScreen() {
     handleSelectCurrency,
     handleToggleTheme,
     lastSyncSubtitle,
-    handleVersionClick,
     handleSyncNow,
     handleExportData
   };

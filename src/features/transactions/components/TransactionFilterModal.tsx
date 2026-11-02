@@ -213,7 +213,7 @@ export const TransactionFilterModal: React.FC<TransactionFilterModalProps> = ({
           </View>
         </View>
       </View>
-      <ToastOverlay />
+      <ToastOverlay visible={visible} priority={1} />
     </Modal>
   );
 };

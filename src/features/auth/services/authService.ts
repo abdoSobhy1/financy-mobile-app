@@ -3,6 +3,9 @@ import {
   signInWithEmailAndPassword,
   createUserWithEmailAndPassword,
   signOut,
+  signInAnonymously,
+  EmailAuthProvider,
+  linkWithCredential,
   onAuthStateChanged,
   User as FirebaseUser,
   updateProfile,
@@ -28,6 +31,7 @@ export class AuthService {
   private static readonly SESSION_KEY = "financy_user_session";
   private static readonly SESSION_DURATION = 30 * 24 * 60 * 60 * 1000; // 30 days in milliseconds
   private static readonly LAST_USER_KEY = "financy_last_user_id";
+  private static readonly GUEST_DATA_PENDING_KEY = "financy_guest_data_pending_migration_v1";
   // True while signOut() is running, so the auth listener can't resurrect the stored session
   private signingOut = false;
   // Per-user leftovers that used to survive sign-out
@@ -79,8 +83,9 @@ export class AuthService {
     return {
       uid: firebaseUser.uid,
       email: firebaseUser.email,
-      displayName: firebaseUser.displayName,
+      displayName: firebaseUser.displayName || (firebaseUser.isAnonymous ? "Guest User" : null),
       emailVerified: firebaseUser.emailVerified,
+      isGuest: firebaseUser.isAnonymous,
     };
   }
 
@@ -96,6 +101,16 @@ export class AuthService {
     this.savingUserId = user.uid;
     this.saveSessionPromise = (async () => {
       try {
+        const previousSession = await this.getStoredSession();
+        const lastUserId = await AsyncStorage.getItem(AuthService.LAST_USER_KEY);
+        const hasPendingGuestData =
+          (await AsyncStorage.getItem(AuthService.GUEST_DATA_PENDING_KEY)) === "true" ||
+          Boolean(previousSession?.user.isGuest || previousSession?.user.uid === "guest") ||
+          lastUserId === "guest";
+        const isGuestUser = Boolean(user.isGuest || user.uid === "guest");
+        const switchingUsers = !lastUserId || lastUserId !== user.uid;
+        const preserveGuestData = switchingUsers && hasPendingGuestData;
+
         const now = Date.now();
         const sessionData: SessionData = {
           user,
@@ -110,12 +125,15 @@ export class AuthService {
           `💾 Session saved for user ${user.uid}, expires at ${new Date(sessionData.expiresAt).toLocaleString()}`,
         );
 
-        // Check if user changed (or fresh sign-in after sign-out) and reset database if needed
-        const lastUserId = await AsyncStorage.getItem(AuthService.LAST_USER_KEY);
+        if (isGuestUser) {
+          await AsyncStorage.setItem(AuthService.GUEST_DATA_PENDING_KEY, "true");
+        } else if (hasPendingGuestData) {
+          await AsyncStorage.removeItem(AuthService.GUEST_DATA_PENDING_KEY);
+        }
 
-        // Reset local database whenever switching between any two different sessions (or signing in after sign-out)
-        // so Guest default categories/wallets never flash or leak into a signed-in user's account, and vice versa
-        if (!lastUserId || lastUserId !== user.uid) {
+        // Preserve local guest data when it is intentionally adopted by a registered account.
+        // Other account switches still reset the local database to prevent data leakage.
+        if (switchingUsers && !preserveGuestData) {
           console.log(
             `👤 Session user changed from ${lastUserId || "none"} to ${user.uid}. Resetting local database for clean session.`,
           );
@@ -203,11 +221,15 @@ export class AuthService {
     displayName?: string,
   ): Promise<User> {
     try {
-      const userCredential = await createUserWithEmailAndPassword(
-        this.getAuth(),
-        email,
-        password,
-      );
+      const auth = this.getAuth();
+      const currentUser = auth.currentUser;
+      const linkingGuest = Boolean(currentUser?.isAnonymous);
+      const userCredential = currentUser?.isAnonymous
+        ? await linkWithCredential(
+            currentUser,
+            EmailAuthProvider.credential(email, password),
+          )
+        : await createUserWithEmailAndPassword(auth, email, password);
 
       // Update profile with display name if provided
       if (displayName) {
@@ -244,6 +266,26 @@ export class AuthService {
       // Save session to AsyncStorage
       await this.saveSession(user);
 
+      // Defaults belong to first-time registration, never to login or restore.
+      // Linked guest accounts already have their own local categories and wallets.
+      if (!linkingGuest) {
+        const database = DatabaseManager.getInstance().getDatabase();
+        const categories = await database.getFirstAsync<{ count: number }>(
+          "SELECT COUNT(*) as count FROM categories",
+        );
+        const wallets = await database.getFirstAsync<{ count: number }>(
+          "SELECT COUNT(*) as count FROM wallets",
+        );
+        if (!categories?.count) {
+          const { CategoryRepository } = await import("../../categories/repositories/categoriesRepository");
+          await new CategoryRepository().seedDefaultArabicCategories();
+        }
+        if (!wallets?.count) {
+          const { WalletRepository } = await import("../../wallets/repositories/walletsRepository");
+          await new WalletRepository().seedDefaultWallets();
+        }
+      }
+
       console.log("User created successfully:", user.uid);
       return user;
     } catch (error) {
@@ -279,29 +321,66 @@ export class AuthService {
     }
   }
 
-  // Sign in as Guest (Local SQLite only, no Firebase Cloud Sync)
+  // Sign in as Guest (local SQLite only; anonymous Firebase auth enables hosted AI)
   public async signInAsGuest(): Promise<User> {
-    const guestUser: User = {
-      uid: "guest",
-      email: null,
-      displayName: "Guest User",
-      emailVerified: false,
-      isGuest: true,
-    };
-
+    const auth = this.getAuth();
+    let guestUser: User;
     try {
-      // Ensure any previous Firebase auth session is signed out
-      if (this.getAuth().currentUser) {
-        await signOut(this.getAuth());
+      let firebaseUser = auth.currentUser;
+      if (firebaseUser && !firebaseUser.isAnonymous) {
+        await signOut(auth);
+        firebaseUser = null;
       }
-      await AsyncStorage.removeItem("financy_user_profile_v1");
-    } catch {
-      // Ignore Firebase signOut errors when entering guest mode
+
+      if (!firebaseUser) {
+        firebaseUser = (await signInAnonymously(auth)).user;
+      }
+
+      guestUser = this.mapFirebaseUser(firebaseUser)!;
+    } catch (error) {
+      console.warn(
+        "Anonymous Firebase auth is unavailable; continuing in local-only guest mode:",
+        error,
+      );
+      guestUser = {
+        uid: "guest",
+        email: null,
+        displayName: "Guest User",
+        emailVerified: false,
+        isGuest: true,
+      };
     }
 
+    await AsyncStorage.removeItem("financy_user_profile_v1");
     await this.saveSession(guestUser);
-    console.log("👤 Signed in as Guest (local-only mode)");
+    console.log("👤 Signed in as Guest (local-only data, hosted AI available when anonymous auth is enabled)");
     return guestUser;
+  }
+
+  /**
+   * Creates a Firebase anonymous identity for existing local guest sessions so
+   * hosted services can authenticate requests without enabling cloud sync.
+   */
+  public async ensureGuestFirebaseAuth(): Promise<FirebaseUser | null> {
+    const auth = this.getAuth();
+    if (auth.currentUser) {
+      return auth.currentUser.isAnonymous ? auth.currentUser : null;
+    }
+
+    const storedUser = await this.getStoredUser();
+    if (!storedUser || (!storedUser.isGuest && storedUser.uid !== "guest")) {
+      return null;
+    }
+
+    try {
+      const credential = await signInAnonymously(auth);
+      const guestUser = this.mapFirebaseUser(credential.user);
+      if (guestUser) await this.saveSession(guestUser);
+      return credential.user;
+    } catch (error) {
+      console.warn("Could not authenticate guest for hosted AI:", error);
+      return null;
+    }
   }
 
   // Update user display name in Firebase Auth, Firestore, and local session
@@ -352,8 +431,9 @@ export class AuthService {
 
   // Check if current session is Guest Mode
   public async isGuestAsync(): Promise<boolean> {
-    if (this.getAuth().currentUser !== null) {
-      return false;
+    const firebaseUser = this.getAuth().currentUser;
+    if (firebaseUser) {
+      return firebaseUser.isAnonymous;
     }
     const storedUser = await this.getStoredUser();
     return Boolean(storedUser?.isGuest || storedUser?.uid === "guest");
@@ -361,8 +441,9 @@ export class AuthService {
 
   // Check if Firebase Cloud Sync is allowed (requires real authenticated non-guest account)
   public async isCloudSyncAllowedAsync(): Promise<boolean> {
-    if (this.getAuth().currentUser !== null) {
-      return true;
+    const firebaseUser = this.getAuth().currentUser;
+    if (firebaseUser) {
+      return !firebaseUser.isAnonymous;
     }
     const storedUser = await this.getStoredUser();
     if (!storedUser || storedUser.isGuest || storedUser.uid === "guest") {
@@ -375,38 +456,53 @@ export class AuthService {
   public async signOut(): Promise<void> {
     this.signingOut = true;
     try {
+      const firebaseUser = this.getAuth().currentUser;
+      const storedUser = await this.getStoredUser();
+      const isGuestSession = Boolean(
+        firebaseUser?.isAnonymous || storedUser?.isGuest || storedUser?.uid === "guest",
+      );
+
       // 1. Stop the outgoing user's background work before anything else
       await this.stopBackgroundSync();
 
       // 2. Drop the persisted session FIRST. Firebase's listener fires as soon as signOut()
       //    runs, and it falls back to the stored session - which used to re-emit the old user.
       await this.clearStoredSession();
-      await AsyncStorage.removeItem(AuthService.LAST_USER_KEY);
+      if (isGuestSession) {
+        await AsyncStorage.setItem(AuthService.LAST_USER_KEY, "guest");
+        await AsyncStorage.setItem(AuthService.GUEST_DATA_PENDING_KEY, "true");
+      } else {
+        await AsyncStorage.removeItem(AuthService.LAST_USER_KEY);
+      }
 
       // 3. Sign out of Firebase
       if (this.getAuth().currentUser) {
         await signOut(this.getAuth());
       }
 
-      // 4. Reset local SQLite database so no data leaks across sessions
-      try {
-        const dbManager = DatabaseManager.getInstance();
-        await dbManager.ensureInitialized();
-        await dbManager.resetDatabase();
-      } catch (dbResetErr) {
-        console.warn("Failed to reset local database on sign out:", dbResetErr);
+      // 4. Keep guest data on-device so it can be adopted by a later account.
+      if (!isGuestSession) {
+        try {
+          const dbManager = DatabaseManager.getInstance();
+          await dbManager.ensureInitialized();
+          await dbManager.resetDatabase();
+        } catch (dbResetErr) {
+          console.warn("Failed to reset local database on sign out:", dbResetErr);
+        }
       }
 
       // 5. Clear everything else that was scoped to this user
-      try {
-        await AsyncStorage.multiRemove(AuthService.USER_SCOPED_KEYS);
-        const { clearUserPreferences } =
-          await import("../../settings/utils/userPreferences");
-        await clearUserPreferences();
-        const { walletService } = await import("../../wallets/services/walletService");
-        walletService.clearCache();
-      } catch (prefError) {
-        console.warn("Failed to clear user-scoped data on sign out:", prefError);
+      if (!isGuestSession) {
+        try {
+          await AsyncStorage.multiRemove(AuthService.USER_SCOPED_KEYS);
+          const { clearUserPreferences } =
+            await import("../../settings/utils/userPreferences");
+          await clearUserPreferences();
+          const { walletService } = await import("../../wallets/services/walletService");
+          walletService.clearCache();
+        } catch (prefError) {
+          console.warn("Failed to clear user-scoped data on sign out:", prefError);
+        }
       }
 
       console.log("User signed out successfully");
@@ -489,6 +585,9 @@ export class AuthService {
   public requireUserId(): string {
     const user = this.getAuth().currentUser;
     if (user) {
+      if (user.isAnonymous) {
+        throw new Error("Cloud sync is disabled in Guest Mode");
+      }
       return user.uid;
     }
 
@@ -503,6 +602,9 @@ export class AuthService {
     // Check Firebase auth first
     const firebaseUser = this.getAuth().currentUser;
     if (firebaseUser) {
+      if (firebaseUser.isAnonymous) {
+        throw new Error("Cloud sync is disabled in Guest Mode");
+      }
       return firebaseUser.uid;
     }
 

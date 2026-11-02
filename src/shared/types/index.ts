@@ -353,6 +353,7 @@ export const COLLECTIONS = {
   DEBT_PAYMENTS: "debt_payments",
   SETTINGS: "settings",
   WALLETS: "wallets",
+  SMS_SETTINGS: "sms_settings",
 } as const;
 
 export type CollectionName = (typeof COLLECTIONS)[keyof typeof COLLECTIONS];

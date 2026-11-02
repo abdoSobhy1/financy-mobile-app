@@ -1,5 +1,6 @@
 // Data validation and cleaning utilities for Firebase sync
 import { Transaction, TransactionType } from "../types";
+import { normalizeSyncTimestamp } from "./syncTimestamp";
 
 /**
  * Validates and cleans transaction data before database operations
@@ -300,7 +301,9 @@ export const cleanSettingsData = (settings: any): any => {
   }
 
   // Handle sync fields
-  cleaned.syncUpdatedAt = Number(settings.syncUpdatedAt || Date.now());
+  cleaned.syncUpdatedAt = normalizeSyncTimestamp(
+    settings.syncUpdatedAt ?? settings.sync_updated_at ?? settings.updatedAt ?? settings.updated_at,
+  );
   cleaned.deleted = Boolean(settings.deleted || false);
   cleaned.syncStatus = settings.syncStatus || "pending";
 

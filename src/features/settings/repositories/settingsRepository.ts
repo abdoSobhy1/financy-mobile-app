@@ -2,6 +2,9 @@ import { DatabaseManager } from "../../../infrastructure/database";
 import { Settings } from "../../../shared/types";
 import { SettingsTable, transformSettings, toSettingsTable } from "../../../infrastructure/database/models";
 import { offlineFirstSync } from "../../../infrastructure/sync/OfflineFirstSync";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { authService } from "../../auth/services/authService";
+import { normalizeSyncTimestamp } from "../../../shared/utils/syncTimestamp";
 
 export class SettingsRepository {
   private db = DatabaseManager.getInstance();
@@ -22,7 +25,12 @@ export class SettingsRepository {
     const database = this.db.getDatabase();
 
     const setParts: string[] = ["updated_at = ?", "sync_updated_at = ?", "sync_status = ?"];
-    const params: any[] = [new Date().toISOString(), Date.now(), "pending"];
+    const editTimestamp = options?.skipSync ? normalizeSyncTimestamp(updates.syncUpdatedAt) : Date.now();
+    const params: any[] = [
+      new Date(editTimestamp).toISOString(),
+      editTimestamp,
+      options?.skipSync ? "synced" : "pending",
+    ];
 
     if (updates.billingPeriodStartDay !== undefined) {
       setParts.push("billing_period_start_day = ?");
@@ -266,25 +274,17 @@ export class SettingsRepository {
   }
 
   /**
-   * Update the last sync attempt timestamp stored in settings.
-   * This is used by the delta-sync routine to record the most recent time
-   * we attempted to fetch changes from the cloud.
+   * Store the per-account sync cursor separately from preference edit times.
    */
   async setLastSyncAttempt(timestamp: number): Promise<void> {
-    const database = this.db.getDatabase();
-    const now = new Date().toISOString();
+    const userId = await authService.requireUserIdAsync();
+    await AsyncStorage.setItem(`financy_last_sync_attempt_v1_${userId}`, String(timestamp));
+  }
 
-    await database.runAsync(
-      `
-      UPDATE settings
-      SET sync_updated_at = ?, updated_at = ?
-      WHERE id = ?
-    `,
-      [timestamp, now, "default"]
-    );
-
-    // Do not log this to offlineFirstSync sync_log - this is a metadata marker
-    console.log(`✅ Updated local last sync attempt to ${timestamp}`);
+  async getLastSyncAttempt(): Promise<number> {
+    const userId = await authService.requireUserIdAsync();
+    const value = Number(await AsyncStorage.getItem(`financy_last_sync_attempt_v1_${userId}`));
+    return Number.isFinite(value) && value > 0 ? value : 0;
   }
 
   async getDaysUntilNextBillingPeriod(): Promise<number> {

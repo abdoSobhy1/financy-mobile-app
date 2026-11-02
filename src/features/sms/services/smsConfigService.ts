@@ -108,6 +108,12 @@ let cachedConfig: SmsDetectorConfig = {
 };
 
 let isInitialized = false;
+const configListeners = new Set<(config: SmsDetectorConfig) => void>();
+
+export function subscribeSmsConfig(listener: (config: SmsDetectorConfig) => void): () => void {
+  configListeners.add(listener);
+  return () => { configListeners.delete(listener); };
+}
 
 /**
  * Returns the currently cached configuration synchronously.
@@ -164,7 +170,7 @@ export async function getSmsConfig(): Promise<SmsDetectorConfig> {
 /**
  * Saves updated configuration to AsyncStorage and refreshes the in-memory cache.
  */
-export async function saveSmsConfig(config: SmsDetectorConfig): Promise<void> {
+export async function saveSmsConfig(config: SmsDetectorConfig, options?: { skipSync?: boolean }): Promise<void> {
   try {
     cachedConfig = {
       bankSenders: [...config.bankSenders],
@@ -175,6 +181,12 @@ export async function saveSmsConfig(config: SmsDetectorConfig): Promise<void> {
       ignoreAtmWithdrawals: config.ignoreAtmWithdrawals,
     };
     await AsyncStorage.setItem(SMS_CONFIG_STORAGE_KEY, JSON.stringify(cachedConfig));
+    configListeners.forEach((listener) => listener(cachedConfig));
+    if (!options?.skipSync) {
+      const { SmsSettingsRepository } = await import("./smsSettingsRepository");
+      const enabled = await AsyncStorage.getItem("sms_detection_enabled");
+      await new SmsSettingsRepository().save(cachedConfig, enabled !== "false");
+    }
   } catch (error) {
     console.error("[SmsConfigService] Failed to save SMS config:", error);
     throw error;

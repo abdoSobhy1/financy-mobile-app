@@ -11,6 +11,8 @@ import { RootState, AppDispatch } from "../../../app/store";
 import { addTransaction } from "../../transactions/store/transactionsSlice";
 import { addCategory, fetchCategories } from "../../categories/store/categoriesSlice";
 import { AIService } from "../../../infrastructure/ai/aiService";
+import { getAIConfig } from "../../../infrastructure/ai/aiConfigService";
+import { consumeOcrQuota, getOcrQuotaStatus } from "../../receipts/services/ocrRateLimitService";
 import { detectCategory } from "../services/voiceParser";
 
 type NavigationProp = StackNavigationProp<TransactionStackParamList>;
@@ -246,12 +248,34 @@ export function useVoiceVerifyScreen() {
       showError("No internet connection for AI enhancement");
       return;
     }
+
+    let usesGeminiQuota = false;
+    try {
+      const config = await getAIConfig();
+      usesGeminiQuota = config.provider === "gemini";
+      if (usesGeminiQuota) {
+        let quota = await getOcrQuotaStatus({ fast: true });
+        if (!quota.canScan) quota = await getOcrQuotaStatus();
+        if (!quota.canScan) {
+          showError(
+            `Daily limit of ${quota.dailyLimit} Gemini AI requests reached. The limit resets tomorrow.`,
+          );
+          return;
+        }
+      }
+    } catch (error: any) {
+      showError(error?.message || "Could not check the daily AI request limit");
+      return;
+    }
+
     setIsEnhancingAI(true);
+    let geminiRequestStarted = false;
     try {
       const voiceText = rawText || parsedTransactions.map((t) => t.rawText).filter(Boolean).join(" و ");
 
       if (source === "voice" || (!imageUri && voiceText && source !== "ocr")) {
         // Voice transcription AI re-parsing with Gemini
+        geminiRequestStarted = usesGeminiQuota;
         const newParsed = await AIService.parseVoiceWithAI(
           voiceText,
           categoriesMap,
@@ -271,8 +295,10 @@ export function useVoiceVerifyScreen() {
       let aiResult: any;
       if (imageUri) {
         // Send the actual resized image (1080w max) directly to Gemini Vision!
+        geminiRequestStarted = usesGeminiQuota;
         aiResult = await AIService.parseReceiptImageWithAI(imageUri, categoriesMap);
       } else if (rawText) {
+        geminiRequestStarted = usesGeminiQuota;
         aiResult = await AIService.parseReceiptWithAI(rawText, categoriesMap);
       } else {
         showError("No receipt image or text found to analyze");
@@ -311,6 +337,11 @@ export function useVoiceVerifyScreen() {
     } catch (err: any) {
       showError(err?.message || "AI enhancement failed");
     } finally {
+      if (geminiRequestStarted) {
+        await consumeOcrQuota().catch((error) =>
+          console.warn("[VoiceVerify] Failed to update Gemini request quota:", error),
+        );
+      }
       setIsEnhancingAI(false);
     }
   };

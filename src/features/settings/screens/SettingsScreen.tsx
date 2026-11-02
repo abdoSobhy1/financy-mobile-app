@@ -74,7 +74,6 @@ export const SettingsScreen: React.FC = () => {
     handleSelectCurrency,
     handleToggleTheme,
     lastSyncSubtitle,
-    handleVersionClick,
     handleSyncNow,
     handleExportData
   } = useSettingsScreen();
@@ -92,7 +91,7 @@ export const SettingsScreen: React.FC = () => {
       {/* Top Header */}
       <AppHeader title="Settings" showSettings={false} />
 
-      <SettingsSections tabBarHeight={tabBarHeight} isGuest={isGuest} user={user} setProfileNameInput={setProfileNameInput} setShowProfileModal={setShowProfileModal} handleSignOut={handleSignOut} setShowCurrencyPicker={setShowCurrencyPicker} currentBillingDay={currentBillingDay} setBillingDayInput={setBillingDayInput} setShowBillingDayPicker={setShowBillingDayPicker} handleToggleTheme={handleToggleTheme} navigation={navigation} notifSettings={notifSettings} handleReminderToggle={handleReminderToggle} smsEnabled={smsEnabled} handleSmsToggle={handleSmsToggle} isOwner={isOwner} aiStatus={aiStatus} handleOpenAiSettings={handleOpenAiSettings} handleExportData={handleExportData} lastSyncSubtitle={lastSyncSubtitle} handleSyncNow={handleSyncNow} setShowFirebaseCleanup={setShowFirebaseCleanup} handleVersionClick={handleVersionClick} />
+      <SettingsSections tabBarHeight={tabBarHeight} isGuest={isGuest} user={user} setProfileNameInput={setProfileNameInput} setShowProfileModal={setShowProfileModal} handleSignOut={handleSignOut} setShowCurrencyPicker={setShowCurrencyPicker} currentBillingDay={currentBillingDay} setBillingDayInput={setBillingDayInput} setShowBillingDayPicker={setShowBillingDayPicker} handleToggleTheme={handleToggleTheme} navigation={navigation} notifSettings={notifSettings} handleReminderToggle={handleReminderToggle} smsEnabled={smsEnabled} handleSmsToggle={handleSmsToggle} isOwner={isOwner} aiStatus={aiStatus} handleOpenAiSettings={handleOpenAiSettings} handleExportData={handleExportData} lastSyncSubtitle={lastSyncSubtitle} handleSyncNow={handleSyncNow} setShowFirebaseCleanup={setShowFirebaseCleanup} />
 
       {/* Currency Picker Modal */}
       <CurrencyPickerModal showCurrencyPicker={showCurrencyPicker} setShowCurrencyPicker={setShowCurrencyPicker} handleSelectCurrency={handleSelectCurrency} />

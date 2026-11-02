@@ -5,13 +5,14 @@ import {
   StyleSheet,
   Animated,
   TouchableOpacity,
-  Dimensions,
   Platform,
   StatusBar,
 } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons } from "@expo/vector-icons";
 import { useAppTheme } from "../theme/ThemeProvider";
+import { enqueueToast } from "./toastQueue";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 export interface ToastConfig {
   id: string;
@@ -19,15 +20,18 @@ export interface ToastConfig {
   type: "success" | "error" | "info" | "warning";
   duration?: number;
   onDismiss?: () => void;
+  replaceKey?: string;
+  expiresAt?: number;
 }
 
 interface ToastProps {
   toast: ToastConfig;
   onDismiss: (id: string) => void;
   index: number;
+  pendingCount?: number;
+  inStack?: boolean;
+  stacked?: boolean;
 }
-
-const { width } = Dimensions.get("window");
 
 // ── Color palette per type ───────────────────────────────────────────
 const TOAST_THEME: Record<
@@ -70,115 +74,105 @@ const TOAST_THEME: Record<
   },
 };
 
-export const Toast: React.FC<ToastProps> = ({ toast, onDismiss, index }) => {
+export const Toast: React.FC<ToastProps> = ({ toast, onDismiss, index, pendingCount = 0, inStack = false, stacked = false }) => {
   const { colors } = useAppTheme();
   const styles = React.useMemo(() => getStyles(colors), [colors]);
-
-  const translateY = useRef(new Animated.Value(-60)).current;
-  const opacity = useRef(new Animated.Value(0)).current;
-  const scale = useRef(new Animated.Value(0.9)).current;
+  const isFront = !inStack || index === 0;
+  const frontRef = useRef(isFront);
+  frontRef.current = isFront;
+  const mountedRef = useRef(false);
   const dismissedRef = useRef(false);
-
+  const translateY = useRef(new Animated.Value(inStack ? index * 18 + (index === 0 ? -8 : 0) : -8)).current;
+  const translateX = useRef(new Animated.Value(0)).current;
+  const opacity = useRef(new Animated.Value(isFront ? 0 : 1)).current;
+  const scale = useRef(new Animated.Value(inStack ? 1 - index * 0.04 : 1)).current;
+  const motionRef = useRef<Animated.CompositeAnimation | null>(null);
+  const dismissalRef = useRef<Animated.CompositeAnimation | null>(null);
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const theme = TOAST_THEME[toast.type];
 
   useEffect(() => {
-    Animated.parallel([
-      Animated.spring(translateY, {
-        toValue: 0,
-        useNativeDriver: true,
-        tension: 100,
-        friction: 10,
-      }),
-      Animated.timing(opacity, {
-        toValue: 1,
-        duration: 250,
-        useNativeDriver: true,
-      }),
-      Animated.spring(scale, {
-        toValue: 1,
-        useNativeDriver: true,
-        tension: 100,
-        friction: 10,
-      }),
-    ]).start();
-
-    const timer = setTimeout(() => {
-      handleDismiss();
-    }, toast.duration || 3500);
-
-    return () => clearTimeout(timer);
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+      motionRef.current?.stop();
+      dismissalRef.current?.stop();
+      if (timerRef.current) clearTimeout(timerRef.current);
+    };
   }, []);
 
-  const handleDismiss = () => {
-    if (dismissedRef.current) return;
-    dismissedRef.current = true;
+  useEffect(() => {
+    dismissedRef.current = false;
+    dismissalRef.current?.stop();
+    motionRef.current = Animated.parallel([
+      Animated.timing(translateY, { toValue: inStack ? index * 18 : 0, duration: 180, useNativeDriver: true }),
+      Animated.timing(translateX, { toValue: 0, duration: 180, useNativeDriver: true }),
+      Animated.timing(opacity, { toValue: 1, duration: 180, useNativeDriver: true }),
+      Animated.timing(scale, { toValue: inStack ? 1 - index * 0.04 : 1, duration: 180, useNativeDriver: true }),
+    ]);
+    motionRef.current.start();
+    return () => { motionRef.current?.stop(); };
+  }, [index, inStack, toast.message]);
 
-    Animated.parallel([
-      Animated.timing(translateY, {
-        toValue: -60,
-        duration: 200,
-        useNativeDriver: true,
-      }),
-      Animated.timing(opacity, {
-        toValue: 0,
-        duration: 200,
-        useNativeDriver: true,
-      }),
-      Animated.timing(scale, {
-        toValue: 0.85,
-        duration: 200,
-        useNativeDriver: true,
-      }),
-    ]).start(() => {
+  const handleDismiss = () => {
+    if (!frontRef.current || dismissedRef.current || !mountedRef.current) return;
+    dismissedRef.current = true;
+    if (timerRef.current) clearTimeout(timerRef.current);
+    motionRef.current?.stop();
+    dismissalRef.current = Animated.parallel([
+      Animated.timing(translateX, { toValue: 32, duration: 160, useNativeDriver: true }),
+      Animated.timing(opacity, { toValue: 0, duration: 160, useNativeDriver: true }),
+    ]);
+    dismissalRef.current.start(({ finished }) => {
+      if (!finished || !mountedRef.current || !frontRef.current) return;
       onDismiss(toast.id);
       toast.onDismiss?.();
     });
   };
 
-  const topOffset =
-    (Platform.OS === "android" ? (StatusBar.currentHeight || 24) : 50) +
-    12 +
-    index * 76;
+  useEffect(() => {
+    if (!isFront) return;
+    const remaining = toast.expiresAt ? Math.max(0, toast.expiresAt - Date.now()) : (toast.duration || 3500);
+    timerRef.current = setTimeout(handleDismiss, remaining);
+    return () => {
+      if (timerRef.current) clearTimeout(timerRef.current);
+      dismissalRef.current?.stop();
+    };
+  }, [isFront, toast.id, toast.message, toast.duration, toast.expiresAt]);
 
   return (
     <Animated.View
-      pointerEvents="auto"
+      pointerEvents={isFront ? "auto" : "none"}
+      accessibilityElementsHidden={!isFront}
+      importantForAccessibility={isFront ? "auto" : "no-hide-descendants"}
       style={[
-        styles.container,
-        {
-          backgroundColor: colors.surfaceVariant,
-          borderColor: theme.border,
-          transform: [{ translateY }, { scale }],
-          opacity,
-          top: topOffset,
-        },
+        inStack ? styles.stackedCard : styles.container,
+        { zIndex: 10 - index, elevation: inStack ? 12 - index * 4 : 12,
+          transform: [{ translateY }, { translateX }, { scale }], opacity,
+          top: inStack ? 0 : (Platform.OS === "android" ? (StatusBar.currentHeight || 24) : 50) + 12 },
       ]}>
-      <TouchableOpacity
-        activeOpacity={0.9}
-        onPress={handleDismiss}
-        style={styles.content}>
-        {/* Gradient icon circle */}
-        <LinearGradient
-          colors={theme.gradient}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-          style={styles.iconCircle}>
-          <Ionicons name={theme.iconName} size={16} color="#fff" />
-        </LinearGradient>
-
-        {/* Message */}
-        <Text style={styles.message} numberOfLines={2}>
-          {toast.message}
-        </Text>
-
-        {/* Dismiss */}
-        <TouchableOpacity
-          style={styles.dismissBtn}
-          onPress={handleDismiss}
-          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
-          <Ionicons name="close" size={14} color="rgba(255,255,255,0.4)" />
+      <View style={[styles.frontCard, {
+        height: stacked || pendingCount > 0 ? 80 : 56,
+        backgroundColor: colors.surfaceVariant,
+        borderColor: isFront ? theme.border : colors.onSurfaceVariant,
+      }]}>
+        <TouchableOpacity activeOpacity={0.95} onPress={handleDismiss} style={styles.content}
+          disabled={!isFront} accessibilityLabel={toast.message}>
+          <LinearGradient colors={theme.gradient} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.iconCircle}>
+            <Ionicons name={theme.iconName} size={16} color="#fff" />
+          </LinearGradient>
+          <Text style={styles.message} numberOfLines={2}>{toast.message}</Text>
+          <TouchableOpacity style={styles.dismissBtn} onPress={handleDismiss} disabled={!isFront}
+            accessibilityLabel="Dismiss notification" hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+            <Ionicons name="close" size={16} color={colors.onSurfaceVariant} />
+          </TouchableOpacity>
         </TouchableOpacity>
-      </TouchableOpacity>
+        {pendingCount > 0 && (
+          <Text style={styles.stackCount}>
+            {pendingCount + (pendingCount === 1 ? " more notification" : " more notifications")}
+          </Text>
+        )}
+      </View>
     </Animated.View>
   );
 };
@@ -189,6 +183,8 @@ const getStyles = (colors: any) => StyleSheet.create({
     left: 16,
     right: 16,
     zIndex: 9999,
+  },
+  frontCard: {
     borderRadius: 16,
     borderWidth: 1,
     // Glass background
@@ -198,12 +194,26 @@ const getStyles = (colors: any) => StyleSheet.create({
     shadowOffset: { width: 0, height: 8 },
     shadowOpacity: 0.4,
     shadowRadius: 16,
-    elevation: 12,
+  },
+  stackedCard: {
+    position: "absolute",
+    left: 0,
+    right: 0,
+  },
+  stackCount: {
+    color: colors.onSurfaceVariant,
+    fontSize: 12,
+    fontWeight: "500",
+    paddingHorizontal: 16,
+    height: 24,
+    lineHeight: 16,
+    paddingBottom: 8,
   },
   content: {
     flexDirection: "row",
     alignItems: "center",
-    paddingVertical: 14,
+    height: 56,
+    paddingVertical: 8,
     paddingHorizontal: 16,
     gap: 12,
   },
@@ -237,20 +247,23 @@ interface ToastContainerProps {
   onDismiss: (id: string) => void;
 }
 
-export const ToastContainer: React.FC<ToastContainerProps> = ({
-  toasts,
-  onDismiss,
-}) => {
+export const ToastContainer: React.FC<ToastContainerProps> = ({ toasts, onDismiss }) => {
+  const { colors } = useAppTheme();
+  const insets = useSafeAreaInsets();
+  const styles = React.useMemo(() => getStyles(colors), [colors]);
+  if (toasts.length === 0) return null;
+  const cards = toasts.slice(0, 3).map((toast, index) => ({ toast, index })).reverse();
   return (
     <View style={StyleSheet.absoluteFill} pointerEvents="box-none">
-      {toasts.map((toast, index) => (
-        <Toast
-          key={toast.id}
-          toast={toast}
-          onDismiss={onDismiss}
-          index={index}
-        />
-      ))}
+      <View style={[styles.container, {
+        top: Math.max(insets.top, Platform.OS === "android" ? (StatusBar.currentHeight || 24) : 0) + 12,
+        height: 116,
+      }]} pointerEvents="box-none">
+        {cards.map(({ toast, index }) => (
+          <Toast key={toast.id} toast={toast} onDismiss={onDismiss} index={index}
+            pendingCount={index === 0 ? toasts.length - 1 : 0} inStack stacked={toasts.length > 1} />
+        ))}
+      </View>
     </View>
   );
 };
@@ -259,46 +272,51 @@ export const ToastContainer: React.FC<ToastContainerProps> = ({
 export const useToast = () => {
   const [toasts, setToasts] = React.useState<ToastConfig[]>([]);
 
-  const showToast = (
+  const showToast = React.useCallback((
     message: string,
     type: ToastConfig["type"] = "info",
     duration?: number,
     onDismiss?: () => void,
+    replaceKey?: string,
   ) => {
     const id = Math.random().toString(36).substr(2, 9);
-    setToasts((prev) => [
-      ...prev,
-      { id, message, type, duration: duration || 3500, onDismiss },
-    ]);
-  };
+    setToasts((prev) => enqueueToast(prev,
+      { id, message, type, duration: duration || 3500, onDismiss, replaceKey,
+        expiresAt: replaceKey ? Date.now() + (duration || 3500) : undefined },
+    ));
+  }, []);
 
   const showSuccess = (
     message: string,
     duration?: number,
     onDismiss?: () => void,
-  ) => showToast(message, "success", duration, onDismiss);
+    replaceKey?: string,
+  ) => showToast(message, "success", duration, onDismiss, replaceKey);
 
   const showError = (
     message: string,
     duration?: number,
     onDismiss?: () => void,
-  ) => showToast(message, "error", duration, onDismiss);
+    replaceKey?: string,
+  ) => showToast(message, "error", duration, onDismiss, replaceKey);
 
   const showWarning = (
     message: string,
     duration?: number,
     onDismiss?: () => void,
-  ) => showToast(message, "warning", duration, onDismiss);
+    replaceKey?: string,
+  ) => showToast(message, "warning", duration, onDismiss, replaceKey);
 
   const showInfo = (
     message: string,
     duration?: number,
     onDismiss?: () => void,
-  ) => showToast(message, "info", duration, onDismiss);
+    replaceKey?: string,
+  ) => showToast(message, "info", duration, onDismiss, replaceKey);
 
-  const dismissToast = (id: string) => {
-    setToasts((prev) => prev.filter((t) => t.id !== id));
-  };
+  const dismissToast = React.useCallback((id: string) => {
+    setToasts((prev) => prev.filter((t) => t.id !== id && (!t.expiresAt || t.expiresAt > Date.now())));
+  }, []);
 
   const clearAllToasts = () => setToasts([]);
 

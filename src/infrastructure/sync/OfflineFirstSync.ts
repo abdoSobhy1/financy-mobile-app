@@ -5,7 +5,9 @@ import { COLLECTIONS, CollectionName, FirestoreDocument } from "../../shared/typ
 import NetInfo from "@react-native-community/netinfo";
 import { addDeviceTracking } from "../device/deviceTracking";
 import NotificationService from "../notifications/notificationService";
-import AsyncStorage from "@react-native-async-storage/async-storage";
+import { normalizeSyncTimestamp } from "../../shared/utils/syncTimestamp";
+import { hasRestoredCloudData, markCloudDataRestored, invalidateCloudRestore } from "./cloudRestoreState";
+import { applyRestoreBatches, RestoreWrite, RestoreWriter } from "./restoreBatches";
 
 export type SyncDispatchListener = (tableName: string, recordId: string) => void;
 let syncDispatchListener: SyncDispatchListener | null = null;
@@ -46,6 +48,7 @@ class OfflineFirstSync {
     debt_payments: COLLECTIONS.DEBT_PAYMENTS,
     settings: COLLECTIONS.SETTINGS,
     wallets: COLLECTIONS.WALLETS,
+    sms_settings: COLLECTIONS.SMS_SETTINGS,
   };
 
   /**
@@ -160,7 +163,15 @@ class OfflineFirstSync {
   /**
    * Process all unsynced operations from the log
    */
-  private async processUnSyncedOperations(): Promise<void> {
+  private async processUnSyncedOperations(afterRestore = false): Promise<void> {
+    if (!afterRestore) {
+      if (this.fullSyncPromise) return;
+      const userId = await authService.requireUserIdAsync();
+      if (!(await hasRestoredCloudData(userId))) {
+        await this.syncWithFirebase();
+        return;
+      }
+    }
     if (this.isProcessing) {
       return;
     }
@@ -212,11 +223,26 @@ class OfflineFirstSync {
    */
   private async processSingleOperation(logEntry: SyncLogEntry): Promise<void> {
     try {
-      const data = JSON.parse(logEntry.payload);
+      let data = JSON.parse(logEntry.payload);
       const collectionName = this.TABLE_TO_COLLECTION[logEntry.table_name];
 
       if (!collectionName) {
         throw new Error(`Unknown table name: ${logEntry.table_name}`);
+      }
+
+      // A successful restore may have superseded an older queued payload.
+      if (logEntry.operation !== "delete") {
+        const row = await this.db.getDatabase().getFirstAsync<any>(
+          `SELECT * FROM ${logEntry.table_name} WHERE id = ?`,
+          [logEntry.record_id],
+        );
+        if (!row || row.sync_status === "synced") {
+          await this.markOperationAsProcessed(logEntry.log_id!);
+          return;
+        }
+        // Several edits can be queued for one row. Upload its current value so
+        // marking it synced cannot cause later edits to be skipped accidentally.
+        data = this.convertLocalToCloudFormat(logEntry.table_name, row);
       }
 
       // Map operation names from database style to sync service style
@@ -363,6 +389,9 @@ class OfflineFirstSync {
    * Force sync all pending operations (called when coming online)
    */
   public async forceSyncAll(): Promise<void> {
+    if (!(await authService.isCloudSyncAllowedAsync())) {
+      return;
+    }
     console.log("🚀 Force syncing all pending operations");
     await this.processUnSyncedOperations();
   }
@@ -471,8 +500,18 @@ class OfflineFirstSync {
    */
   private async initializeFirebaseListeners(): Promise<void> {
     try {
+      if (!(await authService.isCloudSyncAllowedAsync())) {
+        console.log("⏭️ Firebase listeners skipped for local-only guest mode");
+        return;
+      }
       console.log("🔥 Starting Firebase real-time listeners...");
-      await syncService.initializeSync();
+      const userId = await authService.requireUserIdAsync();
+      if (await hasRestoredCloudData(userId)) {
+        await this.forceSyncAll();
+        await syncService.initializeSync();
+      } else {
+        await this.syncWithFirebase();
+      }
       // After listeners are started, perform a delta sync to pull any changes
       try {
         await syncService.performDeltaSync();
@@ -512,6 +551,7 @@ class OfflineFirstSync {
     this.periodicSyncInterval = setInterval(
       async () => {
         try {
+          if (!(await authService.isCloudSyncAllowedAsync())) return;
           const netInfo = await NetInfo.fetch();
           if (netInfo.isConnected) {
             const pendingCount = await this.getPendingOperationsCount();
@@ -573,8 +613,9 @@ class OfflineFirstSync {
    * Setup network listener to auto-sync when coming online
    */
   public setupNetworkListener(): () => void {
-    const unsubscribe = NetInfo.addEventListener((state) => {
+    const unsubscribe = NetInfo.addEventListener(async (state) => {
       if (state.isConnected) {
+        if (!(await authService.isCloudSyncAllowedAsync())) return;
         console.log(
           "📡 Network connected, attempting to sync pending operations and perform delta sync",
         );
@@ -605,39 +646,16 @@ class OfflineFirstSync {
    * Normalize any timestamp value (number, numeric string, ISO string, or Firestore Timestamp) to epoch ms
    */
   private parseTimestampMs(val: any): number {
-    if (!val) return 0;
-    if (typeof val === "number") {
-      return isNaN(val) ? 0 : val;
-    }
-    if (typeof val === "object") {
-      if (typeof val.toDate === "function") {
-        return val.toDate().getTime();
-      }
-      if (typeof val.seconds === "number") {
-        return val.seconds * 1000;
-      }
-    }
-    if (typeof val === "string") {
-      const asNum = Number(val);
-      if (!isNaN(asNum) && asNum > 0) {
-        return asNum;
-      }
-      const parsed = Date.parse(val);
-      if (!isNaN(parsed) && parsed > 0) {
-        return parsed;
-      }
-    }
-    return 0;
+    return normalizeSyncTimestamp(val);
   }
 
   /**
    * Complete bidirectional sync with Firebase database:
    * 1. Validates auth & internet connection
-   * 2. Initializes sync service & ensures Firestore user document exists
-   * 3. Flushes pending local sync operations
-   * 4. Pulls/restores cloud data down to local SQLite
+   * 2. Restores cloud data down to local SQLite
+   * 3. Flushes pending local sync operations after successful restore
    * 5. Pushes local data (categories, settings, wallets, budgets, transactions, debts, debt_payments) to cloud
-   * 6. Updates syncUpdatedAt timestamp
+   * 6. Records the sync cursor separately from settings edits and starts polling
    */
   public async syncWithFirebase(forceFullPush: boolean = true): Promise<{
     push: { totalUploaded: number; totalSkipped: number; errors: string[] };
@@ -668,67 +686,19 @@ class OfflineFirstSync {
         }
 
         console.log("🔄 Starting full bidirectional sync with Firebase database...");
+        await invalidateCloudRestore();
+        const userId = await authService.requireUserIdAsync();
 
-        // 1. Initialize Firebase sync service & ensure user document exists in Firestore
-        await syncService.initializeSync();
-
-        // 2. Process pending offline sync operations
-        await this.processUnSyncedOperations();
-
-        // 3. Restore cloud data FIRST so local database is populated with cloud records before pushing
-        let pullResult = { itemsCreated: 0, itemsUpdated: 0, errors: [] as string[] };
-        try {
-          pullResult = await this.performComprehensiveCloudRestore();
-        } catch (pullErr: any) {
-          console.error("❌ Restore from cloud failed:", pullErr);
-          pullResult.errors.push(pullErr?.message || String(pullErr));
+        // Restore must succeed before any queued writes can reach cloud.
+        const pullResult = await this.performComprehensiveCloudRestore();
+        if (pullResult.errors.length > 0) {
+          throw new Error(`Cloud restore failed: ${pullResult.errors.join("; ")}`);
         }
-
-        // 4. Ensure categories and wallets state for this user is marked or seeded
-        try {
-          await this.db.ensureInitialized();
-          const database = this.db.getDatabase();
-          const catCountRow = await database.getFirstAsync<{ count: number }>(
-            "SELECT COUNT(*) as count FROM categories WHERE deleted = 0 OR deleted IS NULL",
-          );
-          const walletCountRow = await database.getFirstAsync<{ count: number }>(
-            "SELECT COUNT(*) as count FROM wallets",
-          );
-          const currentUserId = (await authService.getCurrentAuthenticatedUser())?.uid;
-
-          if (currentUserId) {
-            const seededKey = `financy_categories_seeded_v1_${currentUserId}`;
-            const walletSeededKey = `financy_wallets_seeded_v1_${currentUserId}`;
-            const hasExistingCloudData =
-              pullResult.itemsCreated + pullResult.itemsUpdated > 0;
-
-            if ((catCountRow && catCountRow.count > 0) || hasExistingCloudData) {
-              // User already has categories or existing cloud account data (meaning any missing categories were intentionally deleted)
-              await AsyncStorage.setItem(seededKey, "true");
-            } else {
-              // Brand new user with 0 categories and 0 cloud records: seed default Arabic categories with deterministic IDs once
-              const alreadySeeded = await AsyncStorage.getItem(seededKey);
-              if (alreadySeeded !== "true") {
-                const { CategoryRepository } = await import("../../features/categories/repositories/categoriesRepository");
-                const categoryRepo = new CategoryRepository();
-                await categoryRepo.seedDefaultArabicCategories();
-              }
-            }
-
-            if ((walletCountRow && walletCountRow.count > 0) || hasExistingCloudData) {
-              await AsyncStorage.setItem(walletSeededKey, "true");
-            } else {
-              const alreadySeededWallets = await AsyncStorage.getItem(walletSeededKey);
-              if (alreadySeededWallets !== "true") {
-                const { WalletRepository } = await import("../../features/wallets/repositories/walletsRepository");
-                const walletRepo = new WalletRepository();
-                await walletRepo.seedDefaultWallets();
-              }
-            }
-          }
-        } catch (catInitErr) {
-          console.warn("Category/Wallet post-restore check warning:", catInitErr);
+        if (userId !== await authService.requireUserIdAsync()) {
+          throw new Error("Account changed during cloud restore");
         }
+        await markCloudDataRestored(userId);
+        await this.processUnSyncedOperations(true);
 
         // Recalculate category entry counts after cloud restore
         try {
@@ -751,12 +721,13 @@ class OfflineFirstSync {
           pushResult.errors.push(pushErr?.message || String(pushErr));
         }
 
-        // 6. Update settings.syncUpdatedAt (with skipSync to avoid queuing an operation in sync_log)
+        // Sync progress is metadata, not an edit to the user's preferences.
         try {
           const { SettingsRepository } = await import("../../features/settings/repositories/settingsRepository");
           const settingsRepo = new SettingsRepository();
           const now = Date.now();
-          await settingsRepo.updateSettings({ syncUpdatedAt: now }, { skipSync: true });
+          await settingsRepo.setLastSyncAttempt(now);
+          await syncService.initializeSync();
         } catch (e) {
           console.warn("Could not update syncUpdatedAt setting:", e);
         }
@@ -788,10 +759,10 @@ class OfflineFirstSync {
     try {
       console.log("🔍 Starting conflicts-only sync...");
 
-      // Check if user is authenticated first
-      const isAuthenticated = await authService.isAuthenticatedAsync();
-      if (!isAuthenticated) {
-        console.log("🔐 User not authenticated, skipping conflicts sync");
+      // Guests have a Firebase anonymous identity for hosted AI, but their data stays local.
+      const canSync = await authService.isCloudSyncAllowedAsync();
+      if (!canSync) {
+        console.log("⏭️ Conflicts sync skipped for local-only guest mode");
         return;
       }
 
@@ -836,7 +807,7 @@ class OfflineFirstSync {
       errors: [] as string[],
     };
 
-    const independentCollections = ["categories", "settings", "wallets"];
+    const independentCollections = ["categories", "settings", "wallets", "sms_settings"];
     const dependentCollections = [
       "budgets",
       "transactions",
@@ -861,6 +832,8 @@ class OfflineFirstSync {
           const errorMsg = `Failed to sync ${tableName}: ${error instanceof Error ? error.message : error}`;
           result.errors.push(errorMsg);
           console.error(`❌ ${errorMsg}`);
+          // Stop before dependent records can be restored with missing links.
+          return result;
         }
       }
     }
@@ -882,6 +855,7 @@ class OfflineFirstSync {
           const errorMsg = `Failed to sync ${tableName}: ${error instanceof Error ? error.message : error}`;
           result.errors.push(errorMsg);
           console.error(`❌ ${errorMsg}`);
+          return result;
         }
       }
     }
@@ -912,10 +886,9 @@ class OfflineFirstSync {
     try {
       console.log("☁️ Starting initial cloud data pull...");
 
-      // Check if user is authenticated
-      const isAuthenticated = await authService.isAuthenticatedAsync();
-      if (!isAuthenticated) {
-        console.log("🔐 User not authenticated, skipping cloud pull");
+      const canSync = await authService.isCloudSyncAllowedAsync();
+      if (!canSync) {
+        console.log("⏭️ Initial cloud pull skipped for local-only guest mode");
         return false;
       }
 
@@ -958,6 +931,10 @@ class OfflineFirstSync {
     itemsCreated: number;
     errors: string[];
   }> {
+    if (!(await authService.isCloudSyncAllowedAsync())) {
+      return { itemsUpdated: 0, itemsCreated: 0, errors: [] };
+    }
+
     const notificationService = NotificationService.getInstance();
     let notificationId: string | null = null;
 
@@ -968,12 +945,6 @@ class OfflineFirstSync {
       notificationId = await notificationService.showSyncNotification(
         "Restoring data from cloud...",
       );
-
-      // Check if user is authenticated
-      const isAuthenticated = await authService.isAuthenticatedAsync();
-      if (!isAuthenticated) {
-        throw new Error("User not authenticated");
-      }
 
       // Check network connectivity
       const netInfo = await NetInfo.fetch();
@@ -1014,10 +985,9 @@ class OfflineFirstSync {
   ): Promise<{ created: number; updated: number }> {
     console.log(`🔄 Syncing ${collectionName} with ID comparison...`);
 
-    // Check if user is authenticated first
-    const isAuthenticated = await authService.isAuthenticatedAsync();
-    if (!isAuthenticated) {
-      console.log(`🔐 User not authenticated, skipping ${collectionName} sync`);
+    const canSync = await authService.isCloudSyncAllowedAsync();
+    if (!canSync) {
+      console.log(`⏭️ Skipping ${collectionName} sync in local-only guest mode`);
       return { created: 0, updated: 0 };
     }
 
@@ -1044,6 +1014,8 @@ class OfflineFirstSync {
         [tableName],
       );
       const pendingDeleteIds = new Set(pendingDeleteRows.map((r) => r.record_id));
+      const localWrites: RestoreWrite[] = [];
+      const remoteDeletes: Array<() => Promise<void>> = [];
 
       console.log(
         `📊 ${collectionName}: ${cloudDocuments.length} cloud items, ${localDocuments.length} local items`,
@@ -1052,6 +1024,10 @@ class OfflineFirstSync {
       // Process each cloud document
       for (const cloudDoc of cloudDocuments) {
         try {
+          if (!cloudDoc?.id) {
+            console.warn(`⚠️ Skipping invalid ${tableName} document (no ID)`);
+            continue;
+          }
           const docData = cloudDoc.data || cloudDoc;
           const isDeleted =
             cloudDoc.deleted === true ||
@@ -1064,38 +1040,35 @@ class OfflineFirstSync {
             const localDoc = localById.get(cloudDoc.id);
             if (localDoc) {
               console.log(`🗑️ Removing deleted ${tableName} document from local DB: ${cloudDoc.id}`);
-              await database.runAsync(`DELETE FROM ${tableName} WHERE id = ?`, [cloudDoc.id]);
+              localWrites.push(async (writer) => {
+                await writer.runAsync(`DELETE FROM ${tableName} WHERE id = ?`, [cloudDoc.id]);
+              });
               result.updated++;
             }
-            try {
-              await syncService.syncLocalChanges(collectionName, "delete", cloudDoc.id);
-            } catch {
-              // ignore
-            }
-            continue;
-          }
-
-          // Validate document has minimum required data
-          if (!cloudDoc || !cloudDoc.id) {
-            console.warn(
-              `⚠️ Skipping invalid ${tableName} document (no ID):`,
-              cloudDoc,
-            );
+            remoteDeletes.push(async () => {
+              try {
+                await syncService.syncLocalChanges(collectionName, "delete", cloudDoc.id);
+              } catch {
+                // Keep the tombstone in cloud so a later restore can retry.
+              }
+            });
             continue;
           }
 
           // If this item was hard-deleted locally and is waiting in sync_log, delete it from Firebase instead of re-inserting
           if (pendingDeleteIds.has(cloudDoc.id)) {
             console.log(`🗑️ ${tableName}:${cloudDoc.id} has pending local delete, removing from Firebase...`);
-            try {
-              await syncService.syncLocalChanges(collectionName, "delete", cloudDoc.id);
-              await database.runAsync(
-                `UPDATE sync_log SET is_processed = 1 WHERE table_name = ? AND record_id = ? AND operation = 'delete'`,
-                [tableName, cloudDoc.id],
-              );
-            } catch (delErr) {
-              console.warn(`Could not delete ${tableName}:${cloudDoc.id} from Firebase:`, delErr);
-            }
+            remoteDeletes.push(async () => {
+              try {
+                await syncService.syncLocalChanges(collectionName, "delete", cloudDoc.id);
+                await database.runAsync(
+                  `UPDATE sync_log SET is_processed = 1 WHERE table_name = ? AND record_id = ? AND operation = 'delete'`,
+                  [tableName, cloudDoc.id],
+                );
+              } catch (delErr) {
+                console.warn(`Could not delete ${tableName}:${cloudDoc.id} from Firebase:`, delErr);
+              }
+            });
             continue;
           }
 
@@ -1110,7 +1083,7 @@ class OfflineFirstSync {
           if (!localDoc) {
             // Document doesn't exist locally - create it
             console.log(`➕ Creating new ${tableName}: ${cloudDoc.id}`);
-            await this.insertCloudDocumentToLocal(tableName, cloudDoc);
+            localWrites.push((writer) => this.insertCloudDocumentToLocal(tableName, cloudDoc, writer));
             result.created++;
           } else {
             // If locally deleted, do not resurrect from cloud — delete from Firebase instead
@@ -1121,19 +1094,21 @@ class OfflineFirstSync {
               console.log(
                 `🗑️ ${tableName}:${cloudDoc.id} is marked deleted locally, removing from Firebase...`,
               );
-              try {
-                await syncService.syncLocalChanges(
-                  collectionName,
-                  "delete",
-                  cloudDoc.id,
-                );
-                await this.markRecordSynced(tableName, cloudDoc.id);
-              } catch (delErr) {
-                console.warn(
-                  `Could not delete ${tableName}:${cloudDoc.id} from Firebase:`,
-                  delErr,
-                );
-              }
+              remoteDeletes.push(async () => {
+                try {
+                  await syncService.syncLocalChanges(
+                    collectionName,
+                    "delete",
+                    cloudDoc.id,
+                  );
+                  await this.markRecordSynced(tableName, cloudDoc.id);
+                } catch (delErr) {
+                  console.warn(
+                    `Could not delete ${tableName}:${cloudDoc.id} from Firebase:`,
+                    delErr,
+                  );
+                }
+              });
               continue;
             }
 
@@ -1154,7 +1129,7 @@ class OfflineFirstSync {
               console.log(
                 `🔄 Updating ${tableName}: ${cloudDoc.id} (cloud: ${cloudUpdatedAt}, local: ${localUpdatedAt}, isDefault: ${localIsUntouchedDefault})`,
               );
-              await this.updateLocalDocumentFromCloud(tableName, cloudDoc);
+              localWrites.push((writer) => this.updateLocalDocumentFromCloud(tableName, cloudDoc, writer));
               result.updated++;
             } else {
               console.log(
@@ -1167,9 +1142,16 @@ class OfflineFirstSync {
             `❌ Failed to process ${tableName}:${cloudDoc.id}:`,
             error,
           );
-          // Continue with other documents
+          throw error;
         }
       }
+
+      await applyRestoreBatches(database, localWrites);
+      if (tableName === "sms_settings") {
+        const { SmsSettingsRepository } = await import("../../features/sms/services/smsSettingsRepository");
+        await new SmsSettingsRepository().refreshCache();
+      }
+      for (const removeRemote of remoteDeletes) await removeRemote();
 
       console.log(
         `✅ ${collectionName} sync completed: ${result.created} created, ${result.updated} updated`,
@@ -1201,6 +1183,10 @@ class OfflineFirstSync {
   ): Promise<any[]> {
     await this.db.ensureInitialized();
     const database = this.db.getDatabase();
+    if (tableName === "sms_settings") {
+      const { SmsSettingsRepository } = await import("../../features/sms/services/smsSettingsRepository");
+      await new SmsSettingsRepository().migrateLegacy();
+    }
     const whereClause = includeDeleted
       ? ""
       : " WHERE deleted = 0 OR deleted IS NULL";
@@ -1213,6 +1199,7 @@ class OfflineFirstSync {
       case "debt_payments":
       case "settings":
       case "wallets":
+      case "sms_settings":
         return await database.getAllAsync(
           `SELECT * FROM ${tableName}${whereClause}`,
         );
@@ -1227,9 +1214,10 @@ class OfflineFirstSync {
   private async updateLocalDocumentFromCloud(
     tableName: string,
     cloudDocument: any,
+    writer?: RestoreWriter,
   ): Promise<void> {
     await this.db.ensureInitialized();
-    const database = this.db.getDatabase();
+    const database = writer ?? this.db.getDatabase();
 
     // Convert cloud document to local format
     const localData = this.convertCloudToLocalFormat(tableName, cloudDocument);
@@ -1241,7 +1229,8 @@ class OfflineFirstSync {
       case "debts":
       case "debt_payments":
       case "wallets":
-        await this.insertCloudDocumentToLocal(tableName, cloudDocument);
+      case "sms_settings":
+        await this.insertCloudDocumentToLocal(tableName, cloudDocument, writer);
         break;
 
       case "settings":
@@ -1254,9 +1243,11 @@ class OfflineFirstSync {
           );
         } else {
           // New structured format with billing period and other settings
-          const updates: string[] = ["updated_at = ?"];
+          const updates: string[] = ["updated_at = ?", "sync_updated_at = ?", "sync_status = ?"];
           const params: any[] = [
             localData.updatedAt || new Date().toISOString(),
+            this.parseTimestampMs(localData.updatedAt),
+            "synced",
           ];
 
           if (
@@ -1315,6 +1306,15 @@ class OfflineFirstSync {
     >;
     errors: string[];
   }> {
+    if (!(await authService.isCloudSyncAllowedAsync())) {
+      return {
+        totalUploaded: 0,
+        totalSkipped: 0,
+        collections: {},
+        errors: [],
+      };
+    }
+
     const notificationService = NotificationService.getInstance();
     let notificationId: string | null = null;
 
@@ -1325,12 +1325,6 @@ class OfflineFirstSync {
       notificationId = await notificationService.showSyncNotification(
         "Pushing local data to cloud...",
       );
-
-      // Check if user is authenticated
-      const isAuthenticated = await authService.isAuthenticatedAsync();
-      if (!isAuthenticated) {
-        throw new Error("User not authenticated");
-      }
 
       // Check network connectivity
       const netInfo = await NetInfo.fetch();
@@ -1377,6 +1371,7 @@ class OfflineFirstSync {
         "categories",
         "settings",
         "wallets",
+        "sms_settings",
         "budgets",
         "transactions",
         "debts",
@@ -1445,10 +1440,10 @@ class OfflineFirstSync {
   ): Promise<{ uploaded: number; skipped: number; errors: number }> {
     // Check if user is authenticated first
     const { authService } = await import("../../features/auth/services/authService");
-    const isAuthenticated = await authService.isAuthenticatedAsync();
-    if (!isAuthenticated) {
+    const canSync = await authService.isCloudSyncAllowedAsync();
+    if (!canSync) {
       console.log(
-        `🔐 User not authenticated, skipping ${collectionName} push to cloud`,
+        `⏭️ Skipping ${collectionName} cloud push in local-only guest mode`,
       );
       return { uploaded: 0, skipped: 0, errors: 0 };
     }
@@ -1518,6 +1513,12 @@ class OfflineFirstSync {
           );
 
           if (!cloudDoc) {
+            // A synced row missing remotely may have been deleted on another
+            // device. Only locally pending records may create cloud documents.
+            if (localDoc.sync_status === "synced" && tableName !== "settings") {
+              result.skipped++;
+              continue;
+            }
             // Document doesn't exist in cloud - upload it
             console.log(
               `⬆️ Uploading new ${tableName}: ${(localDoc as any).id}`,
@@ -1528,6 +1529,7 @@ class OfflineFirstSync {
               (localDoc as any).id,
               cloudFormatDoc,
             );
+            await this.markRecordSynced(tableName, localDoc.id);
             result.uploaded++;
           } else {
             // Document exists in cloud - check if local is newer
@@ -1563,6 +1565,7 @@ class OfflineFirstSync {
                 (localDoc as any).id,
                 cloudFormatDoc,
               );
+              await this.markRecordSynced(tableName, localDoc.id);
               result.uploaded++;
             } else {
               console.log(
@@ -1679,14 +1682,25 @@ class OfflineFirstSync {
   private async insertCloudDocumentToLocal(
     tableName: string,
     document: any,
+    writer?: RestoreWriter,
   ): Promise<void> {
     await this.db.ensureInitialized();
-    const database = this.db.getDatabase();
+    const database = writer ?? this.db.getDatabase();
 
     // Convert Firebase document to local format
     const localData = this.convertCloudToLocalFormat(tableName, document);
 
     switch (tableName) {
+      case "sms_settings": {
+        const { validateSmsPreferences } = await import("../../features/sms/services/smsSettingsRepository");
+        const preferences = validateSmsPreferences(document.data || document);
+        const timestamp = this.parseTimestampMs(document.updatedAt ?? document.data?.updatedAt);
+        await database.runAsync(`INSERT OR REPLACE INTO sms_settings
+          (id, config, enabled, updated_at, sync_updated_at, sync_status)
+          VALUES (?, ?, ?, ?, ?, 'synced')`,
+        [document.id, JSON.stringify(preferences.config), preferences.enabled ? 1 : 0, timestamp, timestamp]);
+        break;
+      }
       case "transactions": {
         let validCategoryId = localData.categoryId || null;
         if (validCategoryId) {
@@ -1881,8 +1895,8 @@ class OfflineFirstSync {
         } else {
           // New structured format with billing period and other settings
           await database.runAsync(
-            `INSERT OR REPLACE INTO settings (id, billing_period_start_day, currency, firebase_sync, theme, created_at, updated_at)
-             VALUES (?, ?, ?, ?, ?, ?, ?)`,
+            `INSERT OR REPLACE INTO settings (id, billing_period_start_day, currency, firebase_sync, theme, created_at, updated_at, sync_updated_at, sync_status)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
             [
               localData.id,
               localData.billingPeriodStartDay ||
@@ -1901,6 +1915,8 @@ class OfflineFirstSync {
               localData.updatedAt ||
                 localData.updated_at ||
                 new Date().toISOString(),
+              this.parseTimestampMs(localData.updatedAt),
+              "synced",
             ],
           );
         }
@@ -1942,6 +1958,8 @@ class OfflineFirstSync {
     };
 
     switch (tableName) {
+      case "sms_settings":
+        return { ...baseFields, config: JSON.parse(document.config), enabled: Boolean(document.enabled) };
       case "settings":
         return {
           ...baseFields,

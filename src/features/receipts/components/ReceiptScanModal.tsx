@@ -200,7 +200,7 @@ export const ReceiptScanModal: React.FC<ReceiptScanModalProps> = ({
           </TouchableWithoutFeedback>
         </View>
       </TouchableWithoutFeedback>
-      <ToastOverlay />
+      <ToastOverlay visible={visible} priority={1} />
     </Modal>
   );
 };

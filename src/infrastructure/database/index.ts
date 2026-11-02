@@ -1,5 +1,6 @@
 import * as SQLite from "expo-sqlite";
 import { DATABASE } from "../../shared/constants";
+import { invalidateCloudRestore } from "../sync/cloudRestoreState";
 
 export class DatabaseManager {
   private static instance: DatabaseManager;
@@ -78,6 +79,13 @@ export class DatabaseManager {
       PRAGMA journal_mode = WAL;
       PRAGMA foreign_keys = ON;
     `);
+
+    // Categories table
+    await this.db.execAsync(`CREATE TABLE IF NOT EXISTS sms_settings (
+      id TEXT PRIMARY KEY, config TEXT NOT NULL, enabled INTEGER NOT NULL DEFAULT 1,
+      updated_at INTEGER NOT NULL DEFAULT 0, sync_updated_at INTEGER NOT NULL DEFAULT 0,
+      deleted INTEGER NOT NULL DEFAULT 0, sync_status TEXT NOT NULL DEFAULT 'pending'
+    );`);
 
     // Categories table
     await this.db.execAsync(`
@@ -616,6 +624,7 @@ export class DatabaseManager {
 
   public async resetDatabase(): Promise<void> {
     if (!this.db) return;
+    await invalidateCloudRestore();
 
     await this.db.execAsync(`
       DROP TABLE IF EXISTS debt_payments;
@@ -626,6 +635,7 @@ export class DatabaseManager {
       DROP TABLE IF EXISTS categories;
       DROP TABLE IF EXISTS settings;
       DROP TABLE IF EXISTS sync_log;
+      DROP TABLE IF EXISTS sms_settings;
     `);
 
     await this.createTables();
@@ -635,6 +645,10 @@ export class DatabaseManager {
       const AsyncStorage = (await import("@react-native-async-storage/async-storage")).default;
       await AsyncStorage.removeItem("financy_categories_seeded_v1_guest");
       await AsyncStorage.removeItem("financy_wallets_seeded_v1_guest");
+      await AsyncStorage.removeItem("@financy_sms_detector_config_v1");
+      await AsyncStorage.removeItem("sms_detection_enabled");
+      const { getSmsConfig } = await import("../../features/sms/services/smsConfigService");
+      await getSmsConfig();
       const { walletService } = await import("../../features/wallets/services/walletService");
       walletService.clearCache();
     } catch (e) {
@@ -645,6 +659,7 @@ export class DatabaseManager {
   public async clearAllData(): Promise<void> {
     await this.ensureInitialized();
     if (!this.db) return;
+    await invalidateCloudRestore();
 
     // Clear all data except categories
     await this.db.execAsync(`

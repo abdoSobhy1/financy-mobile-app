@@ -196,7 +196,7 @@ export const CustomDateRangeModal: React.FC<CustomDateRangeModalProps> = ({
           </ScrollView>
         </View>
       </View>
-      <ToastOverlay />
+      <ToastOverlay visible={visible} priority={1} />
     </Modal>
   );
 };

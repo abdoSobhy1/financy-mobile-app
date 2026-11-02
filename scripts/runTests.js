@@ -144,6 +144,19 @@ require.extensions[".ts"] = function (module, filename) {
 };
 
 // Run the unit tests
+if (process.argv.includes("--login-sync-test")) {
+  require("../tests/unit/loginCloudSync.test.ts");
+} else if (process.argv.includes("--restore-batches-test")) {
+  require("../tests/unit/cloudRestoreBatches.test.ts");
+} else if (process.argv.includes("--toast-lifecycle-test")) {
+  require("../tests/unit/toastLifecycle.test.ts");
+} else {
+for (const flag of ["--login-sync-test", "--restore-batches-test", "--toast-lifecycle-test"]) {
+  const regression = require("node:child_process").spawnSync(
+    process.execPath, [__filename, flag], { stdio: "inherit" },
+  );
+  if (regression.status !== 0) process.exit(regression.status || 1);
+}
 require("../tests/unit/geminiQuotaService.test.ts");
 require("../tests/unit/aiConfigService.test.ts");
 require("../tests/unit/calculateWalletBalances.test.ts");
@@ -152,3 +165,6 @@ require("../tests/unit/ocrService.test.ts");
 require("../tests/unit/smsParser.test.ts");
 require("../tests/unit/smsService.test.ts");
 require("../tests/unit/voiceAndCategoryDetection.test.ts");
+require("../tests/unit/toastQueue.test.ts");
+require("../tests/unit/toastHosts.test.ts");
+}

@@ -1,13 +1,13 @@
 import { SAMPLE_MESSAGES, type KeywordGroupKey, type GroupConfig } from "../model/settingsOptions";
 import { useState, useEffect, useMemo } from "react";
-import { Alert } from "react-native";
+import { AlertService } from "../../../shared/services/AlertService";
 
 import { useNavigation } from "@react-navigation/native";
 import { useSelector } from "react-redux";
 import { RootState } from "../../../app/store";
 
 import { useToast } from "../../../shared/ui";
-import { SmsDetectorConfig, getSmsConfig, saveSmsConfig, resetSmsConfigToDefaults, DEFAULT_SMS_CONFIG } from "../services/smsConfigService";
+import { SmsDetectorConfig, getSmsConfig, saveSmsConfig, resetSmsConfigToDefaults, DEFAULT_SMS_CONFIG, subscribeSmsConfig } from "../services/smsConfigService";
 import { isBankSender, isAtmWithdrawal, parseSmsTransaction } from "../services/smsParser";
 import { smsService } from "../services/smsService";
 import { ParsedTransaction } from "../../../shared/types";
@@ -50,6 +50,7 @@ export function useSmsDetectorSettingsScreen() {
 
   useEffect(() => {
     loadConfig();
+    return subscribeSmsConfig(setConfig);
   }, []);
 
   const loadConfig = async () => {
@@ -113,7 +114,7 @@ export function useSmsDetectorSettingsScreen() {
   };
 
   const handleRemoveKeyword = (groupKey: KeywordGroupKey, keyword: string) => {
-    Alert.alert(
+    AlertService.alert(
       "Remove Keyword",
       `Are you sure you want to remove "${keyword}"?`,
       [
@@ -141,7 +142,7 @@ export function useSmsDetectorSettingsScreen() {
   };
 
   const handleResetToDefaults = () => {
-    Alert.alert(
+    AlertService.alert(
       "Reset to Default Rules",
       "This will restore all hardcoded bank senders, keywords, and parsing rules to Financy defaults. Any custom additions will be cleared.",
       [

@@ -6,6 +6,7 @@ import {
   deleteDoc,
   getDoc,
   getDocs,
+  getDocsFromServer,
   query,
   where,
   orderBy,
@@ -215,9 +216,10 @@ export class SyncService {
    * This should only be used for initial setup or when explicitly requested by the user
    */
   public async forceFullSync(): Promise<void> {
-    const isAuth = await authService.isAuthenticatedAsync();
-    if (!isAuth) {
-      throw new Error("User must be authenticated to sync");
+    const canSync = await authService.isCloudSyncAllowedAsync();
+    if (!canSync) {
+      console.log("⏭️ Full sync skipped for local-only guest mode");
+      return;
     }
 
     console.log(
@@ -515,11 +517,7 @@ export class SyncService {
       const { SettingsRepository } =
         await import("../../features/settings/repositories/settingsRepository");
       const settingsRepo = new SettingsRepository();
-      const settings = await settingsRepo.getSettings();
-
-      // Return last sync time or default to 1 hour ago for initial sync
-      const defaultTime = Date.now() - 60 * 60 * 1000; // 1 hour ago
-      return settings.syncUpdatedAt || defaultTime;
+      return await settingsRepo.getLastSyncAttempt();
     } catch (error) {
       console.warn("Could not get last sync timestamp, using default:", error);
       return Date.now() - 60 * 60 * 1000; // 1 hour ago
@@ -534,12 +532,7 @@ export class SyncService {
       const settingsRepo = new SettingsRepository();
 
       // Update the sync timestamp in settings
-      await settingsRepo.updateSettings(
-        {
-          syncUpdatedAt: Date.now(),
-        },
-        { skipSync: true },
-      ); // Don't trigger sync for settings update
+      await settingsRepo.setLastSyncAttempt(Date.now()); // Don't trigger sync for settings update
 
       this.lastSyncTimestamp = Date.now();
     } catch (error) {
@@ -552,6 +545,10 @@ export class SyncService {
     console.log("🔍 Starting conflicts-only sync...");
 
     try {
+      if (!(await authService.isCloudSyncAllowedAsync())) {
+        console.log("⏭️ Conflicts sync skipped for local-only guest mode");
+        return;
+      }
       const userId = await authService.requireUserIdAsync();
 
       // Check local pending operations and sync only those
@@ -893,22 +890,28 @@ export class SyncService {
     documentId: string,
     data?: any,
   ): Promise<void> {
-    // Check authentication using async method that checks both Firebase and stored session
-    const isAuthenticated = await authService.isAuthenticatedAsync();
-    const user = await authService.getCurrentAuthenticatedUser();
+    const canSync = await authService.isCloudSyncAllowedAsync();
+    if (!canSync) {
+      if (await authService.isGuestAsync()) {
+        console.log("⏭️ Guest mode: keeping the change local without starting a sync");
+        return;
+      }
 
+      const isAuthenticated = await authService.isAuthenticatedAsync();
+      if (!isAuthenticated) {
+        console.warn("⚠️ Not authenticated - queueing sync operation");
+        this.queueSyncOperation(collectionName, operation, documentId, data);
+        return;
+      }
+      return;
+    }
+
+    const user = await authService.getCurrentAuthenticatedUser();
     console.log(`🔄 Sync attempt for ${collectionName}/${operation}:`, {
-      isAuthenticated,
       userId: user?.uid || "none",
       hasFirebaseUser: authService.isAuthenticated(),
       hasStoredSession: await authService.hasValidSession(),
     });
-
-    if (!isAuthenticated) {
-      console.warn("⚠️ Not authenticated - queueing sync operation");
-      this.queueSyncOperation(collectionName, operation, documentId, data);
-      return;
-    }
 
     try {
       this.syncInProgress = true;
@@ -1258,8 +1261,8 @@ export class SyncService {
 
   // Process queued sync operations
   private async processSyncQueue(): Promise<void> {
-    const isAuth = await authService.isAuthenticatedAsync();
-    if (this.syncQueue.length === 0 || !isAuth) {
+    const canSync = await authService.isCloudSyncAllowedAsync();
+    if (this.syncQueue.length === 0 || !canSync) {
       return;
     }
 
@@ -1317,6 +1320,11 @@ export class SyncService {
       const dataWithId = { ...cleanData, id: doc.id };
 
       switch (collectionName) {
+        case "sms_settings": {
+          const { SmsSettingsRepository } = await import("../../features/sms/services/smsSettingsRepository");
+          await new SmsSettingsRepository().applyRemote(doc.data);
+          break;
+        }
         case "transactions":
           console.log(`💰 Processing transaction for local insertion:`);
           console.log(
@@ -1565,6 +1573,11 @@ export class SyncService {
       const cleanData = this.cleanDataForFirestore(doc.data);
 
       switch (collectionName) {
+        case "sms_settings": {
+          const { SmsSettingsRepository } = await import("../../features/sms/services/smsSettingsRepository");
+          await new SmsSettingsRepository().applyRemote(doc.data);
+          break;
+        }
         case "transactions":
           console.log(`💰 Processing transaction for local update:`);
           console.log(
@@ -1829,6 +1842,7 @@ export class SyncService {
       [COLLECTIONS.DEBT_PAYMENTS]: "debt_payments",
       [COLLECTIONS.SETTINGS]: "settings",
       [COLLECTIONS.WALLETS]: "wallets",
+      [COLLECTIONS.SMS_SETTINGS]: "sms_settings",
     };
 
     return mapping[collectionName];
@@ -1916,18 +1930,10 @@ export class SyncService {
 
       console.log(`☁️ Fetching all documents from ${collectionName}...`);
 
-      // Use getDocs for one-time fetch with graceful fallback if orderBy index or field is missing
-      let snapshot;
-      try {
-        const q = query(collectionRef, orderBy("updatedAt", "desc"));
-        snapshot = await getDocs(q);
-      } catch (queryErr) {
-        console.warn(
-          `Query with orderBy failed for ${collectionName}, falling back to plain collection query:`,
-          queryErr,
-        );
-        snapshot = await getDocs(collectionRef);
-      }
+      // Restore requires an authoritative server snapshot. Ordering by updatedAt
+      // silently excludes legacy documents without that field, and a cached
+      // empty result must never be mistaken for a new account.
+      const snapshot = await getDocsFromServer(collectionRef);
 
       const documents: any[] = [];
       snapshot.forEach((doc) => {
@@ -1958,14 +1964,17 @@ export class SyncService {
    */
   public async performDeltaSync(lastAttempt?: number): Promise<void> {
     try {
+      if (!(await authService.isCloudSyncAllowedAsync())) {
+        console.log("⏭️ Delta sync skipped for local-only guest mode");
+        return;
+      }
       const settingsRepo = new (
         await import("../../features/settings/repositories/settingsRepository")
       ).SettingsRepository();
       // Determine lastAttempt - prefer provided value, then settings table, then 0
       if (lastAttempt === undefined || lastAttempt === null) {
         try {
-          const settings = await settingsRepo.getSettings();
-          lastAttempt = settings.syncUpdatedAt || 0;
+          lastAttempt = await settingsRepo.getLastSyncAttempt();
         } catch (err) {
           console.warn(
             "Could not read settings.syncUpdatedAt, defaulting to 0",

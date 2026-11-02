@@ -126,6 +126,6 @@ export function MoveWalletModal({ showMoveModal, setShowMoveModal, walletToMove,
         </View>
       </View>
     </View>
-    <ToastOverlay />
+    <ToastOverlay visible={showMoveModal} priority={1} />
   </Modal>);
 }

@@ -102,7 +102,7 @@ const Modal: React.FC<ModalProps> = ({
     <RNModal visible={visible} animationType={animationType} presentationStyle={presentationStyle} onRequestClose={onClose} statusBarTranslucent>
       <StatusBar backgroundColor="rgba(0, 0, 0, 0.5)" barStyle="light-content" />
       {content}
-      <ToastOverlay />
+      <ToastOverlay visible={visible} priority={1} />
     </RNModal>
   );
 };

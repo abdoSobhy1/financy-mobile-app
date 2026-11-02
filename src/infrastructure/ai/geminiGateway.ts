@@ -1,4 +1,5 @@
 import { getFirebaseAuth } from "../firebase/client";
+import { authService } from "../../features/auth/services/authService";
 
 interface GatewayErrorBody {
   error?: string;
@@ -27,9 +28,15 @@ async function callWorker<T>(body: object): Promise<T> {
     );
   }
 
-  const user = getFirebaseAuth().currentUser;
+  let user = getFirebaseAuth().currentUser;
   if (!user) {
-    throw new GeminiGatewayError("Sign in to use hosted Gemini.", "unauthenticated");
+    user = await authService.ensureGuestFirebaseAuth();
+  }
+  if (!user) {
+    throw new GeminiGatewayError(
+      "Hosted Gemini needs Firebase Authentication. Enable Anonymous sign-in for guest access, or sign in to your account.",
+      "unauthenticated",
+    );
   }
 
   const token = await user.getIdToken();

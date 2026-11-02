@@ -58,11 +58,26 @@ export function useSignInScreen() {
   };
 
   const handleContinueAsGuest = async () => {
-    try {
-      await dispatch(signInAsGuest()).unwrap();
-    } catch (error: any) {
-      AlertService.alert("Guest Login Failed", error.message);
-    }
+    AlertService.alert(
+      "Continue as a guest?",
+      "Your data will stay on this device only. Guest mode has no cloud sync or backup, so you may lose access to your data if you change or lose this device. You can sign in or sign up later to keep this data and enable sync.",
+      [
+        {
+          text: "Sign Up Instead",
+          onPress: () => setIsSignUp(true),
+        },
+        {
+          text: "Continue as Guest",
+          onPress: async () => {
+            try {
+              await dispatch(signInAsGuest()).unwrap();
+            } catch (error: any) {
+              AlertService.alert("Guest Login Failed", error.message);
+            }
+          },
+        },
+      ],
+    );
   };
 
   const handleSignUp = async () => {

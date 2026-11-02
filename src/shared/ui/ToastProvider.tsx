@@ -1,16 +1,19 @@
-import React, { createContext, useContext, ReactNode, useEffect } from "react";
+import React, { createContext, useContext, ReactNode, useEffect, useId, useSyncExternalStore } from "react";
 import { View, StyleSheet } from "react-native";
 import { ToastConfig, ToastContainer, useToast as useToastHook } from "./Toast";
+import { toastHosts } from "./toastHosts";
 
-let _showToast: ((message: string, type?: "success" | "error" | "info" | "warning", duration?: number) => void) | null = null;
+type ShowToast = (message: string, type?: ToastConfig["type"], duration?: number, onDismiss?: () => void, replaceKey?: string) => void;
+type ShowVariant = (message: string, duration?: number, onDismiss?: () => void, replaceKey?: string) => void;
+let _showToast: ShowToast | null = null;
 
 export const ToastService = {
-  register(fn: ((message: string, type?: "success" | "error" | "info" | "warning", duration?: number) => void) | null) {
+  register(fn: ShowToast | null) {
     _showToast = fn;
   },
-  show(message: string, type: "success" | "error" | "info" | "warning" = "info", duration?: number) {
+  show(message: string, type: "success" | "error" | "info" | "warning" = "info", duration?: number, replaceKey?: string) {
     if (_showToast) {
-      _showToast(message, type, duration);
+      _showToast(message, type, duration, undefined, replaceKey);
     } else {
       console.log(`[ToastService] (${type}) ${message}`);
     }
@@ -32,20 +35,23 @@ export const ToastService = {
 export interface ToastContextType {
   toasts: ToastConfig[];
   dismissToast: (id: string) => void;
-  showToast: (message: string, type?: "success" | "error" | "info" | "warning", duration?: number) => void;
-  showSuccess: (message: string, duration?: number) => void;
-  showError: (message: string, duration?: number) => void;
-  showWarning: (message: string, duration?: number) => void;
-  showInfo: (message: string, duration?: number) => void;
+  showToast: ShowToast;
+  showSuccess: ShowVariant;
+  showError: ShowVariant;
+  showWarning: ShowVariant;
+  showInfo: ShowVariant;
   clearAllToasts: () => void;
   ToastComponent: React.FC;
 }
 
 const ToastContext = createContext<ToastContextType | undefined>(undefined);
 
-export const ToastOverlay: React.FC = () => {
+export const ToastOverlay: React.FC<{ visible?: boolean; priority?: number }> = ({ visible = true, priority = 0 }) => {
   const context = useContext(ToastContext);
-  if (!context || !context.toasts || context.toasts.length === 0) return null;
+  const hostId = useId();
+  const activeHost = useSyncExternalStore(toastHosts.subscribe, toastHosts.getActive, toastHosts.getActive);
+  useEffect(() => visible ? toastHosts.register(hostId, priority) : undefined, [hostId, priority, visible]);
+  if (!visible || activeHost !== hostId || !context || context.toasts.length === 0) return null;
   return (
     <View
       style={[StyleSheet.absoluteFill, { zIndex: 99999, elevation: 999 }]}

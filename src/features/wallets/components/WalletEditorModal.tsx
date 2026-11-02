@@ -287,7 +287,7 @@ export const WalletEditorModal: React.FC<WalletEditorModalProps> = ({
           </View>
         </View>
       </View>
-      <ToastOverlay />
+      <ToastOverlay visible={visible} priority={1} />
     </Modal>
   );
 };

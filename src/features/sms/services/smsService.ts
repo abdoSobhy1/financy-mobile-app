@@ -50,6 +50,9 @@ export async function getSmsDetectionEnabled(): Promise<boolean> {
 
 export async function setSmsDetectionEnabled(enabled: boolean): Promise<void> {
   await AsyncStorage.setItem(SMS_ENABLED_KEY, enabled ? "true" : "false");
+  const { SmsSettingsRepository } = await import("./smsSettingsRepository");
+  const { getSmsConfig } = await import("./smsConfigService");
+  await new SmsSettingsRepository().save(await getSmsConfig(), enabled);
 }
 
 // ── Store / retrieve per-notification transaction ────────────────────

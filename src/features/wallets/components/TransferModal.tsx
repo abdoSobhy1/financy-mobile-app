@@ -330,7 +330,7 @@ export const TransferModal: React.FC<TransferModalProps> = ({
           </ScrollView>
         </View>
       </View>
-      <ToastOverlay />
+      <ToastOverlay visible={visible} priority={1} />
     </Modal>
   );
 };

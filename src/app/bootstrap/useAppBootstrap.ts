@@ -19,7 +19,8 @@ import { registerDeltaSyncListener } from "../../infrastructure/sync/syncService
 
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { fetchSettings } from "../../features/settings/store/settingsSlice";
-import { clearSmsTransaction, retrieveSmsTransaction, smsService } from "../../features/sms/services/smsService";
+import { clearSmsTransaction, retrieveSmsTransaction, smsService, getSmsDetectionEnabled } from "../../features/sms/services/smsService";
+import { subscribeSmsConfig } from "../../features/sms/services/smsConfigService";
 
 SplashScreen.preventAutoHideAsync();
 
@@ -55,6 +56,16 @@ export function useAppBootstrap() {
   useEffect(() => {
     let networkUnsubscribe: (() => void) | null = null;
     let appStateListener: any = null;
+    const smsConfigUnsubscribe = subscribeSmsConfig(() => {
+      (async () => {
+        if (!(await getSmsDetectionEnabled())) {
+          smsService.stopListening();
+        } else if (await smsService.hasPermissions()) {
+          const state = store.getState();
+          smsService.startListening(Object.values(state.categories.items), state.budgets.items);
+        }
+      })().catch((error) => console.warn("Could not apply synced SMS toggle:", error));
+    });
 
     const initApp = async () => {
       try {
@@ -252,6 +263,7 @@ export function useAppBootstrap() {
       if (appStateListener) appStateListener.remove();
       notifSubscription.remove();
       smsService.stopListening();
+      smsConfigUnsubscribe();
     };
   }, []);
   return { isLoading, dbError };

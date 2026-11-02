@@ -35,10 +35,9 @@ interface SettingsSectionsProps {
   lastSyncSubtitle: ReturnType<typeof useSettingsScreen>["lastSyncSubtitle"];
   handleSyncNow: ReturnType<typeof useSettingsScreen>["handleSyncNow"];
   setShowFirebaseCleanup: ReturnType<typeof useSettingsScreen>["setShowFirebaseCleanup"];
-  handleVersionClick: ReturnType<typeof useSettingsScreen>["handleVersionClick"];
 
 }
-export function SettingsSections({ tabBarHeight, isGuest, user, setProfileNameInput, setShowProfileModal, handleSignOut, setShowCurrencyPicker, currentBillingDay, setBillingDayInput, setShowBillingDayPicker, handleToggleTheme, navigation, notifSettings, handleReminderToggle, smsEnabled, handleSmsToggle, isOwner, aiStatus, handleOpenAiSettings, handleExportData, lastSyncSubtitle, handleSyncNow, setShowFirebaseCleanup, handleVersionClick }: SettingsSectionsProps) {
+export function SettingsSections({ tabBarHeight, isGuest, user, setProfileNameInput, setShowProfileModal, handleSignOut, setShowCurrencyPicker, currentBillingDay, setBillingDayInput, setShowBillingDayPicker, handleToggleTheme, navigation, notifSettings, handleReminderToggle, smsEnabled, handleSmsToggle, isOwner, aiStatus, handleOpenAiSettings, handleExportData, lastSyncSubtitle, handleSyncNow, setShowFirebaseCleanup }: SettingsSectionsProps) {
   const { spacing, currencyCode, currencySymbol, typography, colors, isDark } = useAppTheme();
 
   return (<ScrollView contentContainerStyle={{ paddingHorizontal: spacing.lg, paddingBottom: tabBarHeight + 100 }} showsVerticalScrollIndicator={false}>
@@ -186,14 +185,12 @@ export function SettingsSections({ tabBarHeight, isGuest, user, setProfileNameIn
     <SectionLabel text="DATA" />
     <GlassCard>
       <SettingRow icon="download-outline" title="Export Data" subtitle="Download your transaction history (CSV/Excel)" onPress={handleExportData} />
-      <SettingRow icon="document-attach-outline" title="Import Data" subtitle="Import transactions from CSV or Excel" onPress={() => navigation.navigate("Import")} />
       <SettingRow icon="cloud-upload-outline" title="Backup & Sync" subtitle={lastSyncSubtitle} onPress={handleSyncNow} />
       <SettingRow icon="trash-outline" title="Cleanup Database" subtitle="Remove orphaned or invalid records" destructive onPress={() => setShowFirebaseCleanup(true)} />
     </GlassCard>
 
-    <SectionLabel text="ABOUT" />
+    <SectionLabel text="ACCOUNT" />
     <GlassCard>
-      <SettingRow icon="information-circle-outline" title="About Financy" subtitle="Version 2.4.1 (Build 492)" onPress={handleVersionClick} />
       <TouchableOpacity
         style={{ flexDirection: "row", alignItems: "center", paddingVertical: 12, paddingHorizontal: 16 }}
         onPress={handleSignOut}
