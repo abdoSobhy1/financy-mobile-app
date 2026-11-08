@@ -1,5 +1,5 @@
 import { styles } from "../screens/VoiceVerifyScreen.styles";
-import { useVoiceVerifyScreen } from "../hooks/useVoiceVerifyScreen";
+import type { useVoiceVerifyScreen } from "../hooks/useVoiceVerifyScreen";
 
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView, ActivityIndicator } from "react-native";
 

@@ -1,4 +1,4 @@
-import { useDashboardScreen } from "../hooks/useDashboardScreen";
+import type { useDashboardScreen } from "../hooks/useDashboardScreen";
 
 import { View, Text, ScrollView, TouchableOpacity } from "react-native";
 

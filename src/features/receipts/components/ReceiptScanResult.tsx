@@ -1,5 +1,5 @@
 import { styles } from "./ReceiptScanModal.styles";
-import { useReceiptScanModal } from "../hooks/useReceiptScanModal";
+import type { useReceiptScanModal } from "../hooks/useReceiptScanModal";
 
 import { View, Text, TouchableOpacity } from "react-native";
 import { Ionicons } from "@expo/vector-icons";

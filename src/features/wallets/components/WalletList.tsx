@@ -1,6 +1,6 @@
 import { styles } from "../screens/WalletManagementScreen.styles";
 import { useAppTheme } from "../../../shared/theme/ThemeProvider";
-import { useWalletManagementScreen } from "../hooks/useWalletManagementScreen";
+import type { useWalletManagementScreen } from "../hooks/useWalletManagementScreen";
 
 import { View, Text, TouchableOpacity } from "react-native";
 

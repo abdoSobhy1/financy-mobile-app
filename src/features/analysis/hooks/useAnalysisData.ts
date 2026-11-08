@@ -219,8 +219,8 @@ export const useAnalysisData = (
           percentage: totalForType > 0 ? (data.amount / totalForType) * 100 : 0,
         };
       })
-      .filter(Boolean)
-      .sort((a, b) => b!.amount - a!.amount) as NonNullable<(typeof categoryBreakdownArray)[0]>[];
+      .filter((item): item is NonNullable<typeof item> => item !== null)
+      .sort((a, b) => b.amount - a.amount);
 
     // Filter for trends: ignore startDate/endDate, but keep other filters
     const trendTransactions = transactions.filter((transaction) => {

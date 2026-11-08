@@ -85,7 +85,7 @@ src/
 │   ├── voice/
 │   └── wallets/
 ├── infrastructure/      # SQLite, Firebase, sync, AI, notifications, device APIs
-└── shared/              # Feature-independent UI, theme, forms, hooks, contracts
+└── shared/              # Feature-independent UI, theme, hooks, contracts
 tests/unit/              # Versioned regression tests
 ```
 

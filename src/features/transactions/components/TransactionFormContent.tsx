@@ -4,7 +4,7 @@ import { TransactionBudgetPicker } from "./TransactionBudgetPicker";
 import { TransactionWalletPicker } from "./TransactionWalletPicker";
 import { TransactionNotesSection } from "./TransactionNotesSection";
 import { styles } from "../screens/AddTransactionScreen.styles";
-import { useAddTransactionScreen } from "../hooks/useAddTransactionScreen";
+import type { useAddTransactionScreen } from "../hooks/useAddTransactionScreen";
 
 import { View, ScrollView, Text, TouchableOpacity } from "react-native";
 
@@ -13,53 +13,52 @@ import { TransactionType } from "../../../shared/types";
 import { useAppTheme } from "../../../shared/theme/ThemeProvider";
 
 interface TransactionFormContentProps {
-  colors: ReturnType<typeof useAppTheme>["colors"];
-  radius: ReturnType<typeof useAppTheme>["radius"];
-  spacing: ReturnType<typeof useAppTheme>["spacing"];
-  type: ReturnType<typeof useAddTransactionScreen>["type"];
-  showKeypad: ReturnType<typeof useAddTransactionScreen>["showKeypad"];
-  setShowKeypad: ReturnType<typeof useAddTransactionScreen>["setShowKeypad"];
-  setAmountFocused: ReturnType<typeof useAddTransactionScreen>["setAmountFocused"];
-  setType: ReturnType<typeof useAddTransactionScreen>["setType"];
-  typography: ReturnType<typeof useAppTheme>["typography"];
-  scrollViewRef: ReturnType<typeof useAddTransactionScreen>["scrollViewRef"];
-  amountFocused: ReturnType<typeof useAddTransactionScreen>["amountFocused"];
-  amountStr: ReturnType<typeof useAddTransactionScreen>["amountStr"];
-  amountDisplay: ReturnType<typeof useAddTransactionScreen>["amountDisplay"];
-  cursorOpacity: ReturnType<typeof useAddTransactionScreen>["cursorOpacity"];
-  hasMathOperator: ReturnType<typeof useAddTransactionScreen>["hasMathOperator"];
-  evaluatedAmount: ReturnType<typeof useAddTransactionScreen>["evaluatedAmount"];
-  handleEvaluateExpression: ReturnType<typeof useAddTransactionScreen>["handleEvaluateExpression"];
-  formErrors: ReturnType<typeof useAddTransactionScreen>["formErrors"];
-  activeCategories: ReturnType<typeof useAddTransactionScreen>["activeCategories"];
-  categoryId: ReturnType<typeof useAddTransactionScreen>["categoryId"];
-  resolveCategoryColor: ReturnType<typeof useAppTheme>["resolveCategoryColor"];
-  handleCategorySelect: ReturnType<typeof useAddTransactionScreen>["handleCategorySelect"];
-  setShowCreateCategoryModal: ReturnType<typeof useAddTransactionScreen>["setShowCreateCategoryModal"];
-  budgets: ReturnType<typeof useAddTransactionScreen>["budgets"];
-  setBudgetId: ReturnType<typeof useAddTransactionScreen>["setBudgetId"];
-  setManualBudgetSelected: ReturnType<typeof useAddTransactionScreen>["setManualBudgetSelected"];
-  budgetId: ReturnType<typeof useAddTransactionScreen>["budgetId"];
-  displayWallets: ReturnType<typeof useAddTransactionScreen>["displayWallets"];
-  accountId: ReturnType<typeof useAddTransactionScreen>["accountId"];
-  setAccountId: ReturnType<typeof useAddTransactionScreen>["setAccountId"];
-  setOptionsCardY: ReturnType<typeof useAddTransactionScreen>["setOptionsCardY"];
-  descriptionInputRef: ReturnType<typeof useAddTransactionScreen>["descriptionInputRef"];
-  description: ReturnType<typeof useAddTransactionScreen>["description"];
-  setIsKeypadMounted: ReturnType<typeof useAddTransactionScreen>["setIsKeypadMounted"];
-  scrollToDescription: ReturnType<typeof useAddTransactionScreen>["scrollToDescription"];
-  setDescription: ReturnType<typeof useAddTransactionScreen>["setDescription"];
-  showMore: ReturnType<typeof useAddTransactionScreen>["showMore"];
-  noteInputRef: ReturnType<typeof useAddTransactionScreen>["noteInputRef"];
-  setShowDatePicker: ReturnType<typeof useAddTransactionScreen>["setShowDatePicker"];
-  date: ReturnType<typeof useAddTransactionScreen>["date"];
-  setShowMore: ReturnType<typeof useAddTransactionScreen>["setShowMore"];
-  setNoteY: ReturnType<typeof useAddTransactionScreen>["setNoteY"];
-  note: ReturnType<typeof useAddTransactionScreen>["note"];
-  scrollToNote: ReturnType<typeof useAddTransactionScreen>["scrollToNote"];
-  setNote: ReturnType<typeof useAddTransactionScreen>["setNote"];
+  form: ReturnType<typeof useAddTransactionScreen>;
 }
-export function TransactionFormContent({ colors, radius, spacing, type, showKeypad, setShowKeypad, setAmountFocused, setType, typography, scrollViewRef, amountFocused, amountStr, amountDisplay, cursorOpacity, hasMathOperator, evaluatedAmount, handleEvaluateExpression, formErrors, activeCategories, categoryId, resolveCategoryColor, handleCategorySelect, setShowCreateCategoryModal, budgets, setBudgetId, setManualBudgetSelected, budgetId, displayWallets, accountId, setAccountId, setOptionsCardY, descriptionInputRef, description, setIsKeypadMounted, scrollToDescription, setDescription, showMore, noteInputRef, setShowDatePicker, date, setShowMore, setNoteY, note, scrollToNote, setNote }: TransactionFormContentProps) {
+export function TransactionFormContent({ form }: TransactionFormContentProps) {
+  const { colors, radius, spacing, typography, resolveCategoryColor } = useAppTheme();
+  const {
+    type,
+    showKeypad,
+    setShowKeypad,
+    setAmountFocused,
+    setType,
+    scrollViewRef,
+    amountFocused,
+    amountStr,
+    amountDisplay,
+    cursorOpacity,
+    hasMathOperator,
+    evaluatedAmount,
+    handleEvaluateExpression,
+    formErrors,
+    activeCategories,
+    categoryId,
+    handleCategorySelect,
+    setShowCreateCategoryModal,
+    budgets,
+    setBudgetId,
+    setManualBudgetSelected,
+    budgetId,
+    displayWallets,
+    accountId,
+    setAccountId,
+    setOptionsCardY,
+    descriptionInputRef,
+    description,
+    setIsKeypadMounted,
+    scrollToDescription,
+    setDescription,
+    showMore,
+    noteInputRef,
+    setShowDatePicker,
+    date,
+    setShowMore,
+    setNoteY,
+    note,
+    scrollToNote,
+    setNote,
+  } = form;
   return (<View>
     <View
       style={[
@@ -259,6 +258,6 @@ export function TransactionFormContent({ colors, radius, spacing, type, showKeyp
       />
     </TouchableOpacity>
 
-    {<TransactionExtraNote showMore={showMore} setNoteY={setNoteY} spacing={spacing} noteInputRef={noteInputRef} note={note} setShowKeypad={setShowKeypad} setIsKeypadMounted={setIsKeypadMounted} setAmountFocused={setAmountFocused} scrollToNote={scrollToNote} setNote={setNote} />}
+    <TransactionExtraNote showMore={showMore} setNoteY={setNoteY} noteInputRef={noteInputRef} note={note} setShowKeypad={setShowKeypad} setIsKeypadMounted={setIsKeypadMounted} setAmountFocused={setAmountFocused} scrollToNote={scrollToNote} setNote={setNote} />
   </View>);
 }

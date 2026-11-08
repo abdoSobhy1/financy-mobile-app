@@ -26,14 +26,12 @@ src/
   infrastructure/
     ai/                          AI provider clients and quota management
     database/                    SQLite connection, migrations, row mapping
-    debug/                       Development diagnostics
     device/                      Device identity and sync metadata
     firebase/                    Firebase initialization and maintenance
     notifications/               Native notification integration
     sync/                        Outbox, cloud transport, sync providers/hooks
   shared/
     constants/
-    forms/                       Reusable form scaffolding
     hooks/                       Feature-independent UI hooks
     services/                    In-app alert bridge
     theme/

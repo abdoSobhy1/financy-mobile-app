@@ -1,4 +1,4 @@
-import { useAnalysisScreen } from "../hooks/useAnalysisScreen";
+import type { useAnalysisScreen } from "../hooks/useAnalysisScreen";
 import { styles } from "../screens/AnalysisScreen.styles";
 import { Ionicons } from "@expo/vector-icons";
 
@@ -10,11 +10,10 @@ import { formatCurrency } from "../../../shared/utils";
 
 interface CashFlowTrendProps {
   monthlyTrends: ReturnType<typeof useAnalysisScreen>["monthlyTrends"];
-  colors: ReturnType<typeof useAppTheme>["colors"];
-  typography: ReturnType<typeof useAppTheme>["typography"];
   summary: ReturnType<typeof useAnalysisScreen>["summary"];
 }
-export function CashFlowTrend({ monthlyTrends, colors, typography, summary }: CashFlowTrendProps) {
+export function CashFlowTrend({ monthlyTrends, summary }: CashFlowTrendProps) {
+  const { colors, typography } = useAppTheme();
 
   const data = monthlyTrends.slice(-4);
   const maxVal = Math.max(

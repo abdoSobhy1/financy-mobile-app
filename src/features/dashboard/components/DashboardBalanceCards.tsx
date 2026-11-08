@@ -1,6 +1,6 @@
 import { getAlphaColor } from "../../../shared/utils/colors";
 import { styles } from "../screens/DashboardScreen.styles";
-import { useDashboardScreen } from "../hooks/useDashboardScreen";
+import type { useDashboardScreen } from "../hooks/useDashboardScreen";
 
 import { View, Text, ScrollView, TouchableOpacity } from "react-native";
 
@@ -10,11 +10,10 @@ import Svg, { Path, Circle } from "react-native-svg";
 import { useAppTheme } from "../../../shared/theme/ThemeProvider";
 
 interface DashboardBalanceCardsProps {
-  CARD_WIDTH: number;
+  SCREEN_WIDTH: number;
   activeCardIndex: ReturnType<typeof useDashboardScreen>["activeCardIndex"];
   setActiveCardIndex: ReturnType<typeof useDashboardScreen>["setActiveCardIndex"];
-  fillPath: string;
-  strokePath: string;
+  balanceHistory: ReturnType<typeof useDashboardScreen>["balanceHistory"];
   toggleHideBalances: ReturnType<typeof useDashboardScreen>["toggleHideBalances"];
   hideBalances: ReturnType<typeof useDashboardScreen>["hideBalances"];
   maskCurrency: ReturnType<typeof useDashboardScreen>["maskCurrency"];
@@ -24,18 +23,69 @@ interface DashboardBalanceCardsProps {
   totalExpenses: ReturnType<typeof useDashboardScreen>["totalExpenses"];
   budgetedExpenses: ReturnType<typeof useDashboardScreen>["budgetedExpenses"];
   totalBudget: ReturnType<typeof useDashboardScreen>["totalBudget"];
-  dailySafeToSpend: number;
-  pieRadius: 24;
-  pieStroke: 6;
-  pieCircumference: number;
-  pieDashoffset: number;
-  budgetPercentUsed: number;
   daysLeftInPeriod: ReturnType<typeof useDashboardScreen>["daysLeftInPeriod"];
   navigation: ReturnType<typeof useDashboardScreen>["navigation"];
-
 }
-export function DashboardBalanceCards({ CARD_WIDTH, activeCardIndex, setActiveCardIndex, fillPath, strokePath, toggleHideBalances, hideBalances, maskCurrency, balance, balanceChangePct, totalIncome, totalExpenses, budgetedExpenses, totalBudget, dailySafeToSpend, pieRadius, pieStroke, pieCircumference, pieDashoffset, budgetPercentUsed, daysLeftInPeriod, navigation }: DashboardBalanceCardsProps) {
+
+function generateSmoothPath(data: number[], width: number, height: number) {
+  if (data.length < 2) {
+    return {
+      strokePath: `M 0 ${height / 2} L ${width} ${height / 2}`,
+      fillPath: `M 0 ${height / 2} L ${width} ${height / 2} L ${width} ${height} L 0 ${height} Z`,
+    };
+  }
+
+  const max = Math.max(...data);
+  const min = Math.min(...data);
+  const range = max - min || 1;
+
+  const stepX = width / (data.length - 1);
+  const padding = height * 0.2;
+  const drawHeight = height - padding * 2;
+
+  const points = data.map((val, i) => ({
+    x: i * stepX,
+    y: height - padding - ((val - min) / range) * drawHeight,
+  }));
+
+  let d = `M ${points[0].x} ${points[0].y}`;
+  for (let i = 0; i < points.length - 1; i++) {
+    const p0 = points[i];
+    const p1 = points[i + 1];
+    const cx = (p0.x + p1.x) / 2;
+    d += ` C ${cx} ${p0.y}, ${cx} ${p1.y}, ${p1.x} ${p1.y}`;
+  }
+
+  return { strokePath: d, fillPath: `${d} L ${width} ${height} L 0 ${height} Z` };
+}
+
+export function DashboardBalanceCards({
+  SCREEN_WIDTH,
+  activeCardIndex,
+  setActiveCardIndex,
+  balanceHistory,
+  toggleHideBalances,
+  hideBalances,
+  maskCurrency,
+  balance,
+  balanceChangePct,
+  totalIncome,
+  totalExpenses,
+  budgetedExpenses,
+  totalBudget,
+  daysLeftInPeriod,
+  navigation,
+}: DashboardBalanceCardsProps) {
   const { spacing, colors, isDark, typography } = useAppTheme();
+  const CARD_WIDTH = SCREEN_WIDTH * 0.85;
+  const budgetPercentUsed = totalBudget > 0 ? Math.min(100, Math.round((budgetedExpenses / totalBudget) * 100)) : 0;
+  const remainingBudget = Math.max(0, totalBudget - budgetedExpenses);
+  const dailySafeToSpend = remainingBudget / Math.max(1, daysLeftInPeriod);
+  const pieRadius = 24;
+  const pieStroke = 6;
+  const pieCircumference = 2 * Math.PI * pieRadius;
+  const pieDashoffset = pieCircumference - (budgetPercentUsed / 100) * pieCircumference;
+  const { strokePath, fillPath } = generateSmoothPath(balanceHistory, CARD_WIDTH, 80);
 
   return (<ScrollView
     horizontal

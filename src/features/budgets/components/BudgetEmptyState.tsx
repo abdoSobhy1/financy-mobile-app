@@ -1,5 +1,5 @@
 import { styles } from "../screens/BudgetScreens.styles";
-import { useBudgetListScreen } from "../hooks/useBudgetListScreen";
+import type { useBudgetListScreen } from "../hooks/useBudgetListScreen";
 
 import { View, Text, TouchableOpacity } from "react-native";
 

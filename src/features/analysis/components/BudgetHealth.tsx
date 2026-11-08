@@ -1,4 +1,4 @@
-import { useAnalysisScreen } from "../hooks/useAnalysisScreen";
+import type { useAnalysisScreen } from "../hooks/useAnalysisScreen";
 import { styles } from "../screens/AnalysisScreen.styles";
 
 import { Text, TouchableOpacity, View } from "react-native";
@@ -8,13 +8,11 @@ import { useAppTheme } from "../../../shared/theme/ThemeProvider";
 import { formatCurrency } from "../../../shared/utils";
 
 interface BudgetHealthProps {
-  colors: ReturnType<typeof useAppTheme>["colors"];
-  spacing: ReturnType<typeof useAppTheme>["spacing"];
-  typography: ReturnType<typeof useAppTheme>["typography"];
   navigation: ReturnType<typeof useAnalysisScreen>["navigation"];
   budgetUsage: ReturnType<typeof useAnalysisScreen>["budgetUsage"];
 }
-export function BudgetHealth({ colors, spacing, typography, navigation, budgetUsage }: BudgetHealthProps) {
+export function BudgetHealth({ navigation, budgetUsage }: BudgetHealthProps) {
+  const { colors, spacing, typography } = useAppTheme();
 
   return (
     <View

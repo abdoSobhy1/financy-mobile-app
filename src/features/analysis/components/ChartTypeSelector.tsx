@@ -1,5 +1,5 @@
 import { getStyles } from "../screens/CreateCustomChartScreen.styles";
-import { useCreateCustomChartScreen } from "../hooks/useCreateCustomChartScreen";
+import type { useCreateCustomChartScreen } from "../hooks/useCreateCustomChartScreen";
 
 import { Text, TouchableOpacity, View } from "react-native";
 import { useAppTheme } from "../../../shared/theme/ThemeProvider";

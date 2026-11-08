@@ -1,5 +1,5 @@
 import { styles } from "./DebtForm.styles";
-import { useDebtForm } from "../hooks/useDebtForm";
+import type { useDebtForm } from "../hooks/useDebtForm";
 
 import { View, Text, TextInput } from "react-native";
 

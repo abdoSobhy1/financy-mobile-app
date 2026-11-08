@@ -1,4 +1,4 @@
-import { useAddTransactionScreen } from "../hooks/useAddTransactionScreen";
+import type { useAddTransactionScreen } from "../hooks/useAddTransactionScreen";
 
 import { View, Keyboard } from "react-native";
 
@@ -8,7 +8,6 @@ import { Input } from "../../../shared/ui";
 interface TransactionExtraNoteProps {
   showMore: ReturnType<typeof useAddTransactionScreen>["showMore"];
   setNoteY: ReturnType<typeof useAddTransactionScreen>["setNoteY"];
-  spacing: ReturnType<typeof useAppTheme>["spacing"];
   noteInputRef: ReturnType<typeof useAddTransactionScreen>["noteInputRef"];
   note: ReturnType<typeof useAddTransactionScreen>["note"];
   setShowKeypad: ReturnType<typeof useAddTransactionScreen>["setShowKeypad"];
@@ -17,7 +16,8 @@ interface TransactionExtraNoteProps {
   scrollToNote: ReturnType<typeof useAddTransactionScreen>["scrollToNote"];
   setNote: ReturnType<typeof useAddTransactionScreen>["setNote"];
 }
-export function TransactionExtraNote({ showMore, setNoteY, spacing, noteInputRef, note, setShowKeypad, setIsKeypadMounted, setAmountFocused, scrollToNote, setNote }: TransactionExtraNoteProps) {
+export function TransactionExtraNote({ showMore, setNoteY, noteInputRef, note, setShowKeypad, setIsKeypadMounted, setAmountFocused, scrollToNote, setNote }: TransactionExtraNoteProps) {
+  const { spacing } = useAppTheme();
   return (<>{showMore && (
     <View
       onLayout={(e) => setNoteY(e.nativeEvent.layout.y)}

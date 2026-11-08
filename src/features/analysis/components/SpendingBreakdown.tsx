@@ -1,4 +1,4 @@
-import { useAnalysisScreen } from "../hooks/useAnalysisScreen";
+import type { useAnalysisScreen } from "../hooks/useAnalysisScreen";
 import { styles } from "../screens/AnalysisScreen.styles";
 import { Ionicons } from "@expo/vector-icons";
 
@@ -14,12 +14,10 @@ interface SpendingBreakdownProps {
   categoryBreakdown: ReturnType<typeof useAnalysisScreen>["categoryBreakdown"];
   summary: ReturnType<typeof useAnalysisScreen>["summary"];
   selectedSliceIndex: ReturnType<typeof useAnalysisScreen>["selectedSliceIndex"];
-  colors: ReturnType<typeof useAppTheme>["colors"];
-  typography: ReturnType<typeof useAppTheme>["typography"];
   setSelectedSliceIndex: ReturnType<typeof useAnalysisScreen>["setSelectedSliceIndex"];
-  resolveCategoryColor: ReturnType<typeof useAppTheme>["resolveCategoryColor"];
 }
-export function SpendingBreakdown({ categoryBreakdown, summary, selectedSliceIndex, colors, typography, setSelectedSliceIndex, resolveCategoryColor }: SpendingBreakdownProps) {
+export function SpendingBreakdown({ categoryBreakdown, summary, selectedSliceIndex, setSelectedSliceIndex }: SpendingBreakdownProps) {
+  const { colors, typography, resolveCategoryColor } = useAppTheme();
 
   const expenses = categoryBreakdown.filter((item) => item.category.type === "expense");
   const totalExpenses = Math.abs(summary.totalExpenses);

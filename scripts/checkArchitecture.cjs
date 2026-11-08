@@ -23,6 +23,7 @@ for (const file of files) {
   }
   const source = ts.createSourceFile(file, fs.readFileSync(file, "utf8"), ts.ScriptTarget.Latest, true);
   const isController = /^features\/[^/]+\/hooks\/use.*Screen\.ts$/.test(relative);
+  const isFeatureComponent = /^features\/[^/]+\/components\//.test(relative);
   const isFeatureView = /^features\/[^/]+\/(components|screens)\//.test(relative);
 
   function visit(node) {
@@ -52,6 +53,9 @@ for (const file of files) {
       const isTypeOnly = node.importClause?.isTypeOnly === true;
       if (importsLogicModule && !isTypeOnly) {
         errors.push(`${relative}: views must receive service, repository, and store data through feature hooks (${modulePath}).`);
+      }
+      if (isFeatureComponent && !isTypeOnly && /(?:^|\/)use[^/]*Screen(?:\.[^/]*)?$/.test(modulePath)) {
+        errors.push(`${relative}: feature components must not runtime-import screen hooks (${modulePath}).`);
       }
     }
     ts.forEachChild(node, visit);

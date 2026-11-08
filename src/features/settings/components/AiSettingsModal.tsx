@@ -4,7 +4,7 @@ import { GeminiQuotaPanel } from "./GeminiQuotaPanel";
 import { AiApiKeyField } from "./AiApiKeyField";
 import { getStyles } from "../screens/SettingsScreen.styles";
 import { useMemo } from "react";
-import { useSettingsScreen } from "../hooks/useSettingsScreen";
+import type { useSettingsScreen } from "../hooks/useSettingsScreen";
 
 import { View, Text, ScrollView, TouchableOpacity, Modal, ActivityIndicator, KeyboardAvoidingView, Platform, Linking } from "react-native";
 
@@ -13,30 +13,32 @@ import { useAppTheme } from "../../../shared/theme/ThemeProvider";
 import { Ionicons } from "@expo/vector-icons";
 
 interface AiSettingsModalProps {
-  showAiModal: ReturnType<typeof useSettingsScreen>["showAiModal"];
-  setShowAiModal: ReturnType<typeof useSettingsScreen>["setShowAiModal"];
-  isOwner: ReturnType<typeof useSettingsScreen>["isOwner"];
-  aiStatus: ReturnType<typeof useSettingsScreen>["aiStatus"];
-  selectedAiProvider: ReturnType<typeof useSettingsScreen>["selectedAiProvider"];
-  handleResetGeminiQuota: ReturnType<typeof useSettingsScreen>["handleResetGeminiQuota"];
-  setSelectedAiProvider: ReturnType<typeof useSettingsScreen>["setSelectedAiProvider"];
-  setShowModelChain: ReturnType<typeof useSettingsScreen>["setShowModelChain"];
-  showModelChain: ReturnType<typeof useSettingsScreen>["showModelChain"];
-  geminiUsage: ReturnType<typeof useSettingsScreen>["geminiUsage"];
-  geminiFallbackModels: ReturnType<typeof useSettingsScreen>["geminiFallbackModels"];
-  geminiModelMetadata: ReturnType<typeof useSettingsScreen>["geminiModelMetadata"];
-  aiKeyInput: ReturnType<typeof useSettingsScreen>["aiKeyInput"];
-  setAiKeyInput: ReturnType<typeof useSettingsScreen>["setAiKeyInput"];
-  showAiKeySecret: ReturnType<typeof useSettingsScreen>["showAiKeySecret"];
-  setShowAiKeySecret: ReturnType<typeof useSettingsScreen>["setShowAiKeySecret"];
-  handleTestAi: ReturnType<typeof useSettingsScreen>["handleTestAi"];
-  isTestingAi: ReturnType<typeof useSettingsScreen>["isTestingAi"];
-  handleSaveAiConfig: ReturnType<typeof useSettingsScreen>["handleSaveAiConfig"];
-
+  settings: ReturnType<typeof useSettingsScreen>;
 }
-export function AiSettingsModal({ showAiModal, setShowAiModal, isOwner, aiStatus, selectedAiProvider, handleResetGeminiQuota, setSelectedAiProvider, setShowModelChain, showModelChain, geminiUsage, geminiFallbackModels, geminiModelMetadata, aiKeyInput, setAiKeyInput, showAiKeySecret, setShowAiKeySecret, handleTestAi, isTestingAi, handleSaveAiConfig }: AiSettingsModalProps) {
+export function AiSettingsModal({ settings }: AiSettingsModalProps) {
   const { colors } = useAppTheme();
   const styles = useMemo(() => getStyles(colors), [colors]);
+  const {
+    showAiModal,
+    setShowAiModal,
+    isOwner,
+    aiStatus,
+    selectedAiProvider,
+    handleResetGeminiQuota,
+    setSelectedAiProvider,
+    setShowModelChain,
+    showModelChain,
+    geminiUsage,
+    geminiFallbackModels,
+    geminiModelMetadata,
+    aiKeyInput,
+    setAiKeyInput,
+    showAiKeySecret,
+    setShowAiKeySecret,
+    handleTestAi,
+    isTestingAi,
+    handleSaveAiConfig,
+  } = settings;
 
   return (<Modal
     visible={showAiModal}

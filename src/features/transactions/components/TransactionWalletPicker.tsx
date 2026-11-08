@@ -1,6 +1,6 @@
 import type { WalletAccount } from "../../../shared/types";
 import { styles } from "../screens/AddTransactionScreen.styles";
-import { useAddTransactionScreen } from "../hooks/useAddTransactionScreen";
+import type { useAddTransactionScreen } from "../hooks/useAddTransactionScreen";
 
 import { View, ScrollView, Text, TouchableOpacity } from "react-native";
 

@@ -15,34 +15,12 @@ import { CustomDatePicker, CustomKeypad } from "../../../shared/ui";
 import { CategoryCreationModal } from "../../categories/components/CategoryCreationModal";
 
 export const AddTransactionScreen: React.FC = () => {
-  const {
-    colors,
-    typography,
-    spacing,
-    radius,
-    currencySymbol,
-    resolveCategoryColor,
-  } = useAppTheme();
+  const { colors, spacing } = useAppTheme();
+  const form = useAddTransactionScreen();
   const {
     navigation,
     editTransaction,
-    budgets,
-    amountStr,
     type,
-    setType,
-    categoryId,
-    budgetId,
-    setBudgetId,
-    accountId,
-    setAccountId,
-    displayWallets,
-    setManualBudgetSelected,
-    showMore,
-    setShowMore,
-    description,
-    setDescription,
-    note,
-    setNote,
     date,
     setDate,
     showDatePicker,
@@ -51,36 +29,22 @@ export const AddTransactionScreen: React.FC = () => {
     showKeypad,
     setShowKeypad,
     isKeypadMounted,
-    setIsKeypadMounted,
     keypadTranslateY,
     keypadOpacity,
-    amountFocused,
     setAmountFocused,
-    cursorOpacity,
     showCreateCategoryModal,
     setShowCreateCategoryModal,
-    formErrors,
     scrollViewRef,
-    descriptionInputRef,
-    noteInputRef,
-    setOptionsCardY,
-    setNoteY,
     keyboardHeight,
     isKeyboardVisible,
-    scrollToDescription,
-    scrollToNote,
-    handleCategorySelect,
     hasMathOperator,
-    evaluatedAmount,
     handleKeypadPress,
     handleKeypadBackspace,
     handleKeypadClear,
     handleEvaluateExpression,
     handleQuickCreateCategory,
     handleSave,
-    activeCategories,
-    amountDisplay
-  } = useAddTransactionScreen();
+  } = form;
 
   return (
     <SafeAreaView
@@ -156,7 +120,7 @@ export const AddTransactionScreen: React.FC = () => {
               Keyboard.dismiss();
             }}
             accessible={false}>
-            <TransactionFormContent colors={colors} radius={radius} spacing={spacing} type={type} showKeypad={showKeypad} setShowKeypad={setShowKeypad} setAmountFocused={setAmountFocused} setType={setType} typography={typography} scrollViewRef={scrollViewRef} amountFocused={amountFocused} amountStr={amountStr} amountDisplay={amountDisplay} cursorOpacity={cursorOpacity} hasMathOperator={hasMathOperator} evaluatedAmount={evaluatedAmount} handleEvaluateExpression={handleEvaluateExpression} formErrors={formErrors} activeCategories={activeCategories} categoryId={categoryId} resolveCategoryColor={resolveCategoryColor} handleCategorySelect={handleCategorySelect} setShowCreateCategoryModal={setShowCreateCategoryModal} budgets={budgets} setBudgetId={setBudgetId} setManualBudgetSelected={setManualBudgetSelected} budgetId={budgetId} displayWallets={displayWallets} accountId={accountId} setAccountId={setAccountId} setOptionsCardY={setOptionsCardY} descriptionInputRef={descriptionInputRef} description={description} setIsKeypadMounted={setIsKeypadMounted} scrollToDescription={scrollToDescription} setDescription={setDescription} showMore={showMore} noteInputRef={noteInputRef} setShowDatePicker={setShowDatePicker} date={date} setShowMore={setShowMore} setNoteY={setNoteY} note={note} scrollToNote={scrollToNote} setNote={setNote} />
+            <TransactionFormContent form={form} />
           </TouchableWithoutFeedback>
         </ScrollView>
 

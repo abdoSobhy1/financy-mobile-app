@@ -1,5 +1,5 @@
 import { styles } from "../screens/DebtsScreen.styles";
-import { useDebtsScreen } from "../hooks/useDebtsScreen";
+import type { useDebtsScreen } from "../hooks/useDebtsScreen";
 
 import { View, Text, TouchableOpacity, ActivityIndicator } from "react-native";
 

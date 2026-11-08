@@ -1,5 +1,5 @@
 import { styles } from "./TransactionFilterModals.styles";
-import { useTransactionFilterModal } from "../hooks/useTransactionFilterModal";
+import type { useTransactionFilterModal } from "../hooks/useTransactionFilterModal";
 
 import { View, Text, TouchableOpacity } from "react-native";
 import { Ionicons } from "@expo/vector-icons";

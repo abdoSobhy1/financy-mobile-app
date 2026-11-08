@@ -1,5 +1,5 @@
 import { styles } from "../screens/SmsDetectorSettingsScreen.styles";
-import { useSmsDetectorSettingsScreen } from "../hooks/useSmsDetectorSettingsScreen";
+import type { useSmsDetectorSettingsScreen } from "../hooks/useSmsDetectorSettingsScreen";
 
 import { View, Text, TouchableOpacity, TextInput, Modal, Platform, KeyboardAvoidingView } from "react-native";
 

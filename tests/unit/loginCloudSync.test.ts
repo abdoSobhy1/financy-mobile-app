@@ -93,9 +93,9 @@ async function run() {
   (database as any).getFirstAsync = async () => ({ id: "default", sync_updated_at: 0 });
   for (const [value, expected] of timestampCases) {
     assert.equal(cleanSettingsData({ syncUpdatedAt: value }).syncUpdatedAt, expected);
-    const before = writes.length;
+    const before: number = writes.length;
     await settings.updateSettings({ syncUpdatedAt: value as number }, { skipSync: true });
-    const boundTimestamp = writes[before].params[1];
+    const boundTimestamp: unknown = writes[before].params[1];
     assert.equal(boundTimestamp, expected);
     assert.ok(Number.isFinite(boundTimestamp), "SQLite must never receive null/NaN for sync_updated_at");
     assert.equal(writes[before].params[2], "synced");

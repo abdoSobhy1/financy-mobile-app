@@ -2,43 +2,45 @@ import { SectionHeading as SectionLabel } from "../../../shared/ui/SectionHeadin
 import { ActionRow as SettingRow } from "../../../shared/ui/ActionRow";
 import { SectionCard as GlassCard } from "../../../shared/ui/SectionCard";
 
-import { useSettingsScreen } from "../hooks/useSettingsScreen";
+import type { useSettingsScreen } from "../hooks/useSettingsScreen";
 
 import { View, Text, ScrollView, TouchableOpacity, Platform } from "react-native";
 
 import { useAppTheme } from "../../../shared/theme/ThemeProvider";
 
 import { Ionicons } from "@expo/vector-icons";
-import { Switch } from "../../../shared/ui";
+import { Switch, useTabBarHeight } from "../../../shared/ui";
 
 interface SettingsSectionsProps {
-  tabBarHeight: number;
-  isGuest: ReturnType<typeof useSettingsScreen>["isGuest"];
-  user: ReturnType<typeof useSettingsScreen>["user"];
-  setProfileNameInput: ReturnType<typeof useSettingsScreen>["setProfileNameInput"];
-  setShowProfileModal: ReturnType<typeof useSettingsScreen>["setShowProfileModal"];
-  handleSignOut: ReturnType<typeof useSettingsScreen>["handleSignOut"];
-  setShowCurrencyPicker: ReturnType<typeof useSettingsScreen>["setShowCurrencyPicker"];
-  currentBillingDay: ReturnType<typeof useSettingsScreen>["currentBillingDay"];
-  setBillingDayInput: ReturnType<typeof useSettingsScreen>["setBillingDayInput"];
-  setShowBillingDayPicker: ReturnType<typeof useSettingsScreen>["setShowBillingDayPicker"];
-  handleToggleTheme: ReturnType<typeof useSettingsScreen>["handleToggleTheme"];
-  navigation: ReturnType<typeof useSettingsScreen>["navigation"];
-  notifSettings: ReturnType<typeof useSettingsScreen>["notifSettings"];
-  handleReminderToggle: ReturnType<typeof useSettingsScreen>["handleReminderToggle"];
-  smsEnabled: ReturnType<typeof useSettingsScreen>["smsEnabled"];
-  handleSmsToggle: ReturnType<typeof useSettingsScreen>["handleSmsToggle"];
-  isOwner: ReturnType<typeof useSettingsScreen>["isOwner"];
-  aiStatus: ReturnType<typeof useSettingsScreen>["aiStatus"];
-  handleOpenAiSettings: ReturnType<typeof useSettingsScreen>["handleOpenAiSettings"];
-  handleExportData: ReturnType<typeof useSettingsScreen>["handleExportData"];
-  lastSyncSubtitle: ReturnType<typeof useSettingsScreen>["lastSyncSubtitle"];
-  handleSyncNow: ReturnType<typeof useSettingsScreen>["handleSyncNow"];
-  setShowFirebaseCleanup: ReturnType<typeof useSettingsScreen>["setShowFirebaseCleanup"];
-
+  settings: ReturnType<typeof useSettingsScreen>;
 }
-export function SettingsSections({ tabBarHeight, isGuest, user, setProfileNameInput, setShowProfileModal, handleSignOut, setShowCurrencyPicker, currentBillingDay, setBillingDayInput, setShowBillingDayPicker, handleToggleTheme, navigation, notifSettings, handleReminderToggle, smsEnabled, handleSmsToggle, isOwner, aiStatus, handleOpenAiSettings, handleExportData, lastSyncSubtitle, handleSyncNow, setShowFirebaseCleanup }: SettingsSectionsProps) {
+export function SettingsSections({ settings }: SettingsSectionsProps) {
   const { spacing, currencyCode, currencySymbol, typography, colors, isDark } = useAppTheme();
+  const tabBarHeight = useTabBarHeight();
+  const {
+    isGuest,
+    user,
+    setProfileNameInput,
+    setShowProfileModal,
+    handleSignOut,
+    setShowCurrencyPicker,
+    currentBillingDay,
+    setBillingDayInput,
+    setShowBillingDayPicker,
+    handleToggleTheme,
+    navigation,
+    notifSettings,
+    handleReminderToggle,
+    smsEnabled,
+    handleSmsToggle,
+    isOwner,
+    aiStatus,
+    handleOpenAiSettings,
+    handleExportData,
+    lastSyncSubtitle,
+    handleSyncNow,
+    setShowFirebaseCleanup,
+  } = settings;
 
   return (<ScrollView contentContainerStyle={{ paddingHorizontal: spacing.lg, paddingBottom: tabBarHeight + 100 }} showsVerticalScrollIndicator={false}>
     <SectionLabel text="ACCOUNT" />

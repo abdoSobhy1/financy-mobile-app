@@ -1,6 +1,6 @@
 import { useAppTheme, resolveCategoryColor } from "../../../shared/theme/ThemeProvider";
 import { styles } from "../screens/VoiceVerifyScreen.styles";
-import { useVoiceVerifyScreen } from "../hooks/useVoiceVerifyScreen";
+import type { useVoiceVerifyScreen } from "../hooks/useVoiceVerifyScreen";
 
 import { View, Text, TouchableOpacity, ScrollView, Modal, TextInput, TouchableWithoutFeedback, KeyboardAvoidingView, Platform } from "react-native";
 

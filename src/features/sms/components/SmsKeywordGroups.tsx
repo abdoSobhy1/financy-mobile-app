@@ -1,6 +1,6 @@
 import type { GroupConfig } from "../model/settingsOptions";
 import { styles } from "../screens/SmsDetectorSettingsScreen.styles";
-import { useSmsDetectorSettingsScreen } from "../hooks/useSmsDetectorSettingsScreen";
+import type { useSmsDetectorSettingsScreen } from "../hooks/useSmsDetectorSettingsScreen";
 
 import { View, Text, TouchableOpacity } from "react-native";
 

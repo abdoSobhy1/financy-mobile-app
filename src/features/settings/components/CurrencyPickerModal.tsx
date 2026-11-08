@@ -1,6 +1,6 @@
 import { getStyles } from "../screens/SettingsScreen.styles";
 import { useMemo } from "react";
-import { useSettingsScreen } from "../hooks/useSettingsScreen";
+import type { useSettingsScreen } from "../hooks/useSettingsScreen";
 
 import { View, Text, ScrollView, TouchableOpacity, Modal } from "react-native";
 

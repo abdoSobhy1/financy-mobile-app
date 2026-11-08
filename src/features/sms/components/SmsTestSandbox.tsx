@@ -1,6 +1,6 @@
 import { SmsTestResult } from "./SmsTestResult";
 import { styles } from "../screens/SmsDetectorSettingsScreen.styles";
-import { useSmsDetectorSettingsScreen } from "../hooks/useSmsDetectorSettingsScreen";
+import type { useSmsDetectorSettingsScreen } from "../hooks/useSmsDetectorSettingsScreen";
 import { SAMPLE_MESSAGES } from "../model/settingsOptions";
 
 import { View, Text, ScrollView, TouchableOpacity, TextInput } from "react-native";

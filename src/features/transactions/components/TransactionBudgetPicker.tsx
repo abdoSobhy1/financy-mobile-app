@@ -1,5 +1,5 @@
 import { styles } from "../screens/AddTransactionScreen.styles";
-import { useAddTransactionScreen } from "../hooks/useAddTransactionScreen";
+import type { useAddTransactionScreen } from "../hooks/useAddTransactionScreen";
 
 import { ScrollView, Text, TouchableOpacity } from "react-native";
 

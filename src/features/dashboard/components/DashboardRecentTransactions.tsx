@@ -1,6 +1,6 @@
 import { TransactionSummary } from "../../transactions/components/TransactionSummary";
 import { styles } from "../screens/DashboardScreen.styles";
-import { useDashboardScreen } from "../hooks/useDashboardScreen";
+import type { useDashboardScreen } from "../hooks/useDashboardScreen";
 
 import { View, Text, TouchableOpacity } from "react-native";
 

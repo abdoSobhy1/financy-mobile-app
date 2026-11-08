@@ -1,6 +1,6 @@
 import { createStyles } from "../screens/TransactionListScreen.styles";
 import { useMemo } from "react";
-import { useTransactionListScreen } from "../hooks/useTransactionListScreen";
+import type { useTransactionListScreen } from "../hooks/useTransactionListScreen";
 
 import { View, Text, TouchableOpacity, ScrollView, TextInput } from "react-native";
 import { Ionicons } from "@expo/vector-icons";

@@ -16,10 +16,8 @@ export const AnalysisScreen: React.FC = () => {
   const insets = useSafeAreaInsets();
   const {
     colors,
-    typography,
     spacing,
     isDark,
-    resolveCategoryColor,
   } = useAppTheme();
   const tabBarHeight = useTabBarHeight();
 
@@ -59,9 +57,14 @@ export const AnalysisScreen: React.FC = () => {
           paddingBottom: tabBarHeight,
         }}
         showsVerticalScrollIndicator={false}>
-        {<SpendingBreakdown categoryBreakdown={categoryBreakdown} summary={summary} selectedSliceIndex={selectedSliceIndex} colors={colors} typography={typography} setSelectedSliceIndex={setSelectedSliceIndex} resolveCategoryColor={resolveCategoryColor} />}
-        {<CashFlowTrend monthlyTrends={monthlyTrends} colors={colors} typography={typography} summary={summary} />}
-        {<BudgetHealth colors={colors} spacing={spacing} typography={typography} navigation={navigation} budgetUsage={budgetUsage} />}
+        <SpendingBreakdown
+          categoryBreakdown={categoryBreakdown}
+          summary={summary}
+          selectedSliceIndex={selectedSliceIndex}
+          setSelectedSliceIndex={setSelectedSliceIndex}
+        />
+        <CashFlowTrend monthlyTrends={monthlyTrends} summary={summary} />
+        <BudgetHealth navigation={navigation} budgetUsage={budgetUsage} />
       </ScrollView>
     </View>
   );

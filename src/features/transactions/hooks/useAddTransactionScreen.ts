@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useMemo, useCallback } from "react";
-import { ScrollView, TextInput, Platform, Keyboard, Animated, Easing } from "react-native";
+import { ScrollView, TextInput, Platform, Keyboard } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
 import { useDispatch, useSelector } from "react-redux";
@@ -16,6 +16,7 @@ import { useToast } from "../../../shared/ui";
 
 import { walletService } from "../../wallets/services/walletService";
 import { isWalletRelatedTransaction } from "./useTransactionActions";
+import { evaluateMath, useCalculatorKeypad } from "./useCalculatorKeypad";
 import { useUnsavedChanges } from "../../../shared/hooks";
 
 type NavigationProp = StackNavigationProp<
@@ -26,31 +27,8 @@ type NavigationProp = StackNavigationProp<
 type RouteParam = RouteProp<TransactionStackParamList, "AddTransaction">;
 
 const LAST_CATEGORY_KEY = "lastUsedCategoryId";
-
 const LAST_BUDGET_KEY = "lastUsedBudgetId";
-
 const LAST_ACCOUNT_KEY = "lastUsedAccountId";
-
-const arabicToWestern = (str: string): string =>
-  str.replace(/[٠-٩]/g, (d) => String(d.charCodeAt(0) - 0x0660));
-
-const evaluateMath = (expr: string): number => {
-  try {
-    // Normalize Arabic digits first
-    const normalized = arabicToWestern(expr);
-    // Replace × and ÷ in case someone pastes them
-    const sanitized = normalized
-      .replace(/×/g, "*")
-      .replace(/÷/g, "/")
-      .replace(/[^-()\d/*+.]/g, "");
-    if (!sanitized) return 0;
-    // eslint-disable-next-line no-new-func
-    const result = Number(new Function("return " + sanitized)());
-    return isNaN(result) ? 0 : result;
-  } catch (e) {
-    return 0;
-  }
-};
 
 /** Owns screen state and actions; rendering stays in AddTransactionScreen. */
 export function useAddTransactionScreen() {
@@ -71,7 +49,6 @@ export function useAddTransactionScreen() {
   );
   const { items: budgets } = useSelector((state: RootState) => state.budgets);
 
-  const [amountStr, setAmountStr] = useState("");
   const [type, setType] = useState<TransactionType>("expense");
   const [categoryId, setCategoryId] = useState<string>("");
   const [budgetId, setBudgetId] = useState<string>("");
@@ -85,89 +62,43 @@ export function useAddTransactionScreen() {
   const [note, setNote] = useState("");
   const [date, setDate] = useState<Date>(new Date());
   const [showDatePicker, setShowDatePicker] = useState(false);
-  const KEYPAD_HEIGHT = 350;
-  const shouldInitialFocusAmount = !openCreateCategory;
-  const [showKeypad, setShowKeypad] = useState<boolean>(shouldInitialFocusAmount);
-  const [isKeypadMounted, setIsKeypadMounted] = useState<boolean>(shouldInitialFocusAmount);
-  const keypadTranslateY = useRef(
-    new Animated.Value(shouldInitialFocusAmount ? 0 : KEYPAD_HEIGHT)
-  ).current;
-  const keypadOpacity = useRef(
-    new Animated.Value(shouldInitialFocusAmount ? 1 : 0)
-  ).current;
-  const [amountFocused, setAmountFocused] = useState<boolean>(shouldInitialFocusAmount);
-
-  // Blinking cursor for focused amount input
-  const cursorOpacity = useRef(new Animated.Value(1)).current;
-  useEffect(() => {
-    if (showKeypad) {
-      const blinkAnimation = Animated.loop(
-        Animated.sequence([
-          Animated.timing(cursorOpacity, {
-            toValue: 0,
-            duration: 500,
-            useNativeDriver: true,
-          }),
-          Animated.timing(cursorOpacity, {
-            toValue: 1,
-            duration: 500,
-            useNativeDriver: true,
-          }),
-        ])
-      );
-      blinkAnimation.start();
-      return () => blinkAnimation.stop();
-    } else {
-      cursorOpacity.setValue(0);
-    }
-  }, [showKeypad]);
-
-  useEffect(() => {
-    setAmountFocused(showKeypad);
-    if (showKeypad) {
-      setIsKeypadMounted(true);
-      Animated.parallel([
-        Animated.spring(keypadTranslateY, {
-          toValue: 0,
-          damping: 22,
-          stiffness: 220,
-          mass: 0.8,
-          useNativeDriver: true,
-        }),
-        Animated.timing(keypadOpacity, {
-          toValue: 1,
-          duration: 180,
-          useNativeDriver: true,
-        }),
-      ]).start();
-    } else {
-      Animated.parallel([
-        Animated.timing(keypadTranslateY, {
-          toValue: KEYPAD_HEIGHT,
-          duration: 220,
-          easing: Easing.out(Easing.cubic),
-          useNativeDriver: true,
-        }),
-        Animated.timing(keypadOpacity, {
-          toValue: 0,
-          duration: 180,
-          useNativeDriver: true,
-        }),
-      ]).start(({ finished }) => {
-        if (finished) {
-          setIsKeypadMounted(false);
-        }
-      });
-    }
-  }, [showKeypad]);
-
   const [showCreateCategoryModal, setShowCreateCategoryModal] = useState(false);
   const [formErrors, setFormErrors] = useState<{ amount?: string; category?: string; }>({});
+
+  const shouldInitialFocusAmount = !openCreateCategory;
+  const {
+    KEYPAD_HEIGHT,
+    amountStr,
+    setAmountStr,
+    showKeypad,
+    setShowKeypad,
+    isKeypadMounted,
+    setIsKeypadMounted,
+    keypadTranslateY,
+    keypadOpacity,
+    amountFocused,
+    setAmountFocused,
+    cursorOpacity,
+    showKeypadRef,
+    hasMathOperator,
+    evaluatedAmount,
+    amountDisplay,
+    handleKeypadPress,
+    handleKeypadBackspace,
+    handleKeypadClear,
+    handleEvaluateExpression,
+  } = useCalculatorKeypad({
+    initialFocus: shouldInitialFocusAmount,
+    onClearAmountError: () => {
+      if (formErrors.amount) {
+        setFormErrors((prev) => ({ ...prev, amount: undefined }));
+      }
+    },
+  });
 
   const scrollViewRef = useRef<ScrollView>(null);
   const descriptionInputRef = useRef<TextInput>(null);
   const noteInputRef = useRef<TextInput>(null);
-  const showKeypadRef = useRef(showKeypad);
 
   const [optionsCardY, setOptionsCardY] = useState(0);
   const [noteY, setNoteY] = useState(0);
@@ -224,10 +155,6 @@ export function useAddTransactionScreen() {
       hideSub.remove();
     };
   }, [scrollToDescription, scrollToNote]);
-
-  useEffect(() => {
-    showKeypadRef.current = showKeypad;
-  }, [showKeypad]);
 
   const hasChanges = useMemo(() => {
     if (editTransaction) {
@@ -365,57 +292,6 @@ export function useAddTransactionScreen() {
     }
   };
 
-  const hasMathOperator = /[+\-*/×÷]/.test(amountStr.slice(1));
-  const evaluatedAmount = evaluateMath(amountStr);
-
-  const handleKeypadPress = (key: string) => {
-    if (key === "=") {
-      handleEvaluateExpression();
-      return;
-    }
-    if (formErrors.amount) {
-      setFormErrors((prev) => ({ ...prev, amount: undefined }));
-    }
-    setAmountStr((prev) => {
-      const isOp = ["+", "-", "*", "/"].includes(key);
-      if (isOp) {
-        if (!prev) return "";
-        const lastChar = prev.slice(-1);
-        if (["+", "-", "*", "/", "."].includes(lastChar)) {
-          return prev.slice(0, -1) + key;
-        }
-      }
-      if (key === ".") {
-        const parts = prev.split(/[+\-*/]/);
-        const currentPart = parts[parts.length - 1] || "";
-        if (currentPart.includes(".")) return prev;
-        if (!currentPart) return prev + "0.";
-      }
-      return prev + key;
-    });
-  };
-
-  const handleKeypadBackspace = () => {
-    setAmountStr((prev) => prev.slice(0, -1));
-  };
-
-  const handleKeypadClear = () => {
-    setAmountStr("");
-  };
-
-  const handleEvaluateExpression = () => {
-    if (!amountStr) return;
-    const result = evaluateMath(amountStr);
-    if (result > 0) {
-      setAmountStr(parseFloat(result.toFixed(2)).toString());
-    }
-  };
-
-  const handleAmountBlur = () => {
-    setAmountFocused(false);
-    handleEvaluateExpression();
-  };
-
   const handleQuickCreateCategory = async (data: {
     name: string;
     type: "income" | "expense";
@@ -508,9 +384,6 @@ export function useAddTransactionScreen() {
     .filter((c) => c && c.type === type && !c.deleted)
     .sort((a, b) => ((b as any).entryCount || 0) - ((a as any).entryCount || 0));
 
-  const amountDisplay = amountStr
-    ? amountStr.replace(/\*/g, "×").replace(/\//g, "÷")
-    : "0.00";
   const displayWallets = wallets.length > 0 ? wallets : walletService.getCachedWallets();
   return {
     navigation,

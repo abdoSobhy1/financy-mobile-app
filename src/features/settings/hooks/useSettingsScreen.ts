@@ -1,9 +1,5 @@
-import { AlertService } from "../../../shared/services/AlertService";
 import React, { useEffect, useState } from "react";
 import { Platform } from "react-native";
-import { getAIConfigStatus, saveAIConfig, testAIConnection, AIConfig, AIProvider } from "../../../infrastructure/ai/aiConfigService";
-import { getDailyGeminiUsage, resetDailyGeminiUsage, GeminiDailyUsage, GEMINI_FALLBACK_MODELS, GEMINI_MODEL_METADATA } from "../../../infrastructure/ai/geminiQuotaService";
-import { useIsOwner } from "../../auth/hooks/useIsOwner";
 
 import { useNavigation } from "@react-navigation/native";
 import { StackNavigationProp } from "@react-navigation/stack";
@@ -17,57 +13,42 @@ import NotificationService, { NotificationSettings } from "../../../infrastructu
 import { fetchSettings, updateBillingPeriodStartDay, updateCurrency, updateTheme } from "../store/settingsSlice";
 import { formatRelativeTime, getDateRangeForBillingPeriod } from "../../../shared/utils";
 import { fetchCategories } from "../../categories/store/categoriesSlice";
-import { fetchBudgets } from "../../budgets/store/budgetsSlice";
 import { fetchTransactions } from "../../transactions/store/transactionsSlice";
-import { fetchDebts } from "../../debts/store/debtsSlice";
 import { syncWithFirebase } from "../../../infrastructure/sync/store/syncSlice";
 
 import { exportToExcel, exportToCSV, ExportData } from "../../import/utils/exportUtils";
 import { exportDatabaseToJSON } from "../../import/utils/databaseExport";
-import { db } from "../../../infrastructure/database/repositories";
 import { useAuth } from "../../auth/providers/AuthContext";
 import { useSync } from "../../../infrastructure/sync/providers/SyncProvider";
-import { getDeviceId } from "../../../infrastructure/device/deviceId";
 import { signOut, setUser } from "../../auth/store/authSlice";
 import { authService } from "../../auth/services/authService";
 import { getSmsDetectionEnabled, setSmsDetectionEnabled, smsService } from "../../sms/services/smsService";
 import { subscribeSmsConfig } from "../../sms/services/smsConfigService";
+import { useAiSettings } from "./useAiSettings";
 
 type SettingsScreenNavigationProp = StackNavigationProp<SettingsStackParamList>;
 
 /** Owns screen state and actions; rendering stays in SettingsScreen. */
 export function useSettingsScreen() {
-
   const dispatch = useDispatch<AppDispatch>();
   const navigation = useNavigation<SettingsScreenNavigationProp>();
-  const { items: categories } = useSelector(
-    (state: RootState) => state.categories,
-  );
-  const { items: transactions } = useSelector(
-    (state: RootState) => state.transactions,
-  );
+  const { items: categories } = useSelector((state: RootState) => state.categories);
+  const { items: transactions } = useSelector((state: RootState) => state.transactions);
   const { items: budgets } = useSelector((state: RootState) => state.budgets);
   const settings = useSelector((state: RootState) => state.settings);
   const syncState = useSelector((state: RootState) => state.sync);
   const { user, isAuthenticated } = useAuth();
-  const { syncState: newSyncState, fullRefresh } = useSync();
+  const { syncState: newSyncState } = useSync();
 
-  // ── UI state ────────────────────────────────────────────────────
   const [showBillingDayPicker, setShowBillingDayPicker] = useState(false);
   const [showCurrencyPicker, setShowCurrencyPicker] = useState(false);
-  const [showThemePicker, setShowThemePicker] = useState(false);
-  const [selectedBillingDay, setSelectedBillingDay] = useState(1);
   const [billingDayInput, setBillingDayInput] = useState<string>("1");
-  const [addCategoryModalVisible, setAddCategoryModalVisible] = useState(false);
   const [showFirebaseCleanup, setShowFirebaseCleanup] = useState(false);
-  const [showCategoryManagement, setShowCategoryManagement] = useState(false);
   const [syncing, setSyncing] = useState(false);
-  const [deviceId, setDeviceId] = useState<string>("");
   const { showAlert, AlertComponent } = useCustomAlert();
   const { showSuccess, showError } = useToast();
   const [smsEnabled, setSmsEnabled] = useState(true);
 
-  // ── Profile & Notifications State ──────────────────────────────
   const [showProfileModal, setShowProfileModal] = useState(false);
   const [profileNameInput, setProfileNameInput] = useState("");
   const [savingProfile, setSavingProfile] = useState(false);
@@ -78,50 +59,21 @@ export function useSettingsScreen() {
     eveningReminderTime: "20:00",
   });
 
-  // ── AI Configuration State (Never loads raw API keys into UI) ────
-  const isOwner = useIsOwner();
-  const [showAiModal, setShowAiModal] = useState(false);
-  const [aiKeyInput, setAiKeyInput] = useState("");
-  const [selectedAiProvider, setSelectedAiProvider] = useState<AIProvider>("gemini");
-  const [isTestingAi, setIsTestingAi] = useState(false);
-  const [showAiKeySecret, setShowAiKeySecret] = useState(false);
-  const [aiStatus, setAiStatus] = useState<{
-    provider: AIProvider;
-    hasCustomKey: boolean;
-    hasHostedKey: boolean;
-    activeModel: string;
-    isFallbackModel?: boolean;
-    availableGeminiModelsCount?: number;
-    totalGeminiModelsCount?: number;
-    rateLimitedModels?: string[];
-  }>({
-    provider: "gemini",
-    hasCustomKey: false,
-    hasHostedKey: Boolean(process.env.EXPO_PUBLIC_GEMINI_WORKER_URL?.trim()),
-    activeModel: "gemini-3.6-flash",
-  });
-  const [geminiUsage, setGeminiUsage] = useState<GeminiDailyUsage | null>(null);
-  const [showModelChain, setShowModelChain] = useState(false);
-
-  const refreshAiStatus = async () => {
-    const status = await getAIConfigStatus();
-    setSelectedAiProvider(status.provider);
-    setAiStatus(status);
-    const usage = await getDailyGeminiUsage();
-    setGeminiUsage(usage);
-  };
+  const aiSettings = useAiSettings();
 
   const isGuest = Boolean(user?.isGuest || user?.uid === "guest");
   const currentBillingDay = settings.data?.billingPeriodStartDay || 1;
 
-  // ── Effects ─────────────────────────────────────────────────────
-  useEffect(() => subscribeSmsConfig(() => {
-    getSmsDetectionEnabled().then(setSmsEnabled);
-  }), []);
+  useEffect(
+    () =>
+      subscribeSmsConfig(() => {
+        getSmsDetectionEnabled().then(setSmsEnabled);
+      }),
+    [],
+  );
 
   useEffect(() => {
     if (settings.data) {
-      setSelectedBillingDay(settings.data.billingPeriodStartDay);
       setBillingDayInput(String(settings.data.billingPeriodStartDay));
     }
   }, [settings.data]);
@@ -130,60 +82,14 @@ export function useSettingsScreen() {
     dispatch(fetchCategories());
     dispatch(fetchSettings());
     dispatch(fetchTransactions());
-    getDeviceId().then(setDeviceId);
-    // Load SMS detection toggle state
     if (Platform.OS === "android") {
       getSmsDetectionEnabled().then(setSmsEnabled);
     }
     NotificationService.getInstance()
       .getNotificationSettings()
       .then(setNotifSettings)
-      .catch(() => { });
-    refreshAiStatus().then(() => {
-      // Never load any API key string into aiKeyInput
-      setAiKeyInput("");
-    });
+      .catch(() => {});
   }, [dispatch]);
-
-  const handleSaveAiConfig = async () => {
-    const trimmed = aiKeyInput.trim();
-    if (!trimmed) {
-      showError("Please enter an API key to save");
-      return;
-    }
-    const updated: AIConfig = {
-      provider: selectedAiProvider,
-      apiKey: trimmed,
-      model: selectedAiProvider === "gemini" ? "gemini-3.6-flash" : undefined,
-    };
-    await saveAIConfig(updated);
-    await refreshAiStatus();
-    setAiKeyInput("");
-    setShowAiKeySecret(false);
-    setShowAiModal(false);
-    showSuccess("AI configuration saved!");
-  };
-
-  const handleTestAi = async () => {
-    setIsTestingAi(true);
-    const res = await testAIConnection({
-      provider: selectedAiProvider,
-      apiKey: aiKeyInput.trim(),
-    });
-    setIsTestingAi(false);
-    await refreshAiStatus();
-    if (res.success) {
-      showSuccess(res.message);
-    } else {
-      showError(res.message);
-    }
-  };
-
-  const handleResetGeminiQuota = async () => {
-    await resetDailyGeminiUsage();
-    await refreshAiStatus();
-    showSuccess("Today's model quota flags have been reset!");
-  };
 
   const handleSaveProfile = async () => {
     const trimmedName = profileNameInput.trim();
@@ -213,7 +119,12 @@ export function useSettingsScreen() {
       await NotificationService.getInstance().saveSettings({
         transactionReminders: value,
       });
-      showSuccess(value ? "Daily reminders enabled" : "Daily reminders disabled", 3500, undefined, "settings-reminders");
+      showSuccess(
+        value ? "Daily reminders enabled" : "Daily reminders disabled",
+        3500,
+        undefined,
+        "settings-reminders",
+      );
     } catch {
       showError("Failed to update reminder settings");
     }
@@ -223,16 +134,17 @@ export function useSettingsScreen() {
     setSmsEnabled(value);
     await setSmsDetectionEnabled(value);
     if (value) {
-      // Restart listener with current categories & budgets
       const state = (store as any).getState();
       const cats = Object.values(state.categories?.items || {}) as any[];
-      const budgets = state.budgets?.items || {};
-      const granted = await smsService.hasPermissions() || await smsService.requestPermissions();
+      const currentBudgets = state.budgets?.items || {};
+      const granted =
+        (await smsService.hasPermissions()) ||
+        (await smsService.requestPermissions());
       if (granted) {
         smsService.stopListening();
         smsService.startListening(
           cats.map((c: any) => ({ id: c.id, name: c.name })),
-          budgets
+          currentBudgets,
         );
       }
       showSuccess("SMS detection enabled");
@@ -242,11 +154,10 @@ export function useSettingsScreen() {
     }
   };
 
-  // ── Handlers ────────────────────────────────────────────────────
-
   const parsedBillingDay = parseInt(billingDayInput.trim(), 10);
   const isBillingDayNumeric = /^\d+$/.test(billingDayInput.trim());
-  const isBillingDayValid = isBillingDayNumeric && parsedBillingDay >= 1 && parsedBillingDay <= 30;
+  const isBillingDayValid =
+    isBillingDayNumeric && parsedBillingDay >= 1 && parsedBillingDay <= 30;
 
   const getBillingDayError = (): string | null => {
     const trimmed = billingDayInput.trim();
@@ -265,7 +176,6 @@ export function useSettingsScreen() {
     }
     try {
       await dispatch(updateBillingPeriodStartDay(parsedBillingDay)).unwrap();
-      setSelectedBillingDay(parsedBillingDay);
       setShowBillingDayPicker(false);
       showSuccess(`Billing cycle starts on day ${parsedBillingDay}`);
     } catch {
@@ -303,11 +213,6 @@ export function useSettingsScreen() {
     return "Tap to sync your data with cloud";
   }, [isGuest, syncing, newSyncState?.isSyncing, isAuthenticated, syncState.lastSync]);
 
-  const handleComingSoon = (feature: string) => {
-    AlertService.alert("Coming Soon", `The ${feature} feature is not yet available. Stay tuned!`, [{ text: "OK" }]);
-  };
-
-  // ── Sync Now (bidirectional) ────────────────────────────────────
   const handleSyncNow = async () => {
     if (!isAuthenticated || isGuest) {
       showAlert(
@@ -343,78 +248,6 @@ export function useSettingsScreen() {
     }
   };
 
-  // ── Restore from Cloud ──────────────────────────────────────────
-  const handleRestore = async () => {
-    if (!isAuthenticated) {
-      showError("Please sign in first");
-      return;
-    }
-    if (syncing) return;
-    setSyncing(true);
-    try {
-      showSuccess("Restoring cloud data…");
-      const { offlineFirstSync } = await import("../../../infrastructure/sync/OfflineFirstSync");
-      const r = await offlineFirstSync.performComprehensiveCloudRestore();
-      const total = r.itemsCreated + r.itemsUpdated;
-      showSuccess(
-        total > 0
-          ? `Restored! ${r.itemsCreated} created, ${r.itemsUpdated} updated.`
-          : "Already up to date.",
-      );
-      dispatch(fetchTransactions());
-      dispatch(fetchCategories());
-      dispatch(fetchBudgets());
-      dispatch(fetchDebts());
-      if (r.errors.length)
-        showError(`Completed with ${r.errors.length} warnings`);
-    } catch (e: any) {
-      showError(
-        e?.message?.includes("authenticated")
-          ? "Please sign in first"
-          : `Restore failed: ${e?.message || "Unknown"}`,
-      );
-    } finally {
-      setSyncing(false);
-    }
-  };
-
-  // ── Export ──────────────────────────────────────────────────────
-  const handleExportData = () => {
-    showAlert("Export Data", "Choose export period:", [
-      { text: "Cancel", style: "cancel" },
-      { text: "Current Month", onPress: () => pickFormat("month") },
-      { text: "Last 3 Months", onPress: () => pickFormat("quarter") },
-      { text: "All Time", onPress: () => pickFormat("all") },
-    ]);
-  };
-
-  const pickFormat = (period: string) => {
-    setTimeout(() => {
-      showAlert("Export Format", "Choose file format:", [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Excel (.xlsx)",
-          onPress: () => doExport(period, "excel"),
-        },
-        {
-          text: "CSV (.csv)",
-          onPress: () => doExport(period, "csv"),
-        },
-        {
-          text: "JSON Backup",
-          onPress: async () => {
-            try {
-              await exportDatabaseToJSON();
-              showSuccess("Database exported to console as JSON");
-            } catch {
-              showError("Export failed");
-            }
-          },
-        },
-      ]);
-    }, 500);
-  };
-
   const doExport = async (period: string, format: "excel" | "csv") => {
     try {
       const list = Object.values(transactions || {});
@@ -430,7 +263,10 @@ export function useSettingsScreen() {
           return d >= start && d <= end;
         });
       } else if (period === "quarter") {
-        const { start: currentStart, end: currentEnd } = getDateRangeForBillingPeriod(currentBillingDay, now);
+        const { start: currentStart, end: currentEnd } = getDateRangeForBillingPeriod(
+          currentBillingDay,
+          now,
+        );
         const quarterStart = new Date(currentStart);
         quarterStart.setMonth(quarterStart.getMonth() - 2);
         filtered = list.filter((t) => {
@@ -469,43 +305,47 @@ export function useSettingsScreen() {
     }
   };
 
-  // ── Clear data ─────────────────────────────────────────────────
-  const handleClearAllData = () => {
-    showAlert(
-      "Clear All Data",
-      "This will delete all transactions, budgets, debts and reset settings. Categories will be preserved. This cannot be undone.",
-      [
+  const pickFormat = (period: string) => {
+    setTimeout(() => {
+      showAlert("Export Format", "Choose file format:", [
         { text: "Cancel", style: "cancel" },
         {
-          text: "Clear All",
-          style: "destructive",
+          text: "Excel (.xlsx)",
+          onPress: () => doExport(period, "excel"),
+        },
+        {
+          text: "CSV (.csv)",
+          onPress: () => doExport(period, "csv"),
+        },
+        {
+          text: "JSON Backup",
           onPress: async () => {
             try {
-              await db.clearAllData();
-              dispatch(fetchCategories());
-              dispatch(fetchBudgets());
-              dispatch(fetchTransactions());
-              showSuccess("All data cleared (categories preserved)");
+              await exportDatabaseToJSON();
+              showSuccess("Database exported to console as JSON");
             } catch {
-              showError("Failed to clear data");
+              showError("Export failed");
             }
           },
         },
-      ],
-    );
+      ]);
+    }, 500);
   };
+
+  const handleExportData = () => {
+    showAlert("Export Data", "Choose export period:", [
+      { text: "Cancel", style: "cancel" },
+      { text: "Current Month", onPress: () => pickFormat("month") },
+      { text: "Last 3 Months", onPress: () => pickFormat("quarter") },
+      { text: "All Time", onPress: () => pickFormat("all") },
+    ]);
+  };
+
   const handleSignOut = () => dispatch(signOut());
 
-  const handleOpenAiSettings = async () => {
-    setAiKeyInput("");
-    setShowAiKeySecret(false);
-    await refreshAiStatus();
-    setShowAiModal(true);
-  };
-
   return {
+    ...aiSettings,
     handleSignOut,
-    handleOpenAiSettings,
     navigation,
     user,
     showBillingDayPicker,
@@ -524,27 +364,8 @@ export function useSettingsScreen() {
     setProfileNameInput,
     savingProfile,
     notifSettings,
-    isOwner,
-    showAiModal,
-    setShowAiModal,
-    aiKeyInput,
-    setAiKeyInput,
-    selectedAiProvider,
-    setSelectedAiProvider,
-    isTestingAi,
-    showAiKeySecret,
-    setShowAiKeySecret,
-    aiStatus,
-    geminiUsage,
-    geminiFallbackModels: GEMINI_FALLBACK_MODELS,
-    geminiModelMetadata: GEMINI_MODEL_METADATA,
-    showModelChain,
-    setShowModelChain,
     isGuest,
     currentBillingDay,
-    handleSaveAiConfig,
-    handleTestAi,
-    handleResetGeminiQuota,
     handleSaveProfile,
     handleReminderToggle,
     handleSmsToggle,
@@ -556,6 +377,6 @@ export function useSettingsScreen() {
     handleToggleTheme,
     lastSyncSubtitle,
     handleSyncNow,
-    handleExportData
+    handleExportData,
   };
 }

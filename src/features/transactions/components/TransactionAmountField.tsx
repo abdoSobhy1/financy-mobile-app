@@ -1,5 +1,5 @@
 import { styles } from "../screens/AddTransactionScreen.styles";
-import { useAddTransactionScreen } from "../hooks/useAddTransactionScreen";
+import type { useAddTransactionScreen } from "../hooks/useAddTransactionScreen";
 
 import { View, Text, TouchableOpacity, Keyboard, Animated } from "react-native";
 

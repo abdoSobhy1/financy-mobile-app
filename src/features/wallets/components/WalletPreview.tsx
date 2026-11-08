@@ -1,4 +1,4 @@
-import { useWalletEditorModal } from "../hooks/useWalletEditorModal";
+import type { useWalletEditorModal } from "../hooks/useWalletEditorModal";
 
 import { View, Text } from "react-native";
 
