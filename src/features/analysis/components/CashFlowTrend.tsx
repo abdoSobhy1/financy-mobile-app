@@ -1,5 +1,5 @@
-import type { useAnalysisScreen } from "../hooks/useAnalysisScreen";
-import { styles } from "../screens/AnalysisScreen.styles";
+import type { AnalysisScreenController } from "../hooks/useAnalysisScreen";
+import { styles } from "./AnalysisSection.styles";
 import { Ionicons } from "@expo/vector-icons";
 
 import { Text, View } from "react-native";
@@ -9,8 +9,8 @@ import { useAppTheme } from "../../../shared/theme/ThemeProvider";
 import { formatCurrency } from "../../../shared/utils";
 
 interface CashFlowTrendProps {
-  monthlyTrends: ReturnType<typeof useAnalysisScreen>["monthlyTrends"];
-  summary: ReturnType<typeof useAnalysisScreen>["summary"];
+  monthlyTrends: AnalysisScreenController["monthlyTrends"];
+  summary: AnalysisScreenController["summary"];
 }
 export function CashFlowTrend({ monthlyTrends, summary }: CashFlowTrendProps) {
   const { colors, typography } = useAppTheme();

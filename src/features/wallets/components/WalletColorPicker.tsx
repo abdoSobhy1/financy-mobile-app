@@ -1,9 +1,9 @@
-import type { useWalletEditorModal } from "../hooks/useWalletEditorModal";
+import type { WalletEditorModalController } from "../hooks/useWalletEditorModal";
 
 import { View, Text, TouchableOpacity } from "react-native";
 
 import { WalletType } from "../../../shared/types";
-import { useAppTheme } from "../../../shared/theme/ThemeProvider";
+import { useAppTheme, type AppTheme } from "../../../shared/theme/ThemeProvider";
 import { WALLET_COLORS } from "../model/walletEditorOptions";
 
 export interface WalletEditorFormValues {
@@ -15,10 +15,10 @@ export interface WalletEditorFormValues {
   isSecret: boolean;
 }
 interface WalletColorPickerProps {
-  spacing: ReturnType<typeof useAppTheme>["spacing"];
-  formColor: ReturnType<typeof useWalletEditorModal>["formColor"];
-  setFormColor: ReturnType<typeof useWalletEditorModal>["setFormColor"];
-  colors: ReturnType<typeof useAppTheme>["colors"];
+  spacing: AppTheme["spacing"];
+  formColor: WalletEditorModalController["formColor"];
+  setFormColor: WalletEditorModalController["setFormColor"];
+  colors: AppTheme["colors"];
 }
 export function WalletColorPicker({ spacing, formColor, setFormColor, colors }: WalletColorPickerProps) {
   return (<View

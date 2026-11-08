@@ -1,6 +1,6 @@
 import { getAlphaColor } from "../../../shared/utils/colors";
-import { styles } from "../screens/DashboardScreen.styles";
-import type { useDashboardScreen } from "../hooks/useDashboardScreen";
+import { styles } from "./DashboardSections.styles";
+import type { DashboardScreenController } from "../hooks/useDashboardScreen";
 
 import { View, Text, ScrollView, TouchableOpacity } from "react-native";
 
@@ -11,20 +11,20 @@ import { useAppTheme } from "../../../shared/theme/ThemeProvider";
 
 interface DashboardBalanceCardsProps {
   SCREEN_WIDTH: number;
-  activeCardIndex: ReturnType<typeof useDashboardScreen>["activeCardIndex"];
-  setActiveCardIndex: ReturnType<typeof useDashboardScreen>["setActiveCardIndex"];
-  balanceHistory: ReturnType<typeof useDashboardScreen>["balanceHistory"];
-  toggleHideBalances: ReturnType<typeof useDashboardScreen>["toggleHideBalances"];
-  hideBalances: ReturnType<typeof useDashboardScreen>["hideBalances"];
-  maskCurrency: ReturnType<typeof useDashboardScreen>["maskCurrency"];
-  balance: ReturnType<typeof useDashboardScreen>["balance"];
-  balanceChangePct: ReturnType<typeof useDashboardScreen>["balanceChangePct"];
-  totalIncome: ReturnType<typeof useDashboardScreen>["totalIncome"];
-  totalExpenses: ReturnType<typeof useDashboardScreen>["totalExpenses"];
-  budgetedExpenses: ReturnType<typeof useDashboardScreen>["budgetedExpenses"];
-  totalBudget: ReturnType<typeof useDashboardScreen>["totalBudget"];
-  daysLeftInPeriod: ReturnType<typeof useDashboardScreen>["daysLeftInPeriod"];
-  navigation: ReturnType<typeof useDashboardScreen>["navigation"];
+  activeCardIndex: DashboardScreenController["activeCardIndex"];
+  setActiveCardIndex: DashboardScreenController["setActiveCardIndex"];
+  balanceHistory: DashboardScreenController["balanceHistory"];
+  toggleHideBalances: DashboardScreenController["toggleHideBalances"];
+  hideBalances: DashboardScreenController["hideBalances"];
+  maskCurrency: DashboardScreenController["maskCurrency"];
+  balance: DashboardScreenController["balance"];
+  balanceChangePct: DashboardScreenController["balanceChangePct"];
+  totalIncome: DashboardScreenController["totalIncome"];
+  totalExpenses: DashboardScreenController["totalExpenses"];
+  budgetedExpenses: DashboardScreenController["budgetedExpenses"];
+  totalBudget: DashboardScreenController["totalBudget"];
+  daysLeftInPeriod: DashboardScreenController["daysLeftInPeriod"];
+  navigation: DashboardScreenController["navigation"];
 }
 
 function generateSmoothPath(data: number[], width: number, height: number) {

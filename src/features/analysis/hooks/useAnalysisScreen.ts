@@ -36,3 +36,5 @@ export function useAnalysisScreen() {
   const { summary, categoryBreakdown, monthlyTrends, budgetUsage } = analyticsData;
   return { navigation, refreshing, filter, setFilter, selectedSliceIndex, setSelectedSliceIndex, onRefresh, summary, categoryBreakdown, monthlyTrends, budgetUsage };
 }
+
+export type AnalysisScreenController = ReturnType<typeof useAnalysisScreen>;

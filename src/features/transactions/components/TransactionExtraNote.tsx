@@ -1,4 +1,4 @@
-import type { useAddTransactionScreen } from "../hooks/useAddTransactionScreen";
+import type { AddTransactionScreenController } from "../hooks/useAddTransactionScreen";
 
 import { View, Keyboard } from "react-native";
 
@@ -6,15 +6,15 @@ import { useAppTheme } from "../../../shared/theme/ThemeProvider";
 import { Input } from "../../../shared/ui";
 
 interface TransactionExtraNoteProps {
-  showMore: ReturnType<typeof useAddTransactionScreen>["showMore"];
-  setNoteY: ReturnType<typeof useAddTransactionScreen>["setNoteY"];
-  noteInputRef: ReturnType<typeof useAddTransactionScreen>["noteInputRef"];
-  note: ReturnType<typeof useAddTransactionScreen>["note"];
-  setShowKeypad: ReturnType<typeof useAddTransactionScreen>["setShowKeypad"];
-  setIsKeypadMounted: ReturnType<typeof useAddTransactionScreen>["setIsKeypadMounted"];
-  setAmountFocused: ReturnType<typeof useAddTransactionScreen>["setAmountFocused"];
-  scrollToNote: ReturnType<typeof useAddTransactionScreen>["scrollToNote"];
-  setNote: ReturnType<typeof useAddTransactionScreen>["setNote"];
+  showMore: AddTransactionScreenController["showMore"];
+  setNoteY: AddTransactionScreenController["setNoteY"];
+  noteInputRef: AddTransactionScreenController["noteInputRef"];
+  note: AddTransactionScreenController["note"];
+  setShowKeypad: AddTransactionScreenController["setShowKeypad"];
+  setIsKeypadMounted: AddTransactionScreenController["setIsKeypadMounted"];
+  setAmountFocused: AddTransactionScreenController["setAmountFocused"];
+  scrollToNote: AddTransactionScreenController["scrollToNote"];
+  setNote: AddTransactionScreenController["setNote"];
 }
 export function TransactionExtraNote({ showMore, setNoteY, noteInputRef, note, setShowKeypad, setIsKeypadMounted, setAmountFocused, scrollToNote, setNote }: TransactionExtraNoteProps) {
   const { spacing } = useAppTheme();

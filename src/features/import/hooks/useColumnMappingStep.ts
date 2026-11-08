@@ -87,3 +87,5 @@ export function useColumnMappingStep({ preview, onComplete }: UseColumnMappingSt
     isTargetUsed,
   };
 }
+
+export type ColumnMappingStepController = ReturnType<typeof useColumnMappingStep>;

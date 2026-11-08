@@ -1,7 +1,7 @@
-import { CARD_MARGIN } from "../screens/WalletManagementScreen.styles";
-import { styles } from "../screens/WalletManagementScreen.styles";
+import { CARD_MARGIN } from "./WalletManagementSection.styles";
+import { styles } from "./WalletManagementSection.styles";
 import { useAppTheme } from "../../../shared/theme/ThemeProvider";
-import type { useWalletManagementScreen } from "../hooks/useWalletManagementScreen";
+import type { WalletManagementScreenController } from "../hooks/useWalletManagementScreen";
 
 import { View, Text, TouchableOpacity } from "react-native";
 
@@ -13,13 +13,13 @@ import { IconChip } from "../../../shared/ui/IconChip";
 import { formatCurrency } from "../../../shared/utils";
 
 interface WalletGridProps {
-  filteredWallets: ReturnType<typeof useWalletManagementScreen>["filteredWallets"];
-  walletBalances: ReturnType<typeof useWalletManagementScreen>["walletBalances"];
-  openEditModal: ReturnType<typeof useWalletManagementScreen>["openEditModal"];
-  handleUnarchiveWallet: ReturnType<typeof useWalletManagementScreen>["handleUnarchiveWallet"];
-  handleOpenTransfer: ReturnType<typeof useWalletManagementScreen>["handleOpenTransfer"];
-  handleDeleteWallet: ReturnType<typeof useWalletManagementScreen>["handleDeleteWallet"];
-  openAddModal: ReturnType<typeof useWalletManagementScreen>["openAddModal"];
+  filteredWallets: WalletManagementScreenController["filteredWallets"];
+  walletBalances: WalletManagementScreenController["walletBalances"];
+  openEditModal: WalletManagementScreenController["openEditModal"];
+  handleUnarchiveWallet: WalletManagementScreenController["handleUnarchiveWallet"];
+  handleOpenTransfer: WalletManagementScreenController["handleOpenTransfer"];
+  handleDeleteWallet: WalletManagementScreenController["handleDeleteWallet"];
+  openAddModal: WalletManagementScreenController["openAddModal"];
 
 }
 export function WalletGrid({ filteredWallets, walletBalances, openEditModal, handleUnarchiveWallet, handleOpenTransfer, handleDeleteWallet, openAddModal }: WalletGridProps) {

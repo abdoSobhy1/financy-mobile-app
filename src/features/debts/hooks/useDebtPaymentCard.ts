@@ -51,3 +51,5 @@ export function useDebtPaymentCard({
     payment.amount > 0 ? (payment.interest || 0) / payment.amount : 0;
   return { isExpanded, setIsExpanded, handleDelete, handleEdit, interestRatio };
 }
+
+export type DebtPaymentCardController = ReturnType<typeof useDebtPaymentCard>;

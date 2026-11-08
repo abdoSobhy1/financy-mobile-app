@@ -1,12 +1,12 @@
 import { View, Text, TouchableOpacity } from "react-native";
 
-import { useAppTheme } from "../../../shared/theme/ThemeProvider";
+import { useAppTheme, type AppTheme } from "../../../shared/theme/ThemeProvider";
 import { Ionicons } from "@expo/vector-icons";
 import type { AIProvider } from "../../../infrastructure/ai/aiConfigService";
 interface AiConnectionStatusProps {
   isOwner: boolean;
   aiStatus: { provider: AIProvider; hasCustomKey: boolean; hasHostedKey: boolean; activeModel: string; isFallbackModel?: boolean | undefined; availableGeminiModelsCount?: number | undefined; totalGeminiModelsCount?: number | undefined; rateLimitedModels?: string[] | undefined; };
-  colors: ReturnType<typeof useAppTheme>["colors"];
+  colors: AppTheme["colors"];
   selectedAiProvider: AIProvider;
   handleResetGeminiQuota: () => Promise<void>;
 }

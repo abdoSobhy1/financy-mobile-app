@@ -133,3 +133,5 @@ export function useImportWizard({ visible, onClose, onSuccess, fullScreen = fals
   }, [currentStep]);
   return { currentStep, setCurrentStep, setSelectedFile, preview, setPreview, mapping, setMapping, settings, progress, importResult, setImportResult, importService, handleClose, handleFileSelected, handlePreviewContinue, handleMappingComplete, handleSettingsComplete, handleValidationComplete, handleStepBack };
 }
+
+export type ImportWizardController = ReturnType<typeof useImportWizard>;

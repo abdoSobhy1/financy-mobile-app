@@ -3,7 +3,7 @@ import { DashboardWalletsSection } from "../components/DashboardWalletsSection";
 import { DashboardQuickAddSection } from "../components/DashboardQuickAddSection";
 import { DashboardRecentTransactions } from "../components/DashboardRecentTransactions";
 
-import { styles } from "./DashboardScreen.styles";
+import { styles } from "../components/DashboardSections.styles";
 import { useDashboardScreen } from "../hooks/useDashboardScreen";
 import React from "react";
 import { View, Text, ScrollView, TouchableOpacity, StatusBar } from "react-native";

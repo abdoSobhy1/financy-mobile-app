@@ -1,5 +1,5 @@
-import { styles } from "../screens/DashboardScreen.styles";
-import type { useDashboardScreen } from "../hooks/useDashboardScreen";
+import { styles } from "./DashboardSections.styles";
+import type { DashboardScreenController } from "../hooks/useDashboardScreen";
 
 import { View, Text, ScrollView, TouchableOpacity } from "react-native";
 
@@ -10,10 +10,10 @@ import { useAppTheme } from "../../../shared/theme/ThemeProvider";
 import { IconChip } from "../../../shared/ui/IconChip";
 
 interface DashboardQuickAddSectionProps {
-  quickAddSlots: ReturnType<typeof useDashboardScreen>["quickAddSlots"];
-  handleQuickAddPress: ReturnType<typeof useDashboardScreen>["handleQuickAddPress"];
-  navigation: ReturnType<typeof useDashboardScreen>["navigation"];
-  setShowScanModal: ReturnType<typeof useDashboardScreen>["setShowScanModal"];
+  quickAddSlots: DashboardScreenController["quickAddSlots"];
+  handleQuickAddPress: DashboardScreenController["handleQuickAddPress"];
+  navigation: DashboardScreenController["navigation"];
+  setShowScanModal: DashboardScreenController["setShowScanModal"];
 
 }
 export function DashboardQuickAddSection({ quickAddSlots, handleQuickAddPress, navigation, setShowScanModal }: DashboardQuickAddSectionProps) {

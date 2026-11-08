@@ -1,5 +1,5 @@
-import type { useAnalysisScreen } from "../hooks/useAnalysisScreen";
-import { styles } from "../screens/AnalysisScreen.styles";
+import type { AnalysisScreenController } from "../hooks/useAnalysisScreen";
+import { styles } from "./AnalysisSection.styles";
 import { Ionicons } from "@expo/vector-icons";
 
 import { Text, TouchableOpacity, View } from "react-native";
@@ -11,10 +11,10 @@ import { IconChip } from "../../../shared/ui";
 import { formatCurrency } from "../../../shared/utils";
 
 interface SpendingBreakdownProps {
-  categoryBreakdown: ReturnType<typeof useAnalysisScreen>["categoryBreakdown"];
-  summary: ReturnType<typeof useAnalysisScreen>["summary"];
-  selectedSliceIndex: ReturnType<typeof useAnalysisScreen>["selectedSliceIndex"];
-  setSelectedSliceIndex: ReturnType<typeof useAnalysisScreen>["setSelectedSliceIndex"];
+  categoryBreakdown: AnalysisScreenController["categoryBreakdown"];
+  summary: AnalysisScreenController["summary"];
+  selectedSliceIndex: AnalysisScreenController["selectedSliceIndex"];
+  setSelectedSliceIndex: AnalysisScreenController["setSelectedSliceIndex"];
 }
 export function SpendingBreakdown({ categoryBreakdown, summary, selectedSliceIndex, setSelectedSliceIndex }: SpendingBreakdownProps) {
   const { colors, typography, resolveCategoryColor } = useAppTheme();
@@ -88,7 +88,7 @@ export function SpendingBreakdown({ categoryBreakdown, summary, selectedSliceInd
                   const strokeDashoffset = -cumulativePct * circumference;
                   cumulativePct += pct;
                   const { iconColor } = resolveCategoryColor(
-                    (item.category as any).color
+                    item.category.color
                   );
                   const isDimmed =
                     selectedSliceIndex !== null && selectedSliceIndex !== idx;
@@ -182,7 +182,7 @@ export function SpendingBreakdown({ categoryBreakdown, summary, selectedSliceInd
           {expenses.map((item, index) => {
             const isSelected = selectedSliceIndex === index;
             const { iconColor, bgColor } = resolveCategoryColor(
-              (item.category as any).color
+              item.category.color
             );
             return (
               <TouchableOpacity
@@ -212,9 +212,9 @@ export function SpendingBreakdown({ categoryBreakdown, summary, selectedSliceInd
                   }}>
                   <IconChip
                     iconName={
-                      ((item.category as any).icon || "pricetag") as any
+                      (item.category.icon || "pricetag") as React.ComponentProps<typeof Ionicons>["name"]
                     }
-                    colorName={(item.category as any).color || "bluegrey"}
+                    colorName={item.category.color || "bluegrey"}
                     size={32}
                     style={{ marginRight: 10 }}
                   />

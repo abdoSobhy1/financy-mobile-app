@@ -1,6 +1,6 @@
-import { createStyles } from "../screens/TransactionListScreen.styles";
+import { createStyles } from "./TransactionListSection.styles";
 import { useMemo } from "react";
-import type { useTransactionListScreen } from "../hooks/useTransactionListScreen";
+import type { TransactionListScreenController } from "../hooks/useTransactionListScreen";
 
 import { View, Text, TouchableOpacity, ScrollView, TextInput } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
@@ -17,23 +17,23 @@ type TimeFilter =
   | "All Time"
   | "custom";
 interface TransactionListToolbarProps {
-  searchQuery: ReturnType<typeof useTransactionListScreen>["searchQuery"];
-  setSearchQuery: ReturnType<typeof useTransactionListScreen>["setSearchQuery"];
-  openFilterModal: ReturnType<typeof useTransactionListScreen>["openFilterModal"];
-  selectedCategoryIds: ReturnType<typeof useTransactionListScreen>["selectedCategoryIds"];
-  selectedBudgetIds: ReturnType<typeof useTransactionListScreen>["selectedBudgetIds"];
-  selectedWalletIds: ReturnType<typeof useTransactionListScreen>["selectedWalletIds"];
-  typeFilter: ReturnType<typeof useTransactionListScreen>["typeFilter"];
-  isSelectionMode: ReturnType<typeof useTransactionListScreen>["isSelectionMode"];
-  handleSelectAll: ReturnType<typeof useTransactionListScreen>["handleSelectAll"];
-  selectedTxIds: ReturnType<typeof useTransactionListScreen>["selectedTxIds"];
-  filteredTransactions: ReturnType<typeof useTransactionListScreen>["filteredTransactions"];
-  handleMassDelete: ReturnType<typeof useTransactionListScreen>["handleMassDelete"];
-  isDeletingBulk: ReturnType<typeof useTransactionListScreen>["isDeletingBulk"];
-  setTypeFilter: ReturnType<typeof useTransactionListScreen>["setTypeFilter"];
-  timeFilter: ReturnType<typeof useTransactionListScreen>["timeFilter"];
-  setTimeFilter: ReturnType<typeof useTransactionListScreen>["setTimeFilter"];
-  totalAmount: ReturnType<typeof useTransactionListScreen>["totalAmount"];
+  searchQuery: TransactionListScreenController["searchQuery"];
+  setSearchQuery: TransactionListScreenController["setSearchQuery"];
+  openFilterModal: TransactionListScreenController["openFilterModal"];
+  selectedCategoryIds: TransactionListScreenController["selectedCategoryIds"];
+  selectedBudgetIds: TransactionListScreenController["selectedBudgetIds"];
+  selectedWalletIds: TransactionListScreenController["selectedWalletIds"];
+  typeFilter: TransactionListScreenController["typeFilter"];
+  isSelectionMode: TransactionListScreenController["isSelectionMode"];
+  handleSelectAll: TransactionListScreenController["handleSelectAll"];
+  selectedTxIds: TransactionListScreenController["selectedTxIds"];
+  filteredTransactions: TransactionListScreenController["filteredTransactions"];
+  handleMassDelete: TransactionListScreenController["handleMassDelete"];
+  isDeletingBulk: TransactionListScreenController["isDeletingBulk"];
+  setTypeFilter: TransactionListScreenController["setTypeFilter"];
+  timeFilter: TransactionListScreenController["timeFilter"];
+  setTimeFilter: TransactionListScreenController["setTimeFilter"];
+  totalAmount: TransactionListScreenController["totalAmount"];
 
 }
 export function TransactionListToolbar({ searchQuery, setSearchQuery, openFilterModal, selectedCategoryIds, selectedBudgetIds, selectedWalletIds, typeFilter, isSelectionMode, handleSelectAll, selectedTxIds, filteredTransactions, handleMassDelete, isDeletingBulk, setTypeFilter, timeFilter, setTimeFilter, totalAmount }: TransactionListToolbarProps) {

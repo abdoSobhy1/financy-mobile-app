@@ -1,6 +1,6 @@
 import { DebtBalanceSummary } from "../components/DebtBalanceSummary";
 import { DebtPortfolio } from "../components/DebtPortfolio";
-import { styles } from "./DebtsScreen.styles";
+import { styles } from "../components/DebtsSections.styles";
 import { useDebtsScreen } from "../hooks/useDebtsScreen";
 import React from "react";
 import { View, Text, ScrollView, StatusBar } from "react-native";

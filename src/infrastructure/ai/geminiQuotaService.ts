@@ -135,8 +135,6 @@ export async function getDailyGeminiUsage(referenceDate?: Date): Promise<GeminiD
       if (parsed && parsed.date === today && parsed.models) {
         return parsed;
       }
-      // Date changed: reset for the new day
-      console.log(`[GeminiQuotaService] New day detected (${today} vs ${parsed?.date}). Resetting daily quota flags.`);
     }
   } catch (err) {
     console.warn("[GeminiQuotaService] Failed to read daily usage from storage:", err);
@@ -189,7 +187,6 @@ export async function markModelRateLimited(
 
   try {
     await AsyncStorage.setItem(GEMINI_USAGE_STORAGE_KEY, JSON.stringify(usage));
-    console.log(`[GeminiQuotaService] Flagged model "${normalized}" as rate-limited for today (${today}).`);
   } catch (err) {
     console.warn("[GeminiQuotaService] Failed to save rate-limit flag:", err);
   }
@@ -287,7 +284,6 @@ export async function resetDailyGeminiUsage(referenceDate?: Date): Promise<void>
     models: {},
   };
   await AsyncStorage.setItem(GEMINI_USAGE_STORAGE_KEY, JSON.stringify(fresh));
-  console.log(`[GeminiQuotaService] Manually reset Gemini daily usage for ${today}.`);
 }
 
 /**

@@ -57,6 +57,9 @@ for (const file of files) {
       if (isFeatureComponent && !isTypeOnly && /(?:^|\/)use[^/]*Screen(?:\.[^/]*)?$/.test(modulePath)) {
         errors.push(`${relative}: feature components must not runtime-import screen hooks (${modulePath}).`);
       }
+      if (isFeatureComponent && /(?:^|\/)screens(?:\/|$)/.test(modulePath)) {
+        errors.push(`${relative}: feature components must not import from screens (${modulePath}).`);
+      }
     }
     ts.forEachChild(node, visit);
   }

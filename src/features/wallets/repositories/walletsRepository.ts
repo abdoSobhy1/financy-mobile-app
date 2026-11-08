@@ -183,9 +183,6 @@ export class WalletRepository {
           );
           // If created within 60 seconds with identical name and type, it was created by double submission
           if (timeDiff <= 60000) {
-            console.log(
-              `[WalletRepository] Merging duplicate wallet "${row.name}" (${row.id}) into (${original.id})`,
-            );
             await database.runAsync(
               "UPDATE transactions SET account_id = ? WHERE account_id = ?",
               [original.id, row.id],

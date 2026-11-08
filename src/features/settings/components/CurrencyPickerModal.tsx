@@ -1,6 +1,6 @@
-import { getStyles } from "../screens/SettingsScreen.styles";
+import { getStyles } from "./SettingsModals.styles";
 import { useMemo } from "react";
-import type { useSettingsScreen } from "../hooks/useSettingsScreen";
+import type { SettingsScreenController } from "../hooks/useSettingsScreen";
 
 import { View, Text, ScrollView, TouchableOpacity, Modal } from "react-native";
 
@@ -11,9 +11,9 @@ import { Ionicons } from "@expo/vector-icons";
 import { CURRENCY_METADATA } from "../../../shared/utils";
 
 interface CurrencyPickerModalProps {
-  showCurrencyPicker: ReturnType<typeof useSettingsScreen>["showCurrencyPicker"];
-  setShowCurrencyPicker: ReturnType<typeof useSettingsScreen>["setShowCurrencyPicker"];
-  handleSelectCurrency: ReturnType<typeof useSettingsScreen>["handleSelectCurrency"];
+  showCurrencyPicker: SettingsScreenController["showCurrencyPicker"];
+  setShowCurrencyPicker: SettingsScreenController["setShowCurrencyPicker"];
+  handleSelectCurrency: SettingsScreenController["handleSelectCurrency"];
 
 }
 export function CurrencyPickerModal({ showCurrencyPicker, setShowCurrencyPicker, handleSelectCurrency }: CurrencyPickerModalProps) {

@@ -272,17 +272,10 @@ export class ExcelImportService {
     };
 
     try {
-      console.log("Getting all rows from preview...");
       // Get all rows
       const allRows = await this.getAllRows(preview);
-      console.log(`Found ${allRows.length} rows to import`);
-
-      console.log("Preparing categories map...");
       // Get or create categories
       const categoryMap = await this.prepareCategoriesMap(allRows, mapping, settings);
-      console.log("Categories map prepared:", Object.keys(categoryMap));
-
-      console.log("Starting transaction imports...");
       // Import transactions
       for (let i = 0; i < allRows.length; i++) {
         try {
@@ -290,15 +283,12 @@ export class ExcelImportService {
           const transaction = await this.convertRowToTransaction(row, mapping, settings, categoryMap);
 
           if (transaction) {
-            console.log(`Creating transaction ${i + 1}/${allRows.length}:`, transaction);
             // Remove id and createdAt since createTransaction generates them
             const { id, createdAt, ...transactionData } = transaction;
             const createdTransaction = await db.transactions.createTransaction(transactionData);
-            console.log("Transaction created successfully:", createdTransaction.id);
             result.transactionIds.push(createdTransaction.id);
             result.importedCount++;
           } else {
-            console.log(`Skipping row ${i + 1} - no transaction generated`);
             result.skippedCount++;
           }
         } catch (error) {

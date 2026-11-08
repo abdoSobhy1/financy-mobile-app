@@ -1,11 +1,11 @@
 import { View, TouchableOpacity, TextInput } from "react-native";
 
-import { useAppTheme } from "../../../shared/theme/ThemeProvider";
+import { useAppTheme, type AppTheme } from "../../../shared/theme/ThemeProvider";
 import { Ionicons } from "@expo/vector-icons";
 import type { Dispatch, SetStateAction } from "react";
 import type { AIProvider } from "../../../infrastructure/ai/aiConfigService";
 interface AiApiKeyFieldProps {
-  colors: ReturnType<typeof useAppTheme>["colors"];
+  colors: AppTheme["colors"];
   aiKeyInput: string;
   setAiKeyInput: Dispatch<SetStateAction<string>>;
   selectedAiProvider: AIProvider;

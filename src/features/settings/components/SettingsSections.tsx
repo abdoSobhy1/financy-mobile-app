@@ -2,7 +2,7 @@ import { SectionHeading as SectionLabel } from "../../../shared/ui/SectionHeadin
 import { ActionRow as SettingRow } from "../../../shared/ui/ActionRow";
 import { SectionCard as GlassCard } from "../../../shared/ui/SectionCard";
 
-import type { useSettingsScreen } from "../hooks/useSettingsScreen";
+import type { SettingsScreenController } from "../hooks/useSettingsScreen";
 
 import { View, Text, ScrollView, TouchableOpacity, Platform } from "react-native";
 
@@ -12,7 +12,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { Switch, useTabBarHeight } from "../../../shared/ui";
 
 interface SettingsSectionsProps {
-  settings: ReturnType<typeof useSettingsScreen>;
+  settings: SettingsScreenController;
 }
 export function SettingsSections({ settings }: SettingsSectionsProps) {
   const { spacing, currencyCode, currencySymbol, typography, colors, isDark } = useAppTheme();

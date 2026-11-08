@@ -169,3 +169,5 @@ export function useSignInScreen() {
     handleForgotPassword
   };
 }
+
+export type SignInScreenController = ReturnType<typeof useSignInScreen>;

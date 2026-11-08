@@ -16,20 +16,16 @@ export const useSyncDataRefresh = () => {
   const dispatch = useDispatch<AppDispatch>();
 
   useEffect(() => {
-    console.log("🔄 Registering sync data refresh hook with sync service");
 
     let callbackCount = 0;
     const handleDataChange = async (collectionName: CollectionName, operation: "create" | "update" | "delete", docId: string) => {
       callbackCount++;
-      console.log(`🔄 [${callbackCount}] Sync detected ${operation} on ${collectionName}/${docId}, refreshing Redux store`);
 
       try {
         // Refresh the appropriate Redux slice based on collection
         switch (collectionName) {
           case "budgets":
-            console.log(`🔄 Refreshing budgets in Redux after Firebase sync`);
             const budgets = await dispatch(fetchBudgets()).unwrap();
-            console.log(`✅ Budgets refreshed, got ${budgets.length} budgets`);
             break;
           case "transactions":
             await dispatch(fetchTransactions()).unwrap();
@@ -52,8 +48,6 @@ export const useSyncDataRefresh = () => {
           default:
             console.warn(`Unknown collection for Redux refresh: ${collectionName}`);
         }
-
-        console.log(`✅ Redux store refreshed for ${collectionName} after sync`);
       } catch (error) {
         console.error(`❌ Failed to refresh Redux store for ${collectionName}:`, error);
       }
@@ -61,11 +55,9 @@ export const useSyncDataRefresh = () => {
 
     // Register the callback with sync service
     const unsubscribe = syncService.onDataChange(handleDataChange);
-    console.log("✅ Sync data refresh callback registered successfully");
 
     // Cleanup on unmount
     return () => {
-      console.log("🧹 Cleaning up sync data refresh callback");
       unsubscribe();
     };
   }, [dispatch]);

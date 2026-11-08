@@ -235,12 +235,10 @@ export class FirebaseCleanup {
     try {
       // Ensure user is authenticated
       this.userId = await authService.requireUserIdAsync();
-      console.log(`🧹 Starting Firebase cleanup for user: ${this.userId}`);
 
       const collectionsToClean = options.collections || Object.values(COLLECTIONS);
 
       for (const collectionName of collectionsToClean) {
-        console.log(`🔍 Processing collection: ${collectionName}`);
 
         try {
           const collectionReport = await this.cleanupCollection(collectionName, options);
@@ -261,23 +259,6 @@ export class FirebaseCleanup {
       // Additional cleanup operations
       if (options.cleanupOrphanedRecords) {
         await this.cleanupOrphanedRecords(report, options.dryRun);
-      }
-
-      // Print detailed summary
-      console.log(`\n🎉 Firebase cleanup completed!`);
-      console.log(`📊 Summary:`);
-      console.log(`   • Documents processed: ${report.totalDocuments}`);
-      console.log(`   • Fields cleaned up: ${report.fieldsCleanedUp}`);
-      console.log(`   • Duplicates removed: ${report.duplicatesRemoved}`);
-      console.log(`   • Orphaned records: ${report.orphanedDocuments}`);
-
-      if (report.errors.length > 0) {
-        console.log(`⚠️ Errors encountered: ${report.errors.length}`);
-        report.errors.forEach((error) => console.log(`   - ${error}`));
-      }
-
-      if (report.fieldsCleanedUp === 0) {
-        console.log(`ℹ️ No fields needed cleanup - your Firebase data is already optimized!`);
       }
 
       return report;
@@ -306,22 +287,17 @@ export class FirebaseCleanup {
       fieldsRemoved: 0,
     };
 
-    console.log(`📊 Found ${stats.documents} documents in ${collectionName}`);
-
     // Debug: Show valid fields for this collection
     const validFields = getValidFields(collectionName);
-    console.log(`🔍 Valid fields for ${collectionName}:`, Array.from(validFields).join(", "));
 
     // Debug: Show sample document fields (first doc only)
     if (snapshot.docs.length > 0) {
       const sampleDoc = snapshot.docs[0].data();
       const existingFields = Object.keys(sampleDoc);
-      console.log(`📄 Sample document fields in ${collectionName}:`, existingFields.join(", "));
 
       // Find fields that don't match schema
       const invalidFields = existingFields.filter((field) => !validFields.has(field));
       if (invalidFields.length > 0) {
-        console.log(`⚠️ Invalid fields found in ${collectionName}:`, invalidFields.join(", "));
       }
     }
 
@@ -365,8 +341,6 @@ export class FirebaseCleanup {
           const docsToDelete = docIds.slice(1); // Keep first, delete rest
           documentsToDelete.push(...docsToDelete);
           stats.duplicates += docsToDelete.length;
-
-          console.log(`🔍 Found ${docIds.length} duplicates with hash ${hash.substring(0, 8)}...`);
         }
       }
     }
@@ -375,7 +349,6 @@ export class FirebaseCleanup {
     if (!options.dryRun) {
       await this.applyDocumentChanges(collectionName, documentsToUpdate, documentsToDelete);
     } else {
-      console.log(`🔍 DRY RUN: Would update ${documentsToUpdate.length} documents and delete ${documentsToDelete.length} duplicates`);
     }
 
     return stats;
@@ -398,7 +371,6 @@ export class FirebaseCleanup {
         if (field in cleanedData) {
           delete cleanedData[field];
           fieldsRemoved++;
-          console.log(`🗑️ Removed unused field: ${field}`);
         }
       }
 
@@ -407,7 +379,6 @@ export class FirebaseCleanup {
         if (!validFields.has(field)) {
           delete cleanedData[field];
           fieldsRemoved++;
-          console.log(`🗑️ Removed invalid field for ${collectionName}: ${field}`);
         }
       }
     }
@@ -418,8 +389,7 @@ export class FirebaseCleanup {
         if (oldField in cleanedData && !(newField in cleanedData)) {
           cleanedData[newField] = cleanedData[oldField];
           delete cleanedData[oldField];
-          fieldsRemoved++; // Count as cleanup
-          console.log(`🔄 Converted field: ${oldField} → ${newField}`);
+          fieldsRemoved++;
         }
       }
     }
@@ -429,7 +399,6 @@ export class FirebaseCleanup {
       if (value === undefined) {
         delete cleanedData[key];
         fieldsRemoved++;
-        console.log(`🗑️ Removed undefined field: ${key}`);
       }
     }
 
@@ -578,7 +547,6 @@ export class FirebaseCleanup {
       if (operationCount >= 450) {
         await batch.commit();
         operationCount = 0;
-        console.log(`📦 Committed batch of updates for ${collectionName}`);
       }
     }
 
@@ -591,14 +559,12 @@ export class FirebaseCleanup {
       if (operationCount >= 450) {
         await batch.commit();
         operationCount = 0;
-        console.log(`🗑️ Committed batch of deletions for ${collectionName}`);
       }
     }
 
     // Commit remaining operations
     if (operationCount > 0) {
       await batch.commit();
-      console.log(`✅ Final batch committed for ${collectionName}: ${operationCount} operations`);
     }
   }
 
@@ -606,7 +572,6 @@ export class FirebaseCleanup {
    * Clean up orphaned records (e.g., transactions without valid categories)
    */
   private async cleanupOrphanedRecords(report: CleanupReport, dryRun?: boolean): Promise<void> {
-    console.log(`🔍 Checking for orphaned records...`);
 
     try {
       // Get all categories to validate references
@@ -648,7 +613,6 @@ export class FirebaseCleanup {
 
       if (hasInvalidCategory || hasInvalidBudget) {
         orphanedTransactions.push(docSnap.id);
-        console.log(`🔍 Found orphaned transaction: ${docSnap.id} (invalid category: ${hasInvalidCategory}, invalid budget: ${hasInvalidBudget})`);
       }
     }
 
@@ -679,7 +643,6 @@ export class FirebaseCleanup {
         }
 
         await batch.commit();
-        console.log(`✅ Fixed ${orphanedTransactions.length} orphaned transactions`);
       }
     }
   }
@@ -716,7 +679,6 @@ export class FirebaseCleanup {
         }
 
         await batch.commit();
-        console.log(`🗑️ Deleted ${orphanedPayments.length} orphaned debt payments`);
       }
     }
   }

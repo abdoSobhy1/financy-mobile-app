@@ -375,3 +375,5 @@ export function useVoiceVerifyScreen() {
     handleEnhanceWithAI
   };
 }
+
+export type VoiceVerifyScreenController = ReturnType<typeof useVoiceVerifyScreen>;

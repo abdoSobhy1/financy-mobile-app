@@ -77,28 +77,18 @@ export class SyncService {
   public async initializeSync(): Promise<void> {
     const canSync = await authService.isCloudSyncAllowedAsync();
     if (!canSync) {
-      console.log("⏭️ Cloud sync skipped (Guest Mode or unauthenticated)");
       return;
     }
-
-    console.log(
-      "🔥 Initializing Firebase sync (smart mode - no full data pull)...",
-    );
 
     try {
       // Ensure device ID is initialized
       if (!this.deviceId) {
         this.deviceId = await getDeviceId();
       }
-
-      // Test Firebase connection
-      console.log("🔥 Testing Firebase connection...");
       const db = this.getDb();
-      console.log("🔥 Firestore instance:", db.app.name);
 
       // Test authentication
       const user = await authService.getCurrentAuthenticatedUser();
-      console.log("🔥 Authenticated user:", user?.uid);
 
       if (user) {
         // Ensure user document exists (for existing users who might be missing it)
@@ -113,10 +103,6 @@ export class SyncService {
 
       // Process any pending operations
       await this.processSyncQueue();
-
-      console.log(
-        "🔥 Firebase sync initialized successfully (efficient polling mode - no full data pull)",
-      );
     } catch (error) {
       console.error("🔥 Failed to initialize sync:", error);
       throw error;
@@ -133,7 +119,6 @@ export class SyncService {
     try {
       const isVerified = await AsyncStorage.getItem(USER_VERIFIED_KEY);
       if (isVerified === "true") {
-        console.log("👤 User document already verified (cached check)");
         return;
       }
     } catch (e) {
@@ -143,9 +128,6 @@ export class SyncService {
 
     const netInfo = await NetInfo.fetch();
     if (!netInfo.isConnected) {
-      console.log(
-        "📴 Offline: Skipping user document check (will retry later)",
-      );
       return;
     }
 
@@ -155,9 +137,6 @@ export class SyncService {
       const userDocSnapshot = await getDoc(userDocRef);
 
       if (!userDocSnapshot.exists()) {
-        console.log(
-          `👤 User document missing for ${user.uid}, creating it now...`,
-        );
         await setDoc(userDocRef, {
           email: user.email,
           displayName: user.displayName || "",
@@ -170,9 +149,7 @@ export class SyncService {
             language: "en",
           },
         });
-        console.log("✅ Created missing user document in Firestore");
       } else {
-        console.log("👤 User document verified exists");
       }
 
       // Mark as verified
@@ -192,8 +169,6 @@ export class SyncService {
       return;
     }
 
-    console.log("🔍 Manually checking for changes across all collections...");
-
     try {
       const userId = await authService.requireUserIdAsync();
 
@@ -203,8 +178,6 @@ export class SyncService {
       );
 
       await Promise.all(checkPromises);
-
-      console.log("✅ Manual change check completed");
     } catch (error) {
       console.error("❌ Manual change check failed:", error);
       throw error;
@@ -218,13 +191,8 @@ export class SyncService {
   public async forceFullSync(): Promise<void> {
     const canSync = await authService.isCloudSyncAllowedAsync();
     if (!canSync) {
-      console.log("⏭️ Full sync skipped for local-only guest mode");
       return;
     }
-
-    console.log(
-      "🔄 Starting FULL bidirectional sync (this will pull all remote data)...",
-    );
 
     try {
       // Reset sync initialization timestamp to allow full data pull
@@ -235,8 +203,6 @@ export class SyncService {
 
       // Pull all remote data by re-initializing listeners
       await this.startSyncListeners();
-
-      console.log("✅ Full sync completed successfully");
     } catch (error) {
       console.error("❌ Full sync failed:", error);
       throw error;
@@ -263,15 +229,12 @@ export class SyncService {
   }
   // Stop all sync listeners
   public stopSync(): void {
-    console.log("Stopping Firebase sync...");
 
     this.syncGeneration++;
     this.unsubscribers.forEach((unsubscribe) => {
       unsubscribe();
     });
     this.unsubscribers.clear();
-
-    console.log("Firebase sync stopped");
   }
 
   /**
@@ -304,7 +267,6 @@ export class SyncService {
    * Clear the failed inserts array (useful before starting a new sync operation)
    */
   public clearFailedInserts(): void {
-    console.log(`🧹 Clearing ${this.failedInserts.length} failed inserts`);
     this.failedInserts = [];
   }
 
@@ -323,18 +285,12 @@ export class SyncService {
    */
   public onDataChange(callback: DataChangeCallback): () => void {
     this.dataChangeCallbacks.push(callback);
-    console.log(
-      `📝 Registered new data change callback. Total callbacks: ${this.dataChangeCallbacks.length}`,
-    );
 
     // Return unsubscribe function
     return () => {
       const index = this.dataChangeCallbacks.indexOf(callback);
       if (index > -1) {
         this.dataChangeCallbacks.splice(index, 1);
-        console.log(
-          `🗑️ Unregistered data change callback. Remaining callbacks: ${this.dataChangeCallbacks.length}`,
-        );
       }
     };
   }
@@ -347,15 +303,9 @@ export class SyncService {
     operation: "create" | "update" | "delete",
     docId: string,
   ): void {
-    console.log(
-      `🔔 Notifying ${this.dataChangeCallbacks.length} callbacks about ${operation} on ${collectionName}/${docId}`,
-    );
 
     this.dataChangeCallbacks.forEach((callback, index) => {
       try {
-        console.log(
-          `  📞 Calling callback ${index + 1}/${this.dataChangeCallbacks.length}`,
-        );
         callback(collectionName, operation, docId);
       } catch (error) {
         console.error(`❌ Error in data change callback ${index + 1}:`, error);
@@ -371,7 +321,6 @@ export class SyncService {
    * Test method to manually trigger notifications (for debugging)
    */
   public testNotification(collectionName: CollectionName = "budgets"): void {
-    console.log("🧪 Testing notification system...");
     this.notifyDataChange(collectionName, "update", "test-id-123");
   }
 
@@ -396,9 +345,6 @@ export class SyncService {
     userId: string,
     collectionName: CollectionName,
   ): Promise<void> {
-    console.log(
-      `🔄 Starting efficient polling for ${collectionName} at path: users/${userId}/${collectionName}`,
-    );
 
     // Run initial sync immediately on app start
     try {
@@ -421,10 +367,6 @@ export class SyncService {
     this.unsubscribers.set(collectionName, () => {
       clearInterval(pollInterval);
     });
-
-    console.log(
-      `✅ Started efficient polling for ${collectionName} (initial sync + every 10 minutes)`,
-    );
   }
 
   // Poll for changes since last sync timestamp
@@ -443,10 +385,6 @@ export class SyncService {
 
       // Get last sync timestamp from settings or use a reasonable default
       const lastSyncTime = await this.getLastSyncTimestamp();
-
-      console.log(
-        `🔍 Polling ${collectionName} for changes since ${new Date(lastSyncTime).toISOString()}`,
-      );
 
       // Query only documents modified after last sync
       const changesQuery = query(
@@ -468,24 +406,16 @@ export class SyncService {
         }
       }
       if (!stillCurrent) {
-        console.log(`⏭️ Dropping stale ${collectionName} poll for ${userId}`);
         return;
       }
 
       if (snapshot.docs.length > 0) {
-        console.log(
-          `� Found ${snapshot.docs.length} changed documents in ${collectionName}`,
-        );
 
         // Process each changed document
         for (const docSnapshot of snapshot.docs) {
           if (generation !== this.syncGeneration) return;
           const docData = docSnapshot.data() as FirestoreDocument<any>;
           const docId = docSnapshot.id;
-
-          console.log(
-            `🔄 Processing changed document ${collectionName}/${docId}`,
-          );
 
           // Create a mock change object for existing processing logic
           const mockChange = {
@@ -504,7 +434,6 @@ export class SyncService {
         // Update last sync timestamp
         await this.updateLastSyncTimestamp();
       } else {
-        console.log(`✅ No changes found in ${collectionName} since last sync`);
       }
     } catch (error) {
       console.error(`❌ Error polling ${collectionName} for changes:`, error);
@@ -542,11 +471,9 @@ export class SyncService {
 
   // Add method to pull only conflicted data on demand
   public async syncConflictsOnly(): Promise<void> {
-    console.log("🔍 Starting conflicts-only sync...");
 
     try {
       if (!(await authService.isCloudSyncAllowedAsync())) {
-        console.log("⏭️ Conflicts sync skipped for local-only guest mode");
         return;
       }
       const userId = await authService.requireUserIdAsync();
@@ -556,16 +483,12 @@ export class SyncService {
 
       // Retry failed inserts (dependency conflicts)
       if (this.failedInserts.length > 0) {
-        console.log(
-          `🔄 Retrying ${this.failedInserts.length} failed inserts...`,
-        );
         const toRetry = [...this.failedInserts];
         this.clearFailedInserts();
 
         for (const { collectionName, doc } of toRetry) {
           try {
             await this.insertLocalDocument(collectionName, doc);
-            console.log(`✅ Successfully retried ${collectionName}/${doc.id}`);
           } catch (error) {
             console.error(
               `❌ Retry failed for ${collectionName}/${doc.id}:`,
@@ -575,8 +498,6 @@ export class SyncService {
           }
         }
       }
-
-      console.log("✅ Conflicts-only sync completed");
     } catch (error) {
       console.error("❌ Conflicts-only sync failed:", error);
       throw error;
@@ -632,23 +553,8 @@ export class SyncService {
     const docData = change.doc.data() as FirestoreDocument<any>;
     const docId = change.doc.id;
 
-    console.log(`📄 ===== FIREBASE DOCUMENT CHANGE =====`);
-    console.log(
-      `📄 Collection: ${collectionName}, Document: ${docId}, Change: ${change.type}`,
-    );
-    console.log(`📄 Document metadata:`, {
-      fromCache: change.doc.metadata.fromCache,
-      hasPendingWrites: change.doc.metadata.hasPendingWrites,
-      isLocalWrite:
-        change.doc.metadata.hasPendingWrites && change.doc.metadata.fromCache,
-    });
-    console.log(`📄 Full document data:`, JSON.stringify(docData, null, 2));
-
     // Skip processing our own local writes that haven't been confirmed by server yet
     if (change.doc.metadata.hasPendingWrites) {
-      console.log(
-        `⏭️ Skipping document with pending writes (likely our own local change)`,
-      );
       return;
     }
 
@@ -659,23 +565,13 @@ export class SyncService {
 
     // Check if this change was made by the same device
     const lastModifiedBy = docData.data?.lastModifiedBy;
-    console.log(`🔍 Device check:`, {
-      currentDeviceId: this.deviceId,
-      documentLastModifiedBy: lastModifiedBy,
-      isSameDevice: lastModifiedBy === this.deviceId,
-      hasDeviceInfo: !!lastModifiedBy,
-    });
 
     if (lastModifiedBy && lastModifiedBy === this.deviceId) {
-      console.log(`⏭️ SKIPPING: Change from same device (${this.deviceId})`);
       return;
     }
 
     // If no device info, it might be an old document - be more cautious
     if (!lastModifiedBy) {
-      console.log(
-        `⚠️ Document has no device info - treating as legacy data from different source`,
-      );
 
       // For legacy documents without device tracking, we'll still apply timestamp-based conflict resolution
       // but with more conservative approach (larger time window to avoid conflicts)
@@ -683,15 +579,10 @@ export class SyncService {
 
     try {
       if (change.type === "removed") {
-        console.log(`🗑️ Processing deletion for ${collectionName}/${docId}`);
         await this.handleRemoteDelete(collectionName, docId);
       } else {
-        console.log(`📝 Processing update for ${collectionName}/${docId}`);
         await this.handleRemoteUpdate(collectionName, docId, docData);
       }
-      console.log(
-        `✅ Successfully handled ${change.type} for ${collectionName}/${docId}`,
-      );
     } catch (error) {
       console.error(
         `❌ Error handling ${change.type} for ${collectionName}/${docId}:`,
@@ -708,38 +599,15 @@ export class SyncService {
   ): Promise<void> {
     await this.dbManager.ensureInitialized();
 
-    console.log(`🔍 Checking local existence for ${collectionName}/${docId}`);
-    console.log(
-      `📥 Raw Firebase data for ${collectionName}/${docId}:`,
-      JSON.stringify(remoteDoc, null, 2),
-    );
-    console.log(`📊 Firebase data structure:`, {
-      hasData: !!remoteDoc.data,
-      dataKeys: remoteDoc.data ? Object.keys(remoteDoc.data) : [],
-      updatedAt: remoteDoc.updatedAt,
-      createdAt: remoteDoc.data?.createdAt,
-    });
-
     // Get local version
     const localDoc = await this.getLocalDocument(collectionName, docId);
-    console.log(
-      `💾 Local document for ${collectionName}/${docId}:`,
-      localDoc ? JSON.stringify(localDoc, null, 2) : "NOT FOUND",
-    );
 
     if (!localDoc) {
-      // New document from remote - insert locally
-      console.log(
-        `📥 No local version found, inserting ${collectionName}/${docId} from remote`,
-      );
       await this.insertLocalDocument(collectionName, remoteDoc);
       return;
     }
 
     if (localDoc.deleted === 1 || localDoc.deleted === true) {
-      console.log(
-        `🗑️ Local document ${collectionName}/${docId} is marked deleted, propagating deletion to remote`,
-      );
       try {
         await this.performSyncOperation(collectionName, "delete", docId);
       } catch (delErr) {
@@ -816,55 +684,12 @@ export class SyncService {
       }
     }
 
-    console.log(`⏰ Conflict resolution for ${collectionName}/${docId}:`, {
-      remoteTime: new Date(remoteTime).toISOString(),
-      localTime: localDoc ? new Date(localTime).toISOString() : "NO_LOCAL_DOC",
-      remoteNewer: remoteTime > localTime,
-      timeDifference: timeDifference,
-      timeDifferenceMinutes: Math.round((timeDifference / 60000) * 100) / 100,
-      isLargeTimeDiff: timeDifference > TEN_MINUTES_MS,
-      isSameDevice: isSameDevice,
-      isDifferentDevice: isDifferentDevice,
-      remoteDeviceId: remoteDeviceId,
-      currentDeviceId: this.deviceId,
-      hasDeviceTracking: !!remoteDeviceId,
-      decision: decision,
-      willTakeRemote: shouldTakeRemote,
-      willSkip: shouldSkipDueToSameDevice,
-      rawRemoteValue: remoteDoc.updatedAt,
-      rawLocalValue: localDoc?.sync_updated_at || localDoc?.updated_at,
-    });
-
     if (shouldSkipDueToSameDevice) {
-      console.log(
-        `⏭️ CONFLICT RESOLUTION: Skipping - change from same device (${this.deviceId})`,
-      );
     } else if (shouldTakeRemote) {
-      console.log(
-        `📝 CONFLICT RESOLUTION: Remote version is newer, updating local ${collectionName}/${docId}`,
-      );
-      console.log(
-        `   Firebase data will be APPLIED:`,
-        JSON.stringify(remoteDoc.data, null, 2),
-      );
       await this.updateLocalDocument(collectionName, remoteDoc);
     } else if (localTime > remoteTime) {
-      console.log(
-        `⬆️ CONFLICT RESOLUTION: Local version is newer, pushing ${collectionName}/${docId} to remote`,
-      );
-      console.log(
-        `   Local data will be pushed:`,
-        JSON.stringify(localDoc, null, 2),
-      );
       await this.pushLocalToRemote(collectionName, localDoc);
     } else {
-      console.log(
-        `✅ CONFLICT RESOLUTION: Timestamps equal for ${collectionName}/${docId}, no action needed`,
-      );
-      console.log(
-        `   Both versions have same timestamp:`,
-        new Date(remoteTime).toISOString(),
-      );
     }
   }
 
@@ -877,7 +702,6 @@ export class SyncService {
 
     try {
       await this.deleteLocalDocument(collectionName, docId);
-      console.log(`Deleted ${collectionName}/${docId} locally`);
     } catch (error) {
       console.error(`Error deleting local ${collectionName}/${docId}:`, error);
     }
@@ -893,7 +717,6 @@ export class SyncService {
     const canSync = await authService.isCloudSyncAllowedAsync();
     if (!canSync) {
       if (await authService.isGuestAsync()) {
-        console.log("⏭️ Guest mode: keeping the change local without starting a sync");
         return;
       }
 
@@ -907,25 +730,14 @@ export class SyncService {
     }
 
     const user = await authService.getCurrentAuthenticatedUser();
-    console.log(`🔄 Sync attempt for ${collectionName}/${operation}:`, {
-      userId: user?.uid || "none",
-      hasFirebaseUser: authService.isAuthenticated(),
-      hasStoredSession: await authService.hasValidSession(),
-    });
 
     try {
       this.syncInProgress = true;
-      console.log(
-        `🚀 Starting sync operation: ${collectionName}/${operation}/${documentId}`,
-      );
       await this.performSyncOperation(
         collectionName,
         operation,
         documentId,
         data,
-      );
-      console.log(
-        `✅ Sync operation completed: ${collectionName}/${operation}/${documentId}`,
       );
     } catch (error) {
       console.error("❌ Sync operation failed:", error);
@@ -1172,11 +984,6 @@ export class SyncService {
       documentId,
     );
 
-    console.log(`📍 Firebase document path: ${docPath}`);
-    console.log(`📍 User ID: ${userId}`);
-    console.log(`📍 Collection: ${collectionName}`);
-    console.log(`📍 Document ID: ${documentId}`);
-
     switch (operation) {
       case "create":
       case "update":
@@ -1192,15 +999,8 @@ export class SyncService {
           updatedAt: Date.now(),
         };
 
-        console.log(`📦 Sending to Firestore:`, syncDoc);
-        console.log(`🔗 Document reference path:`, docRef.path);
-
         try {
           const result = await setDoc(docRef, syncDoc, { merge: true });
-          console.log(`✅ setDoc result:`, result);
-          console.log(
-            `✅ Synced ${operation} for ${collectionName}/${documentId} to path: ${docPath}`,
-          );
         } catch (fireError) {
           console.error(
             `❌ Firestore setDoc failed for ${collectionName}/${documentId}:`,
@@ -1213,10 +1013,6 @@ export class SyncService {
         try {
           const snapshot = await getDoc(docRef);
           if (snapshot.exists()) {
-            console.log(
-              `✅ Verification: Document exists in Firestore:`,
-              snapshot.data(),
-            );
           } else {
             console.error(
               `❌ Verification failed: Document not found after write`,
@@ -1228,12 +1024,7 @@ export class SyncService {
         break;
 
       case "delete":
-        // Hard delete - completely remove the document
-        console.log(`🗑️ Hard deleting document from Firestore`);
         await deleteDoc(docRef);
-        console.log(
-          `✅ Synced delete for ${collectionName}/${documentId} to path: ${docPath}`,
-        );
         break;
     }
   }
@@ -1256,7 +1047,6 @@ export class SyncService {
     };
 
     this.syncQueue.push(syncOp);
-    console.log(`Queued ${operation} for ${collectionName}/${documentId}`);
   }
 
   // Process queued sync operations
@@ -1265,8 +1055,6 @@ export class SyncService {
     if (this.syncQueue.length === 0 || !canSync) {
       return;
     }
-
-    console.log(`Processing ${this.syncQueue.length} queued sync operations`);
     const operations = [...this.syncQueue];
     this.syncQueue = [];
 
@@ -1310,9 +1098,6 @@ export class SyncService {
     collectionName: CollectionName,
     doc: FirestoreDocument<any>,
   ): Promise<void> {
-    console.log(
-      `📥 Inserting ${collectionName}/${doc.id} from Firestore to local DB`,
-    );
 
     try {
       // Prepare data with the document ID, removing undefined values
@@ -1326,22 +1111,6 @@ export class SyncService {
           break;
         }
         case "transactions":
-          console.log(`💰 Processing transaction for local insertion:`);
-          console.log(
-            `  Raw Firebase doc.data:`,
-            JSON.stringify(doc.data, null, 2),
-          );
-          console.log(
-            `  Cleaned dataWithId:`,
-            JSON.stringify(dataWithId, null, 2),
-          );
-          console.log(`  LinkedBillId field mapping check:`, {
-            hasLinkedBillId: !!dataWithId.linkedBillId,
-            hasLinked_bill_id: !!dataWithId.linked_bill_id,
-            linkedBillIdValue: dataWithId.linkedBillId,
-            linked_bill_idValue: dataWithId.linked_bill_id,
-            allTransactionKeys: Object.keys(dataWithId),
-          });
 
           // Ensure proper field mapping for Firebase -> Local conversion
           const mappedTransactionData = {
@@ -1360,11 +1129,6 @@ export class SyncService {
             toAccountId: dataWithId.toAccountId || dataWithId.to_account_id || null,
           };
 
-          console.log(
-            `  Final mapped transaction data:`,
-            JSON.stringify(mappedTransactionData, null, 2),
-          );
-
           // Insert transaction but skip logging back to sync_log to avoid loops
           await new (
             await import("../../features/transactions/repositories/transactionsRepository")
@@ -1378,35 +1142,17 @@ export class SyncService {
           break;
 
         case "budgets":
-          console.log(`📊 Processing budget for local insertion:`);
-          console.log(`  Raw dataWithId:`, JSON.stringify(dataWithId, null, 2));
-          console.log(`  Data transformation check:`, {
-            hasId: !!dataWithId.id,
-            hasName: !!dataWithId.name,
-            hasAmount: !!dataWithId.amount,
-            hasCurrentBalance: !!dataWithId.currentBalance,
-            hasResetDay: !!dataWithId.resetDay,
-            allRequiredFields: !!(
-              dataWithId.id &&
-              dataWithId.name &&
-              dataWithId.amount
-            ),
-          });
 
           const budgetRepo = new (
             await import("../../features/budgets/repositories/budgetsRepository")
           ).BudgetRepository();
-          console.log(`📊 Calling budgetRepo.createBudget with:`, dataWithId);
           await budgetRepo.createBudget(dataWithId as any, {
             skipSync: true,
             useProvidedId: dataWithId.id,
           });
-          console.log(`✅ Budget insertion completed successfully`);
           break;
 
         case "categories":
-          console.log(`🏷️ Processing category for local insertion:`);
-          console.log(`  Raw dataWithId:`, JSON.stringify(dataWithId, null, 2));
 
           // Ensure category has required fields with safe defaults
           const safeCategory = {
@@ -1417,7 +1163,6 @@ export class SyncService {
           };
 
           const { entityManager: em } = await import("../database/EntityManager");
-          console.log(`🏷️ Calling category create with skipSync`);
           if (em.createCategoryFromSync) {
             await em.createCategoryFromSync(dataWithId as any);
           } else {
@@ -1428,11 +1173,9 @@ export class SyncService {
               useProvidedId: dataWithId.id,
             });
           }
-          console.log(`✅ Category insertion completed successfully`);
           break;
 
         case "wallets":
-          console.log(`👛 Processing wallet for local insertion:`);
           const walletRepo = new (
             await import("../../features/wallets/repositories/walletsRepository")
           ).WalletRepository();
@@ -1451,12 +1194,9 @@ export class SyncService {
               useProvidedId: dataWithId.id,
             },
           );
-          console.log(`✅ Wallet insertion completed successfully`);
           break;
 
         case "debts":
-          console.log(`💳 Processing debt for local insertion:`);
-          console.log(`  Raw dataWithId:`, JSON.stringify(dataWithId, null, 2));
 
           // Use DebtRepository directly to ensure we pass skipSync and useProvidedId
           // so the repository will not create a sync_log entry and will use the remote id.
@@ -1468,12 +1208,9 @@ export class SyncService {
             skipSync: true,
             useProvidedId: dataWithId.id,
           });
-          console.log(`✅ Debt insertion completed successfully`);
           break;
 
         case "debt_payments":
-          console.log(`💰 Processing debt payment for local insertion:`);
-          console.log(`  Raw dataWithId:`, JSON.stringify(dataWithId, null, 2));
 
           // Use validation to clean debt payment data and ensure required fields
           const { cleanDebtPaymentData } = await import("../../shared/utils/validation");
@@ -1487,12 +1224,9 @@ export class SyncService {
             skipSync: true,
             useProvidedId: dataWithId.id,
           });
-          console.log(`✅ Debt payment insertion completed successfully`);
           break;
 
         case "settings":
-          console.log(`⚙️ Processing settings for local insertion:`);
-          console.log(`  Raw dataWithId:`, JSON.stringify(dataWithId, null, 2));
 
           // Use validation to clean settings data
           const { cleanSettingsData } = await import("../../shared/utils/validation");
@@ -1502,10 +1236,6 @@ export class SyncService {
           const settingsRepo = new (
             await import("../../features/settings/repositories/settingsRepository")
           ).SettingsRepository();
-          console.log(
-            `⚙️ Calling settingsRepo.updateSettings with:`,
-            safeSettings,
-          );
 
           // For settings, we need to use updateSettings since there's only one settings record
           const settingsUpdate = {
@@ -1522,14 +1252,12 @@ export class SyncService {
 
           // Use updateSettings with skipSync to avoid creating a sync_log entry for this metadata update
           await settingsRepo.updateSettings(settingsUpdate, { skipSync: true });
-          console.log(`✅ Settings insertion completed successfully`);
           break;
 
         default:
           console.warn(`Unknown collection for insert: ${collectionName}`);
           return;
       }
-      console.log(`✅ Successfully inserted ${collectionName}/${doc.id}`);
 
       // Notify Redux store about the data change
       this.notifyDataChange(collectionName, "create", doc.id);
@@ -1541,9 +1269,6 @@ export class SyncService {
         errorMessage.toLowerCase().includes("unique constraint") ||
         errorMessage.toLowerCase().includes("primary key")
       ) {
-        console.log(
-          `⚠️ Document ${collectionName}/${doc.id} already exists locally, treating as update`,
-        );
         await this.updateLocalDocument(collectionName, doc);
       } else if (errorMessage.toLowerCase().includes("foreign key")) {
         console.warn(
@@ -1564,9 +1289,6 @@ export class SyncService {
     collectionName: CollectionName,
     doc: FirestoreDocument<any>,
   ): Promise<void> {
-    console.log(
-      `📝 Updating ${collectionName}/${doc.id} from Firestore to local DB`,
-    );
 
     try {
       // Clean data with safe date parsing for all entities
@@ -1579,12 +1301,6 @@ export class SyncService {
           break;
         }
         case "transactions":
-          console.log(`💰 Processing transaction for local update:`);
-          console.log(
-            `  Raw Firebase doc.data:`,
-            JSON.stringify(doc.data, null, 2),
-          );
-          console.log(`  Cleaned data:`, JSON.stringify(cleanData, null, 2));
 
           // Ensure proper field mapping for Firebase -> Local conversion
           const mappedUpdateData = {
@@ -1599,11 +1315,6 @@ export class SyncService {
             toAccountId: cleanData.toAccountId || cleanData.to_account_id || null,
           };
 
-          console.log(
-            `  Final mapped update data:`,
-            JSON.stringify(mappedUpdateData, null, 2),
-          );
-
           const transactionRepo = new (
             await import("../../features/transactions/repositories/transactionsRepository")
           ).TransactionRepository();
@@ -1615,28 +1326,13 @@ export class SyncService {
           break;
 
         case "budgets":
-          console.log(`📊 Processing budget for local update:`);
-          console.log(`  Document ID:`, doc.id);
-          console.log(`  Raw doc.data:`, JSON.stringify(doc.data, null, 2));
-          console.log(`  Cleaned data:`, JSON.stringify(cleanData, null, 2));
-          console.log(`  Update data validation:`, {
-            hasValidId: !!doc.id,
-            hasData: !!doc.data,
-            dataKeys: doc.data ? Object.keys(doc.data) : [],
-            hasRequiredFields: !!(doc.data?.name && doc.data?.amount),
-          });
 
           const budgetRepo = new (
             await import("../../features/budgets/repositories/budgetsRepository")
           ).BudgetRepository();
-          console.log(
-            `📊 Calling budgetRepo.updateBudget with ID: ${doc.id} and data:`,
-            doc.data,
-          );
           await budgetRepo.updateBudget(doc.id, doc.data as any, {
             skipSync: true,
           });
-          console.log(`✅ Budget update completed successfully`);
           break;
 
         case "categories":
@@ -1684,7 +1380,6 @@ export class SyncService {
           break;
 
         case "settings":
-          console.log(`⚙️ Processing settings for local update:`);
           const { cleanSettingsData: cleanSettingsUpdateData } = await import(
             "../../shared/utils/validation"
           );
@@ -1706,13 +1401,11 @@ export class SyncService {
             },
             { skipSync: true },
           );
-          console.log(`✅ Settings update completed successfully`);
           break;
 
         default:
           console.warn(`Unknown collection for update: ${collectionName}`);
       }
-      console.log(`✅ Successfully updated ${collectionName}/${doc.id}`);
 
       // Notify Redux store about the data change
       this.notifyDataChange(collectionName, "update", doc.id);
@@ -1725,15 +1418,11 @@ export class SyncService {
     collectionName: CollectionName,
     docId: string,
   ): Promise<void> {
-    console.log(`🗑️ Deleting ${collectionName}/${docId} from local DB`);
 
     try {
       // First check if the document exists locally
       const localDoc = await this.getLocalDocument(collectionName, docId);
       if (!localDoc) {
-        console.log(
-          `⚠️ Document ${collectionName}/${docId} not found locally - already deleted or never existed`,
-        );
         return; // Not an error - document is already gone
       }
 
@@ -1784,7 +1473,6 @@ export class SyncService {
           console.warn(`Unknown collection for delete: ${collectionName}`);
           return;
       }
-      console.log(`✅ Successfully deleted ${collectionName}/${docId}`);
 
       // Notify Redux store about the data change
       this.notifyDataChange(collectionName, "delete", docId);
@@ -1796,9 +1484,6 @@ export class SyncService {
         errorMessage.toLowerCase().includes("no transaction found") ||
         errorMessage.toLowerCase().includes("does not exist")
       ) {
-        console.log(
-          `⚠️ Document ${collectionName}/${docId} was already deleted or never existed locally`,
-        );
         // This is not an error - the goal (document not existing) is achieved
       } else {
         console.error(`❌ Error deleting ${collectionName}/${docId}:`, error);
@@ -1810,9 +1495,6 @@ export class SyncService {
     collectionName: CollectionName,
     localDoc: any,
   ): Promise<void> {
-    console.log(
-      `⬆️ Pushing local ${collectionName}/${localDoc.id} to Firestore`,
-    );
 
     try {
       await this.performSyncOperation(
@@ -1820,9 +1502,6 @@ export class SyncService {
         "update",
         localDoc.id,
         localDoc,
-      );
-      console.log(
-        `✅ Successfully pushed ${collectionName}/${localDoc.id} to Firestore`,
       );
     } catch (error) {
       console.error(
@@ -1867,7 +1546,6 @@ export class SyncService {
   // Test Firebase connectivity and permissions
   public async testFirebaseConnection(): Promise<void> {
     try {
-      console.log("🧪 Starting Firebase connection test...");
 
       const user = await authService.getCurrentAuthenticatedUser();
       if (!user) {
@@ -1886,20 +1564,13 @@ export class SyncService {
         message: "Firebase connectivity test",
         userId: user.uid,
       };
-
-      console.log("🧪 Writing test document...");
       await setDoc(testDocRef, testData);
-
-      console.log("🧪 Reading test document back...");
       const snapshot = await getDoc(testDocRef);
 
       if (snapshot.exists()) {
-        console.log("✅ Firebase connection test PASSED!");
-        console.log("✅ Test data:", snapshot.data());
 
         // Clean up test document
         await deleteDoc(testDocRef);
-        console.log("🧹 Test document cleaned up");
       } else {
         throw new Error("Test document was not found after write");
       }
@@ -1928,8 +1599,6 @@ export class SyncService {
         collectionName,
       );
 
-      console.log(`☁️ Fetching all documents from ${collectionName}...`);
-
       // Restore requires an authoritative server snapshot. Ordering by updatedAt
       // silently excludes legacy documents without that field, and a cached
       // empty result must never be mistaken for a new account.
@@ -1942,10 +1611,6 @@ export class SyncService {
           ...doc.data(),
         });
       });
-
-      console.log(
-        `☁️ Retrieved ${documents.length} documents from ${collectionName}`,
-      );
       return documents;
     } catch (error) {
       console.error(
@@ -1965,7 +1630,6 @@ export class SyncService {
   public async performDeltaSync(lastAttempt?: number): Promise<void> {
     try {
       if (!(await authService.isCloudSyncAllowedAsync())) {
-        console.log("⏭️ Delta sync skipped for local-only guest mode");
         return;
       }
       const settingsRepo = new (
@@ -1983,10 +1647,6 @@ export class SyncService {
           lastAttempt = 0;
         }
       }
-
-      console.log(
-        `🔁 Starting delta sync (since: ${new Date(lastAttempt).toISOString()})`,
-      );
 
       // Ensure user and firestore available
       const user = await authService.getCurrentAuthenticatedUser();
@@ -2007,18 +1667,9 @@ export class SyncService {
             collectionName,
           );
 
-          console.log(user.uid);
-
           // Prefer top-level updatedAt field for querying. Firestore requires indexed fields
           const q = query(collectionRef, where("updatedAt", ">", lastAttempt));
-          console.log(
-            `☁️ Querying ${collectionName} for updates since ${lastAttempt}`,
-          );
           const snapshot = await getDocs(q);
-
-          console.log(
-            `☁️ Delta query for ${collectionName} returned ${snapshot.docs.length} docs`,
-          );
 
           for (const docSnap of snapshot.docs) {
             const docData = docSnap.data() as FirestoreDocument<any>;
@@ -2053,18 +1704,8 @@ export class SyncService {
 
             // Only process documents whose remote updatedAt is newer than our lastAttempt marker
             if (remoteTime <= (lastAttempt || 0)) {
-              console.log(
-                `↩️ Skipping ${collectionName}/${docId} - remote updatedAt (${new Date(remoteTime).toISOString()}) <= lastAttempt (${new Date(
-                  lastAttempt || 0,
-                ).toISOString()})`,
-              );
               continue;
             }
-
-            // Use the existing handlers to apply document changes locally
-            console.log(
-              `🔄 Processing delta ${collectionName}/${docId} (remote updatedAt=${new Date(remoteTime).toISOString()})`,
-            );
             try {
               const deletedFlag = (docData as any).deleted;
               const deleted =
@@ -2116,10 +1757,6 @@ export class SyncService {
         // Not critical - just log
         console.warn("Could not dispatch lastSync to Redux store:", reduxErr);
       }
-
-      console.log(
-        `✅ Delta sync completed, marker updated to ${new Date(now).toISOString()}`,
-      );
     } catch (error) {
       console.error("❌ performDeltaSync failed:", error);
       throw error;

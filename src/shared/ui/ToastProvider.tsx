@@ -15,7 +15,6 @@ export const ToastService = {
     if (_showToast) {
       _showToast(message, type, duration, undefined, replaceKey);
     } else {
-      console.log(`[ToastService] (${type}) ${message}`);
     }
   },
   showSuccess(message: string, duration?: number) {

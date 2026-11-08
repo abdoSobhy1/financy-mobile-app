@@ -1,17 +1,17 @@
 import { styles } from "./DebtForm.styles";
-import type { useDebtForm } from "../hooks/useDebtForm";
+import type { DebtFormController } from "../hooks/useDebtForm";
 
 import { View, Text, TextInput, Keyboard } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 
 import { useAppTheme } from "../../../shared/theme/ThemeProvider";
 interface DebtPaymentFieldsProps {
-  minPaymentRef: ReturnType<typeof useDebtForm>["minPaymentRef"];
-  formData: ReturnType<typeof useDebtForm>["formData"];
-  updateField: ReturnType<typeof useDebtForm>["updateField"];
-  interestRateRef: ReturnType<typeof useDebtForm>["interestRateRef"];
-  showMore: ReturnType<typeof useDebtForm>["showMore"];
-  descriptionRef: ReturnType<typeof useDebtForm>["descriptionRef"];
+  minPaymentRef: DebtFormController["minPaymentRef"];
+  formData: DebtFormController["formData"];
+  updateField: DebtFormController["updateField"];
+  interestRateRef: DebtFormController["interestRateRef"];
+  showMore: DebtFormController["showMore"];
+  descriptionRef: DebtFormController["descriptionRef"];
 
 }
 export function DebtPaymentFields({ minPaymentRef, formData, updateField, interestRateRef, showMore, descriptionRef }: DebtPaymentFieldsProps) {

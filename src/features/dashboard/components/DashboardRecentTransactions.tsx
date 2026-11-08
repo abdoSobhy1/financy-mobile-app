@@ -1,6 +1,6 @@
 import { TransactionSummary } from "../../transactions/components/TransactionSummary";
-import { styles } from "../screens/DashboardScreen.styles";
-import type { useDashboardScreen } from "../hooks/useDashboardScreen";
+import { styles } from "./DashboardSections.styles";
+import type { DashboardScreenController } from "../hooks/useDashboardScreen";
 
 import { View, Text, TouchableOpacity } from "react-native";
 
@@ -10,13 +10,13 @@ import { formatDate } from "../../../shared/utils";
 import { useAppTheme } from "../../../shared/theme/ThemeProvider";
 
 interface DashboardRecentTransactionsProps {
-  navigation: ReturnType<typeof useDashboardScreen>["navigation"];
-  recentTransactions: ReturnType<typeof useDashboardScreen>["recentTransactions"];
-  categoriesMap: ReturnType<typeof useDashboardScreen>["categoriesMap"];
-  wallets: ReturnType<typeof useDashboardScreen>["wallets"];
-  handleTransactionPress: ReturnType<typeof useDashboardScreen>["handleTransactionPress"];
-  maskCurrency: ReturnType<typeof useDashboardScreen>["maskCurrency"];
-  handleMorePress: ReturnType<typeof useDashboardScreen>["handleMorePress"];
+  navigation: DashboardScreenController["navigation"];
+  recentTransactions: DashboardScreenController["recentTransactions"];
+  categoriesMap: DashboardScreenController["categoriesMap"];
+  wallets: DashboardScreenController["wallets"];
+  handleTransactionPress: DashboardScreenController["handleTransactionPress"];
+  maskCurrency: DashboardScreenController["maskCurrency"];
+  handleMorePress: DashboardScreenController["handleMorePress"];
 
 }
 export function DashboardRecentTransactions({ navigation, recentTransactions, categoriesMap, wallets, handleTransactionPress, maskCurrency, handleMorePress }: DashboardRecentTransactionsProps) {

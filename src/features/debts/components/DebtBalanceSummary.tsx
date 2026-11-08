@@ -1,21 +1,21 @@
-import { styles } from "../screens/DebtsScreen.styles";
-import type { useDebtsScreen } from "../hooks/useDebtsScreen";
+import { styles } from "./DebtsSections.styles";
+import type { DebtsScreenController } from "../hooks/useDebtsScreen";
 
 import { View, Text } from "react-native";
 
 import { Ionicons } from "@expo/vector-icons";
-import { useAppTheme } from "../../../shared/theme/ThemeProvider";
+import { useAppTheme, type AppTheme } from "../../../shared/theme/ThemeProvider";
 
 import { formatCurrency } from "../../../shared/utils";
 
 interface DebtBalanceSummaryProps {
-  colors: ReturnType<typeof useAppTheme>["colors"];
-  typography: ReturnType<typeof useAppTheme>["typography"];
-  totalOwedToYou: ReturnType<typeof useDebtsScreen>["totalOwedToYou"];
-  owedToMeList: ReturnType<typeof useDebtsScreen>["owedToMeList"];
-  totalYouOwe: ReturnType<typeof useDebtsScreen>["totalYouOwe"];
-  overdueList: ReturnType<typeof useDebtsScreen>["overdueList"];
-  iOweList: ReturnType<typeof useDebtsScreen>["iOweList"];
+  colors: AppTheme["colors"];
+  typography: AppTheme["typography"];
+  totalOwedToYou: DebtsScreenController["totalOwedToYou"];
+  owedToMeList: DebtsScreenController["owedToMeList"];
+  totalYouOwe: DebtsScreenController["totalYouOwe"];
+  overdueList: DebtsScreenController["overdueList"];
+  iOweList: DebtsScreenController["iOweList"];
 }
 export function DebtBalanceSummary({ colors, typography, totalOwedToYou, owedToMeList, totalYouOwe, overdueList, iOweList }: DebtBalanceSummaryProps) {
   return (<View style={styles.summaryGrid}>

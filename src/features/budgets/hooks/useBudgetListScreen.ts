@@ -112,3 +112,5 @@ export function useBudgetListScreen() {
   const isTotalOver = totalSpent > totalBudget;
   return { navigation, refreshing, progressLoaded, budgetProgressMap, budgets, ids, budgetsLoading, categoriesMap, handleRefresh, totalBudget, totalSpent, totalRemaining, totalProgressPercentage, isTotalOver };
 }
+
+export type BudgetListScreenController = ReturnType<typeof useBudgetListScreen>;

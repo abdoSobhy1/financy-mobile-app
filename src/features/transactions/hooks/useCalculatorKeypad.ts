@@ -7,19 +7,81 @@ export const arabicToWestern = (str: string): string =>
   str.replace(/[٠-٩]/g, (d) => String(d.charCodeAt(0) - 0x0660));
 
 export const evaluateMath = (expr: string): number => {
-  try {
-    const normalized = arabicToWestern(expr);
-    const sanitized = normalized
-      .replace(/×/g, "*")
-      .replace(/÷/g, "/")
-      .replace(/[^-()\d/*+.]/g, "");
-    if (!sanitized) return 0;
-    // eslint-disable-next-line no-new-func
-    const result = Number(new Function("return " + sanitized)());
-    return isNaN(result) ? 0 : result;
-  } catch {
+  const normalized = arabicToWestern(expr);
+  const sanitized = normalized
+    .replace(/×/g, "*")
+    .replace(/÷/g, "/")
+    .replace(/[^-()\d/*+.]/g, "");
+  if (!sanitized) return 0;
+
+  let index = 0;
+
+  const parseExpression = (): number => {
+    let value = parseTerm();
+    while (index < sanitized.length) {
+      const op = sanitized[index];
+      if (op !== "+" && op !== "-") break;
+      index += 1;
+      const right = parseTerm();
+      value = op === "+" ? value + right : value - right;
+    }
+    return value;
+  };
+
+  const parseTerm = (): number => {
+    let value = parseFactor();
+    while (index < sanitized.length) {
+      const op = sanitized[index];
+      if (op !== "*" && op !== "/") break;
+      index += 1;
+      const right = parseFactor();
+      if (op === "/") {
+        if (right === 0) return NaN;
+        value /= right;
+      } else {
+        value *= right;
+      }
+    }
+    return value;
+  };
+
+  const parseFactor = (): number => {
+    if (index >= sanitized.length) return NaN;
+    const ch = sanitized[index];
+    if (ch === "+" || ch === "-") {
+      index += 1;
+      const val = parseFactor();
+      return ch === "-" ? -val : val;
+    }
+    if (ch === "(") {
+      index += 1;
+      const val = parseExpression();
+      if (sanitized[index] !== ")") return NaN;
+      index += 1;
+      return val;
+    }
+    const start = index;
+    let hasDot = false;
+    while (index < sanitized.length) {
+      const c = sanitized[index];
+      if (c >= "0" && c <= "9") {
+        index += 1;
+      } else if (c === "." && !hasDot) {
+        hasDot = true;
+        index += 1;
+      } else {
+        break;
+      }
+    }
+    if (index === start) return NaN;
+    return Number(sanitized.slice(start, index));
+  };
+
+  const result = parseExpression();
+  if (index !== sanitized.length || !Number.isFinite(result)) {
     return 0;
   }
+  return result;
 };
 
 interface UseCalculatorKeypadOptions {
@@ -181,3 +243,5 @@ export function useCalculatorKeypad({
     handleEvaluateExpression,
   };
 }
+
+export type CalculatorKeypadController = ReturnType<typeof useCalculatorKeypad>;

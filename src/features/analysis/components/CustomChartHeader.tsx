@@ -1,15 +1,15 @@
-import { getStyles } from "../screens/CreateCustomChartScreen.styles";
-import type { useCreateCustomChartScreen } from "../hooks/useCreateCustomChartScreen";
+import { getStyles } from "./CustomChartBuilder.styles";
+import type { CreateCustomChartScreenController } from "../hooks/useCreateCustomChartScreen";
 
 import { Text, TouchableOpacity, View } from "react-native";
-import { useAppTheme } from "../../../shared/theme/ThemeProvider";
+import { useAppTheme, type AppTheme } from "../../../shared/theme/ThemeProvider";
 import { Ionicons } from "@expo/vector-icons";
 
 interface CustomChartHeaderProps {
   styles: ReturnType<typeof getStyles>;
-  navigation: ReturnType<typeof useCreateCustomChartScreen>["navigation"];
-  colors: ReturnType<typeof useAppTheme>["colors"];
-  isEditing: ReturnType<typeof useCreateCustomChartScreen>["isEditing"];
+  navigation: CreateCustomChartScreenController["navigation"];
+  colors: AppTheme["colors"];
+  isEditing: CreateCustomChartScreenController["isEditing"];
 }
 export function CustomChartHeader({ styles, navigation, colors, isEditing }: CustomChartHeaderProps) {
 

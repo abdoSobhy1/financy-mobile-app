@@ -154,3 +154,5 @@ export function useWalletEditorModal({
   });
   return { formName, setFormName, formType, setFormType, formIcon, setFormIcon, formColor, setFormColor, formInitialBalance, setFormInitialBalance, formIsSecret, setFormIsSecret, errors, setErrors, isSubmitting, nameInputRef, balanceInputRef, handleSave, confirmExit };
 }
+
+export type WalletEditorModalController = ReturnType<typeof useWalletEditorModal>;

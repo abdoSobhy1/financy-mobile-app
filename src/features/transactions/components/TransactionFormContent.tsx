@@ -3,8 +3,8 @@ import { TransactionAmountField } from "./TransactionAmountField";
 import { TransactionBudgetPicker } from "./TransactionBudgetPicker";
 import { TransactionWalletPicker } from "./TransactionWalletPicker";
 import { TransactionNotesSection } from "./TransactionNotesSection";
-import { styles } from "../screens/AddTransactionScreen.styles";
-import type { useAddTransactionScreen } from "../hooks/useAddTransactionScreen";
+import { styles } from "./AddTransactionForm.styles";
+import type { AddTransactionScreenController } from "../hooks/useAddTransactionScreen";
 
 import { View, ScrollView, Text, TouchableOpacity } from "react-native";
 
@@ -13,7 +13,7 @@ import { TransactionType } from "../../../shared/types";
 import { useAppTheme } from "../../../shared/theme/ThemeProvider";
 
 interface TransactionFormContentProps {
-  form: ReturnType<typeof useAddTransactionScreen>;
+  form: AddTransactionScreenController;
 }
 export function TransactionFormContent({ form }: TransactionFormContentProps) {
   const { colors, radius, spacing, typography, resolveCategoryColor } = useAppTheme();
@@ -137,7 +137,7 @@ export function TransactionFormContent({ form }: TransactionFormContentProps) {
       }}>
       {activeCategories.map((cat) => {
         const isSelected = cat.id === categoryId;
-        const catTheme = resolveCategoryColor((cat as any).color);
+        const catTheme = resolveCategoryColor(cat.color);
         return (
           <TouchableOpacity
             key={cat.id}
@@ -155,7 +155,7 @@ export function TransactionFormContent({ form }: TransactionFormContentProps) {
               },
             ]}>
             <Ionicons
-              name={((cat as any).icon || "pricetag") as any}
+              name={(cat.icon || "pricetag") as React.ComponentProps<typeof Ionicons>["name"]}
               size={18}
               color={catTheme.iconColor}
               style={{ marginRight: 6 }}

@@ -20,12 +20,10 @@ export class DatabaseManager {
 
   public async init(): Promise<void> {
     if (this.isInitialized) {
-      console.log("Database already initialized");
       return;
     }
 
     if (this.isInitializing && this.initPromise) {
-      console.log("Database initialization in progress, waiting...");
       return this.initPromise;
     }
 
@@ -36,7 +34,6 @@ export class DatabaseManager {
       await this.initPromise;
       this.isInitialized = true;
       this.isInitializing = false;
-      console.log("Database initialized successfully");
 
       // Recalculate entry counts after database is fully initialized
       await this.recalculateEntryCounts();
@@ -324,7 +321,6 @@ export class DatabaseManager {
           DROP TABLE IF EXISTS bill_payments;
           DROP TABLE IF EXISTS bills;
         `);
-        console.log("Dropped legacy bills tables if they existed");
       } catch (err) {
         console.warn("Failed to drop legacy bills tables (non-fatal):", err);
       }
@@ -351,7 +347,6 @@ export class DatabaseManager {
           CREATE INDEX IF NOT EXISTS idx_wallets_deleted ON wallets (deleted);
           CREATE INDEX IF NOT EXISTS idx_wallets_archived ON wallets (archived);
         `);
-        console.log("Wallets table verified/created in migrations");
       } catch (err) {
         console.warn("Failed to ensure wallets table in migrations:", err);
       }
@@ -366,9 +361,6 @@ export class DatabaseManager {
           (!tableInfo.sql.includes("'transfer'") ||
             tableInfo.sql.includes("category_id TEXT NOT NULL"))
         ) {
-          console.log(
-            "Migrating transactions table to allow transfers and nullable category_id...",
-          );
           await this.db.execAsync(`
             CREATE TABLE IF NOT EXISTS transactions_new (
               id TEXT PRIMARY KEY,
@@ -416,14 +408,10 @@ export class DatabaseManager {
             CREATE INDEX IF NOT EXISTS idx_transactions_sync_updated ON transactions (sync_updated_at);
             CREATE INDEX IF NOT EXISTS idx_transactions_to_account ON transactions (to_account_id);
           `);
-          console.log("Transactions table migration for transfers completed successfully");
         }
       } catch (err) {
         console.warn("Transactions table check/migration non-fatal error:", err);
       }
-
-      // Migrations completed
-      console.log("All migrations completed successfully");
     } catch (error) {
       console.error("Error running migrations:", error);
       // Don't throw here as the app should still work even if migrations fail
@@ -447,7 +435,6 @@ export class DatabaseManager {
         try {
           const columnName = field.split(" ")[0];
           await this.db.execAsync(`ALTER TABLE ${table} ADD COLUMN ${field};`);
-          console.log(`Added ${columnName} to ${table}`);
         } catch (error: any) {
           // Column might already exist, ignore duplicate column errors
           if (!error.message?.includes("duplicate column")) {
@@ -508,7 +495,6 @@ export class DatabaseManager {
         try {
           const columnName = column.split(" ")[0];
           await this.db.execAsync(`ALTER TABLE ${tableName} ADD COLUMN ${column};`);
-          console.log(`Added ${columnName} to ${tableName} for cloud compatibility`);
         } catch (error: any) {
           // Column might already exist, ignore duplicate column errors
           if (!error.message?.includes("duplicate column")) {
@@ -576,14 +562,10 @@ export class DatabaseManager {
       // Replace old table
       await this.db.execAsync("DROP TABLE debt_payments;");
       await this.db.execAsync("ALTER TABLE debt_payments_new RENAME TO debt_payments;");
-
-      console.log("✅ Migrated debt_payments table for cloud compatibility");
     } catch (error) {
       // Migration might already be applied
       console.warn("Debt payments migration not needed or already applied:", error);
     }
-
-    console.log("Missing columns migration completed");
   }
 
   private async insertDefaultData(): Promise<void> {
@@ -616,10 +598,6 @@ export class DatabaseManager {
         WHERE table_name = 'settings' AND payload LIKE '%"billingPeriodStartDay":28%';
       `);
     } catch {}
-
-    // Skip inserting default categories - let user create their own
-    // Categories will be empty on first run, user can create custom categories
-    console.log("🚀 Skipping default categories - user will create custom categories");
   }
 
   public async resetDatabase(): Promise<void> {
@@ -677,8 +655,6 @@ export class DatabaseManager {
         sync_status = 'synced'
       WHERE id = 'default';
     `);
-
-    console.log("All data cleared except categories");
   }
 
   public async recalculateEntryCounts(): Promise<void> {
@@ -692,7 +668,6 @@ export class DatabaseManager {
           WHERE transactions.category_id = categories.id
         )
       `);
-      console.log("Entry counts recalculated successfully");
     } catch (error) {
       console.warn("Error recalculating entry counts:", error);
     }

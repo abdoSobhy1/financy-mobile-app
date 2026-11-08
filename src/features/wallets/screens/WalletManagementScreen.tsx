@@ -3,7 +3,7 @@ import { WalletGrid } from "../components/WalletGrid";
 import { WalletList } from "../components/WalletList";
 import { MoveWalletModal } from "../components/MoveWalletModal";
 
-import { styles } from "./WalletManagementScreen.styles";
+import { styles } from "../components/WalletManagementSection.styles";
 import { useAppTheme } from "../../../shared/theme/ThemeProvider";
 import { useWalletManagementScreen } from "../hooks/useWalletManagementScreen";
 import React from "react";

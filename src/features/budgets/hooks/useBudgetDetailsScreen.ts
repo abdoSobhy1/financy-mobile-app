@@ -75,3 +75,5 @@ export function useBudgetDetailsScreen() {
   };
   return { navigation, budgetId, budget, categoriesMap, periodRange, budgetTransactions, spent, remaining, progressPercentage, isOver, daysLeft, safeDaily, category, handleDelete };
 }
+
+export type BudgetDetailsScreenController = ReturnType<typeof useBudgetDetailsScreen>;

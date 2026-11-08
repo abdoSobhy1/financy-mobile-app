@@ -408,7 +408,6 @@ export function findCategory(
     if (!category?.name) continue;
     const catName = category.name.toLowerCase();
     if (normalizedText.includes(catName)) {
-      console.log("🏷️ Full match:", category.name);
       return { id: category.id, matchedText: category.name };
     }
   }
@@ -447,7 +446,6 @@ export function findCategory(
       }
 
       if (bestCatId) {
-        console.log("🧠 ML match:", bestCatId, "with score", maxScore);
         return { id: bestCatId, matchedText: undefined };
       }
     }
@@ -467,7 +465,6 @@ export function findCategory(
 
   for (const { id, word, catName } of candidates) {
     if (normalizedText.includes(word.toLowerCase())) {
-      console.log("🏷️ Partial match:", word, "→", catName);
       return { id, matchedText: word };
     }
   }

@@ -126,3 +126,5 @@ export function useAiSettings() {
     handleResetGeminiQuota,
   };
 }
+
+export type AiSettingsController = ReturnType<typeof useAiSettings>;

@@ -16,9 +16,7 @@ export function useImportScreen() {
   useEffect(() => {
     const testDatabase = async () => {
       try {
-        console.log("Testing database connectivity...");
         const transactions = await db.transactions.getAllTransactions();
-        console.log(`Database test: Found ${transactions.length} existing transactions`);
       } catch (error) {
         console.error("Database test failed:", error);
       }
@@ -32,7 +30,6 @@ export function useImportScreen() {
   };
 
   const handleSuccess = (result: any) => {
-    console.log("Import completed successfully:", result);
     // Don't navigate back automatically - let user see results first
     // navigation.goBack() will be called when user closes the results step
   };
@@ -41,3 +38,5 @@ export function useImportScreen() {
     handleSuccess
   };
 }
+
+export type ImportScreenController = ReturnType<typeof useImportScreen>;

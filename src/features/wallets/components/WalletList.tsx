@@ -1,6 +1,6 @@
-import { styles } from "../screens/WalletManagementScreen.styles";
+import { styles } from "./WalletManagementSection.styles";
 import { useAppTheme } from "../../../shared/theme/ThemeProvider";
-import type { useWalletManagementScreen } from "../hooks/useWalletManagementScreen";
+import type { WalletManagementScreenController } from "../hooks/useWalletManagementScreen";
 
 import { View, Text, TouchableOpacity } from "react-native";
 
@@ -12,12 +12,12 @@ import { IconChip } from "../../../shared/ui/IconChip";
 import { formatCurrency } from "../../../shared/utils";
 
 interface WalletListProps {
-  filteredWallets: ReturnType<typeof useWalletManagementScreen>["filteredWallets"];
-  walletBalances: ReturnType<typeof useWalletManagementScreen>["walletBalances"];
-  openEditModal: ReturnType<typeof useWalletManagementScreen>["openEditModal"];
-  handleUnarchiveWallet: ReturnType<typeof useWalletManagementScreen>["handleUnarchiveWallet"];
-  handleDeleteWallet: ReturnType<typeof useWalletManagementScreen>["handleDeleteWallet"];
-  openAddModal: ReturnType<typeof useWalletManagementScreen>["openAddModal"];
+  filteredWallets: WalletManagementScreenController["filteredWallets"];
+  walletBalances: WalletManagementScreenController["walletBalances"];
+  openEditModal: WalletManagementScreenController["openEditModal"];
+  handleUnarchiveWallet: WalletManagementScreenController["handleUnarchiveWallet"];
+  handleDeleteWallet: WalletManagementScreenController["handleDeleteWallet"];
+  openAddModal: WalletManagementScreenController["openAddModal"];
 
 }
 export function WalletList({ filteredWallets, walletBalances, openEditModal, handleUnarchiveWallet, handleDeleteWallet, openAddModal }: WalletListProps) {

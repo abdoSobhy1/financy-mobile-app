@@ -1,6 +1,6 @@
 import type { WalletAccount } from "../../../shared/types";
-import { styles } from "../screens/AddTransactionScreen.styles";
-import type { useAddTransactionScreen } from "../hooks/useAddTransactionScreen";
+import { styles } from "./AddTransactionForm.styles";
+import type { AddTransactionScreenController } from "../hooks/useAddTransactionScreen";
 
 import { View, ScrollView, Text, TouchableOpacity } from "react-native";
 
@@ -11,11 +11,11 @@ import { useAppTheme } from "../../../shared/theme/ThemeProvider";
 import { isSecretWallet } from "../../wallets/model/walletVisibility";
 
 interface TransactionWalletPickerProps {
-  showKeypad: ReturnType<typeof useAddTransactionScreen>["showKeypad"];
-  setShowKeypad: ReturnType<typeof useAddTransactionScreen>["setShowKeypad"];
+  showKeypad: AddTransactionScreenController["showKeypad"];
+  setShowKeypad: AddTransactionScreenController["setShowKeypad"];
   displayWallets: WalletAccount[];
-  accountId: ReturnType<typeof useAddTransactionScreen>["accountId"];
-  setAccountId: ReturnType<typeof useAddTransactionScreen>["setAccountId"];
+  accountId: AddTransactionScreenController["accountId"];
+  setAccountId: AddTransactionScreenController["setAccountId"];
 
 }
 export function TransactionWalletPicker({ showKeypad, setShowKeypad, displayWallets, accountId, setAccountId }: TransactionWalletPickerProps) {

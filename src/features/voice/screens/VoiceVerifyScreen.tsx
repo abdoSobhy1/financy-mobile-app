@@ -1,6 +1,6 @@
 import { VoiceReviewEntries } from "../components/VoiceReviewEntries";
 import { VoiceEntryEditorModal } from "../components/VoiceEntryEditorModal";
-import { styles } from "./VoiceVerifyScreen.styles";
+import { styles } from "../components/VoiceVerifySection.styles";
 import { useVoiceVerifyScreen } from "../hooks/useVoiceVerifyScreen";
 import React from "react";
 import { View, Text, TouchableOpacity, StatusBar } from "react-native";

@@ -1,25 +1,25 @@
-import { styles } from "../screens/BudgetScreens.styles";
-import type { useBudgetListScreen } from "../hooks/useBudgetListScreen";
+import { styles } from "./BudgetScreens.styles";
+import type { BudgetListScreenController } from "../hooks/useBudgetListScreen";
 
 import { View, Text, TouchableOpacity } from "react-native";
 
-import { useAppTheme } from "../../../shared/theme/ThemeProvider";
+import { useAppTheme, type AppTheme } from "../../../shared/theme/ThemeProvider";
 import { Ionicons } from "@expo/vector-icons";
 import { Shimmer } from "../../../shared/ui";
 import { formatCurrency } from "../../../shared/utils";
 
 interface BudgetOverviewProps {
-  progressLoaded: ReturnType<typeof useBudgetListScreen>["progressLoaded"];
-  spacing: ReturnType<typeof useAppTheme>["spacing"];
-  colors: ReturnType<typeof useAppTheme>["colors"];
-  typography: ReturnType<typeof useAppTheme>["typography"];
-  totalBudget: ReturnType<typeof useBudgetListScreen>["totalBudget"];
-  isTotalOver: ReturnType<typeof useBudgetListScreen>["isTotalOver"];
-  totalRemaining: ReturnType<typeof useBudgetListScreen>["totalRemaining"];
-  totalProgressPercentage: ReturnType<typeof useBudgetListScreen>["totalProgressPercentage"];
-  totalSpent: ReturnType<typeof useBudgetListScreen>["totalSpent"];
-  ids: ReturnType<typeof useBudgetListScreen>["ids"];
-  navigation: ReturnType<typeof useBudgetListScreen>["navigation"];
+  progressLoaded: BudgetListScreenController["progressLoaded"];
+  spacing: AppTheme["spacing"];
+  colors: AppTheme["colors"];
+  typography: AppTheme["typography"];
+  totalBudget: BudgetListScreenController["totalBudget"];
+  isTotalOver: BudgetListScreenController["isTotalOver"];
+  totalRemaining: BudgetListScreenController["totalRemaining"];
+  totalProgressPercentage: BudgetListScreenController["totalProgressPercentage"];
+  totalSpent: BudgetListScreenController["totalSpent"];
+  ids: BudgetListScreenController["ids"];
+  navigation: BudgetListScreenController["navigation"];
 }
 export function BudgetOverview({ progressLoaded, spacing, colors, typography, totalBudget, isTotalOver, totalRemaining, totalProgressPercentage, totalSpent, ids, navigation }: BudgetOverviewProps) {
 

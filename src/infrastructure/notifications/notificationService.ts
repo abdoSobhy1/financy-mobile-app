@@ -44,49 +44,36 @@ class NotificationService {
   }
 
   async initialize() {
-    console.log("🚀 NotificationService.initialize() called");
     console.warn("🚀 NotificationService.initialize() called");
 
     if (this.initialized) {
-      console.log("✅ Service already initialized, skipping");
       console.warn("✅ Service already initialized, skipping");
       return true;
     }
 
     try {
-      console.log("🔐 Requesting notification permissions...");
       console.warn("🔐 Requesting notification permissions...");
 
       // Request permissions
       const { status } = await Notifications.requestPermissionsAsync();
-      console.log(`📋 Permission status: ${status}`);
       console.warn(`📋 Permission status: ${status}`);
 
       if (status !== "granted") {
-        console.log("❌ Notification permission denied");
         console.warn("❌ Notification permission denied");
         this.initialized = true; // Mark as initialized even if permission denied
         return false;
       }
-
-      console.log("📂 Loading notification settings...");
       console.warn("📂 Loading notification settings...");
 
       // Load settings
       await this.loadSettings();
-
-      console.log("🔧 Registering background tasks...");
       console.warn("🔧 Registering background tasks...");
 
       // Register background tasks
       this.registerBackgroundTasks();
 
       this.initialized = true;
-      console.log("✅ NotificationService initialized successfully");
       console.warn("✅ NotificationService initialized successfully");
-
-      // Automatically schedule all notifications after initialization
-      console.log("📅 Auto-scheduling notifications after initialization...");
       console.warn("📅 Auto-scheduling notifications after initialization...");
       await this.scheduleAllNotifications();
 
@@ -145,17 +132,14 @@ class NotificationService {
     }
 
     if (!this.initialized) {
-      console.log("NotificationService not properly initialized, cannot schedule notifications");
       return;
     }
 
     try {
       // Cancel existing notifications
       await Notifications.cancelAllScheduledNotificationsAsync();
-      console.log("✅ Cancelled all existing scheduled notifications");
 
       if (this.settings.transactionReminders) {
-        console.log("📅 Scheduling transaction reminders...");
         await this.scheduleTransactionReminders();
       }
 
@@ -199,7 +183,6 @@ class NotificationService {
     shouldShow: boolean = true
   ) {
     if (!this.initialized) {
-      console.log("NotificationService not initialized, skipping notification schedule");
       console.warn("NotificationService not initialized, skipping notification schedule");
       return null;
     }
@@ -222,8 +205,6 @@ class NotificationService {
       hour,
       minute,
     };
-
-    console.log(`📅 Attempting to schedule "${identifier}" at ${hour}:${minute.toString().padStart(2, "0")}`);
     console.warn(`📅 Attempting to schedule "${identifier}" at ${hour}:${minute.toString().padStart(2, "0")}`);
 
     try {
@@ -251,17 +232,12 @@ class NotificationService {
         },
         trigger,
       };
-
-      console.log(`🔧 Notification request:`, JSON.stringify(notificationRequest, null, 2));
       console.warn(`🔧 Notification request prepared for ${identifier}`);
 
       const notificationId = await Notifications.scheduleNotificationAsync(notificationRequest);
 
       if (notificationId) {
-        console.log(`✅ Scheduled notification "${identifier}" with ID: ${notificationId}`);
         console.warn(`✅ Scheduled notification "${identifier}" with ID: ${notificationId}`);
-        console.log(`   Time: ${hour}:${minute.toString().padStart(2, "0")}`);
-        console.log(`   Title: ${title}`);
         return notificationId;
       } else {
         console.error(`❌ Scheduling returned null ID for ${identifier}`);
@@ -304,7 +280,6 @@ class NotificationService {
 
   async sendTransactionReminder(): Promise<void> {
     if (!this.initialized) {
-      console.log("NotificationService not initialized, cannot send reminder");
       return;
     }
 
@@ -393,7 +368,6 @@ class NotificationService {
     try {
       // Initialize if not already done
       if (!this.initialized) {
-        console.log("Initializing NotificationService for sync notification...");
         await this.initialize();
       }
 
@@ -414,8 +388,6 @@ class NotificationService {
         },
         trigger: null, // Show immediately
       });
-
-      console.log("Sync notification shown with ID:", notificationId);
       return notificationId;
     } catch (error) {
       console.error("Failed to show sync notification:", error);
@@ -432,7 +404,6 @@ class NotificationService {
     try {
       // For presented notifications (trigger: null), use dismissNotificationAsync
       await Notifications.dismissNotificationAsync(notificationId);
-      console.log("Sync notification dismissed:", notificationId);
     } catch (error) {
       console.error("Failed to dismiss sync notification:", error);
     }
@@ -444,33 +415,20 @@ class NotificationService {
 
   // Method to force re-schedule all notifications (useful for debugging)
   async forceRescheduleNotifications() {
-    console.log("🔄 Force rescheduling all notifications...");
     console.warn("🔄 Force rescheduling all notifications...");
 
     try {
       // Ensure service is initialized
       if (!this.initialized) {
-        console.log("🚀 Initializing service first...");
         console.warn("🚀 Initializing service first...");
         await this.initialize();
       }
-
-      // Cancel all existing notifications
-      console.log("🗑️ Canceling all existing notifications...");
       console.warn("🗑️ Canceling all existing notifications...");
       await this.cancelAllNotifications();
-
-      // Schedule new notifications
-      console.log("📅 Scheduling new notifications...");
       console.warn("📅 Scheduling new notifications...");
       await this.scheduleAllNotifications();
-
-      // Verify what was scheduled
-      console.log("🔍 Checking what was actually scheduled...");
       console.warn("🔍 Checking what was actually scheduled...");
       await this.logScheduledNotifications();
-
-      console.log("✅ Force reschedule completed");
       console.warn("✅ Force reschedule completed");
     } catch (error) {
       console.error("❌ Force reschedule failed:", error);
@@ -498,11 +456,8 @@ class NotificationService {
       const missingNotifications = expectedNotifications.filter((id) => !scheduledIdentifiers.includes(id));
 
       if (missingNotifications.length > 0) {
-        console.log(`📅 Missing notifications detected: ${missingNotifications.join(", ")}`);
-        console.log("🔄 Rescheduling all notifications...");
         await this.scheduleAllNotifications();
       } else {
-        console.log("✅ All expected notifications are scheduled");
       }
     } catch (error) {
       console.error("Failed to check notifications:", error);
@@ -513,22 +468,11 @@ class NotificationService {
   async checkNotificationStatus() {
     try {
       const permissions = await Notifications.getPermissionsAsync();
-      console.log("📋 Notification Permission Status:");
-      console.log(`   Status: ${permissions.status}`);
-      console.log(`   Can ask again: ${permissions.canAskAgain}`);
-      console.log(`   Granted: ${permissions.granted}`);
 
       if (permissions.android) {
-        console.log("🤖 Android specific settings:");
-        console.log(`   Importance: ${permissions.android.importance}`);
-        console.log(`   Interruption filter: ${permissions.android.interruptionFilter}`);
       }
 
       if (permissions.ios) {
-        console.log("🍎 iOS specific settings:");
-        console.log(`   Allow alert: ${permissions.ios.allowsAlert}`);
-        console.log(`   Allow badge: ${permissions.ios.allowsBadge}`);
-        console.log(`   Allow sound: ${permissions.ios.allowsSound}`);
       }
 
       return permissions;
@@ -542,16 +486,11 @@ class NotificationService {
   async logScheduledNotifications() {
     try {
       const scheduledNotifications = await Notifications.getAllScheduledNotificationsAsync();
-      console.log(`📱 Currently scheduled notifications: ${scheduledNotifications.length}`);
 
       scheduledNotifications.forEach((notification, index) => {
-        console.log(`${index + 1}. ID: ${notification.identifier}`);
-        console.log(`   Title: ${notification.content.title}`);
-        console.log(`   Trigger: ${JSON.stringify(notification.trigger)}`);
       });
 
       if (scheduledNotifications.length === 0) {
-        console.log("⚠️  No notifications are currently scheduled!");
       }
     } catch (error) {
       console.error("Failed to get scheduled notifications:", error);
@@ -560,38 +499,22 @@ class NotificationService {
 
   // Comprehensive debug method
   async runNotificationDiagnostics() {
-    console.log("🔍 Running Notification Diagnostics...");
     console.warn("🔍 Running Notification Diagnostics..."); // Also use warn for visibility
 
     try {
-      // Check initialization
-      console.log(`📱 Service initialized: ${this.initialized}`);
       console.warn(`📱 Service initialized: ${this.initialized}`);
 
       // Force initialization if not done
       if (!this.initialized) {
-        console.log("🔧 Forcing initialization...");
         console.warn("🔧 Forcing initialization...");
         await this.initialize();
       }
-
-      // Check permissions
-      console.log("🔐 Checking permissions...");
       console.warn("🔐 Checking permissions...");
       await this.checkNotificationStatus();
-
-      // Check scheduled notifications
-      console.log("📅 Checking scheduled notifications...");
       console.warn("📅 Checking scheduled notifications...");
       await this.logScheduledNotifications();
-
-      // Check settings
-      console.log("⚙️ Current settings:");
       console.warn("⚙️ Current settings:");
-      console.log(JSON.stringify(this.settings, null, 2));
       console.warn(JSON.stringify(this.settings, null, 2));
-
-      console.log("✅ Diagnostics complete!");
       console.warn("✅ Diagnostics complete!");
 
       // Also alert to make sure we can see output
@@ -610,28 +533,20 @@ class NotificationService {
 
   // Test method to schedule a notification in 10 seconds
   async scheduleTestNotification() {
-    console.log("🧪 Starting test notification process...");
     console.warn("🧪 Starting test notification process..."); // Also use warn for visibility
 
     if (!this.initialized) {
-      console.log("🔧 Initializing notification service for test...");
       console.warn("🔧 Initializing notification service for test...");
       await this.initialize();
     }
-
-    // Run diagnostics first
-    console.log("🔍 Running diagnostics before test...");
     console.warn("🔍 Running diagnostics before test...");
     await this.runNotificationDiagnostics();
 
     try {
-      console.log("🗑️ Canceling existing test notifications...");
       console.warn("🗑️ Canceling existing test notifications...");
 
       // Cancel any existing test notifications
       await Notifications.cancelScheduledNotificationAsync("test-notification");
-
-      console.log("📱 Scheduling test notification...");
       console.warn("📱 Scheduling test notification...");
 
       const notificationId = await Notifications.scheduleNotificationAsync({
@@ -647,12 +562,7 @@ class NotificationService {
           seconds: 10,
         },
       });
-
-      console.log("✅ Test notification scheduled with ID:", notificationId);
       console.warn("✅ Test notification scheduled with ID:", notificationId);
-
-      // Also try an immediate notification for comparison
-      console.log("📢 Sending immediate test notification...");
       console.warn("📢 Sending immediate test notification...");
 
       const immediateId = await Notifications.scheduleNotificationAsync({
@@ -664,13 +574,10 @@ class NotificationService {
         },
         trigger: null, // Immediate
       });
-
-      console.log("✅ Immediate notification sent with ID:", immediateId);
       console.warn("✅ Immediate notification sent with ID:", immediateId);
 
       // Verify it was scheduled
       setTimeout(async () => {
-        console.log("🔍 Checking scheduled notifications after 1 second...");
         console.warn("🔍 Checking scheduled notifications after 1 second...");
         await this.logScheduledNotifications();
       }, 1000);

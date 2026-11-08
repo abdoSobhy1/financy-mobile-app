@@ -1,16 +1,16 @@
 import { styles } from "./ReceiptScanModal.styles";
-import type { useReceiptScanModal } from "../hooks/useReceiptScanModal";
+import type { ReceiptScanModalController } from "../hooks/useReceiptScanModal";
 
 import { View, Text, TouchableOpacity } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { useAppTheme } from "../../../shared/theme/ThemeProvider";
+import { useAppTheme, type AppTheme } from "../../../shared/theme/ThemeProvider";
 
 interface ReceiptScanResultProps {
-  colors: ReturnType<typeof useAppTheme>["colors"];
-  handleDocumentScanner: ReturnType<typeof useReceiptScanModal>["handleDocumentScanner"];
-  typography: ReturnType<typeof useAppTheme>["typography"];
-  handleGalleryPick: ReturnType<typeof useReceiptScanModal>["handleGalleryPick"];
-  handleDocumentPick: ReturnType<typeof useReceiptScanModal>["handleDocumentPick"];
+  colors: AppTheme["colors"];
+  handleDocumentScanner: ReceiptScanModalController["handleDocumentScanner"];
+  typography: AppTheme["typography"];
+  handleGalleryPick: ReceiptScanModalController["handleGalleryPick"];
+  handleDocumentPick: ReceiptScanModalController["handleDocumentPick"];
 }
 export function ReceiptScanResult({ colors, handleDocumentScanner, typography, handleGalleryPick, handleDocumentPick }: ReceiptScanResultProps) {
   return (<View style={styles.optionsList}>

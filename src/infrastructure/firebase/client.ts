@@ -50,8 +50,6 @@ export const initializeFirebase = () => {
       // Uncomment to use Firestore emulator during development
       // connectFirestoreEmulator(db, 'localhost', 8080);
     }
-
-    console.log("Firebase initialized successfully");
     return { app, auth, db };
   } catch (error) {
     console.error("Firebase initialization error:", error);

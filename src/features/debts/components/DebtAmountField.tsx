@@ -1,19 +1,19 @@
 import { styles } from "./DebtForm.styles";
-import type { useDebtForm } from "../hooks/useDebtForm";
+import type { DebtFormController } from "../hooks/useDebtForm";
 
 import { View, Text, TextInput } from "react-native";
 
-import { useAppTheme } from "../../../shared/theme/ThemeProvider";
+import { useAppTheme, type AppTheme } from "../../../shared/theme/ThemeProvider";
 interface DebtAmountFieldProps {
-  typography: ReturnType<typeof useAppTheme>["typography"];
-  colors: ReturnType<typeof useAppTheme>["colors"];
-  formData: ReturnType<typeof useDebtForm>["formData"];
-  currencySymbol: ReturnType<typeof useAppTheme>["currencySymbol"];
-  totalAmountRef: ReturnType<typeof useDebtForm>["totalAmountRef"];
-  updateField: ReturnType<typeof useDebtForm>["updateField"];
-  isEditing: ReturnType<typeof useDebtForm>["isEditing"];
-  nameRef: ReturnType<typeof useDebtForm>["nameRef"];
-  errors: ReturnType<typeof useDebtForm>["errors"];
+  typography: AppTheme["typography"];
+  colors: AppTheme["colors"];
+  formData: DebtFormController["formData"];
+  currencySymbol: AppTheme["currencySymbol"];
+  totalAmountRef: DebtFormController["totalAmountRef"];
+  updateField: DebtFormController["updateField"];
+  isEditing: DebtFormController["isEditing"];
+  nameRef: DebtFormController["nameRef"];
+  errors: DebtFormController["errors"];
 }
 export function DebtAmountField({ typography, colors, formData, currencySymbol, totalAmountRef, updateField, isEditing, nameRef, errors }: DebtAmountFieldProps) {
   return (<View style={styles.amountSection}>

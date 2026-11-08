@@ -86,3 +86,5 @@ export function useTransactionFilterModal({
   ] as const;
   return { allCategoriesList, allBudgetsList, DATE_OPTIONS };
 }
+
+export type TransactionFilterModalController = ReturnType<typeof useTransactionFilterModal>;

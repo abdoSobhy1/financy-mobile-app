@@ -1,20 +1,20 @@
-import { getStyles } from "../screens/CreateCustomChartScreen.styles";
-import type { useCreateCustomChartScreen } from "../hooks/useCreateCustomChartScreen";
+import { getStyles } from "./CustomChartBuilder.styles";
+import type { CreateCustomChartScreenController } from "../hooks/useCreateCustomChartScreen";
 
 import { Text, TouchableOpacity, View } from "react-native";
-import { useAppTheme } from "../../../shared/theme/ThemeProvider";
+import { useAppTheme, type AppTheme } from "../../../shared/theme/ThemeProvider";
 import { Ionicons } from "@expo/vector-icons";
 
 import Card from "../../../shared/ui/Card";
 
 interface ChartFilterFieldsProps {
-  selectedDataSource: ReturnType<typeof useCreateCustomChartScreen>["selectedDataSource"];
+  selectedDataSource: CreateCustomChartScreenController["selectedDataSource"];
   styles: ReturnType<typeof getStyles>;
   handleDateRangeFilter: () => void;
-  filters: ReturnType<typeof useCreateCustomChartScreen>["filters"];
-  colors: ReturnType<typeof useAppTheme>["colors"];
+  filters: CreateCustomChartScreenController["filters"];
+  colors: AppTheme["colors"];
   handleCategoryFilter: () => void;
-  setFilters: ReturnType<typeof useCreateCustomChartScreen>["setFilters"];
+  setFilters: CreateCustomChartScreenController["setFilters"];
 }
 export function ChartFilterFields({ selectedDataSource, styles, handleDateRangeFilter, filters, colors, handleCategoryFilter, setFilters }: ChartFilterFieldsProps) {
 

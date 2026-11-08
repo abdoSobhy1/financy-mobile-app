@@ -35,6 +35,7 @@ const CATEGORY_ICONS = DEFAULT_ICONS;
 // ─── Types ─────────────────────────────────────────────────────────────────────
 
 export interface CategoryData {
+  id?: string;
   name: string;
   type: "income" | "expense";
   color?: string;
@@ -77,13 +78,13 @@ export const CategoryCreationModal: React.FC<CategoryCreationModalProps> = ({
     if (visible) {
       setName(initialData?.name ?? "");
       setColor(initialData?.color ?? PREDEFINED_COLORS[0]);
-      setIcon((initialData as any)?.icon ?? CATEGORY_ICONS[0]);
+      setIcon(initialData?.icon ?? CATEGORY_ICONS[0]);
       setCatType(initialData?.type ?? type ?? "expense");
       setNameError("");
     }
   }, [visible, initialData, type]);
 
-  const isEdit = !!initialData && !!(initialData.name?.trim() || (initialData as any).id);
+  const isEdit = !!initialData && !!(initialData.name?.trim() || initialData.id);
   const modalTitle = title ?? (isEdit ? "Edit Category" : "Create New Category");
 
   const hasChanges = useMemo(() => {
@@ -91,7 +92,7 @@ export const CategoryCreationModal: React.FC<CategoryCreationModalProps> = ({
     if (isEdit && initialData) {
       const origName = initialData.name || "";
       const origColor = initialData.color || PREDEFINED_COLORS[0];
-      const origIcon = (initialData as any)?.icon || CATEGORY_ICONS[0];
+      const origIcon = initialData.icon || CATEGORY_ICONS[0];
       const origType = initialData.type || type || "expense";
       return (
         name !== origName ||

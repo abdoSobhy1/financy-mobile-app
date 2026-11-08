@@ -1,9 +1,9 @@
-import type { useWalletEditorModal } from "../hooks/useWalletEditorModal";
+import type { WalletEditorModalController } from "../hooks/useWalletEditorModal";
 
 import { View, Text } from "react-native";
 
 import { WalletType } from "../../../shared/types";
-import { useAppTheme } from "../../../shared/theme/ThemeProvider";
+import { useAppTheme, type AppTheme } from "../../../shared/theme/ThemeProvider";
 import { IconChip } from "../../../shared/ui/IconChip";
 
 export interface WalletEditorFormValues {
@@ -15,12 +15,12 @@ export interface WalletEditorFormValues {
   isSecret: boolean;
 }
 interface WalletPreviewProps {
-  colors: ReturnType<typeof useAppTheme>["colors"];
-  spacing: ReturnType<typeof useAppTheme>["spacing"];
-  formIcon: ReturnType<typeof useWalletEditorModal>["formIcon"];
-  formColor: ReturnType<typeof useWalletEditorModal>["formColor"];
-  formName: ReturnType<typeof useWalletEditorModal>["formName"];
-  formType: ReturnType<typeof useWalletEditorModal>["formType"];
+  colors: AppTheme["colors"];
+  spacing: AppTheme["spacing"];
+  formIcon: WalletEditorModalController["formIcon"];
+  formColor: WalletEditorModalController["formColor"];
+  formName: WalletEditorModalController["formName"];
+  formType: WalletEditorModalController["formType"];
 }
 export function WalletPreview({ colors, spacing, formIcon, formColor, formName, formType }: WalletPreviewProps) {
   return (<View

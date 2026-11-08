@@ -1,17 +1,17 @@
 import { styles } from "./DebtForm.styles";
-import type { useDebtForm } from "../hooks/useDebtForm";
+import type { DebtFormController } from "../hooks/useDebtForm";
 
 import { View, Text, TouchableOpacity } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 
-import { useAppTheme } from "../../../shared/theme/ThemeProvider";
+import { useAppTheme, type AppTheme } from "../../../shared/theme/ThemeProvider";
 interface DebtDirectionPickerProps {
-  colors: ReturnType<typeof useAppTheme>["colors"];
-  radius: ReturnType<typeof useAppTheme>["radius"];
-  spacing: ReturnType<typeof useAppTheme>["spacing"];
-  formData: ReturnType<typeof useDebtForm>["formData"];
-  setFormData: ReturnType<typeof useDebtForm>["setFormData"];
-  typography: ReturnType<typeof useAppTheme>["typography"];
+  colors: AppTheme["colors"];
+  radius: AppTheme["radius"];
+  spacing: AppTheme["spacing"];
+  formData: DebtFormController["formData"];
+  setFormData: DebtFormController["setFormData"];
+  typography: AppTheme["typography"];
 }
 export function DebtDirectionPicker({ colors, radius, spacing, formData, setFormData, typography }: DebtDirectionPickerProps) {
   return (<View

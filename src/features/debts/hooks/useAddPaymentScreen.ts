@@ -161,3 +161,5 @@ export function useAddPaymentScreen() {
     handleQuickAmount
   };
 }
+
+export type AddPaymentScreenController = ReturnType<typeof useAddPaymentScreen>;

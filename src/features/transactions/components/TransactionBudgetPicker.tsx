@@ -1,5 +1,5 @@
-import { styles } from "../screens/AddTransactionScreen.styles";
-import type { useAddTransactionScreen } from "../hooks/useAddTransactionScreen";
+import { styles } from "./AddTransactionForm.styles";
+import type { AddTransactionScreenController } from "../hooks/useAddTransactionScreen";
 
 import { ScrollView, Text, TouchableOpacity } from "react-native";
 
@@ -8,12 +8,12 @@ import { Ionicons } from "@expo/vector-icons";
 import { useAppTheme } from "../../../shared/theme/ThemeProvider";
 
 interface TransactionBudgetPickerProps {
-  showKeypad: ReturnType<typeof useAddTransactionScreen>["showKeypad"];
-  setShowKeypad: ReturnType<typeof useAddTransactionScreen>["setShowKeypad"];
-  setBudgetId: ReturnType<typeof useAddTransactionScreen>["setBudgetId"];
-  setManualBudgetSelected: ReturnType<typeof useAddTransactionScreen>["setManualBudgetSelected"];
-  budgetId: ReturnType<typeof useAddTransactionScreen>["budgetId"];
-  budgets: ReturnType<typeof useAddTransactionScreen>["budgets"];
+  showKeypad: AddTransactionScreenController["showKeypad"];
+  setShowKeypad: AddTransactionScreenController["setShowKeypad"];
+  setBudgetId: AddTransactionScreenController["setBudgetId"];
+  setManualBudgetSelected: AddTransactionScreenController["setManualBudgetSelected"];
+  budgetId: AddTransactionScreenController["budgetId"];
+  budgets: AddTransactionScreenController["budgets"];
 
 }
 export function TransactionBudgetPicker({ showKeypad, setShowKeypad, setBudgetId, setManualBudgetSelected, budgetId, budgets }: TransactionBudgetPickerProps) {

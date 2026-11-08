@@ -22,11 +22,6 @@ export interface ExportData {
 
 export const exportToExcel = async (data: ExportData): Promise<void> => {
   try {
-    console.log("Starting Excel export with data:", {
-      transactionCount: data.transactions.length,
-      period: data.period,
-      exportDate: data.exportDate,
-    });
 
     const workbook = XLSX.utils.book_new();
 
@@ -153,25 +148,16 @@ export const exportToExcel = async (data: ExportData): Promise<void> => {
 
     // Append unbudgeted sheet (no cell styling)
     XLSX.utils.book_append_sheet(workbook, unWs, "Unbudgeted");
-
-    console.log("Workbook and worksheets created successfully");
-
-    console.log("Generating Excel buffer...");
     const excelBuffer = XLSX.write(workbook, { type: "base64", bookType: "xlsx" });
 
     const timestamp = new Date().toISOString().slice(0, 19).replace(/[:-]/g, "");
     const filename = `financy_export_${data.period}_${timestamp}.xlsx`;
     const fileUri = documentDirectory + filename;
-
-    console.log("Writing file to:", fileUri);
     await writeAsStringAsync(fileUri, excelBuffer, { encoding: EncodingType.Base64 });
 
     if (await Sharing.isAvailableAsync()) {
-      console.log("Sharing available, opening share dialog...");
       await Sharing.shareAsync(fileUri);
-      console.log("Share dialog completed");
     } else {
-      console.log("Sharing not available on this device");
     }
   } catch (error) {
     console.error("Excel export error:", error);
@@ -181,11 +167,6 @@ export const exportToExcel = async (data: ExportData): Promise<void> => {
 
 export const exportToCSV = async (data: ExportData): Promise<void> => {
   try {
-    console.log("Starting CSV export with data:", {
-      transactionCount: data.transactions.length,
-      period: data.period,
-      exportDate: data.exportDate,
-    });
 
     const headers = ["Date", "Description", "Amount", "Type", "Category", "Budget", "Note"];
     const csvRows = [headers.join(",")];
@@ -205,23 +186,14 @@ export const exportToCSV = async (data: ExportData): Promise<void> => {
       csvRows.push(row.join(","));
     });
 
-    console.log("CSV content generated, rows:", csvRows.length);
-
     const csvContent = csvRows.join("\n");
     const timestamp = new Date().toISOString().slice(0, 19).replace(/[:-]/g, "");
     const filename = `financy_export_${data.period}_${timestamp}.csv`;
     const fileUri = documentDirectory + filename;
-
-    console.log("Writing CSV file to:", fileUri);
     await writeAsStringAsync(fileUri, csvContent, { encoding: EncodingType.UTF8 });
-
-    console.log("CSV file written successfully, checking sharing availability...");
     if (await Sharing.isAvailableAsync()) {
-      console.log("Sharing available, opening share dialog...");
       await Sharing.shareAsync(fileUri);
-      console.log("Share dialog completed");
     } else {
-      console.log("Sharing not available on this device");
     }
   } catch (error) {
     console.error("CSV export error:", error);

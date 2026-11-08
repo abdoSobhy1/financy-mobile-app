@@ -1,22 +1,22 @@
-import { styles } from "../screens/DebtsScreen.styles";
-import type { useDebtsScreen } from "../hooks/useDebtsScreen";
+import { styles } from "./DebtsSections.styles";
+import type { DebtsScreenController } from "../hooks/useDebtsScreen";
 
 import { View, Text, TouchableOpacity, ActivityIndicator } from "react-native";
 
 import { Ionicons } from "@expo/vector-icons";
-import { useAppTheme } from "../../../shared/theme/ThemeProvider";
+import { useAppTheme, type AppTheme } from "../../../shared/theme/ThemeProvider";
 import type { ReactNode } from "react";
 
 import { formatCurrency, formatDate } from "../../../shared/utils";
 
 interface DebtPortfolioProps {
-  colors: ReturnType<typeof useAppTheme>["colors"];
-  typography: ReturnType<typeof useAppTheme>["typography"];
-  filter: ReturnType<typeof useDebtsScreen>["filter"];
-  filteredDebts: ReturnType<typeof useDebtsScreen>["filteredDebts"];
-  navigation: ReturnType<typeof useDebtsScreen>["navigation"];
-  loading: ReturnType<typeof useDebtsScreen>["loading"];
-  spacing: ReturnType<typeof useAppTheme>["spacing"];
+  colors: AppTheme["colors"];
+  typography: AppTheme["typography"];
+  filter: DebtsScreenController["filter"];
+  filteredDebts: DebtsScreenController["filteredDebts"];
+  navigation: DebtsScreenController["navigation"];
+  loading: DebtsScreenController["loading"];
+  spacing: AppTheme["spacing"];
   renderEmptyState: () => ReactNode;
 }
 export function DebtPortfolio({ colors, typography, filter, filteredDebts, navigation, loading, spacing, renderEmptyState }: DebtPortfolioProps) {

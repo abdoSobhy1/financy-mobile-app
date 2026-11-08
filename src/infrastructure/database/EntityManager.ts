@@ -102,7 +102,6 @@ export class EntityManager {
     const duplicate = existingCategories.find((cat) => cat.name.toLowerCase() === category.name.toLowerCase() && cat.type === category.type);
 
     if (duplicate) {
-      console.log(`Category ${category.name} already exists, returning existing`);
       return duplicate;
     }
 

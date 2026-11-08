@@ -1,5 +1,5 @@
-import { styles } from "../screens/VoiceVerifyScreen.styles";
-import type { useVoiceVerifyScreen } from "../hooks/useVoiceVerifyScreen";
+import { styles } from "./VoiceVerifySection.styles";
+import type { VoiceVerifyScreenController } from "../hooks/useVoiceVerifyScreen";
 
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView, ActivityIndicator } from "react-native";
 
@@ -9,21 +9,21 @@ import { formatCurrency } from "../../../shared/utils";
 import { Card, IconChip } from "../../../shared/ui";
 
 interface VoiceReviewEntriesProps {
-  source: ReturnType<typeof useVoiceVerifyScreen>["source"];
-  parsedTransactions: ReturnType<typeof useVoiceVerifyScreen>["parsedTransactions"];
-  summary: ReturnType<typeof useVoiceVerifyScreen>["summary"];
-  totalAmount: ReturnType<typeof useVoiceVerifyScreen>["totalAmount"];
-  itemsSum: ReturnType<typeof useVoiceVerifyScreen>["itemsSum"];
-  discount: ReturnType<typeof useVoiceVerifyScreen>["discount"];
-  rawText: ReturnType<typeof useVoiceVerifyScreen>["rawText"];
-  handleEnhanceWithAI: ReturnType<typeof useVoiceVerifyScreen>["handleEnhanceWithAI"];
-  isEnhancingAI: ReturnType<typeof useVoiceVerifyScreen>["isEnhancingAI"];
-  categoriesMap: ReturnType<typeof useVoiceVerifyScreen>["categoriesMap"];
-  handleEdit: ReturnType<typeof useVoiceVerifyScreen>["handleEdit"];
-  handleRemove: ReturnType<typeof useVoiceVerifyScreen>["handleRemove"];
-  handleAddAnotherVoice: ReturnType<typeof useVoiceVerifyScreen>["handleAddAnotherVoice"];
-  setEditData: ReturnType<typeof useVoiceVerifyScreen>["setEditData"];
-  setEditingIndex: ReturnType<typeof useVoiceVerifyScreen>["setEditingIndex"];
+  source: VoiceVerifyScreenController["source"];
+  parsedTransactions: VoiceVerifyScreenController["parsedTransactions"];
+  summary: VoiceVerifyScreenController["summary"];
+  totalAmount: VoiceVerifyScreenController["totalAmount"];
+  itemsSum: VoiceVerifyScreenController["itemsSum"];
+  discount: VoiceVerifyScreenController["discount"];
+  rawText: VoiceVerifyScreenController["rawText"];
+  handleEnhanceWithAI: VoiceVerifyScreenController["handleEnhanceWithAI"];
+  isEnhancingAI: VoiceVerifyScreenController["isEnhancingAI"];
+  categoriesMap: VoiceVerifyScreenController["categoriesMap"];
+  handleEdit: VoiceVerifyScreenController["handleEdit"];
+  handleRemove: VoiceVerifyScreenController["handleRemove"];
+  handleAddAnotherVoice: VoiceVerifyScreenController["handleAddAnotherVoice"];
+  setEditData: VoiceVerifyScreenController["setEditData"];
+  setEditingIndex: VoiceVerifyScreenController["setEditingIndex"];
 
 }
 export function VoiceReviewEntries({ source, parsedTransactions, summary, totalAmount, itemsSum, discount, rawText, handleEnhanceWithAI, isEnhancingAI, categoriesMap, handleEdit, handleRemove, handleAddAnotherVoice, setEditData, setEditingIndex }: VoiceReviewEntriesProps) {
@@ -219,7 +219,7 @@ export function VoiceReviewEntries({ source, parsedTransactions, summary, totalA
           <View style={styles.cardTop}>
             <View style={styles.cardLeft}>
               <IconChip
-                icon={(category as any)?.icon || "pricetag"}
+                icon={(category?.icon || "pricetag") as React.ComponentProps<typeof Ionicons>["name"]}
                 color={iconColor}
                 size="md"
                 style={{ marginRight: 12 }}

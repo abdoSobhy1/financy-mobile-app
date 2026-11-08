@@ -135,3 +135,5 @@ export function useDebtPaymentsScreen() {
     isPaidOff
   };
 }
+
+export type DebtPaymentsScreenController = ReturnType<typeof useDebtPaymentsScreen>;

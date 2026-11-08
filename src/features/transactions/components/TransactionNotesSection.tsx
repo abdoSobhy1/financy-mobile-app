@@ -1,5 +1,5 @@
-import { styles } from "../screens/AddTransactionScreen.styles";
-import type { useAddTransactionScreen } from "../hooks/useAddTransactionScreen";
+import { styles } from "./AddTransactionForm.styles";
+import type { AddTransactionScreenController } from "../hooks/useAddTransactionScreen";
 
 import { View, TextInput, Text, TouchableOpacity, Keyboard } from "react-native";
 
@@ -8,19 +8,19 @@ import { Ionicons } from "@expo/vector-icons";
 import { useAppTheme } from "../../../shared/theme/ThemeProvider";
 
 interface TransactionNotesSectionProps {
-  setOptionsCardY: ReturnType<typeof useAddTransactionScreen>["setOptionsCardY"];
-  descriptionInputRef: ReturnType<typeof useAddTransactionScreen>["descriptionInputRef"];
-  description: ReturnType<typeof useAddTransactionScreen>["description"];
-  setShowKeypad: ReturnType<typeof useAddTransactionScreen>["setShowKeypad"];
-  setIsKeypadMounted: ReturnType<typeof useAddTransactionScreen>["setIsKeypadMounted"];
-  setAmountFocused: ReturnType<typeof useAddTransactionScreen>["setAmountFocused"];
-  scrollToDescription: ReturnType<typeof useAddTransactionScreen>["scrollToDescription"];
-  setDescription: ReturnType<typeof useAddTransactionScreen>["setDescription"];
-  showMore: ReturnType<typeof useAddTransactionScreen>["showMore"];
-  noteInputRef: ReturnType<typeof useAddTransactionScreen>["noteInputRef"];
-  showKeypad: ReturnType<typeof useAddTransactionScreen>["showKeypad"];
-  setShowDatePicker: ReturnType<typeof useAddTransactionScreen>["setShowDatePicker"];
-  date: ReturnType<typeof useAddTransactionScreen>["date"];
+  setOptionsCardY: AddTransactionScreenController["setOptionsCardY"];
+  descriptionInputRef: AddTransactionScreenController["descriptionInputRef"];
+  description: AddTransactionScreenController["description"];
+  setShowKeypad: AddTransactionScreenController["setShowKeypad"];
+  setIsKeypadMounted: AddTransactionScreenController["setIsKeypadMounted"];
+  setAmountFocused: AddTransactionScreenController["setAmountFocused"];
+  scrollToDescription: AddTransactionScreenController["scrollToDescription"];
+  setDescription: AddTransactionScreenController["setDescription"];
+  showMore: AddTransactionScreenController["showMore"];
+  noteInputRef: AddTransactionScreenController["noteInputRef"];
+  showKeypad: AddTransactionScreenController["showKeypad"];
+  setShowDatePicker: AddTransactionScreenController["setShowDatePicker"];
+  date: AddTransactionScreenController["date"];
 
 }
 export function TransactionNotesSection({ setOptionsCardY, descriptionInputRef, description, setShowKeypad, setIsKeypadMounted, setAmountFocused, scrollToDescription, setDescription, showMore, noteInputRef, showKeypad, setShowDatePicker, date }: TransactionNotesSectionProps) {

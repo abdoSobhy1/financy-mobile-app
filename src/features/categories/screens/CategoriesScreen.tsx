@@ -51,7 +51,7 @@ export const CategoriesScreen: React.FC = () => {
         onPress={() => handleCardPress(cat)}
         activeOpacity={0.7}>
         <View style={[styles.iconBox, { backgroundColor: resolved.bg }]}>
-          <Ionicons name={(cat as any).icon || "pricetag"} size={24} color={resolved.fg} />
+          <Ionicons name={(cat.icon || "pricetag") as React.ComponentProps<typeof Ionicons>["name"]} size={24} color={resolved.fg} />
         </View>
         <Text
           style={[typography.label, { color: colors.onBackground, textAlign: "center", marginBottom: 4 }]}
@@ -82,7 +82,7 @@ export const CategoriesScreen: React.FC = () => {
         onPress={() => handleCardPress(cat)}
         activeOpacity={0.7}>
         <View style={[styles.listIconBox, { backgroundColor: resolved.bg }]}>
-          <Ionicons name={(cat as any).icon || "pricetag"} size={20} color={resolved.fg} />
+          <Ionicons name={(cat.icon || "pricetag") as React.ComponentProps<typeof Ionicons>["name"]} size={20} color={resolved.fg} />
         </View>
         <View style={{ flex: 1 }}>
           <Text style={[typography.label, { color: colors.onBackground }]}>{cat.name}</Text>
@@ -197,7 +197,7 @@ export const CategoriesScreen: React.FC = () => {
             name: editingCategory.name,
             type: editingCategory.type,
             color: editingCategory.color,
-            icon: (editingCategory as any).icon,
+            icon: editingCategory.icon,
           }}
           title={`Edit "${editingCategory.name}"`}
         />

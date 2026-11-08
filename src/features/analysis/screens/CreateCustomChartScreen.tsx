@@ -3,7 +3,7 @@ import { ChartDataSourceSelector } from "../components/ChartDataSourceSelector";
 import { ChartColorThemeSelector } from "../components/ChartColorThemeSelector";
 import { ChartFilterFields } from "../components/ChartFilterFields";
 import { CustomChartHeader } from "../components/CustomChartHeader";
-import { getStyles } from "./CreateCustomChartScreen.styles";
+import { getStyles } from "../components/CustomChartBuilder.styles";
 import { useCreateCustomChartScreen } from "../hooks/useCreateCustomChartScreen";
 
 import React from "react";

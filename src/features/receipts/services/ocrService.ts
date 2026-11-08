@@ -308,30 +308,13 @@ export async function extractTextFromFile(asset: DocumentAsset): Promise<string>
 
 export function logOcrDebugReport(report: OcrDebugReport) {
   const lineBar = "━".repeat(60);
-  console.log(`\n${lineBar}`);
-  console.log("🧾 [OCR SCAN DEBUG REPORT]");
-  console.log(lineBar);
-  console.log(`📄 Total Lines in Document:  ${report.totalLines}`);
-  console.log(`🏬 Merchant / Source:        ${report.merchant || "(not detected)"}`);
-  console.log(`📅 Date Detected:            ${report.date ? report.date.toISOString().split("T")[0] : "(not detected)"}`);
-  console.log(`💳 Transaction Type:         ${report.type.toUpperCase()}`);
-  console.log(`💰 Grand Total Detected:     ${report.detectedGrandTotal !== undefined ? report.detectedGrandTotal + " EGP" : "(not detected)"}`);
   if (report.computedItemsSum !== undefined) {
-    console.log(`🧮 Items Gross Sum:          ${report.computedItemsSum} EGP`);
   }
   if (report.discount) {
-    console.log(`🏷️ Discount Detected:        ${report.discount} EGP`);
   }
-  console.log(`📦 Recognized Items:         ${report.recognizedItemsCount}`);
-  console.log(`❓ Unrecognized Lines:       ${report.unrecognizedLinesCount}`);
-  console.log(lineBar);
-
-  console.log(`✅ [DETECTED ITEMS / TRANSACTIONS (${report.items.length})]:`);
   if (report.items.length === 0) {
     if (report.detectedGrandTotal !== undefined) {
-      console.log(`   • Single Total: ${report.detectedGrandTotal} EGP (${report.merchant || "Transaction"})`);
     } else {
-      console.log("   (No transactions or items detected)");
     }
   } else {
     report.items.forEach((it, i) => {
@@ -340,24 +323,13 @@ export function logOcrDebugReport(report: OcrDebugReport) {
           ? ` (Qty: ${it.quantity} × ${it.unitPrice ?? (it.price / it.quantity).toFixed(2)})`
           : "";
       const cat = it.categoryId ? ` [Cat: ${it.categoryId}]` : "";
-      console.log(`   ${(i + 1).toString().padStart(2, " ")}. [${it.price.toFixed(2)} EGP] ${it.name}${qtyDetails}${cat}`);
     });
   }
-
-  console.log(lineBar);
-  console.log(`⚠️ [WHAT WAS NOT DETECTED AS ITEMS (${report.unrecognizedLines.length})]:`);
   if (report.unrecognizedLines.length === 0) {
-    console.log("   (All lines were matched as items or metadata)");
   } else {
     report.unrecognizedLines.forEach((l, i) => {
-      console.log(`   ${(i + 1).toString().padStart(2, " ")}. "${l}"`);
     });
   }
-
-  console.log(lineBar);
-  console.log("📜 [RAW OCR EXTRACTED TEXT]:");
-  console.log(report.rawText.trim());
-  console.log(`${lineBar}\n`);
 }
 
 function parseInstaPaySlip(
@@ -1268,7 +1240,6 @@ export async function scanReceiptFile(
       const hasPersonalKey = Boolean(config.apiKey && config.apiKey.trim().length > 5);
       if (online && (hasGeminiGateway || hasPersonalKey) && await canUseGemini()) {
         usedHostedVision = hasGeminiGateway;
-        console.log("[OCRService] Sending resized image (max 1080w/1920h) directly to Google Gemini Vision...");
         geminiRequestMade = true;
         let visionResult: OcrReceiptResult;
         try {
@@ -1279,9 +1250,6 @@ export async function scanReceiptFile(
         const hasRecognizedItems = Boolean(visionResult?.items?.length);
         const hasRecognizedAmount = Number.isFinite(visionResult?.amount) && (visionResult?.amount || 0) > 0;
         if (visionResult && (hasRecognizedItems || hasRecognizedAmount)) {
-          console.log(
-            `[OCRService] Gemini Vision parsed ${visionResult.items?.length || 0} items${hasRecognizedAmount ? ` and a total of ${visionResult.amount}` : ""}.`,
-          );
           return visionResult;
         }
       }
@@ -1311,7 +1279,6 @@ export async function scanReceiptFile(
     try {
       const isNetOnline = await AIService.isOnline();
       if (isNetOnline && await canUseGemini()) {
-        console.log("[OCRService] Calling Cloud AI for hybrid receipt understanding...");
         geminiRequestMade = true;
         let aiReceipt: OcrReceiptResult | null;
         try {
@@ -1320,7 +1287,6 @@ export async function scanReceiptFile(
           await markQuotaConsumed();
         }
         if (aiReceipt && aiReceipt.items && aiReceipt.items.length > 0) {
-          console.log(`[OCRService] Cloud AI successfully extracted ${aiReceipt.items.length} items.`);
           result = aiReceipt;
         } else if (aiReceipt && aiReceipt.amount) {
           result = {

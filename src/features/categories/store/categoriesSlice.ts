@@ -32,7 +32,7 @@ export const addCategory = createAsyncThunk(
       syncStatus: "pending",
     };
     if (categoryData.icon !== undefined) {
-      (category as any).icon = categoryData.icon;
+      category.icon = categoryData.icon;
     }
     return await db.categories.createCategory(category);
   },
@@ -59,7 +59,7 @@ export const updateCategory = createAsyncThunk(
       categoryUpdates.color = updates.color;
     }
     if (updates.icon !== undefined) {
-      (categoryUpdates as any).icon = updates.icon;
+      categoryUpdates.icon = updates.icon;
     }
 
     await db.categories.updateCategory(id, categoryUpdates);

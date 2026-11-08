@@ -55,14 +55,6 @@ export class TransactionRepository {
 
     // Debug: log budget assignment and transaction date to help diagnose period calculation issues
     if (tableData.budget_id) {
-      console.log(
-        "[TransactionRepository] createTransaction -> budgetId:",
-        tableData.budget_id,
-        "date:",
-        tableData.date,
-        "amount:",
-        tableData.amount,
-      );
     }
 
     const newTransaction = {
@@ -105,8 +97,6 @@ export class TransactionRepository {
       log_id: `debug-push-${id}-${Date.now()}`,
     } as any;
 
-    console.log(`🚀 Debug pushTransactionNow for id=${id}`);
-
     try {
       // Call syncLocalChanges with explicit params: collectionName, operation, documentId, data
       await SyncService.getInstance().syncLocalChanges(
@@ -115,7 +105,6 @@ export class TransactionRepository {
         id,
         row,
       );
-      console.log(`✅ pushTransactionNow completed for id=${id}`);
     } catch (err) {
       console.error(`❌ pushTransactionNow failed for id=${id}`, err);
       throw err;
@@ -329,9 +318,6 @@ export class TransactionRepository {
             );
           }
         }
-        console.log(
-          `Deleted linked debt payment ${transaction.linkedDebtPaymentId} and restored balance when deleting transaction ${id}`,
-        );
       }
     }
 

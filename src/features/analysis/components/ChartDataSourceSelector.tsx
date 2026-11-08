@@ -1,8 +1,8 @@
-import { getStyles } from "../screens/CreateCustomChartScreen.styles";
-import type { useCreateCustomChartScreen } from "../hooks/useCreateCustomChartScreen";
+import { getStyles } from "./CustomChartBuilder.styles";
+import type { CreateCustomChartScreenController } from "../hooks/useCreateCustomChartScreen";
 
 import { Text, TouchableOpacity, View } from "react-native";
-import { useAppTheme } from "../../../shared/theme/ThemeProvider";
+import { useAppTheme, type AppTheme } from "../../../shared/theme/ThemeProvider";
 import { Ionicons } from "@expo/vector-icons";
 
 import Card from "../../../shared/ui/Card";
@@ -12,9 +12,9 @@ import type { DataSource } from "../store/analysisSlice";
 interface ChartDataSourceSelectorProps {
   styles: ReturnType<typeof getStyles>;
   dataSources: { source: DataSource; label: string; description: string; }[];
-  selectedDataSource: ReturnType<typeof useCreateCustomChartScreen>["selectedDataSource"];
-  setSelectedDataSource: ReturnType<typeof useCreateCustomChartScreen>["setSelectedDataSource"];
-  colors: ReturnType<typeof useAppTheme>["colors"];
+  selectedDataSource: CreateCustomChartScreenController["selectedDataSource"];
+  setSelectedDataSource: CreateCustomChartScreenController["setSelectedDataSource"];
+  colors: AppTheme["colors"];
 }
 export function ChartDataSourceSelector({ styles, dataSources, selectedDataSource, setSelectedDataSource, colors }: ChartDataSourceSelectorProps) {
   return ((

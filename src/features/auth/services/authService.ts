@@ -121,9 +121,6 @@ export class AuthService {
           AuthService.SESSION_KEY,
           JSON.stringify(sessionData),
         );
-        console.log(
-          `💾 Session saved for user ${user.uid}, expires at ${new Date(sessionData.expiresAt).toLocaleString()}`,
-        );
 
         if (isGuestUser) {
           await AsyncStorage.setItem(AuthService.GUEST_DATA_PENDING_KEY, "true");
@@ -134,9 +131,6 @@ export class AuthService {
         // Preserve local guest data when it is intentionally adopted by a registered account.
         // Other account switches still reset the local database to prevent data leakage.
         if (switchingUsers && !preserveGuestData) {
-          console.log(
-            `👤 Session user changed from ${lastUserId || "none"} to ${user.uid}. Resetting local database for clean session.`,
-          );
           try {
             await this.stopBackgroundSync();
             const dbManager = DatabaseManager.getInstance();
@@ -146,7 +140,6 @@ export class AuthService {
               await AsyncStorage.removeItem("financy_categories_seeded_v1_guest");
               await AsyncStorage.removeItem("financy_wallets_seeded_v1_guest");
             }
-            console.log("✅ Local database reset successfully");
           } catch (dbError) {
             console.error("❌ Failed to reset database on user switch:", dbError);
           }
@@ -196,9 +189,6 @@ export class AuthService {
         await AsyncStorage.setItem(
           AuthService.SESSION_KEY,
           JSON.stringify(sessionData),
-        );
-        console.log(
-          `🔄 Session activity updated for user ${sessionData.user.uid}, renewed until ${new Date(sessionData.expiresAt).toLocaleString()}`,
         );
       }
     } catch (error) {
@@ -256,7 +246,6 @@ export class AuthService {
             language: "en",
           },
         });
-        console.log("✅ Created user document in Firestore");
       } catch (firestoreError) {
         console.error("❌ Failed to create user document:", firestoreError);
         // We don't throw here to ensure the auth account is still returned,
@@ -285,8 +274,6 @@ export class AuthService {
           await new WalletRepository().seedDefaultWallets();
         }
       }
-
-      console.log("User created successfully:", user.uid);
       return user;
     } catch (error) {
       console.error("Sign up error:", error);
@@ -310,10 +297,6 @@ export class AuthService {
 
       // Save session to AsyncStorage (implements rolling 30-day renewal)
       await this.saveSession(user);
-
-      console.log(
-        `✅ User signed in successfully: ${user.uid} - Session renewed for 30 days`,
-      );
       return user;
     } catch (error) {
       console.error("Sign in error:", error);
@@ -353,7 +336,6 @@ export class AuthService {
 
     await AsyncStorage.removeItem("financy_user_profile_v1");
     await this.saveSession(guestUser);
-    console.log("👤 Signed in as Guest (local-only data, hosted AI available when anonymous auth is enabled)");
     return guestUser;
   }
 
@@ -504,8 +486,6 @@ export class AuthService {
           console.warn("Failed to clear user-scoped data on sign out:", prefError);
         }
       }
-
-      console.log("User signed out successfully");
     } catch (error) {
       console.error("Sign out error:", error);
       throw new Error("Failed to sign out");
@@ -518,7 +498,6 @@ export class AuthService {
   public async sendPasswordReset(email: string): Promise<void> {
     try {
       await sendPasswordResetEmail(this.getAuth(), email);
-      console.log("Password reset email sent");
     } catch (error) {
       console.error("Password reset error:", error);
       throw this.handleAuthError(error as AuthError);
@@ -627,7 +606,6 @@ export class AuthService {
       if (sessionData) {
         // Update activity timestamp to extend session
         await this.updateSessionActivity();
-        console.log("Session restored for user:", sessionData.user.uid);
 
         // Try to restore Firebase auth state if possible
         // This helps with sync operations that expect Firebase auth
@@ -648,9 +626,6 @@ export class AuthService {
       // Check if Firebase user matches stored user
       const firebaseUser = this.getAuth().currentUser;
       if (!firebaseUser || firebaseUser.uid !== storedUser.uid) {
-        console.log(
-          "Firebase auth state differs from stored session. This is normal on app startup.",
-        );
         // We don't force re-authentication here, just log the difference
         // The sync service will work with stored session until Firebase auth catches up
       }

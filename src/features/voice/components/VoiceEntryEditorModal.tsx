@@ -1,23 +1,23 @@
 import { useAppTheme, resolveCategoryColor } from "../../../shared/theme/ThemeProvider";
-import { styles } from "../screens/VoiceVerifyScreen.styles";
-import type { useVoiceVerifyScreen } from "../hooks/useVoiceVerifyScreen";
+import { styles } from "./VoiceVerifySection.styles";
+import type { VoiceVerifyScreenController } from "../hooks/useVoiceVerifyScreen";
 
 import { View, Text, TouchableOpacity, ScrollView, Modal, TextInput, TouchableWithoutFeedback, KeyboardAvoidingView, Platform } from "react-native";
 
 import { Ionicons } from "@expo/vector-icons";
 
 interface VoiceEntryEditorModalProps {
-  editingIndex: ReturnType<typeof useVoiceVerifyScreen>["editingIndex"];
-  setEditingIndex: ReturnType<typeof useVoiceVerifyScreen>["setEditingIndex"];
-  parsedTransactions: ReturnType<typeof useVoiceVerifyScreen>["parsedTransactions"];
-  editData: ReturnType<typeof useVoiceVerifyScreen>["editData"];
-  setEditData: ReturnType<typeof useVoiceVerifyScreen>["setEditData"];
-  categoryIds: ReturnType<typeof useVoiceVerifyScreen>["categoryIds"];
-  categoriesMap: ReturnType<typeof useVoiceVerifyScreen>["categoriesMap"];
-  setShowCreateCategoryModal: ReturnType<typeof useVoiceVerifyScreen>["setShowCreateCategoryModal"];
-  budgetIds: ReturnType<typeof useVoiceVerifyScreen>["budgetIds"];
-  budgetsMap: ReturnType<typeof useVoiceVerifyScreen>["budgetsMap"];
-  saveEdit: ReturnType<typeof useVoiceVerifyScreen>["saveEdit"];
+  editingIndex: VoiceVerifyScreenController["editingIndex"];
+  setEditingIndex: VoiceVerifyScreenController["setEditingIndex"];
+  parsedTransactions: VoiceVerifyScreenController["parsedTransactions"];
+  editData: VoiceVerifyScreenController["editData"];
+  setEditData: VoiceVerifyScreenController["setEditData"];
+  categoryIds: VoiceVerifyScreenController["categoryIds"];
+  categoriesMap: VoiceVerifyScreenController["categoriesMap"];
+  setShowCreateCategoryModal: VoiceVerifyScreenController["setShowCreateCategoryModal"];
+  budgetIds: VoiceVerifyScreenController["budgetIds"];
+  budgetsMap: VoiceVerifyScreenController["budgetsMap"];
+  saveEdit: VoiceVerifyScreenController["saveEdit"];
 
 }
 export function VoiceEntryEditorModal({ editingIndex, setEditingIndex, parsedTransactions, editData, setEditData, categoryIds, categoriesMap, setShowCreateCategoryModal, budgetIds, budgetsMap, saveEdit }: VoiceEntryEditorModalProps) {
@@ -124,7 +124,7 @@ export function VoiceEntryEditorModal({ editingIndex, setEditingIndex, parsedTra
                   { backgroundColor: isSelected ? resolved.fg : colors.surfaceVariant },
                 ]}>
                 <Ionicons
-                  name={(c as any).icon || "pricetag"}
+                  name={(c.icon || "pricetag") as React.ComponentProps<typeof Ionicons>["name"]}
                   size={14}
                   color={isSelected ? "#0C0E12" : resolved.fg}
                   style={{ marginRight: 4 }}

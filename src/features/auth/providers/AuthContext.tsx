@@ -48,10 +48,8 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
           try {
             const currentUser = await authService.getCurrentAuthenticatedUser();
             if (currentUser && !currentUser.isGuest && currentUser.uid !== "guest") {
-              console.log("🔐 User authenticated, initializing smart sync...");
               dispatch(initializeSync());
             } else {
-              console.log("⚠️ User no longer authenticated, skipping sync");
             }
           } catch (error) {
             console.error("❌ Failed to initialize smart sync:", error);

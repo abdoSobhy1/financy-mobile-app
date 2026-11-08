@@ -145,7 +145,7 @@ function darkenHex(hex: string, factor: number): string {
   return `#${r.toString(16).padStart(2, "0")}${g.toString(16).padStart(2, "0")}${b.toString(16).padStart(2, "0")}`;
 }
 
-type ThemeContextType = {
+export type ThemeContextType = {
   colors: {
     primary: string;
     onPrimary: string;
@@ -206,6 +206,8 @@ type ThemeContextType = {
   updateTheme?: (sourceColor: string) => void;
   resetTheme?: () => void;
 };
+
+export type AppTheme = ThemeContextType;
 
 const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
 

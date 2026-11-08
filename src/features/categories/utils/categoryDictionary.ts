@@ -491,9 +491,6 @@ export function guessCategoryId(
   );
 
   if (match) {
-    console.log(
-      `🎯 Dictionary guess: "${description}" → ${guess.categoryName} (${(guess.confidence * 100).toFixed(0)}% via "${guess.matchedEntry}")`,
-    );
   }
 
   return match?.id;

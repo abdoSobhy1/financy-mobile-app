@@ -1,16 +1,16 @@
-import { styles } from "../screens/BudgetScreens.styles";
-import type { useBudgetListScreen } from "../hooks/useBudgetListScreen";
+import { styles } from "./BudgetScreens.styles";
+import type { BudgetListScreenController } from "../hooks/useBudgetListScreen";
 
 import { View, Text, TouchableOpacity } from "react-native";
 
-import { useAppTheme } from "../../../shared/theme/ThemeProvider";
+import { useAppTheme, type AppTheme } from "../../../shared/theme/ThemeProvider";
 import { Ionicons } from "@expo/vector-icons";
 
 interface BudgetEmptyStateProps {
-  colors: ReturnType<typeof useAppTheme>["colors"];
-  typography: ReturnType<typeof useAppTheme>["typography"];
-  spacing: ReturnType<typeof useAppTheme>["spacing"];
-  navigation: ReturnType<typeof useBudgetListScreen>["navigation"];
+  colors: AppTheme["colors"];
+  typography: AppTheme["typography"];
+  spacing: AppTheme["spacing"];
+  navigation: BudgetListScreenController["navigation"];
 }
 export function BudgetEmptyState({ colors, typography, spacing, navigation }: BudgetEmptyStateProps) {
   return ((

@@ -1,20 +1,20 @@
-import { getStyles } from "../screens/SettingsScreen.styles";
+import { getStyles } from "./SettingsModals.styles";
 import { useMemo } from "react";
-import type { useSettingsScreen } from "../hooks/useSettingsScreen";
+import type { SettingsScreenController } from "../hooks/useSettingsScreen";
 
 import { View, Text, TouchableOpacity, Modal, ActivityIndicator, TextInput } from "react-native";
 
 import { useAppTheme } from "../../../shared/theme/ThemeProvider";
 
 interface ProfileEditorModalProps {
-  showProfileModal: ReturnType<typeof useSettingsScreen>["showProfileModal"];
-  setShowProfileModal: ReturnType<typeof useSettingsScreen>["setShowProfileModal"];
-  isGuest: ReturnType<typeof useSettingsScreen>["isGuest"];
-  profileNameInput: ReturnType<typeof useSettingsScreen>["profileNameInput"];
-  setProfileNameInput: ReturnType<typeof useSettingsScreen>["setProfileNameInput"];
-  user: ReturnType<typeof useSettingsScreen>["user"];
-  savingProfile: ReturnType<typeof useSettingsScreen>["savingProfile"];
-  handleSaveProfile: ReturnType<typeof useSettingsScreen>["handleSaveProfile"];
+  showProfileModal: SettingsScreenController["showProfileModal"];
+  setShowProfileModal: SettingsScreenController["setShowProfileModal"];
+  isGuest: SettingsScreenController["isGuest"];
+  profileNameInput: SettingsScreenController["profileNameInput"];
+  setProfileNameInput: SettingsScreenController["setProfileNameInput"];
+  user: SettingsScreenController["user"];
+  savingProfile: SettingsScreenController["savingProfile"];
+  handleSaveProfile: SettingsScreenController["handleSaveProfile"];
 
 }
 export function ProfileEditorModal({ showProfileModal, setShowProfileModal, isGuest, profileNameInput, setProfileNameInput, user, savingProfile, handleSaveProfile }: ProfileEditorModalProps) {

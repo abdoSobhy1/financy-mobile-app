@@ -15,7 +15,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 
 import { AppHeader } from "../../../shared/ui";
 
-import { FirebaseCleanupModal } from "../../../infrastructure/firebase/components/FirebaseCleanupModal";
+import { FirebaseCleanupModal } from "../components/FirebaseCleanupModal";
 
 export const SettingsScreen: React.FC = () => {
   const settings = useSettingsScreen();

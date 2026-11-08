@@ -51,8 +51,8 @@ export function computeTopExpenseCategories(
   const sortedCatIds = Object.keys(scores).sort((a, b) => {
     const scoreDiff = (scores[b] || 0) - (scores[a] || 0);
     if (scoreDiff !== 0) return scoreDiff;
-    const countA = (catsMap[a] as any)?.entryCount || 0;
-    const countB = (catsMap[b] as any)?.entryCount || 0;
+    const countA = catsMap[a]?.entryCount || 0;
+    const countB = catsMap[b]?.entryCount || 0;
     return countB - countA;
   });
 
@@ -66,9 +66,9 @@ export function computeTopExpenseCategories(
       slots.push({
         id: cat.id,
         name: cat.name,
-        colorName: (cat as any).color || "bluegrey",
+        colorName: cat.color || "bluegrey",
         isFallback: false,
-        iconName: (cat as any).icon || "receipt-outline",
+        iconName: cat.icon || "receipt-outline",
       });
       pickedIds.add(cat.id);
     }
@@ -81,9 +81,9 @@ export function computeTopExpenseCategories(
         slots.push({
           id: cat.id,
           name: cat.name,
-          colorName: (cat as any).color || "bluegrey",
+          colorName: cat.color || "bluegrey",
           isFallback: false,
-          iconName: (cat as any).icon || "cart",
+          iconName: cat.icon || "cart",
         });
         pickedIds.add(cat.id);
       }

@@ -174,3 +174,5 @@ export function useTransferModal({
   const destinationOptions = visibleWallets.filter((w) => w.id !== fromWalletId);
   return { budgetsMap, fromWalletId, toWalletId, setToWalletId, transferAmount, setTransferAmount, transferBudgetId, setTransferBudgetId, transferError, setTransferError, loading, amountInputRef, visibleWallets, handleFromWalletChange, handleTransferSubmit, confirmExit, destinationOptions };
 }
+
+export type TransferModalController = ReturnType<typeof useTransferModal>;

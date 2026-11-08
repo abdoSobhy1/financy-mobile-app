@@ -81,3 +81,5 @@ export function useDebtsScreen() {
     filteredDebts
   };
 }
+
+export type DebtsScreenController = ReturnType<typeof useDebtsScreen>;

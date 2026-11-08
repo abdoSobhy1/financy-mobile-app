@@ -1,5 +1,5 @@
 import { useAppTheme } from "../../../shared/theme/ThemeProvider";
-import type { useWalletManagementScreen } from "../hooks/useWalletManagementScreen";
+import type { WalletManagementScreenController } from "../hooks/useWalletManagementScreen";
 
 import { View, Text, TouchableOpacity, Modal } from "react-native";
 
@@ -8,13 +8,13 @@ import { Ionicons } from "@expo/vector-icons";
 import { ToastOverlay } from "../../../shared/ui";
 
 interface MoveWalletModalProps {
-  showMoveModal: ReturnType<typeof useWalletManagementScreen>["showMoveModal"];
-  setShowMoveModal: ReturnType<typeof useWalletManagementScreen>["setShowMoveModal"];
-  walletToMove: ReturnType<typeof useWalletManagementScreen>["walletToMove"];
-  wallets: ReturnType<typeof useWalletManagementScreen>["wallets"];
-  destinationWalletId: ReturnType<typeof useWalletManagementScreen>["destinationWalletId"];
-  setDestinationWalletId: ReturnType<typeof useWalletManagementScreen>["setDestinationWalletId"];
-  handleMoveAndDeleteWallet: ReturnType<typeof useWalletManagementScreen>["handleMoveAndDeleteWallet"];
+  showMoveModal: WalletManagementScreenController["showMoveModal"];
+  setShowMoveModal: WalletManagementScreenController["setShowMoveModal"];
+  walletToMove: WalletManagementScreenController["walletToMove"];
+  wallets: WalletManagementScreenController["wallets"];
+  destinationWalletId: WalletManagementScreenController["destinationWalletId"];
+  setDestinationWalletId: WalletManagementScreenController["setDestinationWalletId"];
+  handleMoveAndDeleteWallet: WalletManagementScreenController["handleMoveAndDeleteWallet"];
 
 }
 export function MoveWalletModal({ showMoveModal, setShowMoveModal, walletToMove, wallets, destinationWalletId, setDestinationWalletId, handleMoveAndDeleteWallet }: MoveWalletModalProps) {

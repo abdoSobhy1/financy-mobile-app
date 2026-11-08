@@ -1,18 +1,18 @@
 import { styles } from "./DebtForm.styles";
-import type { useDebtForm } from "../hooks/useDebtForm";
+import type { DebtFormController } from "../hooks/useDebtForm";
 
 import { View, Text, TextInput, TouchableOpacity } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 
 import { useAppTheme } from "../../../shared/theme/ThemeProvider";
 interface DebtCreditorFieldsProps {
-  nameRef: ReturnType<typeof useDebtForm>["nameRef"];
-  formData: ReturnType<typeof useDebtForm>["formData"];
-  updateField: ReturnType<typeof useDebtForm>["updateField"];
-  creditorRef: ReturnType<typeof useDebtForm>["creditorRef"];
-  minPaymentRef: ReturnType<typeof useDebtForm>["minPaymentRef"];
-  setShowDatePicker: ReturnType<typeof useDebtForm>["setShowDatePicker"];
-  setFormData: ReturnType<typeof useDebtForm>["setFormData"];
+  nameRef: DebtFormController["nameRef"];
+  formData: DebtFormController["formData"];
+  updateField: DebtFormController["updateField"];
+  creditorRef: DebtFormController["creditorRef"];
+  minPaymentRef: DebtFormController["minPaymentRef"];
+  setShowDatePicker: DebtFormController["setShowDatePicker"];
+  setFormData: DebtFormController["setFormData"];
 
 }
 export function DebtCreditorFields({ nameRef, formData, updateField, creditorRef, minPaymentRef, setShowDatePicker, setFormData }: DebtCreditorFieldsProps) {

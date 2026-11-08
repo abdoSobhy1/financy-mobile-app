@@ -132,7 +132,6 @@ export class CategoryRepository {
 
   public async seedDefaultArabicCategories(): Promise<void> {
     const database = this.db.getDatabase();
-    console.log("🌱 Auto-generating default Arabic categories with deterministic IDs...");
 
     for (const defCat of DEFAULT_ARABIC_CATEGORIES) {
       // Check if a category with this deterministic ID or exact name already exists
@@ -172,7 +171,6 @@ export class CategoryRepository {
     try {
       await this.db.ensureInitialized();
       const database = this.db.getDatabase();
-      console.log("Querying categories table...");
       let results = (await database.getAllAsync(
         "SELECT * FROM categories ORDER BY entry_count DESC, type ASC, name ASC",
       )) as CategoryTable[];
@@ -195,8 +193,6 @@ export class CategoryRepository {
           }
         }
       }
-
-      console.log(`Found ${activeResults.length} categories in database`);
       return activeResults.map(transformCategory);
     } catch (error) {
       console.error("Error in getAllCategories:", error);

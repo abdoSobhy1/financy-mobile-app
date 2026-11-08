@@ -1,7 +1,7 @@
 import { SmsKeywordGroups } from "../components/SmsKeywordGroups";
 import { SmsTestSandbox } from "../components/SmsTestSandbox";
 import { SmsKeywordEditorModal } from "../components/SmsKeywordEditorModal";
-import { styles } from "./SmsDetectorSettingsScreen.styles";
+import { styles } from "../components/SmsDetectorSections.styles";
 import { useSmsDetectorSettingsScreen } from "../hooks/useSmsDetectorSettingsScreen";
 import { GROUPS } from "../model/settingsOptions";
 import React from "react";

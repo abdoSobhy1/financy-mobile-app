@@ -35,8 +35,6 @@ const createExportFile = async (filename: string, content: string): Promise<stri
     const encoder = new TextEncoder();
     await writer.write(encoder.encode(content));
     await writer.close();
-
-    console.log(`✅ File saved to: ${file.uri}`);
     return file.uri;
   } catch (error) {
     console.error("Error creating export file:", error);
@@ -64,8 +62,6 @@ export const exportSQLiteDatabase = async (): Promise<void> => {
       SELECT name, sql FROM sqlite_master 
       WHERE type='table' AND name NOT LIKE 'sqlite_%'
     `)) as { name: string; sql: string }[];
-
-    console.log(`Exporting ${tables.length} tables to new database...`);
 
     // Create tables in export database
     for (const table of tables) {
@@ -95,17 +91,9 @@ export const exportSQLiteDatabase = async (): Promise<void> => {
 
     // Close the export database to flush all changes
     await exportDb.closeAsync();
-
-    console.log(`Database created: ${filename}`);
-
-    // Unfortunately, we cannot easily access the physical database file location
-    // in newer versions of expo-sqlite, so we'll fall back to SQL dump
-    console.log("Cannot access database file directly, falling back to SQL dump...");
     await exportSQLiteDatabaseAsSQLDump();
   } catch (error) {
     console.error("Error exporting SQLite database:", error);
-    // Fallback to SQL dump if database file creation fails
-    console.log("Falling back to SQL dump export...");
     await exportSQLiteDatabaseAsSQLDump();
   }
 };
@@ -155,11 +143,6 @@ const exportSQLiteDatabaseAsSQLDump = async (): Promise<void> => {
 
   sqlContent += `COMMIT;\n`;
 
-  // Log the SQL content to console
-  console.log("=== SQL EXPORT CONTENT ===");
-  console.log(sqlContent);
-  console.log("=== END SQL CONTENT ===");
-
   // Try to share the SQL file
   try {
     if (await Sharing.isAvailableAsync()) {
@@ -171,8 +154,6 @@ const exportSQLiteDatabaseAsSQLDump = async (): Promise<void> => {
         mimeType: "application/sql",
         dialogTitle: "SQL Database Export",
       });
-
-      console.log(`✅ SQL export successful! File: ${filename}`);
     }
   } catch (shareError) {
     console.error("SQL file sharing failed:", shareError);
@@ -196,8 +177,6 @@ const exportSQLiteDatabaseAsSQLDump = async (): Promise<void> => {
           mimeType: "text/plain",
           dialogTitle: "SQL Export Summary",
         });
-
-        console.log("✅ Shared SQL export summary instead");
       }
     } catch (fallbackError) {
       console.error("Even summary sharing failed:", fallbackError);
@@ -237,11 +216,6 @@ export const exportDatabaseToJSON = async (): Promise<void> => {
     const timestamp = new Date().toISOString().replace(/[:.]/g, "-").split("T")[0];
     const filename = `financy-database-backup-${timestamp}.json`;
 
-    // Log full export data to console
-    console.log("=== FULL DATABASE EXPORT ===");
-    console.log(jsonString);
-    console.log("=== END EXPORT DATA ===");
-
     if (await Sharing.isAvailableAsync()) {
       try {
         // Save the full export data to a file
@@ -252,8 +226,6 @@ export const exportDatabaseToJSON = async (): Promise<void> => {
           mimeType: "application/json",
           dialogTitle: "Database Export",
         });
-
-        console.log(`✅ Database export successful! File: ${filename}`);
       } catch (shareError) {
         console.error("Sharing failed:", shareError);
 
@@ -278,8 +250,6 @@ export const exportDatabaseToJSON = async (): Promise<void> => {
             mimeType: "text/plain",
             dialogTitle: "Database Export Summary",
           });
-
-          console.log("✅ Shared export summary instead");
         } catch (fallbackError) {
           console.error("Fallback sharing also failed:", fallbackError);
           throw new Error("Export completed but sharing failed. Check console for full data.");

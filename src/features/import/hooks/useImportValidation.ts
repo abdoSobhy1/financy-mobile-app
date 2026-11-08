@@ -61,3 +61,5 @@ export function useImportValidation({ preview, mapping, settings, importService,
   };
   return { validation, isValidating, validationError, runValidation, handleProceedWithWarnings };
 }
+
+export type ImportValidationController = ReturnType<typeof useImportValidation>;

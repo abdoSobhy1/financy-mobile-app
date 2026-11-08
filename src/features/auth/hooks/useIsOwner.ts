@@ -43,3 +43,5 @@ export function useIsOwner(): boolean {
 
   return isOwner;
 }
+
+export type IsOwnerController = ReturnType<typeof useIsOwner>;

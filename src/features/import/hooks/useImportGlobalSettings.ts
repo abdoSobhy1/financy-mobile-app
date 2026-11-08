@@ -63,3 +63,5 @@ export function useImportGlobalSettings({ settings, mapping, onComplete, onBack 
   };
   return { localSettings, showBudgetPicker, setShowBudgetPicker, showCategoryPreview, setShowCategoryPreview, budgets, selectedBudget, budgetCategories, handleTransactionTypeChange, handleBudgetChange, handleSettingToggle, handleContinue };
 }
+
+export type ImportGlobalSettingsController = ReturnType<typeof useImportGlobalSettings>;

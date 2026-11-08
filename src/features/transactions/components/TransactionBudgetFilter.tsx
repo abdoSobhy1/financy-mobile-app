@@ -1,9 +1,9 @@
 import { styles } from "./TransactionFilterModals.styles";
-import type { useTransactionFilterModal } from "../hooks/useTransactionFilterModal";
+import type { TransactionFilterModalController } from "../hooks/useTransactionFilterModal";
 
 import { View, Text, TouchableOpacity } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { useAppTheme } from "../../../shared/theme/ThemeProvider";
+import { useAppTheme, type AppTheme } from "../../../shared/theme/ThemeProvider";
 
 import { WalletAccount } from "../../../shared/types";
 export type FilterPeriod =
@@ -45,8 +45,8 @@ export interface TransactionFilterModalProps {
 }
 interface TransactionBudgetFilterProps {
   onBudgetToggle: ((id: string) => void) | undefined;
-  allBudgetsList: ReturnType<typeof useTransactionFilterModal>["allBudgetsList"];
-  colors: ReturnType<typeof useAppTheme>["colors"];
+  allBudgetsList: TransactionFilterModalController["allBudgetsList"];
+  colors: AppTheme["colors"];
   selectedBudgetIds: Set<string>;
 }
 export function TransactionBudgetFilter({ onBudgetToggle, allBudgetsList, colors, selectedBudgetIds }: TransactionBudgetFilterProps) {

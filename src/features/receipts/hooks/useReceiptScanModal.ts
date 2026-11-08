@@ -114,3 +114,5 @@ export function useReceiptScanModal({
   };
   return { isProcessing, statusMessage, quota, handleDocumentScanner, handleGalleryPick, handleDocumentPick };
 }
+
+export type ReceiptScanModalController = ReturnType<typeof useReceiptScanModal>;

@@ -2,7 +2,7 @@ import { styles } from "./TransactionFilterModals.styles";
 
 import { View, Text, TouchableOpacity } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { useAppTheme } from "../../../shared/theme/ThemeProvider";
+import { useAppTheme, type AppTheme } from "../../../shared/theme/ThemeProvider";
 
 import { WalletAccount } from "../../../shared/types";
 export type FilterPeriod =
@@ -44,7 +44,7 @@ export interface TransactionFilterModalProps {
 }
 interface TransactionTypeFilterProps {
   filterType: FilterType;
-  colors: ReturnType<typeof useAppTheme>["colors"];
+  colors: AppTheme["colors"];
   onFilterTypeChange: (type: FilterType) => void;
 }
 export function TransactionTypeFilter({ filterType, colors, onFilterTypeChange }: TransactionTypeFilterProps) {

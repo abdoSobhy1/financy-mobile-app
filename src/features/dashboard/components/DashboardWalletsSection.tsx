@@ -1,4 +1,4 @@
-import type { useDashboardScreen } from "../hooks/useDashboardScreen";
+import type { DashboardScreenController } from "../hooks/useDashboardScreen";
 
 import { View, Text, ScrollView, TouchableOpacity } from "react-native";
 
@@ -9,12 +9,12 @@ import { useAppTheme } from "../../../shared/theme/ThemeProvider";
 import { IconChip } from "../../../shared/ui/IconChip";
 
 interface DashboardWalletsSectionProps {
-  navigation: ReturnType<typeof useDashboardScreen>["navigation"];
-  openAddWalletModal: ReturnType<typeof useDashboardScreen>["openAddWalletModal"];
-  handleOpenTransferModal: ReturnType<typeof useDashboardScreen>["handleOpenTransferModal"];
-  visibleWallets: ReturnType<typeof useDashboardScreen>["visibleWallets"];
-  walletBalances: ReturnType<typeof useDashboardScreen>["walletBalances"];
-  maskCurrency: ReturnType<typeof useDashboardScreen>["maskCurrency"];
+  navigation: DashboardScreenController["navigation"];
+  openAddWalletModal: DashboardScreenController["openAddWalletModal"];
+  handleOpenTransferModal: DashboardScreenController["handleOpenTransferModal"];
+  visibleWallets: DashboardScreenController["visibleWallets"];
+  walletBalances: DashboardScreenController["walletBalances"];
+  maskCurrency: DashboardScreenController["maskCurrency"];
 
 }
 export function DashboardWalletsSection({ navigation, openAddWalletModal, handleOpenTransferModal, visibleWallets, walletBalances, maskCurrency }: DashboardWalletsSectionProps) {

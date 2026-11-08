@@ -495,3 +495,5 @@ export function useTransactionListScreen() {
     totalAmount
   };
 }
+
+export type TransactionListScreenController = ReturnType<typeof useTransactionListScreen>;

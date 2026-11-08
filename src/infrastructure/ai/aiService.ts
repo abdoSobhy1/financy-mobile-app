@@ -178,7 +178,6 @@ async function callChatModel(
 
     for (const model of candidateModels) {
       try {
-        console.log(`[AIService] Sending Gemini request to model: ${model}`);
         let text: string | undefined;
         if (apiKey) {
           const controller = new AbortController();
@@ -217,7 +216,6 @@ async function callChatModel(
 
         // Successfully received valid response! Record success and return
         await recordModelSuccess(model);
-        console.log(`[AIService] Successfully processed request with model: ${model}`);
         return text;
       } catch (err: any) {
         const hostedQuotaLimit = err.code === "resource-exhausted";
@@ -671,10 +669,7 @@ export async function parseReceiptImageWithAI(
   if (!online) {
     throw new Error("No internet connection for AI vision scan");
   }
-
-  console.log("[AIService] Resizing receipt image (max 1080w / 1920h) for Gemini Vision...");
   const prepared = await prepareReceiptImage(imageUri);
-  console.log(`[AIService] Image prepared: ${prepared.width}x${prepared.height}, size: ~${Math.round(prepared.base64.length / 1024)} KB`);
 
   const userPrompt =
     "Understand the receipt layout and context. Extract ONLY the purchased goods/services from the line-item body into 'items'. Exclude all header metadata (receipt/invoice #, cashier, table) and footer settlement data (total, subtotal, tax, cash, change).";

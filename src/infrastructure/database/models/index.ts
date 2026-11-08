@@ -1,5 +1,4 @@
 import { Transaction, Category, Budget, Settings, Debt, DebtPayment, WalletAccount, WalletType } from "../../../shared/types";
-import { DateUtils } from "../../../shared/utils/dateUtils";
 
 // Database table schemas
 export interface WalletTable {

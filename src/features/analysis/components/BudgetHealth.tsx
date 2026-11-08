@@ -1,5 +1,5 @@
-import type { useAnalysisScreen } from "../hooks/useAnalysisScreen";
-import { styles } from "../screens/AnalysisScreen.styles";
+import type { AnalysisScreenController } from "../hooks/useAnalysisScreen";
+import { styles } from "./AnalysisSection.styles";
 
 import { Text, TouchableOpacity, View } from "react-native";
 
@@ -8,8 +8,8 @@ import { useAppTheme } from "../../../shared/theme/ThemeProvider";
 import { formatCurrency } from "../../../shared/utils";
 
 interface BudgetHealthProps {
-  navigation: ReturnType<typeof useAnalysisScreen>["navigation"];
-  budgetUsage: ReturnType<typeof useAnalysisScreen>["budgetUsage"];
+  navigation: AnalysisScreenController["navigation"];
+  budgetUsage: AnalysisScreenController["budgetUsage"];
 }
 export function BudgetHealth({ navigation, budgetUsage }: BudgetHealthProps) {
   const { colors, spacing, typography } = useAppTheme();

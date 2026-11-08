@@ -68,15 +68,11 @@ class OfflineFirstSync {
   ): Promise<void> {
     // Don't log sync operations when applying remote changes to prevent loops
     if (skipSyncLog) {
-      console.log(
-        `⏭️ Skipping sync log for ${tableName}:${recordId} (remote change application)`,
-      );
       return;
     }
     try {
       // Check if database is ready before proceeding
       if (!this.db.isReady()) {
-        console.log("Database not ready for sync operations, skipping...");
         return;
       }
 
@@ -116,14 +112,6 @@ class OfflineFirstSync {
           : logEntry.payload
         : "";
       const stack = new Error().stack || "";
-      console.log(
-        `🔄 Logged ${operation} operation for ${tableName}:${recordId} created_at=${new Date(
-          logEntry.created_at,
-        ).toISOString()} payload_preview=${preview}`,
-      );
-      console.log(
-        `🔍 logOperation call stack (top 3):\n${stack.split("\n").slice(0, 4).join("\n")}`,
-      );
 
       // Try to sync immediately if online (but don't block the operation)
       this.attemptSync();
@@ -190,26 +178,9 @@ class OfflineFirstSync {
 
       const result = (await database.getAllAsync(sql)) as SyncLogEntry[];
 
-      console.log(
-        `🔎 Found ${result.length} pending sync operations to process`,
-      );
-      result.forEach((r, i) =>
-        console.log(
-          `   [${i + 1}] log_id=${r.log_id} table=${r.table_name} id=${r.record_id} op=${r.operation} retry=${r.retry_count} created_at=${new Date(
-            r.created_at,
-          ).toISOString()}`,
-        ),
-      );
-
-      console.log(
-        `� Processing ${result.length} pending sync operations`,
-      );
-
       for (const logEntry of result) {
         await this.processSingleOperation(logEntry);
       }
-
-      console.log("✅ Sync operations completed");
     } catch (error) {
       console.error("Error processing sync operations:", error);
       throw error;
@@ -303,7 +274,6 @@ class OfflineFirstSync {
         `UPDATE ${tableName} SET sync_status = 'synced' WHERE id = ?`,
         [recordId],
       );
-      console.log(`✅ Marked ${tableName}:${recordId} sync_status = synced`);
     } catch (error) {
       // Non-fatal: the sync_log entry is already processed; log and continue
       console.warn(
@@ -376,10 +346,6 @@ class OfflineFirstSync {
     // Exponential backoff: 5s, 10s, 20s, 40s, 60s max
     const retryDelay = Math.min(5000 * Math.pow(2, retryCount), 60000);
 
-    console.log(
-      `⏳ Scheduling retry in ${retryDelay / 1000}s (attempt ${retryCount + 1})`,
-    );
-
     this.retryTimeout = setTimeout(() => {
       this.attemptSync();
     }, retryDelay);
@@ -392,7 +358,6 @@ class OfflineFirstSync {
     if (!(await authService.isCloudSyncAllowedAsync())) {
       return;
     }
-    console.log("🚀 Force syncing all pending operations");
     await this.processUnSyncedOperations();
   }
 
@@ -488,8 +453,6 @@ class OfflineFirstSync {
          WHERE is_processed = 1 AND created_at < ?`,
         [sevenDaysAgo],
       );
-
-      console.log(`🧹 Cleaned up ${result.changes} old sync operations`);
     } catch (error) {
       console.error("Error cleaning up old operations:", error);
     }
@@ -501,10 +464,8 @@ class OfflineFirstSync {
   private async initializeFirebaseListeners(): Promise<void> {
     try {
       if (!(await authService.isCloudSyncAllowedAsync())) {
-        console.log("⏭️ Firebase listeners skipped for local-only guest mode");
         return;
       }
-      console.log("🔥 Starting Firebase real-time listeners...");
       const userId = await authService.requireUserIdAsync();
       if (await hasRestoredCloudData(userId)) {
         await this.forceSyncAll();
@@ -515,11 +476,9 @@ class OfflineFirstSync {
       // After listeners are started, perform a delta sync to pull any changes
       try {
         await syncService.performDeltaSync();
-        console.log("✅ Performed initial delta sync after starting listeners");
       } catch (deltaErr) {
         console.warn("Initial delta sync failed (continuing):", deltaErr);
       }
-      console.log("✅ Firebase real-time listeners started successfully");
     } catch (error) {
       console.error("❌ Failed to start Firebase listeners:", error);
       // Don't throw - app should still work without real-time sync
@@ -535,7 +494,6 @@ class OfflineFirstSync {
     }
 
     this.isInitialized = true;
-    console.log("🚀 Initializing OfflineFirstSync service");
 
     // Setup network listener
     const networkUnsubscribe = this.setupNetworkListener();
@@ -556,16 +514,12 @@ class OfflineFirstSync {
           if (netInfo.isConnected) {
             const pendingCount = await this.getPendingOperationsCount();
             if (pendingCount > 0) {
-              console.log(
-                `⏰ Periodic sync: ${pendingCount} pending operations`,
-              );
               await this.forceSyncAll();
             }
 
             // Always attempt a delta sync to pull recent remote changes
             try {
               await syncService.performDeltaSync();
-              console.log("⏰ Periodic delta sync completed");
             } catch (deltaErr) {
               console.warn("Periodic delta sync failed:", deltaErr);
             }
@@ -616,9 +570,6 @@ class OfflineFirstSync {
     const unsubscribe = NetInfo.addEventListener(async (state) => {
       if (state.isConnected) {
         if (!(await authService.isCloudSyncAllowedAsync())) return;
-        console.log(
-          "📡 Network connected, attempting to sync pending operations and perform delta sync",
-        );
 
         // Force local pending operations to cloud
         this.forceSyncAll().catch((error) => {
@@ -628,14 +579,10 @@ class OfflineFirstSync {
         // Also perform a delta pull from cloud to update local DB
         syncService
           .performDeltaSync()
-          .then(() => console.log("✅ Delta sync on network restore completed"))
           .catch((err) =>
             console.error("Delta sync on network restore failed:", err),
           );
       } else {
-        console.log(
-          "📡 Network disconnected, operations will be queued locally",
-        );
       }
     });
 
@@ -662,7 +609,6 @@ class OfflineFirstSync {
     pull: { itemsCreated: number; itemsUpdated: number; errors: string[] };
   }> {
     if (this.fullSyncPromise) {
-      console.log("🔄 Full sync already in progress, awaiting active sync promise...");
       return await this.fullSyncPromise;
     }
 
@@ -672,7 +618,6 @@ class OfflineFirstSync {
 
         const canSync = await authService.isCloudSyncAllowedAsync();
         if (!canSync) {
-          console.log("⏭️ Cloud sync skipped: user is not authenticated or in guest mode");
           return {
             push: { totalUploaded: 0, totalSkipped: 0, errors: [] },
             pull: { itemsCreated: 0, itemsUpdated: 0, errors: [] },
@@ -681,11 +626,8 @@ class OfflineFirstSync {
 
         const netInfo = await NetInfo.fetch();
         if (!netInfo.isConnected) {
-          console.log("📡 No internet connection for Firebase sync");
           throw new Error("No internet connection");
         }
-
-        console.log("🔄 Starting full bidirectional sync with Firebase database...");
         await invalidateCloudRestore();
         const userId = await authService.requireUserIdAsync();
 
@@ -732,10 +674,6 @@ class OfflineFirstSync {
           console.warn("Could not update syncUpdatedAt setting:", e);
         }
 
-        console.log(
-          `✅ Firebase database sync completed: ${pushResult.totalUploaded} pushed, ${pullResult.itemsCreated + pullResult.itemsUpdated} pulled`,
-        );
-
         return {
           push: {
             totalUploaded: pushResult.totalUploaded,
@@ -757,19 +695,16 @@ class OfflineFirstSync {
    */
   async syncConflictsOnly(): Promise<void> {
     try {
-      console.log("🔍 Starting conflicts-only sync...");
 
       // Guests have a Firebase anonymous identity for hosted AI, but their data stays local.
       const canSync = await authService.isCloudSyncAllowedAsync();
       if (!canSync) {
-        console.log("⏭️ Conflicts sync skipped for local-only guest mode");
         return;
       }
 
       // Check network connectivity
       const netInfo = await NetInfo.fetch();
       if (!netInfo.isConnected) {
-        console.log("📡 No internet connection for conflicts sync");
         return;
       }
 
@@ -778,8 +713,6 @@ class OfflineFirstSync {
 
       // Sync conflicts in Firebase
       await syncService.syncConflictsOnly();
-
-      console.log("✅ Conflicts-only sync completed");
     } catch (error) {
       console.error("❌ Conflicts-only sync failed:", error);
       throw error;
@@ -814,10 +747,6 @@ class OfflineFirstSync {
       "debts",
       "debt_payments",
     ];
-
-    console.log(
-      "☁️ Phase 1: Syncing independent collections (categories, settings, wallets)",
-    );
     for (const tableName of independentCollections) {
       const collectionName = this.TABLE_TO_COLLECTION[tableName];
       if (collectionName) {
@@ -837,10 +766,6 @@ class OfflineFirstSync {
         }
       }
     }
-
-    console.log(
-      "☁️ Phase 2: Syncing dependent collections (budgets, transactions, debts, debt_payments)",
-    );
     for (const tableName of dependentCollections) {
       const collectionName = this.TABLE_TO_COLLECTION[tableName];
       if (collectionName) {
@@ -863,9 +788,6 @@ class OfflineFirstSync {
     // Phase 3: Retry failed inserts (foreign key constraints)
     const retryCount = await this.retryFailedInserts();
     if (retryCount > 0) {
-      console.log(
-        `☁️ Phase 3: Successfully retried ${retryCount} failed inserts`,
-      );
       result.itemsCreated += retryCount;
     }
 
@@ -884,20 +806,15 @@ class OfflineFirstSync {
    */
   async performInitialCloudPull(): Promise<boolean> {
     try {
-      console.log("☁️ Starting initial cloud data pull...");
 
       const canSync = await authService.isCloudSyncAllowedAsync();
       if (!canSync) {
-        console.log("⏭️ Initial cloud pull skipped for local-only guest mode");
         return false;
       }
 
       // Check if we have any local data (indicates not a fresh install)
       const hasLocalData = await this.checkForLocalData();
       if (hasLocalData) {
-        console.log(
-          "📱 Local data exists, performing conflicts-only sync instead",
-        );
         await this.syncConflictsOnly();
         return true; // Return true to indicate sync was performed
       }
@@ -905,16 +822,11 @@ class OfflineFirstSync {
       // Check network connectivity
       const netInfo = await NetInfo.fetch();
       if (!netInfo.isConnected) {
-        console.log("📡 No internet connection for initial cloud pull");
         return false;
       }
 
       const result = await this.executePhasedCloudRestore();
       const totalPulled = result.itemsCreated + result.itemsUpdated;
-
-      console.log(
-        `☁️ Initial cloud pull completed: ${totalPulled} items restored`,
-      );
       return totalPulled > 0;
     } catch (error) {
       console.error("❌ Initial cloud pull failed:", error);
@@ -939,7 +851,6 @@ class OfflineFirstSync {
     let notificationId: string | null = null;
 
     try {
-      console.log("☁️ Starting comprehensive cloud data restore...");
 
       // Show sync notification
       notificationId = await notificationService.showSyncNotification(
@@ -953,10 +864,6 @@ class OfflineFirstSync {
       }
 
       const result = await this.executePhasedCloudRestore();
-
-      console.log(
-        `☁️ Comprehensive cloud restore completed: ${result.itemsCreated} created, ${result.itemsUpdated} updated, ${result.errors.length} errors`,
-      );
 
       // Dismiss sync notification
       if (notificationId) {
@@ -983,11 +890,9 @@ class OfflineFirstSync {
     collectionName: CollectionName,
     tableName: string,
   ): Promise<{ created: number; updated: number }> {
-    console.log(`🔄 Syncing ${collectionName} with ID comparison...`);
 
     const canSync = await authService.isCloudSyncAllowedAsync();
     if (!canSync) {
-      console.log(`⏭️ Skipping ${collectionName} sync in local-only guest mode`);
       return { created: 0, updated: 0 };
     }
 
@@ -999,7 +904,6 @@ class OfflineFirstSync {
         await syncService.getAllDocumentsFromCollection(collectionName);
 
       if (cloudDocuments.length === 0) {
-        console.log(`☁️ No ${collectionName} found in cloud`);
         return result;
       }
 
@@ -1016,10 +920,6 @@ class OfflineFirstSync {
       const pendingDeleteIds = new Set(pendingDeleteRows.map((r) => r.record_id));
       const localWrites: RestoreWrite[] = [];
       const remoteDeletes: Array<() => Promise<void>> = [];
-
-      console.log(
-        `📊 ${collectionName}: ${cloudDocuments.length} cloud items, ${localDocuments.length} local items`,
-      );
 
       // Process each cloud document
       for (const cloudDoc of cloudDocuments) {
@@ -1039,7 +939,6 @@ class OfflineFirstSync {
           if (isDeleted) {
             const localDoc = localById.get(cloudDoc.id);
             if (localDoc) {
-              console.log(`🗑️ Removing deleted ${tableName} document from local DB: ${cloudDoc.id}`);
               localWrites.push(async (writer) => {
                 await writer.runAsync(`DELETE FROM ${tableName} WHERE id = ?`, [cloudDoc.id]);
               });
@@ -1057,7 +956,6 @@ class OfflineFirstSync {
 
           // If this item was hard-deleted locally and is waiting in sync_log, delete it from Firebase instead of re-inserting
           if (pendingDeleteIds.has(cloudDoc.id)) {
-            console.log(`🗑️ ${tableName}:${cloudDoc.id} has pending local delete, removing from Firebase...`);
             remoteDeletes.push(async () => {
               try {
                 await syncService.syncLocalChanges(collectionName, "delete", cloudDoc.id);
@@ -1081,8 +979,6 @@ class OfflineFirstSync {
           );
 
           if (!localDoc) {
-            // Document doesn't exist locally - create it
-            console.log(`➕ Creating new ${tableName}: ${cloudDoc.id}`);
             localWrites.push((writer) => this.insertCloudDocumentToLocal(tableName, cloudDoc, writer));
             result.created++;
           } else {
@@ -1091,9 +987,6 @@ class OfflineFirstSync {
               (localDoc as any).deleted === 1 ||
               (localDoc as any).deleted === true
             ) {
-              console.log(
-                `🗑️ ${tableName}:${cloudDoc.id} is marked deleted locally, removing from Firebase...`,
-              );
               remoteDeletes.push(async () => {
                 try {
                   await syncService.syncLocalChanges(
@@ -1126,15 +1019,9 @@ class OfflineFirstSync {
                 (localDoc as any).sync_status === "synced");
 
             if (cloudUpdatedAt > localUpdatedAt || localUpdatedAt === 0 || localIsUntouchedDefault) {
-              console.log(
-                `🔄 Updating ${tableName}: ${cloudDoc.id} (cloud: ${cloudUpdatedAt}, local: ${localUpdatedAt}, isDefault: ${localIsUntouchedDefault})`,
-              );
               localWrites.push((writer) => this.updateLocalDocumentFromCloud(tableName, cloudDoc, writer));
               result.updated++;
             } else {
-              console.log(
-                `⏭️ Skipping ${tableName}: ${cloudDoc.id} (local is up to date)`,
-              );
             }
           }
         } catch (error) {
@@ -1152,10 +1039,6 @@ class OfflineFirstSync {
         await new SmsSettingsRepository().refreshCache();
       }
       for (const removeRemote of remoteDeletes) await removeRemote();
-
-      console.log(
-        `✅ ${collectionName} sync completed: ${result.created} created, ${result.updated} updated`,
-      );
 
       if (tableName === "settings" && result.updated + result.created > 0) {
         try {
@@ -1319,7 +1202,6 @@ class OfflineFirstSync {
     let notificationId: string | null = null;
 
     try {
-      console.log("⬆️ Starting comprehensive data push to cloud...");
 
       // Show sync notification
       notificationId = await notificationService.showSyncNotification(
@@ -1352,9 +1234,6 @@ class OfflineFirstSync {
             "SELECT sync_updated_at FROM settings WHERE id = 'default' LIMIT 1",
           );
           since = row?.sync_updated_at || 0;
-          console.log(
-            `⬆️ Pushing only local items updated after ${new Date(since).toISOString()}`,
-          );
         } catch (err) {
           console.warn(
             "Could not read settings.syncUpdatedAt, falling back to full push:",
@@ -1363,7 +1242,6 @@ class OfflineFirstSync {
           since = 0;
         }
       } else {
-        console.log("⬆️ Force push enabled: checking all local records for upload");
       }
 
       // Process all collections (independent first, then dependent)
@@ -1382,7 +1260,6 @@ class OfflineFirstSync {
         const collectionName = this.TABLE_TO_COLLECTION[tableName];
         if (collectionName) {
           try {
-            console.log(`⬆️ Pushing ${tableName} to cloud (since=${since})...`);
             const stats = await this.pushCollectionToCloud(
               collectionName,
               tableName,
@@ -1391,10 +1268,6 @@ class OfflineFirstSync {
             result.collections[tableName] = stats;
             result.totalUploaded += stats.uploaded;
             result.totalSkipped += stats.skipped;
-
-            console.log(
-              `✅ ${tableName}: ${stats.uploaded} uploaded, ${stats.skipped} skipped, ${stats.errors} errors`,
-            );
           } catch (error) {
             const errorMsg = `Failed to push ${tableName}: ${error instanceof Error ? error.message : error}`;
             result.errors.push(errorMsg);
@@ -1407,10 +1280,6 @@ class OfflineFirstSync {
           }
         }
       }
-
-      console.log(
-        `🚀 Data push completed: ${result.totalUploaded} uploaded, ${result.totalSkipped} skipped, ${result.errors.length} collection errors`,
-      );
 
       // Dismiss sync notification
       if (notificationId) {
@@ -1442,9 +1311,6 @@ class OfflineFirstSync {
     const { authService } = await import("../../features/auth/services/authService");
     const canSync = await authService.isCloudSyncAllowedAsync();
     if (!canSync) {
-      console.log(
-        `⏭️ Skipping ${collectionName} cloud push in local-only guest mode`,
-      );
       return { uploaded: 0, skipped: 0, errors: 0 };
     }
 
@@ -1463,7 +1329,6 @@ class OfflineFirstSync {
       }
 
       if (localDocuments.length === 0) {
-        console.log(`📭 No local ${tableName} to upload`);
         return result;
       }
 
@@ -1471,10 +1336,6 @@ class OfflineFirstSync {
       const cloudDocuments =
         await syncService.getAllDocumentsFromCollection(collectionName);
       const cloudById = new Map(cloudDocuments.map((doc) => [doc.id, doc]));
-
-      console.log(
-        `📊 ${tableName}: ${localDocuments.length} local items, ${cloudDocuments.length} cloud items`,
-      );
 
       // Process each local document
       for (const localDoc of localDocuments) {
@@ -1485,9 +1346,6 @@ class OfflineFirstSync {
             (localDoc as any).deleted === true
           ) {
             if (cloudById.has((localDoc as any).id)) {
-              console.log(
-                `🗑️ Deleting ${tableName} from cloud: ${(localDoc as any).id}`,
-              );
               await syncService.syncLocalChanges(
                 collectionName,
                 "delete",
@@ -1519,10 +1377,6 @@ class OfflineFirstSync {
               result.skipped++;
               continue;
             }
-            // Document doesn't exist in cloud - upload it
-            console.log(
-              `⬆️ Uploading new ${tableName}: ${(localDoc as any).id}`,
-            );
             await syncService.syncLocalChanges(
               collectionName,
               "create",
@@ -1549,16 +1403,9 @@ class OfflineFirstSync {
                   (localDoc as any).sync_updated_at === 0 ||
                   (localDoc as any).sync_status === "synced")
               ) {
-                console.log(
-                  `⏭️ Skipping cloud settings push (local is default placeholder, cloud already exists)`,
-                );
                 result.skipped++;
                 continue;
               }
-
-              console.log(
-                `⬆️ Updating cloud ${tableName}: ${(localDoc as any).id} (local: ${localUpdatedAt}, cloud: ${cloudUpdatedAt})`,
-              );
               await syncService.syncLocalChanges(
                 collectionName,
                 "update",
@@ -1568,9 +1415,6 @@ class OfflineFirstSync {
               await this.markRecordSynced(tableName, localDoc.id);
               result.uploaded++;
             } else {
-              console.log(
-                `⏭️ Skipping ${tableName}: ${(localDoc as any).id} (cloud is up to date)`,
-              );
               result.skipped++;
             }
           }
@@ -1617,11 +1461,8 @@ class OfflineFirstSync {
     const failedInserts = syncService.getFailedInserts();
 
     if (failedInserts.length === 0) {
-      console.log("☁️ No failed inserts to retry");
       return 0;
     }
-
-    console.log(`🔄 Retrying ${failedInserts.length} failed inserts...`);
 
     let successCount = 0;
     const stillFailed: Array<{
@@ -1633,7 +1474,6 @@ class OfflineFirstSync {
       try {
         const tableName = this.getTableNameFromCollection(collectionName);
         if (tableName) {
-          console.log(`🔄 Retrying ${tableName}:${doc.id}...`);
           await this.insertCloudDocumentToLocal(tableName, doc);
           successCount++;
         }
@@ -1653,10 +1493,6 @@ class OfflineFirstSync {
         `⚠️ Document ${failedItem.collectionName}:${failedItem.doc.id} still failing after retry`,
       );
     }
-
-    console.log(
-      `🔄 Retry completed: ${successCount}/${failedInserts.length} successful`,
-    );
     return successCount;
   }
 

@@ -1,7 +1,7 @@
 import { getAlphaColor } from "../../../shared/utils/colors";
 
 import { useAppTheme } from "../../../shared/theme/ThemeProvider";
-import type { useWalletManagementScreen } from "../hooks/useWalletManagementScreen";
+import type { WalletManagementScreenController } from "../hooks/useWalletManagementScreen";
 
 import { View, Text, TouchableOpacity } from "react-native";
 
@@ -12,10 +12,10 @@ import { Card } from "../../../shared/ui";
 import { formatCurrency } from "../../../shared/utils";
 
 interface WalletBalanceSummaryProps {
-  wallets: ReturnType<typeof useWalletManagementScreen>["wallets"];
-  totalNetWorth: ReturnType<typeof useWalletManagementScreen>["totalNetWorth"];
-  handleOpenTransfer: ReturnType<typeof useWalletManagementScreen>["handleOpenTransfer"];
-  openAddModal: ReturnType<typeof useWalletManagementScreen>["openAddModal"];
+  wallets: WalletManagementScreenController["wallets"];
+  totalNetWorth: WalletManagementScreenController["totalNetWorth"];
+  handleOpenTransfer: WalletManagementScreenController["handleOpenTransfer"];
+  openAddModal: WalletManagementScreenController["openAddModal"];
 
 }
 export function WalletBalanceSummary({ wallets, totalNetWorth, handleOpenTransfer, openAddModal }: WalletBalanceSummaryProps) {

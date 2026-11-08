@@ -46,8 +46,6 @@ export const checkAuthState = createAsyncThunk("auth/checkAuthState", async () =
   const isAuth = await authService.isAuthenticatedAsync();
   const user = await authService.getCurrentAuthenticatedUser();
 
-  console.log("Auth state check:", { isAuthenticated: isAuth, user: user?.uid || "none" });
-
   return user;
 });
 

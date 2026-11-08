@@ -1,18 +1,18 @@
 import { styles } from "./DebtForm.styles";
-import type { useDebtForm } from "../hooks/useDebtForm";
+import type { DebtFormController } from "../hooks/useDebtForm";
 
 import { View, TextInput, Keyboard } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 
-import { useAppTheme } from "../../../shared/theme/ThemeProvider";
+import { useAppTheme, type AppTheme } from "../../../shared/theme/ThemeProvider";
 interface DebtNotesFieldProps {
-  showMore: ReturnType<typeof useDebtForm>["showMore"];
-  colors: ReturnType<typeof useAppTheme>["colors"];
-  spacing: ReturnType<typeof useAppTheme>["spacing"];
-  descriptionRef: ReturnType<typeof useDebtForm>["descriptionRef"];
-  typography: ReturnType<typeof useAppTheme>["typography"];
-  formData: ReturnType<typeof useDebtForm>["formData"];
-  updateField: ReturnType<typeof useDebtForm>["updateField"];
+  showMore: DebtFormController["showMore"];
+  colors: AppTheme["colors"];
+  spacing: AppTheme["spacing"];
+  descriptionRef: DebtFormController["descriptionRef"];
+  typography: AppTheme["typography"];
+  formData: DebtFormController["formData"];
+  updateField: DebtFormController["updateField"];
 }
 export function DebtNotesField({ showMore, colors, spacing, descriptionRef, typography, formData, updateField }: DebtNotesFieldProps) {
   return (<>{showMore && (

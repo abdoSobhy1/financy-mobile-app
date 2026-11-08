@@ -197,8 +197,6 @@ export async function processIncomingSms(
   if (scheduledId && scheduledId !== customNotifId) {
     await storeSmsTransaction(scheduledId, parsed);
   }
-
-  console.log("[SmsService] Parsed & Notified:", parsed.type, parsed.amount, parsed.description);
   return parsed;
 }
 

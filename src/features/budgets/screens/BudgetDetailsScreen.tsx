@@ -1,4 +1,4 @@
-import { styles } from "./BudgetScreens.styles";
+import { styles } from "../components/BudgetScreens.styles";
 import { useBudgetDetailsScreen } from "../hooks/useBudgetDetailsScreen";
 
 import React from "react";

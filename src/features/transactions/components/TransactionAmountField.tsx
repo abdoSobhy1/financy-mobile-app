@@ -1,5 +1,5 @@
-import { styles } from "../screens/AddTransactionScreen.styles";
-import type { useAddTransactionScreen } from "../hooks/useAddTransactionScreen";
+import { styles } from "./AddTransactionForm.styles";
+import type { AddTransactionScreenController } from "../hooks/useAddTransactionScreen";
 
 import { View, Text, TouchableOpacity, Keyboard, Animated } from "react-native";
 
@@ -8,19 +8,19 @@ import { useAppTheme } from "../../../shared/theme/ThemeProvider";
 import { formatCurrency } from "../../../shared/utils";
 
 interface TransactionAmountFieldProps {
-  setShowKeypad: ReturnType<typeof useAddTransactionScreen>["setShowKeypad"];
-  setAmountFocused: ReturnType<typeof useAddTransactionScreen>["setAmountFocused"];
-  scrollViewRef: ReturnType<typeof useAddTransactionScreen>["scrollViewRef"];
-  amountFocused: ReturnType<typeof useAddTransactionScreen>["amountFocused"];
-  amountStr: ReturnType<typeof useAddTransactionScreen>["amountStr"];
-  type: ReturnType<typeof useAddTransactionScreen>["type"];
-  amountDisplay: ReturnType<typeof useAddTransactionScreen>["amountDisplay"];
-  showKeypad: ReturnType<typeof useAddTransactionScreen>["showKeypad"];
-  cursorOpacity: ReturnType<typeof useAddTransactionScreen>["cursorOpacity"];
-  hasMathOperator: ReturnType<typeof useAddTransactionScreen>["hasMathOperator"];
-  evaluatedAmount: ReturnType<typeof useAddTransactionScreen>["evaluatedAmount"];
-  handleEvaluateExpression: ReturnType<typeof useAddTransactionScreen>["handleEvaluateExpression"];
-  formErrors: ReturnType<typeof useAddTransactionScreen>["formErrors"];
+  setShowKeypad: AddTransactionScreenController["setShowKeypad"];
+  setAmountFocused: AddTransactionScreenController["setAmountFocused"];
+  scrollViewRef: AddTransactionScreenController["scrollViewRef"];
+  amountFocused: AddTransactionScreenController["amountFocused"];
+  amountStr: AddTransactionScreenController["amountStr"];
+  type: AddTransactionScreenController["type"];
+  amountDisplay: AddTransactionScreenController["amountDisplay"];
+  showKeypad: AddTransactionScreenController["showKeypad"];
+  cursorOpacity: AddTransactionScreenController["cursorOpacity"];
+  hasMathOperator: AddTransactionScreenController["hasMathOperator"];
+  evaluatedAmount: AddTransactionScreenController["evaluatedAmount"];
+  handleEvaluateExpression: AddTransactionScreenController["handleEvaluateExpression"];
+  formErrors: AddTransactionScreenController["formErrors"];
 
 }
 export function TransactionAmountField({ setShowKeypad, setAmountFocused, scrollViewRef, amountFocused, amountStr, type, amountDisplay, showKeypad, cursorOpacity, hasMathOperator, evaluatedAmount, handleEvaluateExpression, formErrors }: TransactionAmountFieldProps) {

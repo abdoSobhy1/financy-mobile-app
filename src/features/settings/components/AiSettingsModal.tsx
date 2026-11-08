@@ -2,9 +2,9 @@ import { AiConnectionStatus } from "./AiConnectionStatus";
 import { AiProviderPicker } from "./AiProviderPicker";
 import { GeminiQuotaPanel } from "./GeminiQuotaPanel";
 import { AiApiKeyField } from "./AiApiKeyField";
-import { getStyles } from "../screens/SettingsScreen.styles";
+import { getStyles } from "./SettingsModals.styles";
 import { useMemo } from "react";
-import type { useSettingsScreen } from "../hooks/useSettingsScreen";
+import type { SettingsScreenController } from "../hooks/useSettingsScreen";
 
 import { View, Text, ScrollView, TouchableOpacity, Modal, ActivityIndicator, KeyboardAvoidingView, Platform, Linking } from "react-native";
 
@@ -13,7 +13,7 @@ import { useAppTheme } from "../../../shared/theme/ThemeProvider";
 import { Ionicons } from "@expo/vector-icons";
 
 interface AiSettingsModalProps {
-  settings: ReturnType<typeof useSettingsScreen>;
+  settings: SettingsScreenController;
 }
 export function AiSettingsModal({ settings }: AiSettingsModalProps) {
   const { colors } = useAppTheme();

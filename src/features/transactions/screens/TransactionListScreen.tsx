@@ -1,6 +1,6 @@
 import { TransactionListToolbar } from "../components/TransactionListToolbar";
 import { TransactionRowItem } from "../components/TransactionRowItem";
-import { createStyles } from "./TransactionListScreen.styles";
+import { createStyles } from "../components/TransactionListSection.styles";
 import { useTransactionListScreen } from "../hooks/useTransactionListScreen";
 
 import React, { useMemo } from "react";

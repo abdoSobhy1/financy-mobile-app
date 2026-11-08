@@ -1,13 +1,13 @@
 import { View, Text, TouchableOpacity } from "react-native";
 
-import { useAppTheme } from "../../../shared/theme/ThemeProvider";
+import { useAppTheme, type AppTheme } from "../../../shared/theme/ThemeProvider";
 import type { Dispatch, SetStateAction } from "react";
 import type { AIProvider } from "../../../infrastructure/ai/aiConfigService";
 
 interface AiProviderPickerProps {
   selectedAiProvider: AIProvider;
   setSelectedAiProvider: Dispatch<SetStateAction<AIProvider>>;
-  colors: ReturnType<typeof useAppTheme>["colors"];
+  colors: AppTheme["colors"];
 }
 export function AiProviderPicker({ selectedAiProvider, setSelectedAiProvider, colors }: AiProviderPickerProps) {
   return (<View style={{ flexDirection: "row", gap: 8, marginBottom: 14 }}>

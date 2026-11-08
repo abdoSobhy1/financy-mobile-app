@@ -76,3 +76,5 @@ export function useFileSelectionStep({ onFileSelected, onCancel }: FileSelection
   };
   return { selectedFile, isLoading, handlePickFile, handleContinue, formatFileSize, getFileTypeIcon };
 }
+
+export type FileSelectionStepController = ReturnType<typeof useFileSelectionStep>;

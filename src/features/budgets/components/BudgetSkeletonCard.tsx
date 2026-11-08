@@ -1,13 +1,13 @@
-import { styles } from "../screens/BudgetScreens.styles";
+import { styles } from "./BudgetScreens.styles";
 
 import { View } from "react-native";
 
-import { useAppTheme } from "../../../shared/theme/ThemeProvider";
+import { useAppTheme, type AppTheme } from "../../../shared/theme/ThemeProvider";
 
 import { Shimmer } from "../../../shared/ui";
 
 interface BudgetSkeletonCardProps {
-  colors: ReturnType<typeof useAppTheme>["colors"];
+  colors: AppTheme["colors"];
 }
 export function BudgetSkeletonCard({ colors }: BudgetSkeletonCardProps) {
   return ((

@@ -1,9 +1,9 @@
-import type { useWalletEditorModal } from "../hooks/useWalletEditorModal";
+import type { WalletEditorModalController } from "../hooks/useWalletEditorModal";
 
 import { View, Text, TouchableOpacity } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { WalletType } from "../../../shared/types";
-import { useAppTheme } from "../../../shared/theme/ThemeProvider";
+import { useAppTheme, type AppTheme } from "../../../shared/theme/ThemeProvider";
 
 import { Switch } from "../../../shared/ui/Switch";
 
@@ -16,11 +16,11 @@ export interface WalletEditorFormValues {
   isSecret: boolean;
 }
 interface WalletPrivacyToggleProps {
-  formIsSecret: ReturnType<typeof useWalletEditorModal>["formIsSecret"];
-  setFormIsSecret: ReturnType<typeof useWalletEditorModal>["setFormIsSecret"];
-  setFormIcon: ReturnType<typeof useWalletEditorModal>["setFormIcon"];
-  colors: ReturnType<typeof useAppTheme>["colors"];
-  spacing: ReturnType<typeof useAppTheme>["spacing"];
+  formIsSecret: WalletEditorModalController["formIsSecret"];
+  setFormIsSecret: WalletEditorModalController["setFormIsSecret"];
+  setFormIcon: WalletEditorModalController["setFormIcon"];
+  colors: AppTheme["colors"];
+  spacing: AppTheme["spacing"];
 }
 export function WalletPrivacyToggle({ formIsSecret, setFormIsSecret, setFormIcon, colors, spacing }: WalletPrivacyToggleProps) {
   return (<TouchableOpacity

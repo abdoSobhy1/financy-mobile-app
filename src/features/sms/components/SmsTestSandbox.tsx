@@ -1,6 +1,6 @@
 import { SmsTestResult } from "./SmsTestResult";
-import { styles } from "../screens/SmsDetectorSettingsScreen.styles";
-import type { useSmsDetectorSettingsScreen } from "../hooks/useSmsDetectorSettingsScreen";
+import { styles } from "./SmsDetectorSections.styles";
+import type { SmsDetectorSettingsScreenController } from "../hooks/useSmsDetectorSettingsScreen";
 import { SAMPLE_MESSAGES } from "../model/settingsOptions";
 
 import { View, Text, ScrollView, TouchableOpacity, TextInput } from "react-native";
@@ -11,14 +11,14 @@ import { useAppTheme } from "../../../shared/theme/ThemeProvider";
 import { Card } from "../../../shared/ui";
 
 interface SmsTestSandboxProps {
-  testBody: ReturnType<typeof useSmsDetectorSettingsScreen>["testBody"];
-  setTestSender: ReturnType<typeof useSmsDetectorSettingsScreen>["setTestSender"];
-  setTestBody: ReturnType<typeof useSmsDetectorSettingsScreen>["setTestBody"];
-  setTestResult: ReturnType<typeof useSmsDetectorSettingsScreen>["setTestResult"];
-  testSender: ReturnType<typeof useSmsDetectorSettingsScreen>["testSender"];
-  handleRunTest: ReturnType<typeof useSmsDetectorSettingsScreen>["handleRunTest"];
-  handleSimulateNotification: ReturnType<typeof useSmsDetectorSettingsScreen>["handleSimulateNotification"];
-  testResult: ReturnType<typeof useSmsDetectorSettingsScreen>["testResult"];
+  testBody: SmsDetectorSettingsScreenController["testBody"];
+  setTestSender: SmsDetectorSettingsScreenController["setTestSender"];
+  setTestBody: SmsDetectorSettingsScreenController["setTestBody"];
+  setTestResult: SmsDetectorSettingsScreenController["setTestResult"];
+  testSender: SmsDetectorSettingsScreenController["testSender"];
+  handleRunTest: SmsDetectorSettingsScreenController["handleRunTest"];
+  handleSimulateNotification: SmsDetectorSettingsScreenController["handleSimulateNotification"];
+  testResult: SmsDetectorSettingsScreenController["testResult"];
 
 }
 export function SmsTestSandbox({ testBody, setTestSender, setTestBody, setTestResult, testSender, handleRunTest, handleSimulateNotification, testResult }: SmsTestSandboxProps) {

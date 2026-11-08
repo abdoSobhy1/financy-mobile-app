@@ -382,7 +382,7 @@ export function useAddTransactionScreen() {
   // Sort categories by usage count (entryCount) descending
   const activeCategories = Object.values(categories)
     .filter((c) => c && c.type === type && !c.deleted)
-    .sort((a, b) => ((b as any).entryCount || 0) - ((a as any).entryCount || 0));
+    .sort((a, b) => (b.entryCount || 0) - (a.entryCount || 0));
 
   const displayWallets = wallets.length > 0 ? wallets : walletService.getCachedWallets();
   return {
@@ -445,3 +445,5 @@ export function useAddTransactionScreen() {
     amountDisplay
   };
 }
+
+export type AddTransactionScreenController = ReturnType<typeof useAddTransactionScreen>;

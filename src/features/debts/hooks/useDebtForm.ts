@@ -260,3 +260,5 @@ export function useDebtForm({
   };
   return { navigation, isEditing, formData, setFormData, errors, loading, showDatePicker, setShowDatePicker, showMore, setShowMore, totalAmountRef, nameRef, creditorRef, minPaymentRef, interestRateRef, descriptionRef, handleSubmit, handleDelete, updateField };
 }
+
+export type DebtFormController = ReturnType<typeof useDebtForm>;

@@ -1,6 +1,6 @@
 import { TransactionFormContent } from "../components/TransactionFormContent";
 
-import { styles } from "./AddTransactionScreen.styles";
+import { styles } from "../components/AddTransactionForm.styles";
 import { useAddTransactionScreen } from "../hooks/useAddTransactionScreen";
 import React from "react";
 import { View, ScrollView, Text, TouchableOpacity, TouchableWithoutFeedback, KeyboardAvoidingView, Platform, Keyboard, Animated } from "react-native";

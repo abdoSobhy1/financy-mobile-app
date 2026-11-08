@@ -1,5 +1,5 @@
 import { View, Text, TouchableOpacity } from "react-native";
-import { useAppTheme } from "../../../shared/theme/ThemeProvider";
+import { useAppTheme, type AppTheme } from "../../../shared/theme/ThemeProvider";
 import type { Dispatch, SetStateAction } from "react";
 import type { AIProvider } from "../../../infrastructure/ai/aiConfigService";
 import type { GeminiDailyUsage } from "../../../infrastructure/ai/geminiQuotaService";
@@ -7,7 +7,7 @@ import { Ionicons } from "@expo/vector-icons";
 interface GeminiQuotaPanelProps {
   isOwner: boolean;
   selectedAiProvider: AIProvider;
-  colors: ReturnType<typeof useAppTheme>["colors"];
+  colors: AppTheme["colors"];
   setShowModelChain: Dispatch<SetStateAction<boolean>>;
   showModelChain: boolean;
   aiStatus: { provider: AIProvider; hasCustomKey: boolean; hasHostedKey: boolean; activeModel: string; isFallbackModel?: boolean | undefined; availableGeminiModelsCount?: number | undefined; totalGeminiModelsCount?: number | undefined; rateLimitedModels?: string[] | undefined; };

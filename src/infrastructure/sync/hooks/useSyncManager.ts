@@ -46,7 +46,6 @@ export const useSyncManager = () => {
       // Debounce sync attempts unless it's a forced full sync
       const now = Date.now();
       if (!forceFullSync && !showFeedback && now - lastSyncAttempt < SYNC_DEBOUNCE_MS) {
-        console.log(`⏭️ Skipping sync - too soon after last attempt (${now - lastSyncAttempt}ms ago)`);
         return;
       }
 
@@ -112,8 +111,6 @@ export const useSyncManager = () => {
 
     try {
       setSyncState((prev) => ({ ...prev, isSyncing: true }));
-
-      console.log("🔍 Manually checking for remote changes...");
       await syncService.checkForChanges();
 
       setSyncState((prev) => ({
@@ -182,13 +179,11 @@ export const useSyncManager = () => {
 
       if (syncState.isOnline) {
         try {
-          console.log("🔄 Starting initial sync setup...");
           setSyncState((prev) => ({ ...prev, isSyncing: true }));
 
           // Wait for database to be fully initialized before syncing
           const dbManager = (await import("../../database")).DatabaseManager.getInstance();
           if (!dbManager.isReady()) {
-            console.log("Database initialization in progress, waiting...");
             // Wait for database to be ready
             let retries = 0;
             while (!dbManager.isReady() && retries < 10) {
@@ -199,16 +194,8 @@ export const useSyncManager = () => {
               throw new Error("Database failed to initialize within timeout");
             }
           }
-
-          // Only process pending operations, don't force full sync on app load
-          console.log("📤 Processing pending sync operations only (smart sync)...");
           await offlineFirstSync.forceSyncAll();
-
-          // Initialize efficient polling & listeners system (no full data pull)
-          console.log("🔗 Initializing efficient sync polling...");
           await syncService.initializeSync();
-
-          console.log("✅ Initial sync setup completed");
           setSyncState((prev) => ({
             ...prev,
             isSyncing: false,

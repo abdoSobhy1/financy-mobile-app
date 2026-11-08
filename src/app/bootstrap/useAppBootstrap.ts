@@ -70,13 +70,7 @@ export function useAppBootstrap() {
     const initApp = async () => {
       try {
         setIsLoading(true);
-
-        // Initialize Firebase
-        console.log("Initializing Firebase...");
         initializeFirebase();
-
-        // Initialize Database
-        console.log("Initializing Database...");
         const dbManager = DatabaseManager.getInstance();
         await dbManager.init();
 
@@ -92,21 +86,13 @@ export function useAppBootstrap() {
           "financy_app_lock_enabled_v1",
           "financy_app_lock_pin_hash_v1",
         ]).catch(() => { });
-
-        // Run database migrations if needed for cloud compatibility
-        console.log("Checking for database migrations...");
         const { databaseMigration } =
           await import("../../infrastructure/database/migrations/databaseMigration");
         const needsMigrations = await databaseMigration.needsMigrations();
         if (needsMigrations) {
-          console.log("Running database migrations for cloud compatibility...");
           await databaseMigration.runCloudCompatibilityMigrations();
         } else {
-          console.log("Database is up to date");
         }
-
-        // Initialize Offline-First Sync
-        console.log("Setting up offline-first sync...");
 
         // Initialize sync service (includes network listener and periodic sync)
         networkUnsubscribe = offlineFirstSync.initialize();
@@ -116,9 +102,6 @@ export function useAppBootstrap() {
           "change",
           async (nextAppState) => {
             if (nextAppState === "active") {
-              console.log(
-                "📱 App became active, checking for pending sync operations",
-              );
               offlineFirstSync.forceSyncAll().catch((error) => {
                 console.error("Background sync failed:", error);
               });
@@ -140,15 +123,11 @@ export function useAppBootstrap() {
             }
           },
         );
-
-        // Initialize Notification Service
-        console.log("Initializing notification service...");
         try {
           const { default: NotificationService } =
             await import("../../infrastructure/notifications/notificationService");
           const notificationService = NotificationService.getInstance();
           await notificationService.initialize();
-          console.log("Notification service initialized successfully");
         } catch (error) {
           console.error("Failed to initialize notification service:", error);
         }
@@ -165,7 +144,6 @@ export function useAppBootstrap() {
                 cats.map((c: any) => ({ id: c.id, name: c.name })),
                 budgets
               );
-              console.log("📱 SMS detection service started");
             } else {
               // Request permissions — user will see the dialog
               const granted = await smsService.requestPermissions();
@@ -174,18 +152,12 @@ export function useAppBootstrap() {
                   cats.map((c: any) => ({ id: c.id, name: c.name })),
                   budgets
                 );
-                console.log("📱 SMS detection service started after permission grant");
               }
             }
           } catch (e) {
             console.warn("SMS service init failed (non-critical):", e);
           }
         }
-
-        // Note: Initial cloud pull will happen after user authentication
-        // See AuthContext for post-authentication cloud restore logic
-
-        console.log("App initialization completed successfully");
         setIsLoading(false);
       } catch (error) {
         console.error("App initialization failed:", error);

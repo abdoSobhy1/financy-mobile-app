@@ -131,11 +131,11 @@ export const TransactionRowItem: React.FC<TransactionRowItemProps> = React.memo(
               }}>
               <IconChip
                 icon={
-                  isTransfer
-                    ? ("swap-horizontal-outline" as any)
+                  (isTransfer
+                    ? "swap-horizontal-outline"
                     : isAdjustment
-                      ? ("wallet-outline" as any)
-                      : ((((cat as any)?.icon as any) || "receipt-outline") as any)
+                      ? "wallet-outline"
+                      : cat?.icon || "receipt-outline") as React.ComponentProps<typeof Ionicons>["name"]
                 }
                 color={
                   isTransfer

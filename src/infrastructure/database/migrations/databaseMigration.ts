@@ -9,7 +9,6 @@ export class DatabaseMigration {
    */
   async runCloudCompatibilityMigrations(): Promise<void> {
     try {
-      console.log("🔧 Starting database migrations for cloud compatibility...");
 
       await this.db.ensureInitialized();
       const database = this.db.getDatabase();
@@ -22,8 +21,6 @@ export class DatabaseMigration {
 
       // Migration 3: Clean up data
       await this.cleanupData(database);
-
-      console.log("✅ Database migrations completed successfully!");
     } catch (error) {
       console.error("❌ Database migration failed:", error);
       throw error;
@@ -31,7 +28,6 @@ export class DatabaseMigration {
   }
 
   private async addMissingColumns(database: any): Promise<void> {
-    console.log("🔧 Adding missing columns...");
 
     const migrations = [
       // Transactions table
@@ -68,10 +64,8 @@ export class DatabaseMigration {
     for (const migration of migrations) {
       try {
         await database.execAsync(`ALTER TABLE ${migration.table} ADD COLUMN ${migration.column} ${migration.definition};`);
-        console.log(`✅ Added ${migration.column} to ${migration.table}`);
       } catch (error: any) {
         if (error.message?.includes("duplicate column")) {
-          console.log(`ℹ️ Column ${migration.column} already exists in ${migration.table}`);
         } else {
           console.warn(`⚠️ Failed to add ${migration.column} to ${migration.table}:`, error.message);
         }
@@ -80,7 +74,6 @@ export class DatabaseMigration {
   }
 
   private async updateDefaultValues(database: any): Promise<void> {
-    console.log("🔧 Updating default values...");
 
     try {
       // Set default period_type for budgets
@@ -113,15 +106,12 @@ export class DatabaseMigration {
         SET date = payment_date 
         WHERE date IS NULL AND payment_date IS NOT NULL;
       `);
-
-      console.log("✅ Default values updated");
     } catch (error) {
       console.warn("⚠️ Some default value updates failed:", error);
     }
   }
 
   private async cleanupData(database: any): Promise<void> {
-    console.log("🔧 Cleaning up data...");
 
     try {
       // Remove any sync log entries that might be corrupted
@@ -129,7 +119,6 @@ export class DatabaseMigration {
         DELETE FROM sync_log 
         WHERE created_at < ${Date.now() - 7 * 24 * 60 * 60 * 1000};
       `);
-      console.log("✅ Cleaned up old sync log entries");
     } catch (error) {
       console.warn("⚠️ Data cleanup had some issues:", error);
     }
@@ -155,7 +144,6 @@ export class DatabaseMigration {
           await database.getFirstAsync(`SELECT ${check.column} FROM ${check.table} LIMIT 1`);
         } catch (error: any) {
           if (error.message?.includes("no such column")) {
-            console.log(`Missing column detected: ${check.table}.${check.column}`);
             return true;
           }
         }

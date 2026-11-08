@@ -1,8 +1,8 @@
-import { getStyles } from "../screens/CreateCustomChartScreen.styles";
-import type { useCreateCustomChartScreen } from "../hooks/useCreateCustomChartScreen";
+import { getStyles } from "./CustomChartBuilder.styles";
+import type { CreateCustomChartScreenController } from "../hooks/useCreateCustomChartScreen";
 
 import { Text, TouchableOpacity, View } from "react-native";
-import { useAppTheme } from "../../../shared/theme/ThemeProvider";
+import { useAppTheme, type AppTheme } from "../../../shared/theme/ThemeProvider";
 import { Ionicons } from "@expo/vector-icons";
 
 import Card from "../../../shared/ui/Card";
@@ -12,9 +12,9 @@ import type { ChartType } from "../store/analysisSlice";
 interface ChartTypeSelectorProps {
   styles: ReturnType<typeof getStyles>;
   chartTypes: { type: ChartType; label: string; icon: string; description: string; }[];
-  selectedChartType: ReturnType<typeof useCreateCustomChartScreen>["selectedChartType"];
-  setSelectedChartType: ReturnType<typeof useCreateCustomChartScreen>["setSelectedChartType"];
-  colors: ReturnType<typeof useAppTheme>["colors"];
+  selectedChartType: CreateCustomChartScreenController["selectedChartType"];
+  setSelectedChartType: CreateCustomChartScreenController["setSelectedChartType"];
+  colors: AppTheme["colors"];
 }
 export function ChartTypeSelector({ styles, chartTypes, selectedChartType, setSelectedChartType, colors }: ChartTypeSelectorProps) {
   return ((

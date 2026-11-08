@@ -1,9 +1,9 @@
-import type { useWalletEditorModal } from "../hooks/useWalletEditorModal";
+import type { WalletEditorModalController } from "../hooks/useWalletEditorModal";
 
 import { View, TouchableOpacity } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { WalletType } from "../../../shared/types";
-import { useAppTheme } from "../../../shared/theme/ThemeProvider";
+import { useAppTheme, type AppTheme } from "../../../shared/theme/ThemeProvider";
 import { WALLET_ICONS } from "../model/walletEditorOptions";
 
 export interface WalletEditorFormValues {
@@ -15,10 +15,10 @@ export interface WalletEditorFormValues {
   isSecret: boolean;
 }
 interface WalletIconPickerProps {
-  spacing: ReturnType<typeof useAppTheme>["spacing"];
-  formIcon: ReturnType<typeof useWalletEditorModal>["formIcon"];
-  setFormIcon: ReturnType<typeof useWalletEditorModal>["setFormIcon"];
-  colors: ReturnType<typeof useAppTheme>["colors"];
+  spacing: AppTheme["spacing"];
+  formIcon: WalletEditorModalController["formIcon"];
+  setFormIcon: WalletEditorModalController["setFormIcon"];
+  colors: AppTheme["colors"];
 }
 export function WalletIconPicker({ spacing, formIcon, setFormIcon, colors }: WalletIconPickerProps) {
   return (<View

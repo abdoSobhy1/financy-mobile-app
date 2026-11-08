@@ -347,3 +347,5 @@ export function useVoiceInputScreen() {
     ringAnimStyle
   };
 }
+
+export type VoiceInputScreenController = ReturnType<typeof useVoiceInputScreen>;

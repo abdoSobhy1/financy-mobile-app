@@ -1,12 +1,12 @@
-import { styles } from "../screens/SmsDetectorSettingsScreen.styles";
+import { styles } from "./SmsDetectorSections.styles";
 
 import { View, Text } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { useAppTheme } from "../../../shared/theme/ThemeProvider";
+import { useAppTheme, type AppTheme } from "../../../shared/theme/ThemeProvider";
 import type { ParsedTransaction } from "../../../shared/types";
 
 interface SmsTestResultProps {
-  colors: ReturnType<typeof useAppTheme>["colors"];
+  colors: AppTheme["colors"];
   testResult: { checked: boolean; isBank: boolean; isAtm: boolean; parsed: ParsedTransaction | null; } | null;
 }
 export function SmsTestResult({ colors, testResult }: SmsTestResultProps) {

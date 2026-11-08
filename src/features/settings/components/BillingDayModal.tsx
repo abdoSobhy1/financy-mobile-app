@@ -1,6 +1,6 @@
-import { getStyles } from "../screens/SettingsScreen.styles";
+import { getStyles } from "./SettingsModals.styles";
 import { useMemo } from "react";
-import type { useSettingsScreen } from "../hooks/useSettingsScreen";
+import type { SettingsScreenController } from "../hooks/useSettingsScreen";
 
 import { View, Text, TouchableOpacity, Modal, TextInput, KeyboardAvoidingView, Platform } from "react-native";
 
@@ -9,14 +9,14 @@ import { useAppTheme } from "../../../shared/theme/ThemeProvider";
 import { Ionicons } from "@expo/vector-icons";
 
 interface BillingDayModalProps {
-  showBillingDayPicker: ReturnType<typeof useSettingsScreen>["showBillingDayPicker"];
-  setShowBillingDayPicker: ReturnType<typeof useSettingsScreen>["setShowBillingDayPicker"];
-  isBillingDayValid: ReturnType<typeof useSettingsScreen>["isBillingDayValid"];
-  billingDayInput: ReturnType<typeof useSettingsScreen>["billingDayInput"];
-  setBillingDayInput: ReturnType<typeof useSettingsScreen>["setBillingDayInput"];
-  parsedBillingDay: ReturnType<typeof useSettingsScreen>["parsedBillingDay"];
-  getBillingDayError: ReturnType<typeof useSettingsScreen>["getBillingDayError"];
-  saveBillingDay: ReturnType<typeof useSettingsScreen>["saveBillingDay"];
+  showBillingDayPicker: SettingsScreenController["showBillingDayPicker"];
+  setShowBillingDayPicker: SettingsScreenController["setShowBillingDayPicker"];
+  isBillingDayValid: SettingsScreenController["isBillingDayValid"];
+  billingDayInput: SettingsScreenController["billingDayInput"];
+  setBillingDayInput: SettingsScreenController["setBillingDayInput"];
+  parsedBillingDay: SettingsScreenController["parsedBillingDay"];
+  getBillingDayError: SettingsScreenController["getBillingDayError"];
+  saveBillingDay: SettingsScreenController["saveBillingDay"];
 
 }
 export function BillingDayModal({ showBillingDayPicker, setShowBillingDayPicker, isBillingDayValid, billingDayInput, setBillingDayInput, parsedBillingDay, getBillingDayError, saveBillingDay }: BillingDayModalProps) {

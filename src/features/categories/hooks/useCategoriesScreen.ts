@@ -104,3 +104,5 @@ export function useCategoriesScreen() {
     handleCardPress
   };
 }
+
+export type CategoriesScreenController = ReturnType<typeof useCategoriesScreen>;

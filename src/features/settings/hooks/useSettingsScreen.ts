@@ -134,8 +134,8 @@ export function useSettingsScreen() {
     setSmsEnabled(value);
     await setSmsDetectionEnabled(value);
     if (value) {
-      const state = (store as any).getState();
-      const cats = Object.values(state.categories?.items || {}) as any[];
+      const state = store.getState();
+      const cats = Object.values(state.categories?.items || {});
       const currentBudgets = state.budgets?.items || {};
       const granted =
         (await smsService.hasPermissions()) ||
@@ -143,7 +143,7 @@ export function useSettingsScreen() {
       if (granted) {
         smsService.stopListening();
         smsService.startListening(
-          cats.map((c: any) => ({ id: c.id, name: c.name })),
+          cats.map((c) => ({ id: c.id, name: c.name })),
           currentBudgets,
         );
       }
@@ -380,3 +380,5 @@ export function useSettingsScreen() {
     handleExportData,
   };
 }
+
+export type SettingsScreenController = ReturnType<typeof useSettingsScreen>;

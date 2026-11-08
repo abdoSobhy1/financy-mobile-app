@@ -13,14 +13,11 @@ export class DebtRepository {
       const id = options?.useProvidedId || generateId();
       const now = new Date().toISOString();
 
-      console.log("DebtRepository: Creating debt with data:", JSON.stringify(debt, null, 2));
-
       // Validate and clean debt data before transformation to ensure required fields exist
       const { cleanDebtData } = await import("../../../shared/utils/validation");
       const cleanedDebt = cleanDebtData({ ...debt, id }); // Add id for validation context
 
       const debtData = toDebtTable(cleanedDebt);
-      console.log("DebtRepository: Cleaned and transformed debt data:", JSON.stringify(debtData, null, 2));
 
       await database.runAsync(
         `
@@ -48,8 +45,6 @@ export class DebtRepository {
           cleanedDebt.updatedAt,
         ]
       );
-
-      console.log("DebtRepository: Debt inserted successfully with ID:", cleanedDebt.id);
 
       const newDebt = {
         ...cleanedDebt,
@@ -415,8 +410,6 @@ export class DebtRepository {
         await offlineFirstSync.logOperation("debts", payment.debtId, "update", updatedDebt);
       }
     }
-
-    console.log(`Created debt payment ${paymentId} with linked transaction ${transactionId} for debt ${debt.name}`);
     return newPayment;
   }
 
@@ -509,7 +502,6 @@ export class DebtRepository {
 
     for (const txRow of linkedTxRows) {
       await database.runAsync("DELETE FROM transactions WHERE id = ?", [txRow.id]);
-      console.log(`Deleted linked transaction ${txRow.id} for debt payment ${id}`);
     }
 
     // Delete payment
@@ -533,8 +525,6 @@ export class DebtRepository {
       `UPDATE debts SET current_balance = ?, updated_at = ?, sync_updated_at = ? WHERE id = ?`,
       [restoredBalance, now, Date.now(), payment.debtId]
     );
-
-    console.log(`Deleted debt payment ${id} and restored debt balance`);
 
     // Log sync operations unless requested to skip
     if (!options?.skipSync) {
@@ -593,8 +583,6 @@ export class DebtRepository {
         values.push(payment.linkedTransactionId);
 
         await database.runAsync(`UPDATE transactions SET ${transactionUpdates.join(", ")} WHERE id = ?`, values);
-
-        console.log(`Updated linked transaction ${payment.linkedTransactionId} for debt payment ${paymentId}`);
       }
     }
 
@@ -614,7 +602,6 @@ export class DebtRepository {
         `UPDATE debts SET current_balance = ?, updated_at = ?, sync_updated_at = ? WHERE id = ?`,
         [finalBalance, now, Date.now(), payment.debtId]
       );
-      console.log(`Updated debt balance by ${balanceChange} for debt ${payment.debtId}`);
     }
   }
 

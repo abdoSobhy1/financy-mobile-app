@@ -292,3 +292,5 @@ export function useWalletManagementScreen() {
     handleOpenTransfer
   };
 }
+
+export type WalletManagementScreenController = ReturnType<typeof useWalletManagementScreen>;

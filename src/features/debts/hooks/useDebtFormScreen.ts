@@ -25,3 +25,5 @@ export function useDebtFormScreen() {
   };
   return { debt, handleSuccess, handleCancel };
 }
+
+export type DebtFormScreenController = ReturnType<typeof useDebtFormScreen>;

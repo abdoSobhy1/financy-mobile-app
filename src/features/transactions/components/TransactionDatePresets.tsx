@@ -1,9 +1,9 @@
 import { styles } from "./TransactionFilterModals.styles";
-import type { useTransactionFilterModal } from "../hooks/useTransactionFilterModal";
+import type { TransactionFilterModalController } from "../hooks/useTransactionFilterModal";
 
 import { View, Text, TouchableOpacity } from "react-native";
 
-import { useAppTheme } from "../../../shared/theme/ThemeProvider";
+import { useAppTheme, type AppTheme } from "../../../shared/theme/ThemeProvider";
 
 import { WalletAccount } from "../../../shared/types";
 export type FilterPeriod =
@@ -44,9 +44,9 @@ export interface TransactionFilterModalProps {
   onClose: () => void;
 }
 interface TransactionDatePresetsProps {
-  DATE_OPTIONS: ReturnType<typeof useTransactionFilterModal>["DATE_OPTIONS"];
+  DATE_OPTIONS: TransactionFilterModalController["DATE_OPTIONS"];
   filterPeriod: FilterPeriod;
-  colors: ReturnType<typeof useAppTheme>["colors"];
+  colors: AppTheme["colors"];
   onFilterPeriodChange: (period: FilterPeriod) => void;
 }
 export function TransactionDatePresets({ DATE_OPTIONS, filterPeriod, colors, onFilterPeriodChange }: TransactionDatePresetsProps) {

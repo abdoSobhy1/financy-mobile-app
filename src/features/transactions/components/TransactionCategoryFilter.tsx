@@ -1,9 +1,9 @@
 import { styles } from "./TransactionFilterModals.styles";
-import type { useTransactionFilterModal } from "../hooks/useTransactionFilterModal";
+import type { TransactionFilterModalController } from "../hooks/useTransactionFilterModal";
 
 import { View, Text, TouchableOpacity } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { useAppTheme } from "../../../shared/theme/ThemeProvider";
+import { useAppTheme, type AppTheme } from "../../../shared/theme/ThemeProvider";
 
 import { WalletAccount } from "../../../shared/types";
 export type FilterPeriod =
@@ -45,8 +45,8 @@ export interface TransactionFilterModalProps {
 }
 interface TransactionCategoryFilterProps {
   onCategoryToggle: ((id: string) => void) | undefined;
-  allCategoriesList: ReturnType<typeof useTransactionFilterModal>["allCategoriesList"];
-  colors: ReturnType<typeof useAppTheme>["colors"];
+  allCategoriesList: TransactionFilterModalController["allCategoriesList"];
+  colors: AppTheme["colors"];
   selectedCategoryIds: Set<string>;
 }
 export function TransactionCategoryFilter({ onCategoryToggle, allCategoriesList, colors, selectedCategoryIds }: TransactionCategoryFilterProps) {
@@ -81,7 +81,7 @@ export function TransactionCategoryFilter({ onCategoryToggle, allCategoriesList,
               activeOpacity={0.8}>
               <Ionicons
                 name={
-                  ((cat as any)?.icon || "pricetag") as any
+                  (cat?.icon || "pricetag") as React.ComponentProps<typeof Ionicons>["name"]
                 }
                 size={24}
                 color={

@@ -2,7 +2,7 @@ import { BudgetEmptyState } from "../components/BudgetEmptyState";
 import { BudgetOverview } from "../components/BudgetOverview";
 import { BudgetListCard } from "../components/BudgetListCard";
 
-import { styles } from "./BudgetScreens.styles";
+import { styles } from "../components/BudgetScreens.styles";
 
 import { useBudgetListScreen } from "../hooks/useBudgetListScreen";
 import React from "react";

@@ -1,6 +1,6 @@
 import type { GroupConfig } from "../model/settingsOptions";
-import { styles } from "../screens/SmsDetectorSettingsScreen.styles";
-import type { useSmsDetectorSettingsScreen } from "../hooks/useSmsDetectorSettingsScreen";
+import { styles } from "./SmsDetectorSections.styles";
+import type { SmsDetectorSettingsScreenController } from "../hooks/useSmsDetectorSettingsScreen";
 
 import { View, Text, TouchableOpacity } from "react-native";
 
@@ -12,8 +12,8 @@ import { Card } from "../../../shared/ui";
 interface SmsKeywordGroupsProps {
   group: GroupConfig;
   list: string[];
-  openAddModal: ReturnType<typeof useSmsDetectorSettingsScreen>["openAddModal"];
-  handleRemoveKeyword: ReturnType<typeof useSmsDetectorSettingsScreen>["handleRemoveKeyword"];
+  openAddModal: SmsDetectorSettingsScreenController["openAddModal"];
+  handleRemoveKeyword: SmsDetectorSettingsScreenController["handleRemoveKeyword"];
 
 }
 export function SmsKeywordGroups({ group, list, openAddModal, handleRemoveKeyword }: SmsKeywordGroupsProps) {

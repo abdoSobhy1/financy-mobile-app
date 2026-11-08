@@ -411,3 +411,5 @@ export function useDashboardScreen() {
     SCREEN_WIDTH,
   };
 }
+
+export type DashboardScreenController = ReturnType<typeof useDashboardScreen>;

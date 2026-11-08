@@ -202,3 +202,5 @@ export function useSmsDetectorSettingsScreen() {
   };
   return { config, activeGroup, setActiveGroup, newKeywordInput, setNewKeywordInput, testSender, setTestSender, testBody, setTestBody, testResult, setTestResult, handleToggleAtm, openAddModal, handleAddKeyword, handleRemoveKeyword, handleResetToDefaults, handleRunTest, handleSimulateNotification };
 }
+
+export type SmsDetectorSettingsScreenController = ReturnType<typeof useSmsDetectorSettingsScreen>;

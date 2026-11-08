@@ -177,3 +177,5 @@ export function useBudgetFormScreen() {
     handleDelete
   };
 }
+
+export type BudgetFormScreenController = ReturnType<typeof useBudgetFormScreen>;

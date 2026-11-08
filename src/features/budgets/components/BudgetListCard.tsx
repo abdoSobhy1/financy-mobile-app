@@ -1,22 +1,22 @@
 import { BudgetSkeletonCard } from "./BudgetSkeletonCard";
-import { styles } from "../screens/BudgetScreens.styles";
-import type { useBudgetListScreen } from "../hooks/useBudgetListScreen";
+import { styles } from "./BudgetScreens.styles";
+import type { BudgetListScreenController } from "../hooks/useBudgetListScreen";
 
 import { View, Text, TouchableOpacity } from "react-native";
 
-import { useAppTheme } from "../../../shared/theme/ThemeProvider";
+import { useAppTheme, type AppTheme } from "../../../shared/theme/ThemeProvider";
 import { Ionicons } from "@expo/vector-icons";
 import { IconChip } from "../../../shared/ui";
 import { formatCurrency, percentage } from "../../../shared/utils";
 
 interface BudgetListCardProps {
-  budgets: ReturnType<typeof useBudgetListScreen>["budgets"];
-  progressLoaded: ReturnType<typeof useBudgetListScreen>["progressLoaded"];
-  colors: ReturnType<typeof useAppTheme>["colors"];
-  budgetProgressMap: ReturnType<typeof useBudgetListScreen>["budgetProgressMap"];
-  categoriesMap: ReturnType<typeof useBudgetListScreen>["categoriesMap"];
-  navigation: ReturnType<typeof useBudgetListScreen>["navigation"];
-  typography: ReturnType<typeof useAppTheme>["typography"];
+  budgets: BudgetListScreenController["budgets"];
+  progressLoaded: BudgetListScreenController["progressLoaded"];
+  colors: AppTheme["colors"];
+  budgetProgressMap: BudgetListScreenController["budgetProgressMap"];
+  categoriesMap: BudgetListScreenController["categoriesMap"];
+  navigation: BudgetListScreenController["navigation"];
+  typography: AppTheme["typography"];
 }
 export function BudgetListCard({ budgets, progressLoaded, colors, budgetProgressMap, categoriesMap, navigation, typography, item: id }: BudgetListCardProps & { item: string; }) {
 

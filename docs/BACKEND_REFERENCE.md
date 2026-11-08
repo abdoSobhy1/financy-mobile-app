@@ -1,8 +1,6 @@
 # Financy — Backend Architecture Reference
 
-> **Purpose:** A developer (or new AI session with zero context) can read this document and fully reimplement the entire backend layer — database, sync, state, services — into a new app shell without reading any original source files.
->
-> **Behavioral reference:** originally reviewed on 2026-07-30. File paths have been updated for the feature-based structure; see [Architecture](ARCHITECTURE.md) for the current layout and dependency boundaries. This document is not a fresh verification of every behavior described below.
+> **Overview:** Reference documentation for the Financy backend and data layer — covering SQLite persistence, Firebase cloud synchronization, Redux state slices, and domain services. See [Architecture](ARCHITECTURE.md) for the feature-based directory structure and dependency boundaries.
 
 ---
 
@@ -37,8 +35,7 @@
 | Date utilities | date-fns | parse, isValid, format, startOfDay, endOfDay, parseISO |
 | Crypto (import IDs) | expo-crypto | randomUUID() |
 
-**Firebase project ID:** strapicms1
-**Firestore path pattern:** users/{uid}/{collectionName}/{docId}
+**Firestore path pattern:** `users/{uid}/{collectionName}/{docId}`
 
 ---
 
@@ -308,14 +305,15 @@ CREATE TABLE IF NOT EXISTS bills (
 );
 `
 
-### 3.3 Migrations (src/database/migrations/)
+### 3.3 Migrations (src/infrastructure/database/migrations/)
 
 | File | What it does |
 |---|---|
-| billPaymentsMigration.ts | Adds linked_bill_id, linked_debt_payment_id to transactions; adds linked_transaction_id to debt_payments; creates bills table |
-| categoriesIconMigration.ts | Adds icon TEXT column to categories |
+| debitsTypeMigration.ts | Adds `type` column (`i_owe` / `owed_to_me`) to `debts` |
+| walletsAndReceiptMigration.ts | Creates `wallets` table and adds `account_id`, `to_account_id`, `receipt_uri` to `transactions` |
+| budgetPreferencesMigration.ts | Adds `period` and `alerts_enabled` columns to `budgets` |
 
-All use ALTER TABLE ... ADD COLUMN wrapped in try/catch.
+All migrations use `ALTER TABLE ... ADD COLUMN` wrapped in idempotent column checks / `try/catch`.
 
 ### 3.4 Type Mapping Conventions
 
@@ -564,20 +562,6 @@ Singleton: entityManager. Wraps repository calls with validation/cleaning and du
 - createBudgetFromSync(data): Promise<Budget>
 - createCategoryFromSync(data): Promise<Category>
 - checkForDuplicates(): Promise<{ debts, budgets, categories }>
-
-### 5.12 SyncTracker (src/infrastructure/sync/SyncTracker.ts)
-
-Singleton: syncTracker. In-memory item-level sync state. Persisted to AsyncStorage key @financy_sync_tracking.
-NOT the primary sync mechanism — used for diagnostics.
-
-- markItemAsSynced(collection, itemId): void
-- markItemAsPending(collection, itemId): void
-- isItemSynced(collection, itemId): boolean
-- getSyncStatus(): { totalSynced, totalPending, lastSync, collections }
-- resetSyncTracking(): Promise<void>
-- initializeSyncTracking(): Promise<void>
-
-Collections tracked: transactions, categories, budgets, bills, debts
 
 ---
 
@@ -851,16 +835,12 @@ Singleton: smsService. Android-only (gracefully no-ops on iOS).
 - addTransactionListener(cb: (tx) => void): () => void   returns unsubscribe fn
 - consumePendingTransactions(): ParsedTransaction[]       clears internal queue
 
-### 7.7 AIService (src/infrastructure/ai/aiService.ts) — online fallback
+### 7.7 AIService (src/infrastructure/ai/aiService.ts) — Multi-Provider AI Client
 
-- isOnline(): Promise<boolean>
-- parseWithAI(rawText: string): Promise<ParsedTransaction>
-  POST https://api.g4f.dev/v1/chat/completions
-  model: "gpt-4o-mini", temperature: 0.1
-  API key: process.env.G4F_API_KEY
-  Returns confidence=0 if offline, key missing, or parse error
-  Success: confidence = min(matchedFields/3 + 0.2, 1)
-  System prompt is Arabic; expects JSON response with: amount, type, description, date (YYYY-MM-DD), categoryHint
+- Supports Gemini (via Cloudflare Worker proxy or user-supplied API key), OpenRouter, Groq, and OpenAI.
+- Stores user-provided API keys encrypted in `expo-secure-store` via `aiConfigService.ts`.
+- Tracks daily Gemini request quotas and automatic model fallback (`geminiQuotaService.ts`).
+- Used for natural-language voice parsing and receipt OCR extraction when online.
 
 ### 7.8 ExcelImportService (src/features/import/services/excelImportService.ts)
 
@@ -1159,36 +1139,19 @@ transactions, categories, budgets, debts, debt_payments, settings, bills (legacy
 
 ---
 
-## Appendix B: Known Gotchas
+## Appendix B: Implementation Notes
 
-1. **settings.sync_updated_at dual purpose:**
-   Stores the timestamp of the last successful cloud poll, NOT the settings entity's own modification time.
-   Written by: SettingsRepository.updateSettings({ syncUpdatedAt: Date.now() }, { skipSync: true })
+1. **Sync marker persistence (`settings.sync_updated_at`):**
+   Stores the timestamp of the last successful cloud delta poll via `SettingsRepository.updateSettings({ syncUpdatedAt: Date.now() }, { skipSync: true })`.
 
-2. **updated_at type inconsistency across tables:**
-   - transactions.updated_at: INTEGER (epoch ms) in SQL / number in TypeScript
-   - budgets.updated_at, debts.updated_at, settings.updated_at: TEXT (ISO string) in SQL / string in TypeScript
-   Keep type coercions in mind in migration queries.
+2. **Schema timestamp conventions:**
+   - `transactions.updated_at`: INTEGER (epoch ms) in SQL / `number` in TypeScript.
+   - `budgets.updated_at`, `debts.updated_at`, `settings.updated_at`: TEXT (ISO string) in SQL / `string` in TypeScript, paired with `sync_updated_at` (epoch ms) for conflict resolution.
 
-3. **Bills removed from Redux but still in DB and Firestore:**
-   The bills table exists. Cloud restore still syncs the "bills" collection.
-   No BillRepository exists. Bills are tracked via Transaction.linkedBillId.
-   The TABLE_TO_COLLECTION map in OfflineFirstSync includes: bills -> "bills"
+3. **Category soft-delete behavior during cloud restore:**
+   During `syncCollectionWithIdComparison`, if a cloud category document has `deleted=true` and matches a seeded default category locally, it is soft-deleted locally so user-deleted default categories stay deleted across devices.
 
-4. **Category soft-delete exception in cloud restore:**
-   During syncCollectionWithIdComparison, if a cloud category doc has deleted=true AND
-   the local category is a "default" category, it IS soft-deleted locally.
-   All other entity types skip deleted cloud documents entirely.
-
-5. **Conflict resolution 10-minute window:**
-   - Different device, within 10 min: remote always wins (UPDATE_LOCAL)
-   - Different device, beyond 10 min: timestamp comparison
-   - Same device: always skip (prevents sync loops)
-
-6. **generateId() is NOT crypto-random:**
-   Uses Math.random().toString(36) + Date.now().toString(36)
-   Only the Excel importer (ExcelImportService.convertRowToTransaction) uses expo-crypto.randomUUID().
-
-7. **addDebt thunk uses syncUpdatedAt not updatedAt:**
-   In debtsSlice.addDebt, the payload uses field syncUpdatedAt: Date.now() (not updatedAt).
-   The Debt interface has both updatedAt (string) and syncUpdatedAt (number).
+4. **Conflict resolution window:**
+   - Different device within 10 minutes: remote update is applied (`UPDATE_LOCAL`).
+   - Different device beyond 10 minutes: latest timestamp wins.
+   - Same device ID: skipped to prevent echo loops.

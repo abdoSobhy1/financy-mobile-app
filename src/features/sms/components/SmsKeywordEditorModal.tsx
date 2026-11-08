@@ -1,5 +1,5 @@
-import { styles } from "../screens/SmsDetectorSettingsScreen.styles";
-import type { useSmsDetectorSettingsScreen } from "../hooks/useSmsDetectorSettingsScreen";
+import { styles } from "./SmsDetectorSections.styles";
+import type { SmsDetectorSettingsScreenController } from "../hooks/useSmsDetectorSettingsScreen";
 
 import { View, Text, TouchableOpacity, TextInput, Modal, Platform, KeyboardAvoidingView } from "react-native";
 
@@ -7,11 +7,11 @@ import { Ionicons } from "@expo/vector-icons";
 import { useAppTheme } from "../../../shared/theme/ThemeProvider";
 
 interface SmsKeywordEditorModalProps {
-  activeGroup: ReturnType<typeof useSmsDetectorSettingsScreen>["activeGroup"];
-  setActiveGroup: ReturnType<typeof useSmsDetectorSettingsScreen>["setActiveGroup"];
-  newKeywordInput: ReturnType<typeof useSmsDetectorSettingsScreen>["newKeywordInput"];
-  setNewKeywordInput: ReturnType<typeof useSmsDetectorSettingsScreen>["setNewKeywordInput"];
-  handleAddKeyword: ReturnType<typeof useSmsDetectorSettingsScreen>["handleAddKeyword"];
+  activeGroup: SmsDetectorSettingsScreenController["activeGroup"];
+  setActiveGroup: SmsDetectorSettingsScreenController["setActiveGroup"];
+  newKeywordInput: SmsDetectorSettingsScreenController["newKeywordInput"];
+  setNewKeywordInput: SmsDetectorSettingsScreenController["setNewKeywordInput"];
+  handleAddKeyword: SmsDetectorSettingsScreenController["handleAddKeyword"];
 
 }
 export function SmsKeywordEditorModal({ activeGroup, setActiveGroup, newKeywordInput, setNewKeywordInput, handleAddKeyword }: SmsKeywordEditorModalProps) {

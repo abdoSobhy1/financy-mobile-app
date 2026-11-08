@@ -3,35 +3,35 @@ import { useSelector } from "react-redux";
 import { createSelector } from "@reduxjs/toolkit";
 import { RootState } from "../../../app/store";
 import { format, parseISO, subDays, subMonths, startOfMonth, endOfMonth } from "date-fns";
-import { Transaction, Category, Budget, Debt } from "../../../shared/types";
+import { Transaction, Category, Budget, Debt, DebtPayment } from "../../../shared/types";
 import { walletService } from "../../wallets/services/walletService";
 
-const EMPTY_RECORD: Record<string, any> = {};
+const EMPTY_RECORD: Record<string, never> = {};
 
 // Stable selectors that only use memoization when actually transforming data
 const selectTransactionsArray = createSelector(
   [(state: RootState) => state.transactions?.items || EMPTY_RECORD],
-  (items) => Object.values(items || {})
+  (items): Transaction[] => Object.values(items || {})
 );
 
 const selectCategoriesArray = createSelector(
   [(state: RootState) => state.categories?.items || EMPTY_RECORD],
-  (items) => Object.values(items || {})
+  (items): Category[] => Object.values(items || {})
 );
 
 const selectBudgetsArray = createSelector(
   [(state: RootState) => state.budgets?.items || EMPTY_RECORD],
-  (items) => Object.values(items || {})
+  (items): Budget[] => Object.values(items || {})
 );
 
 const selectDebtsArray = createSelector(
   [(state: RootState) => state.debts?.items || EMPTY_RECORD],
-  (items) => Object.values(items || {})
+  (items): Debt[] => Object.values(items || {})
 );
 
 const selectDebtPaymentsArray = createSelector(
-  [(state: RootState) => (state.debts && (state.debts as any).payments ? (state.debts as any).payments : EMPTY_RECORD)],
-  (payments) => Object.values(payments || {}) as any[]
+  [(state: RootState) => state.debts?.payments || EMPTY_RECORD],
+  (payments): DebtPayment[] => Object.values(payments || {})
 );
 
 const selectLoadingState = createSelector(
