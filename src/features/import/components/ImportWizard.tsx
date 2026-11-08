@@ -1,11 +1,11 @@
 import { useImportWizard } from "../hooks/useImportWizard";
 
 import React from "react";
-import { View, Text, StyleSheet } from "react-native";
+import { View, StyleSheet, TouchableOpacity } from "react-native";
+import { Ionicons } from "@expo/vector-icons";
 
-import { Modal } from "../../../shared/ui";
+import { Modal, AppHeader, Badge } from "../../../shared/ui";
 import { useAppTheme } from "../../../shared/theme/ThemeProvider";
-import { UI } from "../../../shared/constants";
 import { ImportMapping, ImportResult } from "../types/import";
 
 import { FileSelectionStep } from "./FileSelectionStep";
@@ -20,14 +20,47 @@ interface ImportWizardProps {
   visible: boolean;
   onClose: () => void;
   onSuccess: (result: ImportResult) => void;
-  fullScreen?: boolean; // When true, don't wrap in Modal
+  fullScreen?: boolean;
 }
 
-export const ImportWizard: React.FC<ImportWizardProps> = ({ visible, onClose, onSuccess, fullScreen = false }) => {
-  const { currentStep, setCurrentStep, setSelectedFile, preview, setPreview, mapping, setMapping, settings, progress, importResult, setImportResult, importService, handleClose, handleFileSelected, handlePreviewContinue, handleMappingComplete, handleSettingsComplete, handleValidationComplete, handleStepBack } = useImportWizard({ visible, onClose, onSuccess, fullScreen });
-  const { colors } = useAppTheme();
+const WIZARD_STEPS = [
+  "file-selection",
+  "preview",
+  "column-mapping",
+  "global-settings",
+  "validation",
+  "importing",
+] as const;
 
-  // Render current step
+export const ImportWizard: React.FC<ImportWizardProps> = ({
+  visible,
+  onClose,
+  onSuccess,
+  fullScreen = false,
+}) => {
+  const {
+    currentStep,
+    setCurrentStep,
+    setSelectedFile,
+    preview,
+    setPreview,
+    mapping,
+    setMapping,
+    settings,
+    progress,
+    importResult,
+    setImportResult,
+    importService,
+    handleClose,
+    handleFileSelected,
+    handlePreviewContinue,
+    handleMappingComplete,
+    handleSettingsComplete,
+    handleValidationComplete,
+    handleStepBack,
+  } = useImportWizard({ visible, onClose, onSuccess, fullScreen });
+  const { colors, spacing, radius } = useAppTheme();
+
   const renderCurrentStep = () => {
     switch (currentStep) {
       case "file-selection":
@@ -80,9 +113,9 @@ export const ImportWizard: React.FC<ImportWizardProps> = ({ visible, onClose, on
   const getStepTitle = () => {
     switch (currentStep) {
       case "file-selection":
-        return "Select Import File";
+        return "Import Data";
       case "preview":
-        return "Preview Data";
+        return "Preview File";
       case "column-mapping":
         return "Map Columns";
       case "global-settings":
@@ -90,41 +123,121 @@ export const ImportWizard: React.FC<ImportWizardProps> = ({ visible, onClose, on
       case "validation":
         return "Validate Data";
       case "importing":
-        return "Importing...";
+        return "Importing";
       case "results":
-        return "Import Complete";
+        return "Import Summary";
       default:
-        return "Import Wizard";
+        return "Import Data";
     }
   };
 
-  const getStepProgress = () => {
-    const steps = ["file-selection", "preview", "column-mapping", "global-settings", "validation", "importing", "results"];
-    const currentIndex = steps.indexOf(currentStep);
-    return {
-      current: Math.max(0, currentIndex),
-      total: steps.length - 1, // Don't count results as a step
-    };
+  const getStepSubtitle = () => {
+    switch (currentStep) {
+      case "file-selection":
+        return "Upload CSV or Excel spreadsheet";
+      case "preview":
+        return preview ? `${preview.fileName} • ${preview.totalRows.toLocaleString()} rows` : "Inspect file structure";
+      case "column-mapping":
+        return "Match spreadsheet columns to fields";
+      case "global-settings":
+        return "Default type, budget & category rules";
+      case "validation":
+        return "Verify rows before saving";
+      case "importing":
+        return "Saving transactions to your database";
+      case "results":
+        return "Review completed import details";
+      default:
+        return undefined;
+    }
+  };
+
+  const currentIndex = WIZARD_STEPS.indexOf(currentStep as any);
+  const showStepper = currentStep !== "results" && currentIndex >= 0;
+  const canNavigateBack = currentStep !== "importing";
+  const isInnerStep =
+    currentStep !== "file-selection" &&
+    currentStep !== "results" &&
+    currentStep !== "importing";
+
+  const onHeaderBack = () => {
+    if (currentStep === "file-selection" || currentStep === "results") {
+      handleClose();
+    } else {
+      handleStepBack();
+    }
   };
 
   const content = (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
-      {/* Header */}
-      <View style={[styles.header, { borderBottomColor: colors.outlineVariant }]}>
-        <Text style={[styles.title, { color: colors.onBackground }]}>{getStepTitle()}</Text>
-        {currentStep !== "results" && (
-          <View style={styles.progressContainer}>
-            <Text style={[styles.progressText, { color: colors.onSurfaceVariant }]}>
-              Step {getStepProgress().current + 1} of {getStepProgress().total + 1}
-            </Text>
-            <View style={[styles.progressBar, { backgroundColor: colors.surfaceVariant }]}>
-              <View style={[styles.progressFill, { backgroundColor: colors.primary, width: `${(getStepProgress().current / getStepProgress().total) * 100}%` }]} />
-            </View>
+      <AppHeader
+        title={getStepTitle()}
+        subtitle={getStepSubtitle()}
+        showBack={canNavigateBack}
+        onBackPress={onHeaderBack}
+        showSettings={false}
+        rightAction={
+          <View style={styles.headerRight}>
+            {showStepper && (
+              <Badge
+                label={`Step ${currentIndex + 1}/${WIZARD_STEPS.length}`}
+                role="primary"
+                size="small"
+              />
+            )}
+            {isInnerStep && (
+              <TouchableOpacity
+                onPress={handleClose}
+                style={[
+                  styles.closeBtn,
+                  {
+                    backgroundColor: colors.surfaceVariant,
+                    borderColor: colors.outlineVariant,
+                    borderRadius: radius.pill,
+                  },
+                ]}
+                activeOpacity={0.7}
+                accessibilityLabel="Cancel Import">
+                <Ionicons name="close" size={18} color={colors.onSurfaceVariant} />
+              </TouchableOpacity>
+            )}
           </View>
-        )}
-      </View>
+        }
+      />
 
-      {/* Content */}
+      {showStepper && (
+        <View
+          style={[
+            styles.stepperRow,
+            {
+              paddingHorizontal: spacing.lg,
+              paddingBottom: spacing.sm,
+              borderBottomColor: colors.outlineVariant,
+            },
+          ]}>
+          {WIZARD_STEPS.map((stepKey, idx) => {
+            const isCompleted = idx < currentIndex;
+            const isActive = idx === currentIndex;
+            return (
+              <View
+                key={stepKey}
+                style={[
+                  styles.stepSegment,
+                  {
+                    backgroundColor: isCompleted
+                      ? colors.primary
+                      : isActive
+                        ? colors.primary
+                        : colors.surfaceVariant,
+                    opacity: isCompleted ? 0.55 : 1,
+                  },
+                ]}
+              />
+            );
+          })}
+        </View>
+      )}
+
       <View style={styles.content}>{renderCurrentStep()}</View>
     </View>
   );
@@ -132,7 +245,7 @@ export const ImportWizard: React.FC<ImportWizardProps> = ({ visible, onClose, on
   return fullScreen ? (
     content
   ) : (
-    <Modal visible={visible} onClose={handleClose}>
+    <Modal visible={visible} onClose={handleClose} showCloseButton={false}>
       {content}
     </Modal>
   );
@@ -142,32 +255,27 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
-  header: {
-    padding: UI.SPACING.LG,
-    borderBottomWidth: 1,
-  },
-  title: {
-    fontSize: 24,
-    fontWeight: "bold",
-    marginBottom: UI.SPACING.SM,
-  },
-  progressContainer: {
+  headerRight: {
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "space-between",
+    gap: 8,
   },
-  progressText: {
-    fontSize: 14,
-    marginRight: UI.SPACING.MD,
+  closeBtn: {
+    width: 34,
+    height: 34,
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 1,
   },
-  progressBar: {
+  stepperRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    borderBottomWidth: 1,
+  },
+  stepSegment: {
     flex: 1,
     height: 4,
-    borderRadius: 2,
-    overflow: "hidden",
-  },
-  progressFill: {
-    height: "100%",
     borderRadius: 2,
   },
   content: {

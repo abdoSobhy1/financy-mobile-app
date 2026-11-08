@@ -19,14 +19,7 @@ const SettingsStackNavigator: React.FC = () => {
       <Stack.Screen name="CategoryManagement" component={CategoriesScreen} />
       <Stack.Screen name="WalletManagement" component={WalletManagementScreen} />
       <Stack.Screen name="SmsSettings" component={SmsDetectorSettingsScreen} />
-      <Stack.Screen
-        name="Import"
-        component={ImportScreen}
-        options={{
-          headerShown: true,
-          headerTitle: "Import Data",
-        }}
-      />
+      <Stack.Screen name="Import" component={ImportScreen} />
     </Stack.Navigator>
   );
 };

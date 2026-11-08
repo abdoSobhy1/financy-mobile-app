@@ -1,8 +1,14 @@
 import React from "react";
-import { View, Text, StyleSheet, ScrollView, FlatList } from "react-native";
+import { View, Text, StyleSheet, ScrollView } from "react-native";
 import { ImportPreview, ImportRow } from "../types/import";
-import { Button } from "../../../shared/ui";
-import { UI } from "../../../shared/constants";
+import {
+  Card,
+  SectionHeading,
+  Badge,
+  useAppTheme,
+} from "../../../shared/ui";
+import { ImportStepLayout } from "./ImportStepLayout";
+import { ImportSummaryCard } from "./ImportSummaryCard";
 
 interface PreviewStepProps {
   preview: ImportPreview;
@@ -10,250 +16,211 @@ interface PreviewStepProps {
   onBack: () => void;
 }
 
-export const PreviewStep: React.FC<PreviewStepProps> = ({ preview, onContinue, onBack }) => {
-  const renderHeaderCell = (columnName: string, index: number) => (
-    <View key={index} style={[styles.headerCell, { minWidth: Math.max(100, columnName.length * 8) }]}>
-      <Text style={styles.headerText}>{columnName}</Text>
-    </View>
-  );
+export const PreviewStep: React.FC<PreviewStepProps> = ({
+  preview,
+  onContinue,
+  onBack,
+}) => {
+  const { colors, typography, spacing } = useAppTheme();
 
-  const renderDataCell = (value: any, index: number, columnName: string) => (
-    <View key={index} style={[styles.dataCell, { minWidth: Math.max(100, columnName.length * 8) }]}>
-      <Text style={styles.dataText} numberOfLines={2}>
-        {value !== null && value !== undefined ? String(value) : "—"}
+  const renderHeaderCell = (columnName: string, index: number) => (
+    <View
+      key={index}
+      style={[
+        styles.headerCell,
+        {
+          minWidth: Math.max(110, columnName.length * 9),
+          borderRightColor: colors.outlineVariant,
+        },
+      ]}>
+      <Text style={[typography.label, styles.headerText, { color: colors.onSurfaceVariant }]}>
+        {columnName}
       </Text>
     </View>
   );
 
-  const renderRow = ({ item, index }: { item: ImportRow; index: number }) => {
+  const renderDataCell = (value: any, index: number, columnName: string) => (
+    <View
+      key={index}
+      style={[
+        styles.dataCell,
+        {
+          minWidth: Math.max(110, columnName.length * 9),
+          borderRightColor: colors.outlineVariant,
+          borderBottomColor: colors.outlineVariant,
+        },
+      ]}>
+      <Text style={[typography.bodySmall, { color: colors.onSurface }]} numberOfLines={2}>
+        {value !== null && value !== undefined && String(value) !== "" ? String(value) : "—"}
+      </Text>
+    </View>
+  );
+
+  const renderRow = (item: ImportRow, index: number) => {
     const isEven = index % 2 === 0;
     return (
-      <View style={[styles.row, isEven && styles.evenRow]}>
-        {preview.columns.map((column, columnIndex) => renderDataCell(item[column.name], columnIndex, column.name))}
+      <View
+        key={index}
+        style={[
+          styles.row,
+          { backgroundColor: isEven ? colors.surface : colors.background },
+        ]}>
+        {preview.columns.map((column, columnIndex) =>
+          renderDataCell(item[column.name], columnIndex, column.name),
+        )}
       </View>
     );
   };
 
-  const renderListHeader = () => <View style={styles.headerRow}>{preview.columns.map((column, index) => renderHeaderCell(column.name, index))}</View>;
-
   return (
-    <View style={styles.container}>
-      {/* File Info */}
-      <View style={styles.fileInfo}>
-        <View style={styles.fileInfoRow}>
-          <Text style={styles.fileInfoLabel}>File:</Text>
-          <Text style={styles.fileInfoValue}>{preview.fileName}</Text>
-        </View>
-        <View style={styles.fileInfoRow}>
-          <Text style={styles.fileInfoLabel}>Total Rows:</Text>
-          <Text style={styles.fileInfoValue}>{preview.totalRows.toLocaleString()}</Text>
-        </View>
-        <View style={styles.fileInfoRow}>
-          <Text style={styles.fileInfoLabel}>Columns:</Text>
-          <Text style={styles.fileInfoValue}>{preview.columns.length}</Text>
-        </View>
-        <View style={styles.fileInfoRow}>
-          <Text style={styles.fileInfoLabel}>Preview:</Text>
-          <Text style={styles.fileInfoValue}>First {preview.rows.length} rows</Text>
-        </View>
-      </View>
+    <ImportStepLayout
+      secondaryAction={{
+        title: "Back",
+        onPress: onBack,
+        variant: "secondary",
+        icon: "arrow-back",
+      }}
+      primaryAction={{
+        title: "Map Columns",
+        onPress: onContinue,
+        icon: "arrow-forward",
+        iconPosition: "right",
+      }}>
+      <SectionHeading text="FILE OVERVIEW" />
+      <ImportSummaryCard
+        title={preview.fileName}
+        subtitle={`Showing first ${preview.rows.length} of ${preview.totalRows.toLocaleString()} rows`}
+        iconName="document-text-outline"
+        iconColor="teal"
+        iconShape="rounded-square"
+        trailing={<Badge label={`${preview.columns.length} cols`} role="primary" size="small" />}
+        stats={[
+          { label: "Total Rows", value: preview.totalRows, color: colors.primary },
+          { label: "Columns", value: preview.columns.length, color: colors.onSurface },
+          {
+            label: "Auto-Detected",
+            value: preview.columns.filter((c) => Boolean(c.mappedTo)).length,
+            color: colors.tertiary,
+          },
+        ]}
+      />
 
-      {/* Data Preview */}
-      <View style={styles.previewContainer}>
-        <Text style={styles.previewTitle}>Data Preview</Text>
-        <Text style={styles.previewSubtitle}>Review your data structure before mapping columns</Text>
-
-        <View style={styles.tableContainer}>
-          <ScrollView horizontal showsHorizontalScrollIndicator={true}>
-            <View>
-              {renderListHeader()}
-              <FlatList
-                data={preview.rows}
-                renderItem={renderRow}
-                keyExtractor={(_, index) => index.toString()}
-                style={styles.table}
-                showsVerticalScrollIndicator={true}
-                nestedScrollEnabled={true}
+      {/* Detected Columns Strip */}
+      <SectionHeading text="DETECTED COLUMNS" />
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={{ gap: spacing.sm, paddingBottom: spacing.md }}>
+        {preview.columns.map((column, index) => (
+          <Card
+            key={column.id || index}
+            variant="outlined"
+            padding="medium"
+            style={styles.columnCard}>
+            <View style={styles.columnCardHeader}>
+              <Text
+                style={[typography.label, { color: colors.onSurface, flex: 1 }]}
+                numberOfLines={1}>
+                {column.name}
+              </Text>
+              <Badge
+                label={column.type.toUpperCase()}
+                role={column.mappedTo ? "primary" : "surfaceVariant"}
+                size="small"
               />
             </View>
-          </ScrollView>
-        </View>
-      </View>
-
-      {/* Column Detection Info */}
-      <View style={styles.detectionInfo}>
-        <Text style={styles.detectionTitle}>Column Detection</Text>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-          <View style={styles.columnsContainer}>
-            {preview.columns.map((column, index) => (
-              <View key={index} style={styles.columnCard}>
-                <Text style={styles.columnName}>{column.name}</Text>
-                <Text style={styles.columnType}>{column.type.charAt(0).toUpperCase() + column.type.slice(1)}</Text>
-                {column.sampleValues && column.sampleValues.length > 0 && (
-                  <View style={styles.sampleValues}>
-                    {column.sampleValues.slice(0, 2).map((sample, sampleIndex) => (
-                      <Text key={sampleIndex} style={styles.sampleValue} numberOfLines={1}>
-                        {sample || "—"}
-                      </Text>
-                    ))}
-                  </View>
-                )}
+            {column.mappedTo && (
+              <Text
+                style={[
+                  typography.caption,
+                  { color: colors.primary, fontWeight: "600", marginTop: 4 },
+                ]}>
+                Suggested: {column.mappedTo}
+              </Text>
+            )}
+            {column.sampleValues && column.sampleValues.length > 0 && (
+              <View style={styles.sampleValues}>
+                {column.sampleValues.slice(0, 2).map((sample, sampleIndex) => (
+                  <Text
+                    key={sampleIndex}
+                    style={[
+                      typography.caption,
+                      { color: colors.onSurfaceVariant, fontStyle: "italic" },
+                    ]}
+                    numberOfLines={1}>
+                    {sample || "—"}
+                  </Text>
+                ))}
               </View>
-            ))}
+            )}
+          </Card>
+        ))}
+      </ScrollView>
+
+      {/* Data Preview Table */}
+      <SectionHeading text="SAMPLE DATA ROWS" />
+      <Card variant="outlined" padding="none" style={styles.tableCard}>
+        <ScrollView horizontal showsHorizontalScrollIndicator={true}>
+          <View>
+            <View
+              style={[
+                styles.headerRow,
+                {
+                  backgroundColor: colors.surfaceVariant,
+                  borderBottomColor: colors.outlineVariant,
+                },
+              ]}>
+              {preview.columns.map((column, index) => renderHeaderCell(column.name, index))}
+            </View>
+            {preview.rows.map((row, idx) => renderRow(row, idx))}
           </View>
         </ScrollView>
-      </View>
-
-      {/* Actions */}
-      <View style={styles.actions}>
-        <Button title="Back" onPress={onBack} variant="secondary" style={styles.backButton} />
-        <Button title="Continue to Mapping" onPress={onContinue} style={styles.continueButton} />
-      </View>
-    </View>
+      </Card>
+    </ImportStepLayout>
   );
 };
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    padding: UI.SPACING.LG,
+  columnCard: {
+    minWidth: 165,
+    maxWidth: 210,
   },
-  fileInfo: {
-    backgroundColor: UI.COLORS.SURFACE,
-    padding: UI.SPACING.MD,
-    borderRadius: UI.CARD_RADIUS,
-    marginBottom: UI.SPACING.LG,
-    borderWidth: 1,
-    borderColor: UI.COLORS.BORDER,
-  },
-  fileInfoRow: {
+  columnCardHeader: {
     flexDirection: "row",
+    alignItems: "center",
     justifyContent: "space-between",
-    marginBottom: UI.SPACING.XS,
+    gap: 8,
   },
-  fileInfoLabel: {
-    fontSize: 14,
-    color: UI.COLORS.TEXT_SECONDARY,
-    fontWeight: "500",
+  sampleValues: {
+    marginTop: 8,
+    gap: 2,
   },
-  fileInfoValue: {
-    fontSize: 14,
-    color: UI.COLORS.TEXT_PRIMARY,
-    fontWeight: "600",
-  },
-  previewContainer: {
-    flex: 1,
-    marginBottom: UI.SPACING.LG,
-  },
-  previewTitle: {
-    fontSize: 18,
-    fontWeight: "bold",
-    color: UI.COLORS.TEXT_PRIMARY,
-    marginBottom: UI.SPACING.XS,
-  },
-  previewSubtitle: {
-    fontSize: 14,
-    color: UI.COLORS.TEXT_SECONDARY,
-    marginBottom: UI.SPACING.MD,
-  },
-  tableContainer: {
-    flex: 1,
-    backgroundColor: UI.COLORS.SURFACE,
-    borderRadius: UI.CARD_RADIUS,
-    borderWidth: 1,
-    borderColor: UI.COLORS.BORDER,
+  tableCard: {
     overflow: "hidden",
-  },
-  table: {
-    flex: 1,
   },
   headerRow: {
     flexDirection: "row",
-    backgroundColor: UI.COLORS.BACKGROUND,
     borderBottomWidth: 1,
-    borderBottomColor: UI.COLORS.BORDER,
   },
   headerCell: {
-    padding: UI.SPACING.SM,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
     borderRightWidth: 1,
-    borderRightColor: UI.COLORS.BORDER,
     justifyContent: "center",
   },
   headerText: {
-    fontSize: 12,
-    fontWeight: "bold",
-    color: UI.COLORS.TEXT_PRIMARY,
+    fontSize: 11,
     textTransform: "uppercase",
+    letterSpacing: 0.5,
   },
   row: {
     flexDirection: "row",
   },
-  evenRow: {
-    backgroundColor: "rgba(255, 255, 255, 0.02)",
-  },
   dataCell: {
-    padding: UI.SPACING.SM,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
     borderRightWidth: 1,
-    borderRightColor: UI.COLORS.BORDER,
     borderBottomWidth: 1,
-    borderBottomColor: UI.COLORS.BORDER,
     justifyContent: "center",
-  },
-  dataText: {
-    fontSize: 12,
-    color: UI.COLORS.TEXT_SECONDARY,
-  },
-  detectionInfo: {
-    marginBottom: UI.SPACING.LG,
-  },
-  detectionTitle: {
-    fontSize: 16,
-    fontWeight: "bold",
-    color: UI.COLORS.TEXT_PRIMARY,
-    marginBottom: UI.SPACING.SM,
-  },
-  columnsContainer: {
-    flexDirection: "row",
-    gap: UI.SPACING.SM,
-  },
-  columnCard: {
-    backgroundColor: UI.COLORS.SURFACE,
-    padding: UI.SPACING.SM,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: UI.COLORS.BORDER,
-    minWidth: 120,
-    maxWidth: 150,
-  },
-  columnName: {
-    fontSize: 13,
-    fontWeight: "600",
-    color: UI.COLORS.TEXT_PRIMARY,
-    marginBottom: UI.SPACING.XS,
-  },
-  columnType: {
-    fontSize: 11,
-    color: UI.COLORS.PRIMARY,
-    textTransform: "uppercase",
-    fontWeight: "600",
-    marginBottom: UI.SPACING.XS,
-  },
-  sampleValues: {
-    gap: 2,
-  },
-  sampleValue: {
-    fontSize: 10,
-    color: UI.COLORS.TEXT_MUTED,
-    fontStyle: "italic",
-  },
-  actions: {
-    flexDirection: "row",
-    gap: UI.SPACING.MD,
-  },
-  backButton: {
-    flex: 1,
-  },
-  continueButton: {
-    flex: 2,
   },
 });

@@ -11,6 +11,7 @@ export { default as DebtsScreen } from "../../features/debts/screens/DebtsScreen
 export * from "../../features/settings/screens/SettingsScreen";
 export * from "../../features/wallets/screens/WalletManagementScreen";
 export * from "../../features/sms/screens/SmsDetectorSettingsScreen";
+export * from "../../features/import/screens/ImportScreen";
 
 // Analysis Screens
 export { AnalysisScreen } from "../../features/analysis/screens/AnalysisScreen";

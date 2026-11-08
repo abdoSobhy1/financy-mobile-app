@@ -1,63 +1,58 @@
 import React from "react";
-import { View, Text, StyleSheet, Animated } from "react-native";
+import { View, Text, StyleSheet, Animated, ActivityIndicator } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { ImportProgress } from "../types/import";
-import { UI } from "../../../shared/constants";
+import { Card, Badge, useAppTheme } from "../../../shared/ui";
 
 interface ImportProgressStepProps {
   progress: ImportProgress | null;
 }
 
 export const ImportProgressStep: React.FC<ImportProgressStepProps> = ({ progress }) => {
+  const { colors, typography, spacing } = useAppTheme();
+
   if (!progress) {
     return (
-      <View style={styles.container}>
-        <View style={styles.loadingContainer}>
-          <Ionicons name="hourglass" size={48} color={UI.COLORS.PRIMARY} />
-          <Text style={styles.title}>Preparing Import...</Text>
-        </View>
+      <View style={[styles.container, { backgroundColor: colors.background }]}>
+        <Card variant="elevated" padding="large" style={styles.card}>
+          <ActivityIndicator size="large" color={colors.primary} />
+          <Text style={[typography.h3, { color: colors.onSurface, marginTop: spacing.md }]}>
+            Preparing Import...
+          </Text>
+        </Card>
       </View>
     );
   }
 
-  const getStatusIcon = () => {
+  const getStatusIcon = (): keyof typeof Ionicons.glyphMap => {
     switch (progress.status) {
       case "preparing":
-        return "construct";
+        return "construct-outline";
       case "validating":
-        return "checkmark-circle";
+        return "shield-checkmark-outline";
       case "importing":
-        return "download";
+        return "cloud-download-outline";
       case "complete":
-        return "checkmark-done-circle";
+        return "checkmark-done-circle-outline";
       case "error":
-        return "alert-circle";
+        return "alert-circle-outline";
       default:
-        return "hourglass";
+        return "hourglass-outline";
     }
   };
 
-  const getStatusColor = () => {
-    switch (progress.status) {
-      case "complete":
-        return UI.COLORS.SUCCESS;
-      case "error":
-        return UI.COLORS.ERROR;
-      default:
-        return UI.COLORS.PRIMARY;
-    }
-  };
+  const isError = progress.status === "error";
+  const accentColor = isError ? colors.error : colors.primary;
+  const accentContainer = isError ? colors.errorContainer : colors.primaryContainer;
 
   return (
-    <View style={styles.container}>
-      <View style={styles.progressContainer}>
-        {/* Status Icon */}
-        <View style={[styles.iconContainer, { backgroundColor: getStatusColor() + "20" }]}>
-          <Ionicons name={getStatusIcon()} size={48} color={getStatusColor()} />
+    <View style={[styles.container, { backgroundColor: colors.background }]}>
+      <Card variant="elevated" padding="large" style={styles.card}>
+        <View style={[styles.iconContainer, { backgroundColor: accentContainer }]}>
+          <Ionicons name={getStatusIcon()} size={42} color={accentColor} />
         </View>
 
-        {/* Progress Info */}
-        <Text style={styles.title}>
+        <Text style={[typography.h2, { color: colors.onSurface, textAlign: "center" }]}>
           {progress.status === "preparing" && "Preparing Import"}
           {progress.status === "validating" && "Validating Data"}
           {progress.status === "importing" && "Importing Transactions"}
@@ -65,47 +60,51 @@ export const ImportProgressStep: React.FC<ImportProgressStepProps> = ({ progress
           {progress.status === "error" && "Import Failed"}
         </Text>
 
-        <Text style={styles.message}>{progress.message}</Text>
+        <Text
+          style={[
+            typography.bodyMedium,
+            {
+              color: colors.onSurfaceVariant,
+              textAlign: "center",
+              marginTop: spacing.xs,
+              marginBottom: spacing.lg,
+            },
+          ]}>
+          {progress.message}
+        </Text>
 
-        {/* Progress Bar */}
         {progress.status !== "complete" && progress.status !== "error" && (
           <View style={styles.progressBarContainer}>
-            <View style={styles.progressBar}>
+            <View
+              style={[
+                styles.progressBar,
+                { backgroundColor: colors.surfaceVariant },
+              ]}>
               <Animated.View
                 style={[
                   styles.progressFill,
                   {
-                    width: `${progress.percentage}%`,
-                    backgroundColor: getStatusColor(),
+                    width: `${Math.min(100, Math.max(0, progress.percentage))}%`,
+                    backgroundColor: accentColor,
                   },
                 ]}
               />
             </View>
-            <Text style={styles.progressText}>{progress.percentage.toFixed(1)}%</Text>
-          </View>
-        )}
-
-        {/* Current Progress Details */}
-        {progress.total > 0 && progress.status === "importing" && (
-          <View style={styles.detailsContainer}>
-            <View style={styles.detailRow}>
-              <Text style={styles.detailLabel}>Progress:</Text>
-              <Text style={styles.detailValue}>
-                {progress.current} / {progress.total} transactions
-              </Text>
+            <View style={styles.progressMetaRow}>
+              <Badge
+                label={`${progress.percentage.toFixed(0)}%`}
+                role="primary"
+                size="small"
+              />
+              {progress.total > 0 && progress.status === "importing" && (
+                <Text style={[typography.caption, { color: colors.onSurfaceVariant }]}>
+                  {progress.current.toLocaleString()} / {progress.total.toLocaleString()} rows
+                </Text>
+              )}
             </View>
           </View>
         )}
-
-        {/* Loading Animation for Active States */}
-        {["preparing", "validating", "importing"].includes(progress.status) && (
-          <View style={styles.loadingAnimation}>
-            <View style={styles.dot} />
-            <View style={styles.dot} />
-            <View style={styles.dot} />
-          </View>
-        )}
-      </View>
+      </Card>
     </View>
   );
 };
@@ -115,100 +114,40 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: "center",
     alignItems: "center",
-    padding: UI.SPACING.XL,
+    padding: 24,
   },
-  loadingContainer: {
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  progressContainer: {
-    alignItems: "center",
-    justifyContent: "center",
-    maxWidth: 300,
+  card: {
     width: "100%",
+    maxWidth: 360,
+    alignItems: "center",
+    borderRadius: 24,
   },
   iconContainer: {
-    width: 96,
-    height: 96,
-    borderRadius: 48,
+    width: 84,
+    height: 84,
+    borderRadius: 42,
     alignItems: "center",
     justifyContent: "center",
-    marginBottom: UI.SPACING.LG,
-  },
-  title: {
-    fontSize: 24,
-    fontWeight: "bold",
-    color: UI.COLORS.TEXT_PRIMARY,
-    textAlign: "center",
-    marginBottom: UI.SPACING.SM,
-  },
-  message: {
-    fontSize: 16,
-    color: UI.COLORS.TEXT_SECONDARY,
-    textAlign: "center",
-    marginBottom: UI.SPACING.LG,
-    lineHeight: 22,
+    marginBottom: 16,
   },
   progressBarContainer: {
     width: "100%",
-    marginBottom: UI.SPACING.LG,
   },
   progressBar: {
     width: "100%",
     height: 8,
-    backgroundColor: UI.COLORS.SURFACE,
     borderRadius: 4,
     overflow: "hidden",
-    marginBottom: UI.SPACING.SM,
+    marginBottom: 12,
   },
   progressFill: {
     height: "100%",
     borderRadius: 4,
     minWidth: 8,
   },
-  progressText: {
-    fontSize: 14,
-    color: UI.COLORS.TEXT_SECONDARY,
-    textAlign: "center",
-    fontWeight: "600",
-  },
-  detailsContainer: {
-    width: "100%",
-    backgroundColor: UI.COLORS.SURFACE,
-    borderRadius: UI.CARD_RADIUS,
-    padding: UI.SPACING.MD,
-    borderWidth: 1,
-    borderColor: UI.COLORS.BORDER,
-  },
-  detailRow: {
+  progressMetaRow: {
     flexDirection: "row",
+    alignItems: "center",
     justifyContent: "space-between",
-    alignItems: "center",
-  },
-  detailLabel: {
-    fontSize: 14,
-    color: UI.COLORS.TEXT_SECONDARY,
-    fontWeight: "500",
-  },
-  detailValue: {
-    fontSize: 14,
-    color: UI.COLORS.TEXT_PRIMARY,
-    fontWeight: "600",
-  },
-  loadingAnimation: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: UI.SPACING.XS,
-    marginTop: UI.SPACING.LG,
-  },
-  dot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: UI.COLORS.PRIMARY,
-    opacity: 0.4,
-    // Note: React Native doesn't support CSS animations
-    // We would use Animated API for this in a real implementation
   },
 });

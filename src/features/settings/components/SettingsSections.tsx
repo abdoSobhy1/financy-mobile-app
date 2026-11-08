@@ -185,6 +185,7 @@ export function SettingsSections({ tabBarHeight, isGuest, user, setProfileNameIn
     <SectionLabel text="DATA" />
     <GlassCard>
       <SettingRow icon="download-outline" title="Export Data" subtitle="Download your transaction history (CSV/Excel)" onPress={handleExportData} />
+      <SettingRow icon="document-attach-outline" title="Import Data" subtitle="Import transactions from CSV or Excel" onPress={() => navigation.navigate("Import")} />
       <SettingRow icon="cloud-upload-outline" title="Backup & Sync" subtitle={lastSyncSubtitle} onPress={handleSyncNow} />
       <SettingRow icon="trash-outline" title="Cleanup Database" subtitle="Remove orphaned or invalid records" destructive onPress={() => setShowFirebaseCleanup(true)} />
     </GlassCard>

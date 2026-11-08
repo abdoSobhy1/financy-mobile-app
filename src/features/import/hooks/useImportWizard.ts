@@ -5,6 +5,9 @@ import { useDispatch } from "react-redux";
 import { useNavigation } from "@react-navigation/native";
 import * as DocumentPicker from "expo-document-picker";
 import { AppDispatch } from "../../../app/store";
+import { fetchTransactions } from "../../transactions/store/transactionsSlice";
+import { fetchCategories } from "../../categories/store/categoriesSlice";
+import { fetchBudgets } from "../../budgets/store/budgetsSlice";
 
 import { ImportPreview, ImportMapping, ImportSettings, ImportResult, ImportProgress } from "../types/import";
 import { ExcelImportService } from "../services/excelImportService";
@@ -58,9 +61,12 @@ export function useImportWizard({ visible, onClose, onSuccess, fullScreen = fals
     (result: ImportResult) => {
       setImportResult(result);
       setCurrentStep("results");
+      dispatch(fetchTransactions());
+      dispatch(fetchCategories());
+      dispatch(fetchBudgets());
       onSuccess?.(result);
     },
-    [onSuccess]
+    [dispatch, onSuccess]
   );
 
   // Step navigation handlers

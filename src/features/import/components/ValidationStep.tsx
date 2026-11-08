@@ -2,12 +2,19 @@ import { styles } from "./ValidationStep.styles";
 import { useImportValidation } from "../hooks/useImportValidation";
 
 import React from "react";
-import { View, Text, StyleSheet, ScrollView, FlatList } from "react-native";
-import { Ionicons } from "@expo/vector-icons";
+import { View, Text, StyleSheet, ActivityIndicator } from "react-native";
 import { ImportPreview, ImportMapping, ImportSettings, ImportError } from "../types/import";
 import type { ExcelImportService } from "../services/excelImportService";
-import { Button, Card } from "../../../shared/ui";
-import { UI } from "../../../shared/constants";
+import {
+  Button,
+  Card,
+  IconChip,
+  useAppTheme,
+} from "../../../shared/ui";
+import { ImportStepLayout } from "./ImportStepLayout";
+import { ImportSummaryCard } from "./ImportSummaryCard";
+import { ImportSectionList } from "./ImportSectionList";
+import { ImportIssueList } from "./ImportIssueList";
 
 interface ValidationStepProps {
   preview: ImportPreview;
@@ -18,17 +25,46 @@ interface ValidationStepProps {
   onBack: () => void;
 }
 
-export const ValidationStep: React.FC<ValidationStepProps> = ({ preview, mapping, settings, importService, onComplete, onBack }) => {
-  const { validation, isValidating, validationError, runValidation, handleProceedWithWarnings } = useImportValidation({ preview, mapping, settings, importService, onComplete, onBack });
+export const ValidationStep: React.FC<ValidationStepProps> = ({
+  preview,
+  mapping,
+  settings,
+  importService,
+  onComplete,
+  onBack,
+}) => {
+  const {
+    validation,
+    isValidating,
+    validationError,
+    runValidation,
+    handleProceedWithWarnings,
+  } = useImportValidation({
+    preview,
+    mapping,
+    settings,
+    importService,
+    onComplete,
+    onBack,
+  });
+  const { colors, typography, spacing } = useAppTheme();
 
   const renderValidationSummary = () => {
     if (isValidating) {
       return (
-        <Card style={styles.summaryCard}>
-          <View style={styles.loadingContainer}>
-            <Ionicons name="hourglass" size={32} color={UI.COLORS.PRIMARY} />
-            <Text style={styles.loadingText}>Validating your data...</Text>
-            <Text style={styles.loadingSubtext}>This may take a moment for large files</Text>
+        <Card variant="outlined" style={styles.summaryCard}>
+          <View style={styles.stateContainer}>
+            <ActivityIndicator size="large" color={colors.primary} />
+            <Text style={[typography.h3, { color: colors.onSurface, marginTop: spacing.md }]}>
+              Validating your data...
+            </Text>
+            <Text
+              style={[
+                typography.bodySmall,
+                { color: colors.onSurfaceVariant, marginTop: 4 },
+              ]}>
+              Checking {preview.totalRows.toLocaleString()} rows against mapping rules
+            </Text>
           </View>
         </Card>
       );
@@ -36,12 +72,36 @@ export const ValidationStep: React.FC<ValidationStepProps> = ({ preview, mapping
 
     if (validationError) {
       return (
-        <Card style={StyleSheet.flatten([styles.summaryCard, styles.errorCard])}>
-          <View style={styles.errorContainer}>
-            <Ionicons name="alert-circle" size={32} color={UI.COLORS.ERROR} />
-            <Text style={styles.errorTitle}>Validation Failed</Text>
-            <Text style={styles.errorMessage}>{validationError}</Text>
-            <Button title="Retry Validation" onPress={runValidation} variant="secondary" style={styles.retryButton} />
+        <Card
+          variant="outlined"
+          style={StyleSheet.flatten([
+            styles.summaryCard,
+            { borderColor: colors.error, backgroundColor: colors.errorContainer + "33" },
+          ])}>
+          <View style={styles.stateContainer}>
+            <IconChip iconName="alert-circle-outline" colorName="red" size="lg" />
+            <Text style={[typography.h3, { color: colors.error, marginTop: spacing.md }]}>
+              Validation Failed
+            </Text>
+            <Text
+              style={[
+                typography.bodySmall,
+                {
+                  color: colors.onSurfaceVariant,
+                  textAlign: "center",
+                  marginTop: 4,
+                  marginBottom: spacing.md,
+                },
+              ]}>
+              {validationError}
+            </Text>
+            <Button
+              title="Retry Validation"
+              onPress={runValidation}
+              variant="secondary"
+              size="small"
+              icon="refresh-outline"
+            />
           </View>
         </Card>
       );
@@ -53,153 +113,107 @@ export const ValidationStep: React.FC<ValidationStepProps> = ({ preview, mapping
     const successRate = totalRowCount > 0 ? (validRowCount / totalRowCount) * 100 : 0;
 
     return (
-      <Card style={StyleSheet.flatten([styles.summaryCard, isValid ? styles.successCard : styles.warningCard])}>
-        <View style={styles.summaryHeader}>
-          <Ionicons name={isValid ? "checkmark-circle" : "warning"} size={32} color={isValid ? UI.COLORS.SUCCESS : UI.COLORS.WARNING} />
-          <View style={styles.summaryContent}>
-            <Text style={styles.summaryTitle}>{isValid ? "Ready to Import" : "Issues Found"}</Text>
-            <Text style={styles.summarySubtitle}>
-              {validRowCount} of {totalRowCount} rows will be imported ({successRate.toFixed(1)}%)
-            </Text>
-          </View>
-        </View>
-
-        <View style={styles.summaryStats}>
-          <View style={styles.stat}>
-            <Text style={styles.statNumber}>{validRowCount}</Text>
-            <Text style={styles.statLabel}>Valid Rows</Text>
-          </View>
-          <View style={styles.stat}>
-            <Text style={[styles.statNumber, { color: UI.COLORS.ERROR }]}>{errors.length}</Text>
-            <Text style={styles.statLabel}>Errors</Text>
-          </View>
-          <View style={styles.stat}>
-            <Text style={[styles.statNumber, { color: UI.COLORS.WARNING }]}>{warnings.length}</Text>
-            <Text style={styles.statLabel}>Warnings</Text>
-          </View>
-        </View>
-      </Card>
+      <ImportSummaryCard
+        title={isValid ? "Ready to Import" : "Attention Needed"}
+        subtitle={`${validRowCount.toLocaleString()} of ${totalRowCount.toLocaleString()} rows valid (${successRate.toFixed(1)}%)`}
+        iconName={isValid ? "checkmark-circle-outline" : "warning-outline"}
+        iconColor={isValid ? "green" : "orange"}
+        borderColor={isValid ? colors.primary : colors.error}
+        stats={[
+          { label: "Valid Rows", value: validRowCount, color: colors.primary },
+          {
+            label: "Errors",
+            value: errors.length,
+            color: errors.length > 0 ? colors.error : colors.onSurface,
+          },
+          {
+            label: "Warnings",
+            value: warnings.length,
+            color: warnings.length > 0 ? colors.tertiary : colors.onSurface,
+          },
+        ]}
+      />
     );
   };
 
-  const renderImportSettings = () => (
-    <Card style={styles.settingsCard}>
-      <Text style={styles.settingsTitle}>Import Configuration</Text>
-
-      <View style={styles.settingsList}>
-        <View style={styles.settingItem}>
-          <Text style={styles.settingLabel}>Transaction Type:</Text>
-          <Text style={styles.settingValue}>
-            {settings.globalTransactionType
-              ? settings.globalTransactionType.charAt(0).toUpperCase() + settings.globalTransactionType.slice(1)
-              : "Not set"}
-          </Text>
-        </View>
-
-        {settings.globalBudgetName && (
-          <View style={styles.settingItem}>
-            <Text style={styles.settingLabel}>Budget:</Text>
-            <Text style={styles.settingValue}>{settings.globalBudgetName}</Text>
-          </View>
-        )}
-
-        <View style={styles.settingItem}>
-          <Text style={styles.settingLabel}>Create Missing Categories:</Text>
-          <Text style={styles.settingValue}>{settings.createMissingCategories ? "Yes" : "No"}</Text>
-        </View>
-
-        {mapping.type && (
-          <View style={styles.settingItem}>
-            <Text style={styles.settingLabel}>Type Column Override:</Text>
-            <Text style={styles.settingValue}>{settings.allowIndividualTypeOverride ? "Enabled" : "Disabled"}</Text>
-          </View>
-        )}
-      </View>
-    </Card>
-  );
-
-  const renderMappingSummary = () => (
-    <Card style={styles.mappingCard}>
-      <Text style={styles.mappingTitle}>Column Mapping</Text>
-
-      <View style={styles.mappingList}>
-        {Object.entries(mapping).map(([field, column]) => (
-          <View key={field} style={styles.mappingItem}>
-            <View style={styles.mappingField}>
-              <Text style={styles.mappingFieldName}>{field.charAt(0).toUpperCase() + field.slice(1)}</Text>
-              {(["amount", "description", "date"] as Array<keyof ImportMapping>).includes(field as keyof ImportMapping) && (
-                <Text style={styles.requiredBadge}>Required</Text>
-              )}
-            </View>
-            <Text style={styles.mappingColumn}>"{column.name}"</Text>
-          </View>
-        ))}
-      </View>
-    </Card>
-  );
-
-  const renderErrorList = () => {
-    if (!validation || (validation.errors.length === 0 && validation.warnings.length === 0)) {
-      return null;
-    }
-
-    const allIssues = [...validation.errors, ...validation.warnings];
-
-    const renderIssue = ({ item }: { item: ImportError }) => (
-      <View style={[styles.issueItem, item.severity === "error" ? styles.errorItem : styles.warningItem]}>
-        <View style={styles.issueHeader}>
-          <Ionicons
-            name={item.severity === "error" ? "close-circle" : "warning"}
-            size={16}
-            color={item.severity === "error" ? UI.COLORS.ERROR : UI.COLORS.WARNING}
-          />
-          <Text style={styles.issueLocation}>
-            Row {item.row}, Column "{item.column}"
-          </Text>
-        </View>
-        <Text style={styles.issueMessage}>{item.message}</Text>
-      </View>
-    );
-
-    return (
-      <Card style={styles.issuesCard}>
-        <View style={styles.issuesHeader}>
-          <Text style={styles.issuesTitle}>Issues Found ({allIssues.length})</Text>
-          <Text style={styles.issuesSubtitle}>Rows with errors will be skipped during import</Text>
-        </View>
-
-        <FlatList
-          data={allIssues.slice(0, 20)} // Limit to first 20 issues
-          renderItem={renderIssue}
-          keyExtractor={(item, index) => `${item.row}-${item.column}-${index}`}
-          style={styles.issuesList}
-          maxToRenderPerBatch={10}
-        />
-
-        {allIssues.length > 20 && <Text style={styles.moreIssuesText}>... and {allIssues.length - 20} more issues</Text>}
-      </Card>
-    );
-  };
+  const mappedEntries = Object.entries(mapping).filter(([, col]) => Boolean(col));
+  const allIssues: ImportError[] = validation
+    ? [...validation.errors, ...validation.warnings]
+    : [];
 
   return (
-    <View style={styles.container}>
-      <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
-        {renderValidationSummary()}
-        {renderImportSettings()}
-        {renderMappingSummary()}
-        {renderErrorList()}
-      </ScrollView>
+    <ImportStepLayout
+      secondaryAction={{
+        title: "Back",
+        onPress: onBack,
+        variant: "secondary",
+        icon: "arrow-back",
+      }}
+      primaryAction={{
+        title: validation?.isValid ? "Start Import" : "Fix Issues First",
+        onPress: handleProceedWithWarnings,
+        disabled: isValidating || !!validationError || !validation,
+        icon: validation?.isValid ? "cloud-upload-outline" : "alert-circle-outline",
+      }}>
+      {renderValidationSummary()}
 
-      {/* Actions */}
-      <View style={styles.actions}>
-        <Button title="Back" onPress={onBack} variant="secondary" style={styles.backButton} />
-        <Button
-          title={validation?.isValid ? "Start Import" : "Fix Issues First"}
-          onPress={handleProceedWithWarnings}
-          disabled={isValidating || !!validationError || !validation}
-          style={styles.importButton}
-        />
-      </View>
-    </View>
+      <ImportSectionList
+        heading="IMPORT CONFIGURATION"
+        items={[
+          {
+            key: "default-type",
+            icon: "swap-vertical-outline",
+            iconColor: "teal",
+            title: "Default Type",
+            subtitle: "Applied when row type is not overridden",
+            badge: {
+              label: settings.globalTransactionType
+                ? settings.globalTransactionType.toUpperCase()
+                : "NOT SET",
+              role: settings.globalTransactionType === "income" ? "primary" : "error",
+            },
+          },
+          {
+            key: "target-budget",
+            icon: "pie-chart-outline",
+            iconColor: "purple",
+            title: "Target Budget",
+            subtitle: "Budget linked to imported transactions",
+            badge: {
+              label: settings.globalBudgetName || "None",
+              role: settings.globalBudgetName ? "primary" : "surfaceVariant",
+            },
+          },
+          {
+            key: "create-categories",
+            icon: "add-circle-outline",
+            iconColor: "orange",
+            title: "Create Missing Categories",
+            subtitle: "Auto-create unrecognized categories",
+            badge: {
+              label: settings.createMissingCategories ? "Enabled" : "Disabled",
+              role: settings.createMissingCategories ? "primary" : "surfaceVariant",
+            },
+          },
+        ]}
+      />
+
+      <ImportSectionList
+        heading="MAPPED COLUMNS"
+        items={mappedEntries.map(([field, column]) => {
+          const isRequired = ["amount", "description", "date"].includes(field);
+          return {
+            key: field,
+            icon: "git-compare-outline",
+            iconColor: isRequired ? "green" : "blue",
+            title: field.charAt(0).toUpperCase() + field.slice(1),
+            subtitle: isRequired ? "Required field" : "Optional field",
+            badge: { label: column.name, role: "primary" as const },
+          };
+        })}
+      />
+
+      <ImportIssueList issues={allIssues} headingPrefix="ISSUES FOUND" limit={20} />
+    </ImportStepLayout>
   );
 };
