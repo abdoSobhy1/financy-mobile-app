@@ -14,7 +14,7 @@ export class DebtRepository {
       const now = new Date().toISOString();
 
       // Validate and clean debt data before transformation to ensure required fields exist
-      const { cleanDebtData } = await import("../../../shared/utils/validation");
+      const { cleanDebtData } = require("../../../shared/utils/validation");
       const cleanedDebt = cleanDebtData({ ...debt, id }); // Add id for validation context
 
       const debtData = toDebtTable(cleanedDebt);
@@ -259,8 +259,9 @@ export class DebtRepository {
 
     if (updateFields.length === 0) return;
 
-    updateFields.push("updated_at = ?");
-    values.push(new Date().toISOString());
+    const nowMs = Date.now();
+    updateFields.push("updated_at = ?", "sync_updated_at = ?", "sync_status = ?");
+    values.push(new Date(nowMs).toISOString(), nowMs, options?.skipSync ? "synced" : "pending");
     values.push(id);
 
     await database.runAsync(

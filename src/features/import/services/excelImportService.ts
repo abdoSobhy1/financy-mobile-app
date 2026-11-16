@@ -53,7 +53,62 @@ export class ExcelImportService {
       const fileUri = (file as any).uri;
       let workbook: XLSX.WorkBook;
 
-      if ((file as any).name?.endsWith(".csv")) {
+      if ((file as any).name?.endsWith(".json")) {
+        const jsonText = await this.readFileAsText(fileUri);
+        const parsedBackup = JSON.parse(jsonText);
+        const stats = {
+          transactions: Array.isArray(parsedBackup.transactions) ? parsedBackup.transactions.length : 0,
+          categories: Array.isArray(parsedBackup.categories) ? parsedBackup.categories.length : 0,
+          budgets: Array.isArray(parsedBackup.budgets) ? parsedBackup.budgets.length : 0,
+          wallets: Array.isArray(parsedBackup.wallets) ? parsedBackup.wallets.length : 0,
+          debts: Array.isArray(parsedBackup.debts) ? parsedBackup.debts.length : 0,
+          debtPayments: Array.isArray(parsedBackup.debtPayments) ? parsedBackup.debtPayments.length : 0,
+        };
+        const total = Object.values(stats).reduce((a, b) => a + b, 0);
+
+        this.updateProgress({
+          status: "preparing",
+          message: "Database backup parsed successfully",
+          percentage: 100,
+        });
+
+        return {
+          columns: [],
+          rows: [],
+          totalRows: total,
+          fileName: (file as any).name || "backup.json",
+          fileSize: (file as any).size || 0,
+          isBackup: true,
+          backupData: parsedBackup,
+          backupStats: stats,
+        };
+      } else if (
+        (file as any).name?.endsWith(".db") ||
+        (file as any).name?.endsWith(".sqlite") ||
+        (file as any).name?.endsWith(".sqlite3")
+      ) {
+        const { inspectSQLiteDatabaseFile } = await import("../utils/databaseExport");
+        const stats = await inspectSQLiteDatabaseFile(fileUri);
+        const total = Object.values(stats).reduce((a, b) => a + b, 0);
+
+        this.updateProgress({
+          status: "preparing",
+          message: "SQLite database backup parsed successfully",
+          percentage: 100,
+        });
+
+        return {
+          columns: [],
+          rows: [],
+          totalRows: total,
+          fileName: (file as any).name || "backup.db",
+          fileSize: (file as any).size || 0,
+          isBackup: true,
+          isSqliteDb: true,
+          backupFileUri: fileUri,
+          backupStats: stats,
+        };
+      } else if ((file as any).name?.endsWith(".csv")) {
         // Handle CSV files
         const csvData = await this.readFileAsText(fileUri);
         workbook = XLSX.read(csvData, { type: "string" });
@@ -141,6 +196,16 @@ export class ExcelImportService {
    * Validate mapped data before import
    */
   async validateImport(preview: ImportPreview, mapping: ImportMapping, settings: ImportSettings): Promise<ImportValidation> {
+    if (preview.isBackup) {
+      return {
+        isValid: true,
+        errors: [],
+        warnings: [],
+        validRowCount: preview.totalRows,
+        totalRowCount: preview.totalRows,
+      };
+    }
+
     this.updateProgress({
       status: "validating",
       message: "Validating data...",
@@ -255,6 +320,78 @@ export class ExcelImportService {
    * Import validated data to database
    */
   async importData(preview: ImportPreview, mapping: ImportMapping, settings: ImportSettings): Promise<ImportResult> {
+    if (preview.isBackup) {
+      if (preview.isSqliteDb && preview.backupFileUri) {
+        this.updateProgress({
+          status: "importing",
+          message: "Restoring native SQLite database backup...",
+          percentage: 30,
+        });
+
+        const { restoreSQLiteDatabaseFromFile } = await import("../utils/databaseExport");
+        const restoreRes = await restoreSQLiteDatabaseFromFile(preview.backupFileUri);
+        const totalImported = Object.values(restoreRes.restoredCounts).reduce((a, b) => a + b, 0);
+
+        this.updateProgress({
+          status: "complete",
+          message: `Database restore complete! Restored ${totalImported} items.`,
+          percentage: 100,
+        });
+
+        return {
+          success: restoreRes.success,
+          importedCount: totalImported,
+          skippedCount: 0,
+          errorCount: restoreRes.errors.length,
+          createdCategories: [],
+          createdWallets: [],
+          errors: restoreRes.errors.map((msg, idx) => ({
+            row: idx + 1,
+            column: "sqlite_db",
+            message: msg,
+            severity: "error" as const,
+          })),
+          transactionIds: [],
+          isBackupRestore: true,
+          backupStats: restoreRes.restoredCounts,
+        };
+      } else if (preview.backupData) {
+        this.updateProgress({
+          status: "importing",
+          message: "Restoring database backup...",
+          percentage: 30,
+        });
+
+        const { importDatabaseFromJSON } = await import("../utils/databaseExport");
+        const restoreRes = await importDatabaseFromJSON(preview.backupData, { mode: "merge" });
+        const totalImported = Object.values(restoreRes.restoredCounts).reduce((a, b) => a + b, 0);
+
+        this.updateProgress({
+          status: "complete",
+          message: `Backup restore complete! Restored ${totalImported} items.`,
+          percentage: 100,
+        });
+
+        return {
+          success: restoreRes.success,
+          importedCount: totalImported,
+          skippedCount: 0,
+          errorCount: restoreRes.errors.length,
+          createdCategories: [],
+          createdWallets: [],
+          errors: restoreRes.errors.map((msg, idx) => ({
+            row: idx + 1,
+            column: "backup",
+            message: msg,
+            severity: "error" as const,
+          })),
+          transactionIds: [],
+          isBackupRestore: true,
+          backupStats: restoreRes.restoredCounts,
+        };
+      }
+    }
+
     this.updateProgress({
       status: "importing",
       message: "Starting import...",
@@ -267,6 +404,7 @@ export class ExcelImportService {
       skippedCount: 0,
       errorCount: 0,
       createdCategories: [],
+      createdWallets: [],
       errors: [],
       transactionIds: [],
     };
@@ -274,13 +412,25 @@ export class ExcelImportService {
     try {
       // Get all rows
       const allRows = await this.getAllRows(preview);
-      // Get or create categories
-      const categoryMap = await this.prepareCategoriesMap(allRows, mapping, settings);
+
+      const categoryInfo = await this.prepareCategoriesMap(allRows, mapping, settings);
+
+      const walletMap = await this.prepareWalletsMap(allRows, mapping, settings);
+
+      const budgetMap = await this.prepareBudgetsMap(allRows, mapping, settings);
+
       // Import transactions
       for (let i = 0; i < allRows.length; i++) {
         try {
           const row = allRows[i];
-          const transaction = await this.convertRowToTransaction(row, mapping, settings, categoryMap);
+          const transaction = await this.convertRowToTransaction(
+            row,
+            mapping,
+            settings,
+            categoryInfo,
+            walletMap,
+            budgetMap
+          );
 
           if (transaction) {
             // Remove id and createdAt since createTransaction generates them
@@ -313,7 +463,12 @@ export class ExcelImportService {
       }
 
       result.success = result.importedCount > 0;
-      result.createdCategories = Object.keys(categoryMap).filter((name) => categoryMap[name].isNew);
+      result.createdCategories = Object.keys(categoryInfo.map).filter(
+        (name) => categoryInfo.map[name].isNew
+      );
+      result.createdWallets = Object.keys(walletMap).filter(
+        (name) => walletMap[name].isNew
+      );
 
       this.updateProgress({
         status: "complete",
@@ -479,58 +634,172 @@ export class ExcelImportService {
     rows: ImportRow[],
     mapping: ImportMapping,
     settings: ImportSettings
-  ): Promise<Record<string, { id: string; isNew: boolean }>> {
+  ): Promise<{
+    map: Record<string, { id: string; isNew: boolean }>;
+    fallbackExpenseId: string;
+    fallbackIncomeId: string;
+  }> {
     const categoryMap: Record<string, { id: string; isNew: boolean }> = {};
-
-    if (!mapping.category) return categoryMap;
 
     // Get existing categories
     const existingCategories = await db.categories.getAllCategories();
     const existingByName = existingCategories.reduce((acc, cat) => {
-      acc[cat.name.toLowerCase()] = cat;
+      acc[cat.name.toLowerCase().trim()] = cat;
       return acc;
     }, {} as Record<string, any>);
 
-    // Collect unique category names from import
-    const categoryNames = new Set<string>();
-    rows.forEach((row) => {
-      const categoryName = String(row[mapping.category!.name] || "").trim();
-      if (categoryName) {
-        categoryNames.add(categoryName);
-      }
-    });
+    let fallbackExpense = existingCategories.find((c) => c.type === "expense" && !c.deleted);
+    let fallbackIncome = existingCategories.find((c) => c.type === "income" && !c.deleted);
 
-    // Map categories
-    const categoryNameArray = Array.from(categoryNames);
-    for (const name of categoryNameArray) {
-      const existing = existingByName[name.toLowerCase()];
-      if (existing) {
-        categoryMap[name] = { id: existing.id, isNew: false };
-      } else if (settings.createMissingCategories) {
-        // Create new category - let the repository generate the real ID and use that
-        const newCategoryData = {
-          name,
-          type: (settings.globalTransactionType || "expense") as "income" | "expense",
-          color: undefined,
+    if (!fallbackExpense) {
+      try {
+        fallbackExpense = await db.categories.createCategory({
+          name: "General Expense",
+          type: "expense",
+          color: "blue",
           entryCount: 0,
           updatedAt: Date.now(),
-          deleted: false,
-          syncStatus: "pending" as const,
-        } as any;
-
-        const createdCategory = await db.categories.createCategory(newCategoryData);
-        categoryMap[name] = { id: createdCategory.id, isNew: true };
+        });
+      } catch (e) {
+        // ignore
+      }
+    }
+    if (!fallbackIncome) {
+      try {
+        fallbackIncome = await db.categories.createCategory({
+          name: "General Income",
+          type: "income",
+          color: "green",
+          entryCount: 0,
+          updatedAt: Date.now(),
+        });
+      } catch (e) {
+        // ignore
       }
     }
 
-    return categoryMap;
+    if (mapping.category) {
+      // Collect unique category names from import
+      const categoryNames = new Set<string>();
+      rows.forEach((row) => {
+        const categoryName = String(row[mapping.category!.name] || "").trim();
+        if (categoryName) {
+          categoryNames.add(categoryName);
+        }
+      });
+
+      // Map categories
+      const categoryNameArray = Array.from(categoryNames);
+      for (const name of categoryNameArray) {
+        const existing = existingByName[name.toLowerCase().trim()];
+        if (existing) {
+          categoryMap[name] = { id: existing.id, isNew: false };
+        } else if (settings.createMissingCategories) {
+          const newCategoryData = {
+            name,
+            type: (settings.globalTransactionType || "expense") as "income" | "expense",
+            color: undefined,
+            entryCount: 0,
+            updatedAt: Date.now(),
+            deleted: false,
+            syncStatus: "pending" as const,
+          } as any;
+
+          const createdCategory = await db.categories.createCategory(newCategoryData);
+          categoryMap[name] = { id: createdCategory.id, isNew: true };
+          existingByName[name.toLowerCase().trim()] = createdCategory;
+        }
+      }
+    }
+
+    return {
+      map: categoryMap,
+      fallbackExpenseId: fallbackExpense?.id || "default_expense",
+      fallbackIncomeId: fallbackIncome?.id || "default_income",
+    };
+  }
+
+  private async prepareWalletsMap(
+    rows: ImportRow[],
+    mapping: ImportMapping,
+    settings: ImportSettings
+  ): Promise<Record<string, { id: string; name: string; isNew: boolean }>> {
+    const walletMap: Record<string, { id: string; name: string; isNew: boolean }> = {};
+
+    const existingWallets = await db.wallets.getAllWallets({ includeArchived: true });
+    for (const w of existingWallets) {
+      walletMap[w.name.toLowerCase().trim()] = { id: w.id, name: w.name, isNew: false };
+      walletMap[w.id.toLowerCase().trim()] = { id: w.id, name: w.name, isNew: false };
+    }
+
+    if (!mapping.account && !mapping.toAccount) {
+      return walletMap;
+    }
+
+    const uniqueNames = new Set<string>();
+    rows.forEach((row) => {
+      if (mapping.account) {
+        const val = String(row[mapping.account.name] || "").trim();
+        if (val) uniqueNames.add(val);
+      }
+      if (mapping.toAccount) {
+        const val = String(row[mapping.toAccount.name] || "").trim();
+        if (val) uniqueNames.add(val);
+      }
+    });
+
+    for (const name of uniqueNames) {
+      const lower = name.toLowerCase().trim();
+      if (!walletMap[lower]) {
+        if (settings.createMissingWallets) {
+          try {
+            const created = await db.wallets.createWallet({
+              name,
+              type: "cash",
+              icon: "wallet-outline",
+              color: "teal",
+              initialBalance: 0,
+              isSecret: false,
+              archived: false,
+            });
+            walletMap[lower] = { id: created.id, name: created.name, isNew: true };
+          } catch (e) {
+            console.warn(`Could not auto-create wallet "${name}":`, e);
+          }
+        }
+      }
+    }
+
+    return walletMap;
+  }
+
+  private async prepareBudgetsMap(
+    rows: ImportRow[],
+    mapping: ImportMapping,
+    settings: ImportSettings
+  ): Promise<Record<string, { id: string; name: string }>> {
+    const budgetMap: Record<string, { id: string; name: string }> = {};
+
+    const existingBudgets = await db.budgets.getAllBudgets();
+    for (const b of existingBudgets) {
+      budgetMap[b.name.toLowerCase().trim()] = { id: b.id, name: b.name };
+      budgetMap[b.id.toLowerCase().trim()] = { id: b.id, name: b.name };
+    }
+
+    return budgetMap;
   }
 
   private async convertRowToTransaction(
     row: ImportRow,
     mapping: ImportMapping,
     settings: ImportSettings,
-    categoryMap: Record<string, { id: string; isNew: boolean }>
+    categoryInfo: {
+      map: Record<string, { id: string; isNew: boolean }>;
+      fallbackExpenseId: string;
+      fallbackIncomeId: string;
+    },
+    walletMap: Record<string, { id: string; name: string; isNew: boolean }>,
+    budgetMap: Record<string, { id: string; name: string }>
   ): Promise<Transaction | null> {
     // Parse required fields
     const amount = this.parseAmount(row[mapping.amount.name]);
@@ -542,22 +811,80 @@ export class ExcelImportService {
     }
 
     // Determine transaction type
-    let type: TransactionType = "expense"; // default
-    if (settings.globalTransactionType) {
-      type = settings.globalTransactionType;
-    } else if (mapping.type) {
-      const typeValue = String(row[mapping.type.name] || "").toLowerCase();
-      if (typeValue.includes("income") || typeValue.includes("credit")) {
+    let type: TransactionType = settings.globalTransactionType || "expense";
+    if (mapping.type) {
+      const typeValue = String(row[mapping.type.name] || "").toLowerCase().trim();
+      if (
+        typeValue.includes("income") ||
+        typeValue.includes("credit") ||
+        typeValue.includes("deposit") ||
+        typeValue.includes("إيداع") ||
+        typeValue.includes("دخل")
+      ) {
         type = "income";
+      } else if (typeValue.includes("transfer") || typeValue.includes("تحويل")) {
+        type = "transfer";
+      } else if (
+        typeValue.includes("expense") ||
+        typeValue.includes("debit") ||
+        typeValue.includes("withdrawal") ||
+        typeValue.includes("سحب") ||
+        typeValue.includes("مصروف")
+      ) {
+        type = "expense";
       }
     }
 
-    // Get category ID
+    // Resolve source account / wallet
+    let accountId = settings.globalAccountId;
+    if (mapping.account) {
+      const accName = String(row[mapping.account.name] || "").toLowerCase().trim();
+      if (accName && walletMap[accName]) {
+        accountId = walletMap[accName].id;
+      }
+    }
+    if (!accountId) {
+      const defaultCash =
+        Object.values(walletMap).find((w) => w.id === "default_cash") ||
+        Object.values(walletMap)[0];
+      accountId = defaultCash?.id || "default_cash";
+    }
+
+    // Resolve destination account (for transfers)
+    let toAccountId: string | undefined = undefined;
+    if (mapping.toAccount) {
+      const toName = String(row[mapping.toAccount.name] || "").toLowerCase().trim();
+      if (toName && walletMap[toName]) {
+        toAccountId = walletMap[toName].id;
+      }
+    }
+    if (toAccountId && toAccountId !== accountId) {
+      type = "transfer";
+    }
+
+    // Resolve budget
+    let budgetId = settings.globalBudgetId;
+    if (mapping.budget) {
+      const bName = String(row[mapping.budget.name] || "").toLowerCase().trim();
+      if (bName && budgetMap[bName]) {
+        budgetId = budgetMap[bName].id;
+      }
+    }
+
+    // Resolve category
     let categoryId: string | null = null;
-    if (mapping.category) {
-      const categoryName = String(row[mapping.category.name] || "").trim();
-      if (categoryName && categoryMap[categoryName]) {
-        categoryId = categoryMap[categoryName].id;
+    if (type !== "transfer") {
+      if (mapping.category) {
+        const categoryName = String(row[mapping.category.name] || "").trim();
+        if (categoryName && categoryInfo.map[categoryName]) {
+          categoryId = categoryInfo.map[categoryName].id;
+        }
+      }
+      if (!categoryId) {
+        categoryId =
+          type === "income"
+            ? categoryInfo.fallbackIncomeId
+            : categoryInfo.fallbackExpenseId;
       }
     }
 
@@ -572,8 +899,10 @@ export class ExcelImportService {
       description,
       date: date.toISOString(),
       type,
-      categoryId: categoryId || "", // Transaction requires categoryId as string
-      budgetId: settings.globalBudgetId || undefined,
+      categoryId: categoryId || undefined,
+      budgetId: budgetId || undefined,
+      accountId,
+      toAccountId: type === "transfer" ? toAccountId : undefined,
       note: note || undefined,
       createdAt: new Date().toISOString(),
       updatedAt: now,

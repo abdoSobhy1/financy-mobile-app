@@ -14,8 +14,11 @@ const mappingTargets: Array<{
   { key: "amount", label: "Amount", required: true, description: "Transaction amount (required)" },
   { key: "description", label: "Description", required: true, description: "Transaction description (required)" },
   { key: "date", label: "Date", required: true, description: "Transaction date (required)" },
+  { key: "type", label: "Type", required: false, description: "Income, Expense, or Transfer (optional)" },
   { key: "category", label: "Category", required: false, description: "Transaction category (optional)" },
-  { key: "type", label: "Type", required: false, description: "Income or Expense (optional)" },
+  { key: "account", label: "Account / Wallet", required: false, description: "Source wallet or bank account (optional)" },
+  { key: "toAccount", label: "To Account", required: false, description: "Destination wallet for transfers (optional)" },
+  { key: "budget", label: "Budget", required: false, description: "Target budget (optional)" },
   { key: "note", label: "Note", required: false, description: "Additional notes (optional)" },
 ];
 

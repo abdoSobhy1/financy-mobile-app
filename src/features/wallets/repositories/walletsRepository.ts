@@ -1,4 +1,10 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import {
+  getStoredUser,
+  isCurrentSessionCloudAllowed,
+  isSessionSeeded,
+  markSessionSeeded,
+} from "../../auth/services/authSessionStorage";
 import { DatabaseManager } from "../../../infrastructure/database";
 import { WalletAccount, WalletType } from "../../../shared/types";
 import { WalletTable, transformWallet } from "../../../infrastructure/database/models";
@@ -31,22 +37,20 @@ export class WalletRepository {
     this.initialized = true;
   }
 
-  private async shouldSeedDefaultWallets(): Promise<boolean> {
+  private async shouldSeedDefaultWallets(userId?: string): Promise<boolean> {
     try {
-      const { authService } = await import("../../auth/services/authService");
-      const currentUser = await authService.getCurrentAuthenticatedUser();
-      if (!currentUser) {
+      const storedUser = await getStoredUser();
+      if (!storedUser && !userId) {
         return false;
       }
-      const isCloudAllowed = await authService.isCloudSyncAllowedAsync();
+      const isCloudAllowed = await isCurrentSessionCloudAllowed();
       // For signed-in cloud users, wait for cloud restore in syncWithFirebase before seeding default wallets
-      if (isCloudAllowed || (!currentUser.isGuest && currentUser.uid !== "guest")) {
+      if (isCloudAllowed || (storedUser && !storedUser.isGuest && storedUser.uid !== "guest")) {
         return false;
       }
-      const currentUserId = currentUser.uid || "guest";
-      const seededKey = `financy_wallets_seeded_v1_${currentUserId}`;
-      const alreadySeeded = await AsyncStorage.getItem(seededKey);
-      if (alreadySeeded === "true") {
+      const currentUserId = userId || storedUser?.uid || "guest";
+      const alreadySeeded = await isSessionSeeded("wallets", currentUserId);
+      if (alreadySeeded) {
         return false;
       }
       return true;
@@ -126,7 +130,7 @@ export class WalletRepository {
     }
   }
 
-  public async seedDefaultWallets(): Promise<void> {
+  public async seedDefaultWallets(userId?: string): Promise<void> {
     const database = this.db.getDatabase();
     const now = Date.now();
 
@@ -153,10 +157,7 @@ export class WalletRepository {
     }
 
     try {
-      const { authService } = await import("../../auth/services/authService");
-      const currentUserId =
-        (await authService.getCurrentAuthenticatedUser())?.uid || "guest";
-      await AsyncStorage.setItem(`financy_wallets_seeded_v1_${currentUserId}`, "true");
+      await markSessionSeeded("wallets", userId);
     } catch (e) {
       // ignore
     }
@@ -370,7 +371,7 @@ export class WalletRepository {
 
   async deleteWallet(
     id: string,
-    options?: { skipSync?: boolean },
+    options?: { skipSync?: boolean; userId?: string },
   ): Promise<void> {
     await this.ensureInitialized();
     const database = this.db.getDatabase();
@@ -378,10 +379,7 @@ export class WalletRepository {
     await database.runAsync(`DELETE FROM wallets WHERE id = ?`, [id]);
 
     try {
-      const { authService } = await import("../../auth/services/authService");
-      const currentUserId =
-        (await authService.getCurrentAuthenticatedUser())?.uid || "guest";
-      await AsyncStorage.setItem(`financy_wallets_seeded_v1_${currentUserId}`, "true");
+      await markSessionSeeded("wallets", options?.userId);
     } catch {
       // ignore
     }

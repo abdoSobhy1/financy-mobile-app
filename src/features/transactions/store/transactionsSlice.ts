@@ -22,7 +22,7 @@ async function checkAndTriggerBudgetAlert(tx: Transaction, state: any) {
     );
     if (matchingBudgets.length === 0) return;
 
-    const { default: NotificationService } = await import("../../../infrastructure/notifications/notificationService");
+    const NotificationService = require("../../../infrastructure/notifications/notificationService").default;
     const notifService = NotificationService.getInstance();
 
     for (const budget of matchingBudgets) {

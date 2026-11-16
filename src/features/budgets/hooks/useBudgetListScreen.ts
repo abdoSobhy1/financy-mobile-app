@@ -55,7 +55,7 @@ export function useBudgetListScreen() {
         end = range.end;
       }
 
-      const queriesModule = await import("../../../infrastructure/database/repositories");
+      const queriesModule = require("../../../infrastructure/database/repositories");
       const fetchedBudgets = await dispatch(fetchBudgets()).unwrap();
 
       const promises = (fetchedBudgets || []).map(async (b: any) => {

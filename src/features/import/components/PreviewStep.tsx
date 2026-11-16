@@ -72,6 +72,76 @@ export const PreviewStep: React.FC<PreviewStepProps> = ({
     );
   };
 
+  if (preview.isBackup) {
+    const isSqlite = Boolean(preview.isSqliteDb);
+    const stats = preview.backupStats || {
+      transactions: 0,
+      categories: 0,
+      budgets: 0,
+      wallets: 0,
+      debts: 0,
+      debtPayments: 0,
+    };
+
+    return (
+      <ImportStepLayout
+        secondaryAction={{
+          title: "Back",
+          onPress: onBack,
+          variant: "secondary",
+          icon: "arrow-back",
+        }}
+        primaryAction={{
+          title: isSqlite ? "Restore Database (.db)" : "Restore Backup",
+          onPress: onContinue,
+          icon: isSqlite ? "server-outline" : "cloud-download-outline",
+          iconPosition: "right",
+        }}>
+        <SectionHeading text="BACKUP OVERVIEW" />
+        <ImportSummaryCard
+          title={preview.fileName}
+          subtitle={
+            isSqlite
+              ? `Native SQLite Database (${preview.totalRows.toLocaleString()} items)`
+              : `Financy Database Backup (${preview.totalRows.toLocaleString()} items)`
+          }
+          iconName={isSqlite ? "server-outline" : "archive-outline"}
+          iconColor={isSqlite ? "teal" : "purple"}
+          iconShape="rounded-square"
+          trailing={
+            <Badge
+              label={isSqlite ? "SQLITE" : `v${preview.backupData?.version || "2.0.0"}`}
+              role="primary"
+              size="small"
+            />
+          }
+          stats={[
+            { label: "Transactions", value: stats.transactions, color: colors.primary },
+            { label: "Wallets", value: stats.wallets, color: colors.onSurface },
+            { label: "Budgets", value: stats.budgets, color: colors.tertiary },
+          ]}
+        />
+
+        <SectionHeading text="ITEMS INCLUDED IN BACKUP" />
+        <View style={{ gap: spacing.sm, marginBottom: spacing.lg }}>
+          <Card variant="outlined" padding="medium">
+            <Text style={[typography.bodyMedium, { color: colors.onSurface, fontWeight: "600", marginBottom: 8 }]}>
+              Data Summary
+            </Text>
+            <Text style={[typography.bodySmall, { color: colors.onSurfaceVariant, lineHeight: 22 }]}>
+              • {stats.transactions.toLocaleString()} Transactions{"\n"}
+              • {stats.wallets.toLocaleString()} Wallets & Accounts{"\n"}
+              • {stats.categories.toLocaleString()} Categories{"\n"}
+              • {stats.budgets.toLocaleString()} Budgets{"\n"}
+              • {stats.debts.toLocaleString()} Debts & Loans{"\n"}
+              • {stats.debtPayments.toLocaleString()} Debt Payments
+            </Text>
+          </Card>
+        </View>
+      </ImportStepLayout>
+    );
+  }
+
   return (
     <ImportStepLayout
       secondaryAction={{

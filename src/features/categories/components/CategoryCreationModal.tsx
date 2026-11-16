@@ -72,17 +72,25 @@ export const CategoryCreationModal: React.FC<CategoryCreationModalProps> = ({
   );
   const [nameError, setNameError] = useState("");
   const nameInputRef = useRef<TextInput>(null);
+  const prevVisibleRef = useRef(false);
+  const prevCategoryKeyRef = useRef<string | null>(null);
 
-  // Pre-fill when initialData changes (edit mode) or modal opens
+  // Pre-fill when modal opens or when editing target changes
   useEffect(() => {
-    if (visible) {
+    const categoryKey = initialData ? `${initialData.id || ""}:${initialData.name || ""}` : null;
+    const isOpening = visible && !prevVisibleRef.current;
+    const isTargetChanged = visible && categoryKey !== prevCategoryKeyRef.current && prevVisibleRef.current;
+
+    if (isOpening || isTargetChanged) {
       setName(initialData?.name ?? "");
       setColor(initialData?.color ?? PREDEFINED_COLORS[0]);
       setIcon(initialData?.icon ?? CATEGORY_ICONS[0]);
       setCatType(initialData?.type ?? type ?? "expense");
       setNameError("");
     }
-  }, [visible, initialData, type]);
+    prevVisibleRef.current = visible;
+    prevCategoryKeyRef.current = categoryKey;
+  }, [visible, initialData?.id, initialData?.name, initialData?.color, initialData?.icon, initialData?.type, type]);
 
   const isEdit = !!initialData && !!(initialData.name?.trim() || initialData.id);
   const modalTitle = title ?? (isEdit ? "Edit Category" : "Create New Category");

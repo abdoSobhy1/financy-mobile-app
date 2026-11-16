@@ -118,7 +118,7 @@ export const VoiceVerifyScreen: React.FC = () => {
         visible={showCreateCategoryModal}
         onClose={() => setShowCreateCategoryModal(false)}
         onCreateCategory={handleQuickCreateCategory}
-        initialData={{ name: "", type: editData.type }}
+        type={editData.type}
       />
     </SafeAreaView>
   );

@@ -50,7 +50,34 @@ const mockTaskManager = {
 };
 const mockFileSystem = {
   readAsStringAsync: () => Promise.resolve(""),
-  EncodingType: { Base64: "base64" },
+  writeAsStringAsync: () => Promise.resolve(),
+  copyAsync: () => Promise.resolve(),
+  documentDirectory: "file:///mock/documents/",
+  EncodingType: { Base64: "base64", UTF8: "utf8" },
+  Paths: { document: "file:///mock/documents/" },
+  File: class {
+    constructor(dir, name) { this.uri = (dir || "") + (name || ""); }
+    create() { return Promise.resolve(); }
+    text() { return Promise.resolve("{}"); }
+    base64() { return Promise.resolve(""); }
+    readableStream() {
+      return {
+        pipeTo: () => Promise.resolve(),
+      };
+    }
+    writableStream() {
+      return {
+        getWriter: () => ({
+          write: () => Promise.resolve(),
+          close: () => Promise.resolve(),
+        }),
+      };
+    }
+  },
+};
+const mockSharing = {
+  isAvailableAsync: () => Promise.resolve(false),
+  shareAsync: () => Promise.resolve(),
 };
 const mockTextRec = {
   default: { recognize: () => Promise.resolve([]) },
@@ -99,6 +126,7 @@ Module._load = function (request, parent, isMain) {
     if (request === "expo-secure-store") return mockSecureStore;
     if (request === "expo-notifications" || request.includes("expo-notifications")) return mockNotifications;
     if (request.includes("expo-file-system")) return mockFileSystem;
+    if (request.includes("expo-sharing")) return mockSharing;
     if (request.includes("@dariyd/react-native-text-recognition")) return mockTextRec;
     if (request.includes("expo-image-manipulator")) return mockImgManip;
     if (request.includes("react-native-document-scanner-plugin")) return mockDocScan;
@@ -109,10 +137,19 @@ Module._load = function (request, parent, isMain) {
         openDatabaseSync: () => ({ execSync: () => {}, getAllSync: () => [], getFirstSync: () => null, runSync: () => ({}) }),
         openDatabaseAsync: () => Promise.resolve({
           execAsync: () => Promise.resolve(),
-          getAllAsync: () => Promise.resolve([]),
-          getFirstAsync: () => Promise.resolve(null),
+          getAllAsync: () => Promise.resolve([{ name: "transactions" }, { name: "categories" }]),
+          getFirstAsync: () => Promise.resolve({ count: 5 }),
           runAsync: () => Promise.resolve({ lastInsertRowId: 1, changes: 1 }),
+          databasePath: "file:///mock/databases/financy.db",
+          closeAsync: () => Promise.resolve(),
+          prepareAsync: () => Promise.resolve({
+            executeAsync: () => Promise.resolve(),
+            finalizeAsync: () => Promise.resolve(),
+          }),
         }),
+        backupDatabaseAsync: () => Promise.resolve(),
+        deleteDatabaseAsync: () => Promise.resolve(),
+        defaultDatabaseDirectory: "file:///mock/databases/",
       };
     }
     if (request.includes("expo-modules-core")) return { requireNativeModule: () => ({}), NativeModulesProxy: {}, EventEmitter: class {} };
@@ -167,4 +204,5 @@ require("../tests/unit/smsService.test.ts");
 require("../tests/unit/voiceAndCategoryDetection.test.ts");
 require("../tests/unit/toastQueue.test.ts");
 require("../tests/unit/toastHosts.test.ts");
+require("../tests/unit/importExportDataAlignment.test.ts");
 }

@@ -98,3 +98,23 @@ database-*
 !.env.example
 .dev.vars
 .dev.vars.*
+
+# Local showcase, screenshots & Python automation scratch files
+financy_all_assets/
+workers/
+.firebaserc
+app_overview.md
+scratch/
+assets/real_screenshots/
+assets/linkedin_showcase/
+assets/showcase/
+__pycache__/
+*.pyc
+dump.xml
+scripts/capture_real_screenshots.py
+scripts/device_controller.py
+scripts/generate_linkedin_cards.py
+scripts/generate_luxury_3d_showcase.py
+scripts/generate_showcase_images.py
+scripts/prepare_3d_assets.py
+scripts/test_runner.py

@@ -34,14 +34,25 @@ const AddPaymentScreen: React.FC = () => {
     <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} style={{ flex: 1, backgroundColor: colors.background }}>
       {/* Top Bar */}
       <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 20, paddingTop: 10, paddingBottom: 10 }}>
-        <TouchableOpacity style={{ width: 60, height: 40, justifyContent: "center" }} onPress={() => navigation.goBack()}>
-          <Text style={[typography.bodyLarge, { color: colors.onSurfaceVariant }]}>Cancel</Text>
+        <TouchableOpacity
+          style={{
+            width: 40,
+            height: 40,
+            borderRadius: 20,
+            justifyContent: "center",
+            alignItems: "center",
+            backgroundColor: colors.surfaceVariant,
+          }}
+          onPress={() => navigation.goBack()}>
+          <Ionicons name="close" size={24} color={colors.onSurfaceVariant} />
         </TouchableOpacity>
         <View style={{ alignItems: "center" }}>
           <Text style={[typography.h3, { color: colors.onBackground }]}>Record Payment</Text>
-          <Text style={[typography.bodySmall, { color: colors.onSurfaceVariant, marginTop: 2 }]}>{debtName}</Text>
+          {debtName ? (
+            <Text style={[typography.bodySmall, { color: colors.onSurfaceVariant, marginTop: 2 }]}>{debtName}</Text>
+          ) : null}
         </View>
-        <View style={{ width: 60 }} />
+        <View style={{ width: 40, height: 40 }} />
       </View>
 
       <ScrollView contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 100 }} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">

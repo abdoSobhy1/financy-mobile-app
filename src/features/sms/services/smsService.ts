@@ -23,6 +23,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { ParsedTransaction, Budget } from "../../../shared/types";
 import { isBankSender, parseSmsTransaction } from "./smsParser";
 import { getSmsConfig } from "./smsConfigService";
+import { SmsSettingsRepository } from "./smsSettingsRepository";
 import { DatabaseManager } from "../../../infrastructure/database";
 import { db } from "../../../infrastructure/database/repositories";
 
@@ -50,8 +51,6 @@ export async function getSmsDetectionEnabled(): Promise<boolean> {
 
 export async function setSmsDetectionEnabled(enabled: boolean): Promise<void> {
   await AsyncStorage.setItem(SMS_ENABLED_KEY, enabled ? "true" : "false");
-  const { SmsSettingsRepository } = await import("./smsSettingsRepository");
-  const { getSmsConfig } = await import("./smsConfigService");
   await new SmsSettingsRepository().save(await getSmsConfig(), enabled);
 }
 
@@ -162,12 +161,14 @@ export async function processIncomingSms(
     }
   }
 
+  const referenceDate = message.timestamp ? new Date(message.timestamp) : new Date();
   const parsed = parseSmsTransaction(
     message.body,
     categories || [],
     budgets,
     undefined,
-    config
+    config,
+    referenceDate
   );
 
   if (!parsed) return null;
@@ -293,12 +294,14 @@ class SmsService {
       };
     }
 
+    const referenceDate = message.timestamp ? new Date(message.timestamp) : new Date();
     const parsed = parseSmsTransaction(
       message.body,
       categories,
       budgets,
       undefined,
-      config
+      config,
+      referenceDate
     );
 
     if (!parsed) {

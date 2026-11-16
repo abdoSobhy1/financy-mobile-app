@@ -11,4 +11,11 @@
 -keep class com.swmansion.reanimated.** { *; }
 -keep class com.facebook.react.turbomodule.** { *; }
 
-# Add any project specific keep options here:
+# Keep custom SMS receiver, Expo modules, and ML Kit OCR classes
+-keep class com.sobhy.financy.** { *; }
+-keep class expo.modules.** { *; }
+-keep class com.google.mlkit.** { *; }
+-keep class com.google.android.gms.** { *; }
+-dontwarn com.google.mlkit.**
+-dontwarn com.google.android.odml.**
+-dontwarn com.gemalto.jp2.JP2Decoder

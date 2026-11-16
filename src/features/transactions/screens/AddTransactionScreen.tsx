@@ -15,7 +15,7 @@ import { CustomDatePicker, CustomKeypad } from "../../../shared/ui";
 import { CategoryCreationModal } from "../../categories/components/CategoryCreationModal";
 
 export const AddTransactionScreen: React.FC = () => {
-  const { colors, spacing } = useAppTheme();
+  const { colors, spacing, typography } = useAppTheme();
   const form = useAddTransactionScreen();
   const {
     navigation,
@@ -44,6 +44,7 @@ export const AddTransactionScreen: React.FC = () => {
     handleEvaluateExpression,
     handleQuickCreateCategory,
     handleSave,
+    loading,
   } = form;
 
   return (
@@ -75,21 +76,7 @@ export const AddTransactionScreen: React.FC = () => {
             <Text style={[styles.title, { color: colors.onBackground }]}>
               {editTransaction ? "Edit Transaction" : "New Transaction"}
             </Text>
-            <TouchableOpacity
-              style={[
-                styles.iconButton,
-                { backgroundColor: colors.primaryContainer },
-              ]}
-              onPress={() => {
-                if (showKeypad) setShowKeypad(false);
-                handleSave();
-              }}>
-              <Ionicons
-                name="checkmark"
-                size={24}
-                color={colors.onPrimaryContainer}
-              />
-            </TouchableOpacity>
+            <View style={{ width: 40, height: 40 }} />
           </View>
         </TouchableWithoutFeedback>
 
@@ -122,6 +109,34 @@ export const AddTransactionScreen: React.FC = () => {
             accessible={false}>
             <TransactionFormContent form={form} />
           </TouchableWithoutFeedback>
+
+          {/* Action Button at bottom */}
+          <TouchableOpacity
+            style={[
+              styles.submitButton,
+              {
+                backgroundColor: colors.primaryContainer,
+                opacity: loading ? 0.7 : 1,
+                marginTop: spacing.md,
+              },
+            ]}
+            onPress={() => {
+              if (showKeypad) setShowKeypad(false);
+              handleSave();
+            }}
+            disabled={loading}>
+            <Text
+              style={[
+                typography.bodyLarge,
+                { color: colors.onPrimaryContainer, fontWeight: "700" },
+              ]}>
+              {loading
+                ? "Saving..."
+                : editTransaction
+                  ? "Update Transaction"
+                  : "Create Transaction"}
+            </Text>
+          </TouchableOpacity>
         </ScrollView>
 
         {isKeypadMounted && (
@@ -164,7 +179,7 @@ export const AddTransactionScreen: React.FC = () => {
           visible={showCreateCategoryModal}
           onClose={() => setShowCreateCategoryModal(false)}
           onCreateCategory={handleQuickCreateCategory}
-          initialData={{ name: "", type: type === "income" ? "income" : "expense" }}
+          type={type === "income" ? "income" : "expense"}
         />
       </KeyboardAvoidingView>
     </SafeAreaView>

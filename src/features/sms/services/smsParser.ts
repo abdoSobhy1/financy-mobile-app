@@ -162,13 +162,47 @@ function extractSmsType(text: string, config?: SmsDetectorConfig): TransactionTy
   return "expense";
 }
 
-// ── Date extraction ─────────────────────────────────────────────────────
-function extractSmsDate(text: string): Date {
+// ── Time & Date extraction ──────────────────────────────────────────────
+function extractSmsTime(text: string): { hours: number; minutes: number; seconds: number } | null {
   const normalizedText = normalizeDigits(text);
-  // 3-part full date: "يوم 03/09/26" (DD/MM/YY) or "يوم 07/08/26"
+  const timeMatch = normalizedText.match(
+    /(?:الساعة|at|time)?\s*([0-2]?\d):([0-5]\d)(?::([0-5]\d))?\s*(am|pm|صباحا|مساء|ص|م)?/i
+  );
+  if (timeMatch) {
+    let hours = parseInt(timeMatch[1], 10);
+    const minutes = parseInt(timeMatch[2], 10);
+    const seconds = timeMatch[3] ? parseInt(timeMatch[3], 10) : 0;
+    const period = timeMatch[4]?.toLowerCase();
+    if ((period === "pm" || period === "م" || period === "مساء") && hours < 12) hours += 12;
+    if ((period === "am" || period === "ص" || period === "صباحا") && hours === 12) hours = 0;
+    if (hours >= 0 && hours < 24 && minutes >= 0 && minutes < 60) {
+      return { hours, minutes, seconds };
+    }
+  }
+  return null;
+}
+
+function extractSmsDate(text: string, referenceDate: Date = new Date()): Date {
+  const normalizedText = normalizeDigits(text);
+  const time = extractSmsTime(text);
+  const applyTime = (d: Date): Date => {
+    if (time) {
+      d.setHours(time.hours, time.minutes, time.seconds, 0);
+    } else {
+      d.setHours(
+        referenceDate.getHours(),
+        referenceDate.getMinutes(),
+        referenceDate.getSeconds(),
+        referenceDate.getMilliseconds()
+      );
+    }
+    return d;
+  };
+
+  // 3-part full date: "يوم 03/09/26" (DD/MM/YY) or "بتاريخ 07/08/2026"
   // Handles with or without space: "يوم 03/09/26" or "يوم03/09/26"
   const fullDateMatch = normalizedText.match(
-    /(?:يوم|بتاريخ|on|date)\s*([0-3]?\d)[/\-]([0-1]?\d)[/\-](\d{2,4})/i
+    /(?:يوم|في|بتاريخ|on|date)\s*([0-3]?\d)[/\-]([0-1]?\d)[/\-](\d{2,4})/i
   );
   if (fullDateMatch) {
     const day = parseInt(fullDateMatch[1], 10);
@@ -176,22 +210,22 @@ function extractSmsDate(text: string): Date {
     let year = parseInt(fullDateMatch[3], 10);
     if (year < 100) year += 2000;
     const d = new Date(year, month, day);
-    if (!isNaN(d.getTime())) return d;
+    if (!isNaN(d.getTime())) return applyTime(d);
   }
 
   // 2-part short date without year: "يوم 09-03" (MM-DD, as NBE InstaPay uses)
   const shortDateMatch = normalizedText.match(
-    /(?:يوم|بتاريخ|on|date)\s*([0-1]?\d)[/\-]([0-3]?\d)(?!\d)/i
+    /(?:يوم|في|بتاريخ|on|date)\s*([0-1]?\d)[/\-]([0-3]?\d)(?!\d)/i
   );
   if (shortDateMatch) {
     const month = parseInt(shortDateMatch[1], 10) - 1;
     const day = parseInt(shortDateMatch[2], 10);
-    const year = new Date().getFullYear();
+    const year = referenceDate.getFullYear();
     const d = new Date(year, month, day);
-    if (!isNaN(d.getTime())) return d;
+    if (!isNaN(d.getTime())) return applyTime(d);
   }
 
-  return new Date();
+  return applyTime(new Date(referenceDate.getTime()));
 }
 
 // ── Merchant / Description extraction ───────────────────────────────────
@@ -287,7 +321,8 @@ export function parseSmsTransaction(
   categories: { id: string; name: string }[] = [],
   budgets?: Record<string, Budget> | Budget[] | null,
   defaultCategoryId?: string,
-  config?: SmsDetectorConfig
+  config?: SmsDetectorConfig,
+  referenceDate?: Date
 ): ParsedTransaction | null {
   if (!smsText || !smsText.trim()) return null;
 
@@ -320,7 +355,7 @@ export function parseSmsTransaction(
     amount,
     type,
     description,
-    date: extractSmsDate(smsText),
+    date: extractSmsDate(smsText, referenceDate || new Date()),
     categoryId,
     budgetId,
     categoryHint,

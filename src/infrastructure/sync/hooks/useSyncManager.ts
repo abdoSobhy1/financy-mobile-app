@@ -182,7 +182,7 @@ export const useSyncManager = () => {
           setSyncState((prev) => ({ ...prev, isSyncing: true }));
 
           // Wait for database to be fully initialized before syncing
-          const dbManager = (await import("../../database")).DatabaseManager.getInstance();
+          const dbManager = require("../../database").DatabaseManager.getInstance();
           if (!dbManager.isReady()) {
             // Wait for database to be ready
             let retries = 0;

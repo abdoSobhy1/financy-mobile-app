@@ -23,7 +23,6 @@ export class EntityManager {
     const now = new Date().toISOString();
 
     // Validate and clean data
-    const { cleanDebtData } = await import("../../shared/utils/validation");
     const cleanedDebt = cleanDebtData({
       ...debt,
       id,
@@ -47,7 +46,6 @@ export class EntityManager {
     if (!currentDebt) throw new Error(`Debt ${id} not found`);
 
     // Validate and clean updates
-    const { cleanDebtData } = await import("../../shared/utils/validation");
     const cleanedUpdates = cleanDebtData({
       ...currentDebt,
       ...updates,
@@ -73,7 +71,6 @@ export class EntityManager {
     const now = new Date().toISOString();
 
     // Validate and clean data
-    const { cleanBudgetData } = await import("../../shared/utils/validation");
     const cleanedBudget = cleanBudgetData({
       ...budget,
       id,
@@ -106,7 +103,6 @@ export class EntityManager {
     }
 
     // Validate and clean data
-    const { cleanCategoryData } = await import("../../shared/utils/validation");
     const cleanedCategory = cleanCategoryData({
       ...category,
       id,

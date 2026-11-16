@@ -5,6 +5,12 @@ import { generateId } from "../../../shared/utils";
 import { offlineFirstSync } from "../../../infrastructure/sync/OfflineFirstSync";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import {
+  getStoredUser,
+  isCurrentSessionCloudAllowed,
+  isSessionSeeded,
+  markSessionSeeded,
+} from "../../auth/services/authSessionStorage";
+import {
   validateCategoryData,
   cleanCategoryData,
 } from "../../../shared/utils/validation";
@@ -99,27 +105,25 @@ export class CategoryRepository {
     return result ? transformCategory(result) : null;
   }
 
-  private async shouldSeedDefaults(): Promise<boolean> {
+  private async shouldSeedDefaults(userId?: string): Promise<boolean> {
     try {
-      const { authService } = await import("../../auth/services/authService");
-      const currentUser = await authService.getCurrentAuthenticatedUser();
+      const storedUser = await getStoredUser();
       // Never auto-seed when no user session is active (e.g. on SignInScreen)
-      if (!currentUser) {
+      if (!storedUser && !userId) {
         return false;
       }
 
-      const isCloudAllowed = await authService.isCloudSyncAllowedAsync();
+      const isCloudAllowed = await isCurrentSessionCloudAllowed();
       // If user is logged in with Firebase, wait for cloud restore before seeding defaults
-      if (isCloudAllowed || (!currentUser.isGuest && currentUser.uid !== "guest")) {
+      if (isCloudAllowed || (storedUser && !storedUser.isGuest && storedUser.uid !== "guest")) {
         return false;
       }
 
-      const currentUserId = currentUser.uid || "guest";
+      const currentUserId = userId || storedUser?.uid || "guest";
 
       // If user has already been marked as seeded, NEVER auto-seed again (prevents resurrecting deleted categories)
-      const seededKey = `financy_categories_seeded_v1_${currentUserId}`;
-      const alreadySeeded = await AsyncStorage.getItem(seededKey);
-      if (alreadySeeded === "true") {
+      const alreadySeeded = await isSessionSeeded("categories", currentUserId);
+      if (alreadySeeded) {
         return false;
       }
 
@@ -130,7 +134,7 @@ export class CategoryRepository {
     }
   }
 
-  public async seedDefaultArabicCategories(): Promise<void> {
+  public async seedDefaultArabicCategories(userId?: string): Promise<void> {
     const database = this.db.getDatabase();
 
     for (const defCat of DEFAULT_ARABIC_CATEGORIES) {
@@ -159,9 +163,7 @@ export class CategoryRepository {
 
     // Mark as seeded for this user/session so it never regenerates if user deletes them
     try {
-      const { authService } = await import("../../auth/services/authService");
-      const currentUserId = (await authService.getCurrentAuthenticatedUser())?.uid || "guest";
-      await AsyncStorage.setItem(`financy_categories_seeded_v1_${currentUserId}`, "true");
+      await markSessionSeeded("categories", userId);
     } catch (e) {
       console.warn("Failed to set categories seeded key:", e);
     }
@@ -244,6 +246,9 @@ export class CategoryRepository {
       return; // No updates to make
     }
 
+    const nowMs = Date.now();
+    setParts.push("updated_at = ?", "sync_updated_at = ?", "sync_status = ?");
+    params.push(new Date(nowMs).toISOString(), nowMs, options?.skipSync ? "synced" : "pending");
     params.push(id);
 
     await database.runAsync(
@@ -269,7 +274,7 @@ export class CategoryRepository {
 
   async deleteCategory(
     id: string,
-    options?: { skipSync?: boolean },
+    options?: { skipSync?: boolean; userId?: string },
   ): Promise<void> {
     const database = this.db.getDatabase();
 
@@ -291,9 +296,7 @@ export class CategoryRepository {
 
     // Ensure deleting categories never triggers auto-reseeding
     try {
-      const { authService } = await import("../../auth/services/authService");
-      const currentUserId = (await authService.getCurrentAuthenticatedUser())?.uid || "guest";
-      await AsyncStorage.setItem(`financy_categories_seeded_v1_${currentUserId}`, "true");
+      await markSessionSeeded("categories", options?.userId);
     } catch (e) {
       // ignore
     }

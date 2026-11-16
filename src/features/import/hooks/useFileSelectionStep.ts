@@ -17,7 +17,17 @@ export function useFileSelectionStep({ onFileSelected, onCancel }: FileSelection
       setIsLoading(true);
 
       const result = await DocumentPicker.getDocumentAsync({
-        type: ["application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "text/csv"],
+        type: [
+          "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+          "application/vnd.ms-excel",
+          "text/csv",
+          "application/json",
+          "text/json",
+          "application/x-sqlite3",
+          "application/vnd.sqlite3",
+          "application/octet-stream",
+          "*/*",
+        ],
         copyToCacheDirectory: false,
       });
 
@@ -70,6 +80,12 @@ export function useFileSelectionStep({ onFileSelected, onCancel }: FileSelection
         return "grid-outline";
       case "csv":
         return "list-outline";
+      case "json":
+        return "code-working-outline";
+      case "db":
+      case "sqlite":
+      case "sqlite3":
+        return "server-outline";
       default:
         return "document-outline";
     }

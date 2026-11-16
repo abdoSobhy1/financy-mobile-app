@@ -38,6 +38,24 @@ const SUPPORTED_FORMAT_ITEMS = [
     subtitle: "Comma-separated values exported from banks (.csv)",
     badge: { label: "CSV", role: "surfaceVariant" as const },
   },
+  {
+    key: "json",
+    icon: "code-working-outline",
+    iconColor: "purple",
+    iconShape: "rounded-square" as const,
+    title: "Financy JSON Backup",
+    subtitle: "Full database backup restore (.json)",
+    badge: { label: "JSON", role: "primary" as const },
+  },
+  {
+    key: "db",
+    icon: "server-outline",
+    iconColor: "teal",
+    iconShape: "rounded-square" as const,
+    title: "SQLite Database",
+    subtitle: "Direct database file backup restore (.db, .sqlite)",
+    badge: { label: "SQLITE", role: "primary" as const },
+  },
 ];
 
 const TIP_ITEMS = [

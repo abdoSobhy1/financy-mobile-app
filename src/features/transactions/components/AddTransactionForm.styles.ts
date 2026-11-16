@@ -91,4 +91,10 @@ export const styles = StyleSheet.create({
     justifyContent: "center",
     marginBottom: 24,
   },
+  submitButton: {
+    paddingVertical: 16,
+    borderRadius: 24,
+    alignItems: "center",
+    marginTop: 8,
+  },
 });

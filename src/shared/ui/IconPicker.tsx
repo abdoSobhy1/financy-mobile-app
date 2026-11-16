@@ -73,8 +73,8 @@ export const DEFAULT_ICONS = [
   "bandage",
   "thermometer",
   "body",
-  "bicycle",
-  "walk",
+  "barbell",
+  "pulse",
   // ── Entertainment ────────────────────────────────
   "film",
   "game-controller",

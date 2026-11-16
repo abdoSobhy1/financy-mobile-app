@@ -111,7 +111,7 @@ export function useWalletManagementScreen() {
         const diff = enteredBal - currentBal;
 
         if (Math.abs(diff) > 0.001) {
-          const { db } = await import("../../../infrastructure/database/repositories");
+          const { db } = require("../../../infrastructure/database/repositories");
           await db.transactions.createTransaction({
             amount: Math.abs(diff),
             type: diff > 0 ? "income" : "expense",
@@ -183,7 +183,7 @@ export function useWalletManagementScreen() {
             text: "Delete",
             style: "destructive",
             onPress: async () => {
-              const { db } = await import("../../../infrastructure/database/repositories");
+              const { db } = require("../../../infrastructure/database/repositories");
               await db.wallets.hardDeleteWallet(wallet.id);
               await loadWallets();
               showSuccess(`Permanently deleted "${wallet.name}"`);
@@ -248,7 +248,7 @@ export function useWalletManagementScreen() {
         walletToMove.id,
         destinationWalletId,
       );
-      const { db } = await import("../../../infrastructure/database/repositories");
+      const { db } = require("../../../infrastructure/database/repositories");
       await db.wallets.hardDeleteWallet(walletToMove.id);
       await dispatch(fetchTransactions());
       await loadWallets();

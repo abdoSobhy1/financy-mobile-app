@@ -35,13 +35,18 @@ export const GlobalSettingsStep: React.FC<GlobalSettingsStepProps> = ({
     localSettings,
     showBudgetPicker,
     setShowBudgetPicker,
+    showWalletPicker,
+    setShowWalletPicker,
     showCategoryPreview,
     setShowCategoryPreview,
     budgets,
     selectedBudget,
+    wallets,
+    selectedWallet,
     budgetCategories,
     handleTransactionTypeChange,
     handleBudgetChange,
+    handleWalletChange,
     handleSettingToggle,
     handleContinue,
   } = useImportGlobalSettings({ settings, mapping, onComplete, onBack });
@@ -135,6 +140,50 @@ export const GlobalSettingsStep: React.FC<GlobalSettingsStepProps> = ({
           </Text>
         </TouchableOpacity>
       </View>
+
+      {/* Account & Wallet Assignment */}
+      <ImportSectionList
+        heading="ACCOUNT & WALLET"
+        items={[
+          {
+            key: "target-wallet",
+            icon: "wallet-outline",
+            iconColor: "teal",
+            title: "Target Wallet / Account",
+            subtitle: selectedWallet
+              ? `Assigned to "${selectedWallet.name}"`
+              : "Select account to credit or debit",
+            onPress: () => setShowWalletPicker(!showWalletPicker),
+            trailing: (
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+                <Badge
+                  label={selectedWallet ? selectedWallet.name : "None"}
+                  role={selectedWallet ? "primary" : "surfaceVariant"}
+                  size="small"
+                />
+                <Ionicons
+                  name={showWalletPicker ? "chevron-up" : "chevron-down"}
+                  size={18}
+                  color={colors.onSurfaceVariant}
+                />
+              </View>
+            ),
+            expandedContent: showWalletPicker ? (
+              <>
+                {wallets.map((wallet) => (
+                  <ImportOptionCard
+                    key={wallet.id}
+                    title={wallet.name}
+                    description={`Type: ${(wallet.type || "cash").toUpperCase()}${wallet.archived ? " (Archived)" : ""}`}
+                    selected={localSettings.globalAccountId === wallet.id}
+                    onPress={() => handleWalletChange(wallet.id)}
+                  />
+                ))}
+              </>
+            ) : undefined,
+          },
+        ]}
+      />
 
       {/* Budget Assignment & Categories Preview */}
       <ImportSectionList
@@ -254,6 +303,20 @@ export const GlobalSettingsStep: React.FC<GlobalSettingsStepProps> = ({
               <Switch
                 value={localSettings.createMissingCategories}
                 onValueChange={() => handleSettingToggle("createMissingCategories")}
+              />
+            ),
+          },
+          {
+            key: "create-missing-wallets",
+            icon: "wallet-outline",
+            iconColor: "teal",
+            title: "Create Missing Accounts",
+            subtitle: "Auto-create new wallets when an Account column has unknown names",
+            onPress: () => handleSettingToggle("createMissingWallets"),
+            trailing: (
+              <Switch
+                value={Boolean(localSettings.createMissingWallets)}
+                onValueChange={() => handleSettingToggle("createMissingWallets")}
               />
             ),
           },

@@ -130,16 +130,16 @@ export function useTransferModal({
               ? new Date(now.getFullYear(), now.getMonth(), now.getDate() - diffToMon + 6, 23, 59, 59, 999)
               : new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
 
-            const { db } = await import("../../../infrastructure/database/repositories");
+            const { db } = require("../../../infrastructure/database/repositories");
             const progress = await db.budgets.getBudgetProgressForPeriod(
               targetBudget.id,
               start.toISOString(),
               end.toISOString(),
             );
             if (progress && progress.percentageUsed >= 80) {
-              const { default: NotificationService } = await import(
+              const NotificationService = require(
                 "../../../infrastructure/notifications/notificationService"
-              );
+              ).default;
               await NotificationService.getInstance().sendBudgetAlertNotification(
                 targetBudget.name,
                 formatCurrency(progress.spent),

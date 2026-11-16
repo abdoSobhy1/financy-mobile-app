@@ -33,7 +33,7 @@ export const DebtForm: React.FC<DebtFormProps> = ({
     <KeyboardAvoidingView
       behavior={Platform.OS === "ios" ? "padding" : undefined}
       style={{ flex: 1 }}>
-      {/* Top Bar matching AddTransactionScreen */}
+      {/* Top Bar */}
       <View style={styles.topBar}>
         <TouchableOpacity
           style={[
@@ -46,8 +46,8 @@ export const DebtForm: React.FC<DebtFormProps> = ({
         <Text style={[styles.title, { color: colors.onBackground }]}>
           {isEditing ? "Edit Debt" : "New Debt"}
         </Text>
-        <View style={{ flexDirection: "row", gap: 8, alignItems: "center" }}>
-          {isEditing && (
+        <View style={{ width: 40, height: 40, alignItems: "center", justifyContent: "center" }}>
+          {isEditing ? (
             <TouchableOpacity
               style={[
                 styles.iconButton,
@@ -57,20 +57,7 @@ export const DebtForm: React.FC<DebtFormProps> = ({
               disabled={loading}>
               <Ionicons name="trash-outline" size={20} color={colors.error} />
             </TouchableOpacity>
-          )}
-          <TouchableOpacity
-            style={[
-              styles.iconButton,
-              { backgroundColor: colors.primaryContainer },
-            ]}
-            onPress={handleSubmit}
-            disabled={loading}>
-            <Ionicons
-              name="checkmark"
-              size={24}
-              color={colors.onPrimaryContainer}
-            />
-          </TouchableOpacity>
+          ) : null}
         </View>
       </View>
 

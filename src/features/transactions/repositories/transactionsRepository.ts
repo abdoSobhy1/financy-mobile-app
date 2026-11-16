@@ -240,6 +240,9 @@ export class TransactionRepository {
       throw new Error("No valid updates provided");
     }
 
+    const nowMs = Date.now();
+    updateFields.push("updated_at = ?", "sync_updated_at = ?", "sync_status = ?");
+    updateValues.push(new Date(nowMs).toISOString(), nowMs, options?.skipSync ? "synced" : "pending");
     updateValues.push(id);
     const query = `UPDATE transactions SET ${updateFields.join(", ")} WHERE id = ?`;
     await database.runAsync(query, updateValues);
@@ -355,7 +358,7 @@ export class TransactionRepository {
       categoryId: originalTransaction.categoryId,
       budgetId: originalTransaction.budgetId,
       description: originalTransaction.description,
-      date: new Date().toISOString().split("T")[0],
+      date: new Date().toISOString(),
       note: originalTransaction.note,
       duplicatedAt: new Date().toISOString(),
       updatedAt: Date.now(),

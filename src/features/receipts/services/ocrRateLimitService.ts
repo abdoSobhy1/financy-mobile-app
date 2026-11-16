@@ -36,20 +36,20 @@ const LOCAL_USAGE_STORAGE_KEY = "@financy_ocr_daily_usage_v1";
 /**
  * Firestore document path created for OCR access configuration & device rate-limit ledger:
  * Collection: "users"
- * Document ID: "C8hK8G3O6JNzGzeTz0NwXqXnEMW2"
+ * Document ID: configured via `EXPO_PUBLIC_OCR_CONFIG_UID`
  *
- * Fields in `users/C8hK8G3O6JNzGzeTz0NwXqXnEMW2`:
+ * Fields in `users/{OCR_CONFIG_DOC_UID}`:
  * - dailyLimit: 3
  * - unlimitedEmails: ["your-email@example.com"]
  * - unlimitedUids: ["your-firebase-uid"]
  *
  * Subcollection for per-device and per-user daily counters:
- * - `users/C8hK8G3O6JNzGzeTz0NwXqXnEMW2/ocr_daily_usage/{deviceOrUserKey}`
+ * - `users/{OCR_CONFIG_DOC_UID}/ocr_daily_usage/{deviceOrUserKey}`
  */
-export const OCR_CONFIG_DOC_UID = "C8hK8G3O6JNzGzeTz0NwXqXnEMW2";
+export const OCR_CONFIG_DOC_UID = process.env.EXPO_PUBLIC_OCR_CONFIG_UID || "";
 const LEDGER_APP_NAME = "FinancyOcrLedgerApp";
-const LEDGER_AUTH_EMAIL = "ocr-config@financy.app";
-const LEDGER_AUTH_PASS = "FinancyOcrLedger#2026!";
+const LEDGER_AUTH_EMAIL = process.env.EXPO_PUBLIC_OCR_LEDGER_EMAIL || "";
+const LEDGER_AUTH_PASS = process.env.EXPO_PUBLIC_OCR_LEDGER_PASS || "";
 
 let ledgerApp: FirebaseApp | null = null;
 let ledgerAuth: Auth | null = null;

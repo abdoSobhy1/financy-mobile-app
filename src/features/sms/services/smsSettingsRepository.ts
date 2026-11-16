@@ -5,13 +5,47 @@ import { normalizeSyncTimestamp } from "../../../shared/utils/syncTimestamp";
 import { DEFAULT_SMS_CONFIG, saveSmsConfig, SmsDetectorConfig } from "./smsConfigService";
 
 export function validateSmsPreferences(value: any): { config: SmsDetectorConfig; enabled: boolean } {
-  const config = value?.config;
-  const lists = ["bankSenders", "incomeKeywords", "expenseKeywords", "atmKeywords", "currencyKeywords"] as const;
-  if (!config || lists.some((key) => !Array.isArray(config[key]) || config[key].some((item: unknown) => typeof item !== "string")) ||
-    typeof config.ignoreAtmWithdrawals !== "boolean" || typeof value.enabled !== "boolean") {
-    throw new Error("Invalid SMS detector settings");
+  const root = value?.data && !value?.config ? value.data : value;
+  let rawConfig = root?.config ?? root;
+  if (typeof rawConfig === "string") {
+    try {
+      rawConfig = JSON.parse(rawConfig);
+    } catch {
+      rawConfig = null;
+    }
   }
-  return { config, enabled: value.enabled };
+  if (!rawConfig || typeof rawConfig !== "object") {
+    rawConfig = DEFAULT_SMS_CONFIG;
+  }
+
+  const normalizeList = (key: keyof Omit<SmsDetectorConfig, "ignoreAtmWithdrawals">): string[] => {
+    const candidate = rawConfig[key];
+    if (Array.isArray(candidate)) {
+      return candidate.filter((item: unknown): item is string => typeof item === "string");
+    }
+    return [...DEFAULT_SMS_CONFIG[key]];
+  };
+
+  const config: SmsDetectorConfig = {
+    bankSenders: normalizeList("bankSenders"),
+    incomeKeywords: normalizeList("incomeKeywords"),
+    expenseKeywords: normalizeList("expenseKeywords"),
+    atmKeywords: normalizeList("atmKeywords"),
+    currencyKeywords: normalizeList("currencyKeywords"),
+    ignoreAtmWithdrawals:
+      typeof rawConfig.ignoreAtmWithdrawals === "boolean"
+        ? rawConfig.ignoreAtmWithdrawals
+        : DEFAULT_SMS_CONFIG.ignoreAtmWithdrawals,
+  };
+
+  const enabled =
+    typeof root?.enabled === "boolean"
+      ? root.enabled
+      : root?.enabled === 0 || root?.enabled === "false"
+        ? false
+        : true;
+
+  return { config, enabled };
 }
 
 export class SmsSettingsRepository {

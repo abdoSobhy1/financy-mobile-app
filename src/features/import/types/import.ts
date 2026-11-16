@@ -14,7 +14,10 @@ export interface ImportMapping {
   description: ImportColumn;
   date: ImportColumn;
   category?: ImportColumn;
-  type?: ImportColumn; // income/expense (optional if set globally)
+  type?: ImportColumn; // income/expense/transfer (optional if set globally)
+  account?: ImportColumn; // source wallet/account
+  toAccount?: ImportColumn; // destination wallet/account for transfers
+  budget?: ImportColumn; // target budget
   note?: ImportColumn;
 }
 
@@ -22,8 +25,11 @@ export interface ImportSettings {
   globalTransactionType?: "income" | "expense";
   globalBudgetId?: string;
   globalBudgetName?: string;
+  globalAccountId?: string;
+  globalAccountName?: string;
   allowIndividualTypeOverride: boolean;
   createMissingCategories: boolean;
+  createMissingWallets?: boolean;
 }
 
 export interface ImportRow {
@@ -37,6 +43,18 @@ export interface ImportPreview {
   totalRows: number;
   fileName: string;
   fileSize: number;
+  isBackup?: boolean;
+  isSqliteDb?: boolean;
+  backupFileUri?: string;
+  backupData?: any;
+  backupStats?: {
+    transactions: number;
+    categories: number;
+    budgets: number;
+    wallets: number;
+    debts: number;
+    debtPayments: number;
+  };
 }
 
 export interface ImportValidation {
@@ -64,8 +82,11 @@ export interface ImportResult {
   skippedCount: number;
   errorCount: number;
   createdCategories: string[];
+  createdWallets?: string[];
   errors: ImportError[];
   transactionIds: string[];
+  isBackupRestore?: boolean;
+  backupStats?: Record<string, number>;
 }
 
 export interface ImportProgress {
@@ -97,6 +118,9 @@ export const COLUMN_PATTERNS = {
   date: ["date", "time", "when", "timestamp", "created", "transaction_date", "day", "التاريخ", "الوقت", "تاريخ المعاملة", "اليوم"],
   category: ["category", "type", "class", "group", "tag", "classification", "التصنيف", "النوع", "الفئة", "المجموعة", "التصنيف"],
   transactionType: ["type", "kind", "transaction_type", "income_expense", "debit_credit", "نوع المعاملة", "النوع", "دخل_مصروف"],
+  account: ["account", "wallet", "bank", "source_account", "from_account", "account_name", "محفظة", "المحفظة", "حساب", "الحساب", "البنك", "اسم الحساب"],
+  toAccount: ["to_account", "destination_account", "to_wallet", "destination_wallet", "target_account", "إلى الحساب", "الحساب المحول إليه", "محفظة الهدف"],
+  budget: ["budget", "budget_name", "الميزانية", "اسم الميزانية"],
   note: ["note", "notes", "comment", "remarks", "additional_info", "ملاحظة", "ملاحظات", "تعليق", "معلومات إضافية"],
 } as const;
 

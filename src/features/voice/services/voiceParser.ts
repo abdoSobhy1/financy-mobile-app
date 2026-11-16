@@ -327,7 +327,11 @@ function extractDate(text: string): Date | undefined {
     const match = normalized.match(pattern);
     if (match) {
       const parsed = new Date(match[0]);
-      if (!isNaN(parsed.getTime())) return parsed;
+      if (!isNaN(parsed.getTime())) {
+        const now = new Date();
+        parsed.setHours(now.getHours(), now.getMinutes(), now.getSeconds(), now.getMilliseconds());
+        return parsed;
+      }
     }
   }
 

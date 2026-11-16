@@ -17,7 +17,8 @@ import { fetchTransactions } from "../../transactions/store/transactionsSlice";
 import { syncWithFirebase } from "../../../infrastructure/sync/store/syncSlice";
 
 import { exportToExcel, exportToCSV, ExportData } from "../../import/utils/exportUtils";
-import { exportDatabaseToJSON } from "../../import/utils/databaseExport";
+import { exportDatabaseToJSON, exportSQLiteDatabase } from "../../import/utils/databaseExport";
+import { db } from "../../../infrastructure/database/repositories";
 import { useAuth } from "../../auth/providers/AuthContext";
 import { useSync } from "../../../infrastructure/sync/providers/SyncProvider";
 import { signOut, setUser } from "../../auth/store/authSlice";
@@ -275,20 +276,43 @@ export function useSettingsScreen() {
         });
       }
 
+      // Fetch wallets, debts, and payments for comprehensive export
+      const [walletsList, debtsList, debtPaymentsList] = await Promise.all([
+        db.wallets.getAllWallets({ includeArchived: true }).catch(() => []),
+        db.debts.getAllDebts().catch(() => []),
+        db.debts.getPaymentHistory().catch(() => []),
+      ]);
+
+      const walletsMap = walletsList.reduce((acc, w) => {
+        acc[w.id] = w;
+        return acc;
+      }, {} as Record<string, any>);
+
+      const totalIncome = filtered
+        .filter((t) => t.type === "income")
+        .reduce((s, t) => s + t.amount, 0);
+      const totalExpenses = filtered
+        .filter((t) => t.type === "expense")
+        .reduce((s, t) => s + t.amount, 0);
+      const totalTransfers = filtered
+        .filter((t) => t.type === "transfer")
+        .reduce((s, t) => s + t.amount, 0);
+
       const data: ExportData = {
         exportDate: new Date().toISOString(),
         period,
         transactions: filtered,
         categories: cats,
         budgets: buds,
+        wallets: walletsMap,
+        debts: debtsList,
+        debtPayments: debtPaymentsList,
         summary: {
           totalTransactions: filtered.length,
-          totalIncome: filtered
-            .filter((t) => t.type === "income")
-            .reduce((s, t) => s + t.amount, 0),
-          totalExpenses: filtered
-            .filter((t) => t.type === "expense")
-            .reduce((s, t) => s + t.amount, 0),
+          totalIncome,
+          totalExpenses,
+          totalTransfers,
+          netSavings: totalIncome - totalExpenses,
         },
       };
 
@@ -318,13 +342,24 @@ export function useSettingsScreen() {
           onPress: () => doExport(period, "csv"),
         },
         {
-          text: "JSON Backup",
+          text: "JSON Backup (.json)",
           onPress: async () => {
             try {
               await exportDatabaseToJSON();
-              showSuccess("Database exported to console as JSON");
-            } catch {
-              showError("Export failed");
+              showSuccess("Database backup exported successfully");
+            } catch (err: any) {
+              showError(`Backup failed: ${err?.message || "Unknown"}`);
+            }
+          },
+        },
+        {
+          text: "SQLite Database (.db)",
+          onPress: async () => {
+            try {
+              await exportSQLiteDatabase();
+              showSuccess("SQLite database backup created successfully");
+            } catch (err: any) {
+              showError(`SQLite backup failed: ${err?.message || "Unknown"}`);
             }
           },
         },

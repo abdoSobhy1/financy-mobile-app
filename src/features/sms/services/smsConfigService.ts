@@ -183,7 +183,7 @@ export async function saveSmsConfig(config: SmsDetectorConfig, options?: { skipS
     await AsyncStorage.setItem(SMS_CONFIG_STORAGE_KEY, JSON.stringify(cachedConfig));
     configListeners.forEach((listener) => listener(cachedConfig));
     if (!options?.skipSync) {
-      const { SmsSettingsRepository } = await import("./smsSettingsRepository");
+      const { SmsSettingsRepository } = require("./smsSettingsRepository");
       const enabled = await AsyncStorage.getItem("sms_detection_enabled");
       await new SmsSettingsRepository().save(cachedConfig, enabled !== "false");
     }

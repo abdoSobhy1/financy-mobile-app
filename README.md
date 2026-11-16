@@ -1,51 +1,54 @@
-# Financy — Offline-First Personal Finance & Smart Expense Tracker
+# Financy — Offline-First Personal Finance & Smart Expense OS
 
 <div align="center">
+  <img src="./assets/icon.png" alt="Financy Logo" width="96" height="96" />
   <h3>An Offline-First React Native Financial Companion Built for Real-World Spending</h3>
-  <p>Automated Egyptian Bank & InstaPay SMS Detection • Arabic/English Voice Logging • Hybrid AI Receipt OCR • Multi-Wallet & Debt Tracking</p>
+  <p>Automated Egyptian Bank & InstaPay SMS Detection • Arabic/English Voice Logging • Hybrid Receipt OCR • Multi-Wallet & Secret Vaults</p>
 </div>
 
 ---
 
 ## 💡 Why Financy?
 
-Manual expense tracking usually fails after a few days because logging every coffee, transfer, and supermarket receipt by hand is tedious—especially across fragmented payment channels like **InstaPay**, **bank card SMS alerts**, **cash**, and **mobile wallets**.
+Most personal finance trackers fail within the first week because logging every coffee, transfer, and supermarket receipt by hand is tedious—especially across fragmented payment channels like **InstaPay**, **Vodafone Cash**, **bank card SMS alerts**, and **pocket cash**. Meanwhile, cloud-only trackers demand sensitive bank credentials or lag behind network requests.
 
-**Financy** eliminates manual entry friction while keeping your financial data **offline-first** in a local **SQLite** database, with optional conflict-resilient **Firebase Cloud Sync**.
+**Financy** eliminates logging friction while keeping your financial data **100% offline-first** in a local **SQLite** database (`<100ms` cold start, `60fps` animations), paired with optional conflict-resilient **Firebase Cloud Sync**.
 
 ---
 
 ## ✨ Key Engineering & Product Features
 
-### 1. 📱 Automated Bank & InstaPay SMS Detection (Android)
-- **Real-Time Background Listener**: Native Android broadcast receiver (`withSmsDetection` Expo config plugin) captures incoming bank transaction alerts even when the app is backgrounded.
-- **Bilingual Regex Engine (`smsParser.ts`)**: Parses Arabic and English SMS formats from major Egyptian banks (**CIB, NBE, Banque Misr, QNB, AlexBank, ValU, InstaPay**, etc.).
-- **Smart ATM Withdrawal Filtering**: Automatically distinguishes ATM cash withdrawals (*"تم سحب"*, *"ATM"*, *"صراف آلي"*) from merchant purchases so moving money from bank to pocket cash is never double-counted as an expense.
-- **Customizable Rules**: In-app configuration for custom bank sender IDs, currency keywords, and ATM filters.
+### 1. 📩 Automated Bank & InstaPay SMS Detection (Android)
+- **Real-Time Native Receiver**: Custom Android broadcast receiver (`withSmsDetection` Expo config plugin) captures incoming transaction alerts even when the app is backgrounded or closed.
+- **20+ Pre-Configured Regional Senders (`smsParser.ts`)**: Out-of-the-box support for **CIB, NBE (Al-Ahly), Banque Misr, QNB, HSBC, AlexBank, Banque du Caire, EG Bank, InstaPay, Vodafone Cash, Fawry, Telda, and Klivvr**.
+- **Smart ATM Withdrawal Filtering**: Automatically distinguishes ATM cash withdrawals (*"تم سحب"*, *"ATM"*, *"صراف آلي"*) from merchant purchases so moving cash from your bank card to your wallet is never double-counted as an expense.
+- **Customizable Rule Engine**: Add or remove bank sender IDs, income/expense keywords, and parsing rules directly in Settings.
 
-### 2. 🎙️ Bilingual Voice Expense Logging (Arabic & English NLP)
+### 2. 👛 Multi-Wallet Cockpit & Secret Vaults 🔒
+- **Unified Liquidity Tracking (`walletService.ts`)**: Manage Cash, Bank Accounts, Credit Cards, and Mobile Wallets with real-time balance computation.
+- **Secret Vaults 🔒**: Mark savings or emergency accounts as **Secret** to exclude them from daily disposable net balance calculations on the main dashboard.
+- **Instant Inter-Wallet Transfers**: Transfer funds between accounts (e.g., *CIB Account → Vodafone Cash*) with optional budget allocation in a single atomic transaction.
+
+### 3. 🎙️ Bilingual Voice Expense Logging (Arabic & English NLP)
 - **Multi-Transaction Utterance Parsing (`voiceParser.ts`)**: Speak naturally in Egyptian Arabic or English to log multiple transactions in a single sentence:
   - *"دفعت 50 جنيه كهربا واشتريت بطاطس ب20 جنيه"* → Extracts 2 structured expenses with amounts, descriptions, and auto-matched categories.
   - *"استلمت 5000 مرتب"* → Extracts income transaction and maps to Salary.
-- **Eastern-to-Western Digit Normalization**: Seamlessly normalizes Arabic numerals (`٠-٩`) and spoken number words (*ألف*, *ألفين*, *نص*, *ربع*).
-- **Verification Flow**: Review, edit, or split voice-extracted transactions before committing to SQLite.
+- **Digit & Spoken Number Normalization**: Seamlessly normalizes Eastern Arabic numerals (`٠-٩`) and spoken Arabic number words (*ألف*, *ألفين*, *نص*, *ربع*).
 
-### 3. 🧾 Hybrid Receipt & InstaPay Slip Scanner (On-Device OCR + Multimodal Vision)
-- **Tier 1 — On-Device OCR (`ocrService.ts`)**: Uses **Google ML Kit** / **Apple Vision** (`@dariyd/react-native-text-recognition`) and document edge scanning (`react-native-document-scanner-plugin`) for fast, private, offline extraction.
-- **Tier 2 — Multimodal Vision AI (`aiService.ts`)**: Optional cloud enhancement using **Google Gemini Vision**, **Groq (Llama 3.3)**, or **OpenAI (GPT-4o-mini)** with proportional client-side image compression (`max 1080×1920`).
-- **Line-Item Decomposition**: Automatically splits multi-item supermarket/restaurant receipts into individual categorized transactions or parses single InstaPay transfer slips.
+### 4. 🧾 Hybrid Receipt & InstaPay Slip Scanner (On-Device OCR + Multimodal Vision)
+- **Tier 1 — On-Device Offline OCR (`ocrService.ts`)**: Uses **Google ML Kit** / **Apple Vision** (`@dariyd/react-native-text-recognition`) and document edge detection (`react-native-document-scanner-plugin`) for instant, private, zero-network extraction.
+- **Tier 2 — Multimodal Vision AI (`aiService.ts`)**: Optional cloud enhancement supporting **Google Gemini**, **Groq (Llama 3.3)**, or **OpenAI (GPT-4o-mini)** with proportional client-side image compression and hardware-encrypted API key storage via `expo-secure-store`.
+- **Line-Item Decomposition**: Automatically splits multi-item supermarket or restaurant receipts into categorized transactions or extracts InstaPay transfer slips.
 
-### 4. 👛 Multi-Wallet, Secret Wallets & Financial Management
-- **Multi-Account Tracking (`walletService.ts`)**: Manage Cash, Bank Accounts, Credit Cards, and Mobile Wallets with real-time balance computation and inter-wallet transfers.
-- **Secret Wallets**: Privacy-focused hidden wallets excluded from main dashboard totals unless explicitly unlocked/selected.
-- **Budgets & Custom Billing Cycles**: Set monthly category budgets aligned with your actual salary/billing start day (e.g., 25th of each month) rather than rigid calendar months.
-- **Debt & Installment Portfolio**: Track loans, credit cards, interest rates, and partial payment histories.
-- **Excel/CSV Import Wizard**: Multi-step column-mapping wizard (`ImportWizard.tsx`) with validation and preview for migrating historical spreadsheets.
+### 5. 📊 Dynamic Payday Budgets, Analytics & Installment Tracker
+- **Payday-Aligned Billing Cycles**: Align monthly budgets with your actual salary day (e.g., the **25th of each month**) rather than rigid calendar months.
+- **Debt & Installment Portfolio**: Track credit card installments (e.g., *CIB Installments*), personal loans, payoff percentages, and one-tap repayment histories linked directly to wallet balances.
+- **Cash Flow & Spending Intelligence**: Interactive category breakdown rings, multi-month cash flow bar charts, and live budget health indicators.
 
-### 5. 🔄 True Offline-First Architecture & Outbox Sync
-- **SQLite Single Source of Truth**: All reads and writes hit local SQLite (`expo-sqlite`) first for zero-latency UI updates.
-- **Transactional Outbox (`sync_log`)**: Every mutation (`insert`, `update`, `delete`) is recorded in a local `sync_log` table with device-fingerprinted metadata (`deviceTracking.ts`) to prevent infinite sync loops.
-- **Delta Cloud Sync (`OfflineFirstSync.ts`)**: Automatically pushes pending outbox entries and pulls remote Firestore deltas on network recovery or app foregrounding.
+### 6. 🔄 Offline-First SQLite Engine, Outbox Sync & Full Data Portability
+- **SQLite Single Source of Truth**: All reads and writes execute against local SQLite (`expo-sqlite`) with schema-aware dynamic migrations.
+- **Transactional Outbox (`sync_log`)**: Every mutation (`insert`, `update`, `delete`) is recorded in a local outbox table with device-fingerprinted metadata to prevent sync loops during delta Firestore synchronization.
+- **Complete Import/Export Suite**: Export or restore your financial history via **Multi-Sheet Excel (`.xlsx`)**, **CSV**, **Full JSON Snapshot (`.json`)**, or **Raw SQLite Database (`.db`)**, plus an interactive column-mapping **Import Wizard**.
 
 ---
 
@@ -53,45 +56,46 @@ Manual expense tracking usually fails after a few days because logging every cof
 
 | Layer | Technology |
 | :--- | :--- |
-| **Framework** | React Native `0.86` + Expo SDK `57` (New Architecture enabled) |
-| **Language** | TypeScript `6.0` (Strict type-checked) |
+| **Framework** | React Native `0.86` + Expo SDK `57` (New Architecture & Hermes Bytecode) |
+| **Language** | TypeScript `6.0` (Strict mode) |
 | **Local Database** | `expo-sqlite` with automated schema & cloud-compatibility migrations |
 | **State Management** | Redux Toolkit (`@reduxjs/toolkit`) + React Context (`SyncProvider`, `AuthProvider`) |
-| **Cloud & Auth** | Firebase Authentication + Cloud Firestore (Delta & Batch Sync) |
+| **Cloud & Auth** | Firebase Authentication + Cloud Firestore (Transactional Outbox & Delta Sync) |
 | **OCR & Speech** | `@dariyd/react-native-text-recognition`, `react-native-document-scanner-plugin`, `@jamsch/expo-speech-recognition` |
-| **UI & Animations** | Custom Theme Engine (Light/Dark), `react-native-reanimated`, `@gorhom/bottom-sheet`, `react-native-svg` |
+| **Security** | `expo-secure-store` for hardware-encrypted API credentials |
+| **UI & Animations** | Matte Slate Dark/Light Theme Engine, `react-native-reanimated`, `@gorhom/bottom-sheet`, `react-native-svg` |
+| **Build Optimization** | R8 Code Shrinking, Resource Shrinking, ABI Filtering (`~37.5 MB` Release APK) |
 
 ---
 
 ## 📂 Project Architecture
 
-Financy uses a feature-based structure. Each feature owns its screens, components, hooks, services, state, and repositories as needed.
+Financy follows a strict **Feature-Based Clean Architecture** verified automatically in CI (`npm run check:architecture`). Each feature encapsulates its own screens, UI components, controller hooks, domain services, Redux slice, and SQLite repository:
 
 ```text
 src/
-├── app/                 # Bootstrap, root navigation, Redux store composition
-├── features/            # Product features and their UI/application logic
-│   ├── analysis/
-│   ├── auth/
-│   ├── budgets/
-│   ├── categories/
-│   ├── dashboard/
-│   ├── debts/
-│   ├── import/
-│   ├── receipts/
-│   ├── settings/
-│   ├── sms/
-│   ├── transactions/
-│   ├── voice/
-│   └── wallets/
-├── infrastructure/      # SQLite, Firebase, sync, AI, notifications, device APIs
-└── shared/              # Feature-independent UI, theme, hooks, contracts
-tests/unit/              # Versioned regression tests
+├── app/                 # Bootstrap lifecycle, root navigation, Redux store composition
+├── features/            # Domain-isolated product features
+│   ├── analysis/        # Cash flow trends, spending breakdown rings, budget health
+│   ├── auth/            # Authentication, guest mode, session persistence
+│   ├── budgets/         # Payday-aligned monthly budgets & overspend alerts
+│   ├── categories/      # Bilingual category dictionary & custom icon/color management
+│   ├── dashboard/       # Net balance cockpit, quick-add slots, recent activity
+│   ├── debts/           # Loans, credit card installments & repayment schedules
+│   ├── import/          # Excel/CSV import wizard & SQLite/JSON/Excel backup engine
+│   ├── receipts/        # On-device ML Kit OCR & multimodal AI receipt scanner
+│   ├── settings/        # Currency, billing cycle, theme, AI & data management
+│   ├── sms/             # Native Android bank SMS listener, parser & keyword editor
+│   ├── transactions/    # Ledger, filtering, calculator keypad & CRUD flows
+│   ├── voice/           # Arabic/English voice recognition & NLP parser
+│   └── wallets/         # Multi-account management, Secret Vaults & transfers
+├── infrastructure/      # SQLite, Firebase, Outbox Sync, AI clients, Notifications
+└── shared/              # Pure UI primitives, theme tokens, formatting & contracts
+tests/unit/              # Automated unit & regression test suites
 ```
 
-Screen hooks coordinate state and actions; views render layout and styling. Shared code cannot import features or infrastructure. See [Architecture](docs/ARCHITECTURE.md) for ownership rules, examples, and current boundaries.
-
-Provider API keys are not stored in Expo `EXPO_PUBLIC_*` variables. Hosted Gemini uses an authenticated Cloudflare Worker; see [API key handling](docs/SECURITY.md) for secret setup and deployment.
+- **Strict Boundary Enforcement**: `shared/` modules cannot import from `app/`, `features/`, or `infrastructure/`. Feature views (`screens/` & `components/`) never import repositories, services, or store slices directly at runtime—all side effects and state orchestration flow through dedicated controller hooks.
+- See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for detailed module rules.
 
 ---
 
@@ -99,9 +103,8 @@ Provider API keys are not stored in Expo `EXPO_PUBLIC_*` variables. Hosted Gemin
 
 ### Prerequisites
 - **Node.js** `>= 18`
-- **npm** or **yarn**
-- **Android Studio** (for Android development build) or **Xcode** (for iOS)
-  > **Note:** Because Financy uses custom native modules (on-device OCR, speech recognition, and native Android SMS detection), run it using an **Expo Development Build** (`npx expo run:android` / `npx expo run:ios`) rather than standard Expo Go.
+- **Android Studio** (Android SDK & NDK) or **Xcode** (macOS)
+  > **Note:** Because Financy includes custom native modules (on-device ML Kit OCR, speech recognition, and native Android SMS broadcast receivers), build and run it with an **Expo Development Build** (`npx expo run:android`) rather than standard Expo Go.
 
 ### 1. Clone & Install
 
@@ -111,70 +114,48 @@ cd financy-mobile-app
 npm install
 ```
 
-### 2. Environment Configuration
+### 2. Environment Configuration (Optional)
 
-Copy `.env.example` to `.env` in the root directory:
+Financy works **100% offline out of the box** using local SQLite. To enable optional Firebase Cloud Sync, copy `.env.example` to `.env`:
 
 ```bash
 cp .env.example .env
 ```
 
-Fill in the optional Firebase client configuration in `.env` (the app works offline with local SQLite without it). Do not put AI provider keys in Expo environment variables; see [API key handling](docs/SECURITY.md):
-
 ```env
-# Optional: Firebase Cloud Sync
 EXPO_PUBLIC_FIREBASE_API_KEY=your_firebase_api_key
 EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN=your_project_id.firebaseapp.com
 EXPO_PUBLIC_FIREBASE_PROJECT_ID=your_project_id
 EXPO_PUBLIC_FIREBASE_STORAGE_BUCKET=your_project_id.firebasestorage.app
 EXPO_PUBLIC_FIREBASE_MESSAGING_SENDER_ID=your_messaging_sender_id
 EXPO_PUBLIC_FIREBASE_APP_ID=your_firebase_app_id
-
 ```
 
-To enable hosted Gemini, deploy the Cloudflare Worker and set `EXPO_PUBLIC_GEMINI_WORKER_URL` in the app's `.env`. Store `GEMINI_API_KEY` as a Worker secret. Personal provider keys entered in Settings are stored with Expo SecureStore.
-
-### 3. Run Development Build
+### 3. Run Development or Release Build
 
 ```bash
-# Android (builds native client with SMS & OCR plugins)
+# Run Android development build
 npx expo run:android
 
-# iOS
-npx expo run:ios
-
-# Start Metro bundler only
-npm start
+# Build optimized Release APK (~37.5 MB with Hermes + R8)
+cd android && ./gradlew assembleRelease
 ```
 
 ---
 
-## 🧪 Testing & Verification
+## 🧪 Quality Checks & Testing
 
-Run the automated test suite (covering SMS/voice parsing, receipt extraction, quotas, wallet balances, and billing-period filtering):
+Run architecture boundary verification, strict TypeScript type-checking, and the unit test suite with a single command:
 
 ```bash
-npm test
+npm run check
 ```
 
-Type-check the codebase:
-
+Individual commands:
 ```bash
-npm run typecheck
-```
-
----
-
-Run architecture checks, type checking, and tests together with `npm run check`. These checks also run in GitHub Actions.
-
-## 📦 Building for Production (EAS)
-
-```bash
-# Build Android APK / AAB via EAS
-eas build --platform android --profile production
-
-# Build iOS archive via EAS
-eas build --platform ios --profile production
+npm run check:architecture   # Enforces feature boundaries & clean view/controller separation
+npm run typecheck            # Runs tsc --noEmit across app and test suites
+npm test                     # Runs unit & regression tests (SMS/Voice NLP, OCR, Sync, Wallets)
 ```
 
 ---

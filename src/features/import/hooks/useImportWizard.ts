@@ -8,6 +8,7 @@ import { AppDispatch } from "../../../app/store";
 import { fetchTransactions } from "../../transactions/store/transactionsSlice";
 import { fetchCategories } from "../../categories/store/categoriesSlice";
 import { fetchBudgets } from "../../budgets/store/budgetsSlice";
+import { walletService } from "../../wallets/services/walletService";
 
 import { ImportPreview, ImportMapping, ImportSettings, ImportResult, ImportProgress } from "../types/import";
 import { ExcelImportService } from "../services/excelImportService";
@@ -64,6 +65,8 @@ export function useImportWizard({ visible, onClose, onSuccess, fullScreen = fals
       dispatch(fetchTransactions());
       dispatch(fetchCategories());
       dispatch(fetchBudgets());
+      walletService.clearCache();
+      walletService.refreshCache();
       onSuccess?.(result);
     },
     [dispatch, onSuccess]
@@ -85,8 +88,12 @@ export function useImportWizard({ visible, onClose, onSuccess, fullScreen = fals
   );
 
   const handlePreviewContinue = useCallback(() => {
-    setCurrentStep("column-mapping");
-  }, []);
+    if (preview?.isBackup) {
+      setCurrentStep("validation");
+    } else {
+      setCurrentStep("column-mapping");
+    }
+  }, [preview]);
 
   const handleMappingComplete = useCallback((newMapping: ImportMapping) => {
     setMapping(newMapping);
@@ -125,12 +132,16 @@ export function useImportWizard({ visible, onClose, onSuccess, fullScreen = fals
         setCurrentStep("column-mapping");
         break;
       case "validation":
-        setCurrentStep("global-settings");
+        if (preview?.isBackup) {
+          setCurrentStep("preview");
+        } else {
+          setCurrentStep("global-settings");
+        }
         break;
       default:
         break;
     }
-  }, [currentStep]);
+  }, [currentStep, preview]);
   return { currentStep, setCurrentStep, setSelectedFile, preview, setPreview, mapping, setMapping, settings, progress, importResult, setImportResult, importService, handleClose, handleFileSelected, handlePreviewContinue, handleMappingComplete, handleSettingsComplete, handleValidationComplete, handleStepBack };
 }
 

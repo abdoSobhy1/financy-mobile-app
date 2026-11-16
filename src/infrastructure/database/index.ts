@@ -620,14 +620,14 @@ export class DatabaseManager {
     await this.insertDefaultData();
 
     try {
-      const AsyncStorage = (await import("@react-native-async-storage/async-storage")).default;
+      const AsyncStorage = require("@react-native-async-storage/async-storage").default;
       await AsyncStorage.removeItem("financy_categories_seeded_v1_guest");
       await AsyncStorage.removeItem("financy_wallets_seeded_v1_guest");
       await AsyncStorage.removeItem("@financy_sms_detector_config_v1");
       await AsyncStorage.removeItem("sms_detection_enabled");
-      const { getSmsConfig } = await import("../../features/sms/services/smsConfigService");
+      const { getSmsConfig } = require("../../features/sms/services/smsConfigService");
       await getSmsConfig();
-      const { walletService } = await import("../../features/wallets/services/walletService");
+      const { walletService } = require("../../features/wallets/services/walletService");
       walletService.clearCache();
     } catch (e) {
       console.warn("Could not clear guest seeded flags or wallet cache on resetDatabase:", e);

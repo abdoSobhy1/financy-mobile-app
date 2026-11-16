@@ -64,6 +64,7 @@ export function useAddTransactionScreen() {
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [showCreateCategoryModal, setShowCreateCategoryModal] = useState(false);
   const [formErrors, setFormErrors] = useState<{ amount?: string; category?: string; }>({});
+  const [loading, setLoading] = useState(false);
 
   const shouldInitialFocusAmount = !openCreateCategory;
   const {
@@ -352,6 +353,7 @@ export function useAddTransactionScreen() {
     };
 
     try {
+      setLoading(true);
       if (editTransaction) {
         await dispatch(
           updateTransaction({
@@ -376,6 +378,8 @@ export function useAddTransactionScreen() {
       resetSaved();
       console.error(error);
       showError("Failed to save transaction");
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -441,6 +445,7 @@ export function useAddTransactionScreen() {
     handleEvaluateExpression,
     handleQuickCreateCategory,
     handleSave,
+    loading,
     activeCategories,
     amountDisplay
   };

@@ -80,11 +80,14 @@ export class SyncService {
       return;
     }
 
+
     try {
       // Ensure device ID is initialized
       if (!this.deviceId) {
         this.deviceId = await getDeviceId();
       }
+
+      // Test Firebase connection
       const db = this.getDb();
 
       // Test authentication
@@ -103,6 +106,7 @@ export class SyncService {
 
       // Process any pending operations
       await this.processSyncQueue();
+
     } catch (error) {
       console.error("🔥 Failed to initialize sync:", error);
       throw error;
@@ -169,6 +173,7 @@ export class SyncService {
       return;
     }
 
+
     try {
       const userId = await authService.requireUserIdAsync();
 
@@ -178,6 +183,7 @@ export class SyncService {
       );
 
       await Promise.all(checkPromises);
+
     } catch (error) {
       console.error("❌ Manual change check failed:", error);
       throw error;
@@ -194,6 +200,7 @@ export class SyncService {
       return;
     }
 
+
     try {
       // Reset sync initialization timestamp to allow full data pull
       this.syncInitializedAt = 0;
@@ -203,6 +210,7 @@ export class SyncService {
 
       // Pull all remote data by re-initializing listeners
       await this.startSyncListeners();
+
     } catch (error) {
       console.error("❌ Full sync failed:", error);
       throw error;
@@ -235,6 +243,7 @@ export class SyncService {
       unsubscribe();
     });
     this.unsubscribers.clear();
+
   }
 
   /**
@@ -367,6 +376,7 @@ export class SyncService {
     this.unsubscribers.set(collectionName, () => {
       clearInterval(pollInterval);
     });
+
   }
 
   // Poll for changes since last sync timestamp
@@ -385,6 +395,7 @@ export class SyncService {
 
       // Get last sync timestamp from settings or use a reasonable default
       const lastSyncTime = await this.getLastSyncTimestamp();
+
 
       // Query only documents modified after last sync
       const changesQuery = query(
@@ -417,6 +428,7 @@ export class SyncService {
           const docData = docSnapshot.data() as FirestoreDocument<any>;
           const docId = docSnapshot.id;
 
+
           // Create a mock change object for existing processing logic
           const mockChange = {
             type: "modified" as const,
@@ -444,7 +456,7 @@ export class SyncService {
   private async getLastSyncTimestamp(): Promise<number> {
     try {
       const { SettingsRepository } =
-        await import("../../features/settings/repositories/settingsRepository");
+        require("../../features/settings/repositories/settingsRepository");
       const settingsRepo = new SettingsRepository();
       return await settingsRepo.getLastSyncAttempt();
     } catch (error) {
@@ -457,7 +469,7 @@ export class SyncService {
   private async updateLastSyncTimestamp(): Promise<void> {
     try {
       const { SettingsRepository } =
-        await import("../../features/settings/repositories/settingsRepository");
+        require("../../features/settings/repositories/settingsRepository");
       const settingsRepo = new SettingsRepository();
 
       // Update the sync timestamp in settings
@@ -498,6 +510,7 @@ export class SyncService {
           }
         }
       }
+
     } catch (error) {
       console.error("❌ Conflicts-only sync failed:", error);
       throw error;
@@ -553,6 +566,7 @@ export class SyncService {
     const docData = change.doc.data() as FirestoreDocument<any>;
     const docId = change.doc.id;
 
+
     // Skip processing our own local writes that haven't been confirmed by server yet
     if (change.doc.metadata.hasPendingWrites) {
       return;
@@ -599,10 +613,12 @@ export class SyncService {
   ): Promise<void> {
     await this.dbManager.ensureInitialized();
 
+
     // Get local version
     const localDoc = await this.getLocalDocument(collectionName, docId);
 
     if (!localDoc) {
+      // New document from remote - insert locally
       await this.insertLocalDocument(collectionName, remoteDoc);
       return;
     }
@@ -683,6 +699,7 @@ export class SyncService {
         shouldSkipDueToSameDevice = false;
       }
     }
+
 
     if (shouldSkipDueToSameDevice) {
     } else if (shouldTakeRemote) {
@@ -928,19 +945,15 @@ export class SyncService {
       const cleaned: any = {};
       for (const [key, value] of Object.entries(data)) {
         if (value !== undefined) {
-          // Handle date fields safely - comprehensive list of date field patterns
+          // Handle date fields safely - match actual date/timestamp suffixes only
+          // (never use key.includes("At"), which matches "ignoreAtmWithdrawals" and strips it!)
           const isDateField =
-            key.includes("date") ||
-            key.includes("Date") ||
-            key.includes("At") ||
-            key === "createdAt" ||
-            key === "updatedAt" ||
-            key === "created_at" ||
-            key === "updated_at" ||
-            key === "sync_updated_at" ||
-            key === "duplicatedAt" ||
-            key === "dueDate" ||
-            key === "paymentDate";
+            typeof value !== "boolean" &&
+            (key === "date" ||
+              key.endsWith("Date") ||
+              key.endsWith("_date") ||
+              key.endsWith("At") ||
+              key.endsWith("_at"));
 
           if (isDateField) {
             const parsedDate = this.parseFirebaseDate(value);
@@ -984,6 +997,7 @@ export class SyncService {
       documentId,
     );
 
+
     switch (operation) {
       case "create":
       case "update":
@@ -998,6 +1012,7 @@ export class SyncService {
           data: dataWithDeviceTracking,
           updatedAt: Date.now(),
         };
+
 
         try {
           const result = await setDoc(docRef, syncDoc, { merge: true });
@@ -1024,6 +1039,7 @@ export class SyncService {
         break;
 
       case "delete":
+        // Hard delete - completely remove the document
         await deleteDoc(docRef);
         break;
     }
@@ -1055,6 +1071,7 @@ export class SyncService {
     if (this.syncQueue.length === 0 || !canSync) {
       return;
     }
+
     const operations = [...this.syncQueue];
     this.syncQueue = [];
 
@@ -1106,7 +1123,7 @@ export class SyncService {
 
       switch (collectionName) {
         case "sms_settings": {
-          const { SmsSettingsRepository } = await import("../../features/sms/services/smsSettingsRepository");
+          const { SmsSettingsRepository } = require("../../features/sms/services/smsSettingsRepository");
           await new SmsSettingsRepository().applyRemote(doc.data);
           break;
         }
@@ -1129,9 +1146,10 @@ export class SyncService {
             toAccountId: dataWithId.toAccountId || dataWithId.to_account_id || null,
           };
 
+
           // Insert transaction but skip logging back to sync_log to avoid loops
           await new (
-            await import("../../features/transactions/repositories/transactionsRepository")
+            require("../../features/transactions/repositories/transactionsRepository")
           ).TransactionRepository().createTransaction(
             mappedTransactionData as any,
             {
@@ -1144,7 +1162,7 @@ export class SyncService {
         case "budgets":
 
           const budgetRepo = new (
-            await import("../../features/budgets/repositories/budgetsRepository")
+            require("../../features/budgets/repositories/budgetsRepository")
           ).BudgetRepository();
           await budgetRepo.createBudget(dataWithId as any, {
             skipSync: true,
@@ -1162,12 +1180,12 @@ export class SyncService {
             createdAt: dataWithId.createdAt || new Date().toISOString(),
           };
 
-          const { entityManager: em } = await import("../database/EntityManager");
+          const { entityManager: em } = require("../database/EntityManager");
           if (em.createCategoryFromSync) {
             await em.createCategoryFromSync(dataWithId as any);
           } else {
             await new (
-              await import("../../features/categories/repositories/categoriesRepository")
+              require("../../features/categories/repositories/categoriesRepository")
             ).CategoryRepository().createCategory(safeCategory as any, {
               skipSync: true,
               useProvidedId: dataWithId.id,
@@ -1177,7 +1195,7 @@ export class SyncService {
 
         case "wallets":
           const walletRepo = new (
-            await import("../../features/wallets/repositories/walletsRepository")
+            require("../../features/wallets/repositories/walletsRepository")
           ).WalletRepository();
           await walletRepo.createWallet(
             {
@@ -1201,7 +1219,7 @@ export class SyncService {
           // Use DebtRepository directly to ensure we pass skipSync and useProvidedId
           // so the repository will not create a sync_log entry and will use the remote id.
           const debtRepo = new (
-            await import("../../features/debts/repositories/debtsRepository")
+            require("../../features/debts/repositories/debtsRepository")
           ).DebtRepository();
           // Mark as coming from sync; createDebt will honor skipSync and useProvidedId
           await debtRepo.createDebt(dataWithId as any, {
@@ -1213,13 +1231,13 @@ export class SyncService {
         case "debt_payments":
 
           // Use validation to clean debt payment data and ensure required fields
-          const { cleanDebtPaymentData } = await import("../../shared/utils/validation");
+          const { cleanDebtPaymentData } = require("../../shared/utils/validation");
           const safeDebtPayment = cleanDebtPaymentData(dataWithId);
           safeDebtPayment.syncStatus = "synced"; // Mark as synced since it's coming from Firebase
 
           // Debt payments: call DebtRepository.makePayment with skipSync to avoid re-logging
           await new (
-            await import("../../features/debts/repositories/debtsRepository")
+            require("../../features/debts/repositories/debtsRepository")
           ).DebtRepository().makePayment(safeDebtPayment as any, {
             skipSync: true,
             useProvidedId: dataWithId.id,
@@ -1229,12 +1247,12 @@ export class SyncService {
         case "settings":
 
           // Use validation to clean settings data
-          const { cleanSettingsData } = await import("../../shared/utils/validation");
+          const { cleanSettingsData } = require("../../shared/utils/validation");
           const safeSettings = cleanSettingsData(dataWithId);
           safeSettings.syncStatus = "synced"; // Mark as synced since it's coming from Firebase
 
           const settingsRepo = new (
-            await import("../../features/settings/repositories/settingsRepository")
+            require("../../features/settings/repositories/settingsRepository")
           ).SettingsRepository();
 
           // For settings, we need to use updateSettings since there's only one settings record
@@ -1296,7 +1314,7 @@ export class SyncService {
 
       switch (collectionName) {
         case "sms_settings": {
-          const { SmsSettingsRepository } = await import("../../features/sms/services/smsSettingsRepository");
+          const { SmsSettingsRepository } = require("../../features/sms/services/smsSettingsRepository");
           await new SmsSettingsRepository().applyRemote(doc.data);
           break;
         }
@@ -1315,8 +1333,9 @@ export class SyncService {
             toAccountId: cleanData.toAccountId || cleanData.to_account_id || null,
           };
 
+
           const transactionRepo = new (
-            await import("../../features/transactions/repositories/transactionsRepository")
+            require("../../features/transactions/repositories/transactionsRepository")
           ).TransactionRepository();
           await transactionRepo.updateTransaction(
             doc.id,
@@ -1328,7 +1347,7 @@ export class SyncService {
         case "budgets":
 
           const budgetRepo = new (
-            await import("../../features/budgets/repositories/budgetsRepository")
+            require("../../features/budgets/repositories/budgetsRepository")
           ).BudgetRepository();
           await budgetRepo.updateBudget(doc.id, doc.data as any, {
             skipSync: true,
@@ -1337,7 +1356,7 @@ export class SyncService {
 
         case "categories":
           const categoryRepo = new (
-            await import("../../features/categories/repositories/categoriesRepository")
+            require("../../features/categories/repositories/categoriesRepository")
           ).CategoryRepository();
           await categoryRepo.updateCategory(doc.id, doc.data as any, {
             skipSync: true,
@@ -1346,7 +1365,7 @@ export class SyncService {
 
         case "debts":
           const debtRepo = new (
-            await import("../../features/debts/repositories/debtsRepository")
+            require("../../features/debts/repositories/debtsRepository")
           ).DebtRepository();
           await debtRepo.updateDebt(doc.id, doc.data as any, {
             skipSync: true,
@@ -1355,7 +1374,7 @@ export class SyncService {
 
         case "debt_payments":
           const debtPaymentRepo = new (
-            await import("../../features/debts/repositories/debtsRepository")
+            require("../../features/debts/repositories/debtsRepository")
           ).DebtRepository();
           // Use updatePayment if present, otherwise fall back to updatePaymentAndTransaction
           if (debtPaymentRepo.updatePayment) {
@@ -1372,7 +1391,7 @@ export class SyncService {
 
         case "wallets":
           const walletUpdateRepo = new (
-            await import("../../features/wallets/repositories/walletsRepository")
+            require("../../features/wallets/repositories/walletsRepository")
           ).WalletRepository();
           await walletUpdateRepo.updateWallet(doc.id, doc.data as any, {
             skipSync: true,
@@ -1380,14 +1399,14 @@ export class SyncService {
           break;
 
         case "settings":
-          const { cleanSettingsData: cleanSettingsUpdateData } = await import(
+          const { cleanSettingsData: cleanSettingsUpdateData } = require(
             "../../shared/utils/validation"
           );
           const safeSettingsUpdate = cleanSettingsUpdateData(doc.data || doc);
           safeSettingsUpdate.syncStatus = "synced";
 
           const settingsUpdateRepo = new (
-            await import("../../features/settings/repositories/settingsRepository")
+            require("../../features/settings/repositories/settingsRepository")
           ).SettingsRepository();
 
           await settingsUpdateRepo.updateSettings(
@@ -1429,42 +1448,42 @@ export class SyncService {
       switch (collectionName) {
         case "transactions":
           const transactionRepo = new (
-            await import("../../features/transactions/repositories/transactionsRepository")
+            require("../../features/transactions/repositories/transactionsRepository")
           ).TransactionRepository();
           await transactionRepo.deleteTransaction(docId, { skipSync: true });
           break;
 
         case "budgets":
           const budgetRepo = new (
-            await import("../../features/budgets/repositories/budgetsRepository")
+            require("../../features/budgets/repositories/budgetsRepository")
           ).BudgetRepository();
           await budgetRepo.deleteBudget(docId, { skipSync: true });
           break;
 
         case "categories":
           const categoryRepo = new (
-            await import("../../features/categories/repositories/categoriesRepository")
+            require("../../features/categories/repositories/categoriesRepository")
           ).CategoryRepository();
           await categoryRepo.deleteCategory(docId, { skipSync: true });
           break;
 
         case "debts":
           const debtRepo = new (
-            await import("../../features/debts/repositories/debtsRepository")
+            require("../../features/debts/repositories/debtsRepository")
           ).DebtRepository();
           await debtRepo.deleteDebt(docId, { skipSync: true });
           break;
 
         case "debt_payments":
           const debtPaymentRepo = new (
-            await import("../../features/debts/repositories/debtsRepository")
+            require("../../features/debts/repositories/debtsRepository")
           ).DebtRepository();
           await debtPaymentRepo.deletePayment(docId, { skipSync: true });
           break;
 
         case "wallets":
           const walletDeleteRepo = new (
-            await import("../../features/wallets/repositories/walletsRepository")
+            require("../../features/wallets/repositories/walletsRepository")
           ).WalletRepository();
           await walletDeleteRepo.deleteWallet(docId, { skipSync: true });
           break;
@@ -1564,7 +1583,9 @@ export class SyncService {
         message: "Firebase connectivity test",
         userId: user.uid,
       };
+
       await setDoc(testDocRef, testData);
+
       const snapshot = await getDoc(testDocRef);
 
       if (snapshot.exists()) {
@@ -1599,6 +1620,7 @@ export class SyncService {
         collectionName,
       );
 
+
       // Restore requires an authoritative server snapshot. Ordering by updatedAt
       // silently excludes legacy documents without that field, and a cached
       // empty result must never be mistaken for a new account.
@@ -1611,6 +1633,7 @@ export class SyncService {
           ...doc.data(),
         });
       });
+
       return documents;
     } catch (error) {
       console.error(
@@ -1633,7 +1656,7 @@ export class SyncService {
         return;
       }
       const settingsRepo = new (
-        await import("../../features/settings/repositories/settingsRepository")
+        require("../../features/settings/repositories/settingsRepository")
       ).SettingsRepository();
       // Determine lastAttempt - prefer provided value, then settings table, then 0
       if (lastAttempt === undefined || lastAttempt === null) {
@@ -1647,6 +1670,7 @@ export class SyncService {
           lastAttempt = 0;
         }
       }
+
 
       // Ensure user and firestore available
       const user = await authService.getCurrentAuthenticatedUser();
@@ -1667,9 +1691,11 @@ export class SyncService {
             collectionName,
           );
 
+
           // Prefer top-level updatedAt field for querying. Firestore requires indexed fields
           const q = query(collectionRef, where("updatedAt", ">", lastAttempt));
           const snapshot = await getDocs(q);
+
 
           for (const docSnap of snapshot.docs) {
             const docData = docSnap.data() as FirestoreDocument<any>;
@@ -1706,6 +1732,8 @@ export class SyncService {
             if (remoteTime <= (lastAttempt || 0)) {
               continue;
             }
+
+            // Use the existing handlers to apply document changes locally
             try {
               const deletedFlag = (docData as any).deleted;
               const deleted =
@@ -1757,6 +1785,7 @@ export class SyncService {
         // Not critical - just log
         console.warn("Could not dispatch lastSync to Redux store:", reduxErr);
       }
+
     } catch (error) {
       console.error("❌ performDeltaSync failed:", error);
       throw error;

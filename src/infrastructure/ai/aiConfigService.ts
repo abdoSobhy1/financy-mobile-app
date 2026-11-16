@@ -174,7 +174,7 @@ export async function testAIConnection(
 
   if (provider === "gemini" && !apiKey?.trim()) {
     try {
-      const { testHostedGeminiConnection } = await import("./geminiGateway");
+      const { testHostedGeminiConnection } = require("./geminiGateway");
       return await testHostedGeminiConnection(config.model || "gemini-3.6-flash");
     } catch (err: any) {
       const message = err.code === "unauthenticated"

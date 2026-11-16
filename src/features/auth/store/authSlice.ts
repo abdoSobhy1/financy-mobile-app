@@ -2,6 +2,7 @@
 import { createSlice, createAsyncThunk, PayloadAction } from "@reduxjs/toolkit";
 import { AuthState, User } from "../../../shared/types";
 import { authService } from "../services/authService";
+import { UserOnboardingService } from "../services/userOnboardingService";
 
 // Initial state
 const initialState: AuthState = {
@@ -19,7 +20,11 @@ export const signIn = createAsyncThunk("auth/signIn", async ({ email, password }
 export const signUp = createAsyncThunk(
   "auth/signUp",
   async ({ email, password, displayName }: { email: string; password: string; displayName?: string }) => {
-    return await authService.signUp(email, password, displayName);
+    const user = await authService.signUp(email, password, displayName);
+    if (user?.uid) {
+      await UserOnboardingService.seedNewUserDefaults(user.uid);
+    }
+    return user;
   }
 );
 

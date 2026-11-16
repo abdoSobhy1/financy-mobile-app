@@ -596,7 +596,14 @@ export const CustomDatePicker: React.FC<CustomDatePickerProps> = ({
   };
 
   const handleSelectDay = (day: Date) => {
-    onDateChange(day);
+    const target = new Date(day);
+    const now = new Date();
+    if (value && (value.getHours() !== 0 || value.getMinutes() !== 0 || value.getSeconds() !== 0)) {
+      target.setHours(value.getHours(), value.getMinutes(), value.getSeconds(), value.getMilliseconds());
+    } else {
+      target.setHours(now.getHours(), now.getMinutes(), now.getSeconds(), now.getMilliseconds());
+    }
+    onDateChange(target);
     handleClose();
   };
 

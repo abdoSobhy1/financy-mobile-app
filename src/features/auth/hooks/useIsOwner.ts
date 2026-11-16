@@ -12,7 +12,7 @@ import {
  * using the identical validation and caching logic that unlocks infinite OCR scans.
  *
  * Checks:
- * 1. Firestore `users/C8hK8G3O6JNzGzeTz0NwXqXnEMW2` -> unlimitedUids & unlimitedEmails
+ * 1. Firestore `users/{OCR_CONFIG_DOC_UID}` -> unlimitedUids & unlimitedEmails
  * 2. Firestore user doc -> role === 'owner' | 'admin' or unlimitedOcr === true
  * 3. Local quota cache in AsyncStorage & in-memory cache (`isUnlimited`)
  *

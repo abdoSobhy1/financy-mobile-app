@@ -21,6 +21,8 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { fetchSettings } from "../../features/settings/store/settingsSlice";
 import { clearSmsTransaction, retrieveSmsTransaction, smsService, getSmsDetectionEnabled } from "../../features/sms/services/smsService";
 import { subscribeSmsConfig } from "../../features/sms/services/smsConfigService";
+import { databaseMigration } from "../../infrastructure/database/migrations/databaseMigration";
+import NotificationService from "../../infrastructure/notifications/notificationService";
 
 SplashScreen.preventAutoHideAsync();
 
@@ -70,7 +72,11 @@ export function useAppBootstrap() {
     const initApp = async () => {
       try {
         setIsLoading(true);
+
+        // Initialize Firebase
         initializeFirebase();
+
+        // Initialize Database
         const dbManager = DatabaseManager.getInstance();
         await dbManager.init();
 
@@ -86,13 +92,15 @@ export function useAppBootstrap() {
           "financy_app_lock_enabled_v1",
           "financy_app_lock_pin_hash_v1",
         ]).catch(() => { });
-        const { databaseMigration } =
-          await import("../../infrastructure/database/migrations/databaseMigration");
+
+        // Run database migrations if needed for cloud compatibility
         const needsMigrations = await databaseMigration.needsMigrations();
         if (needsMigrations) {
           await databaseMigration.runCloudCompatibilityMigrations();
         } else {
         }
+
+        // Initialize Offline-First Sync
 
         // Initialize sync service (includes network listener and periodic sync)
         networkUnsubscribe = offlineFirstSync.initialize();
@@ -108,8 +116,6 @@ export function useAppBootstrap() {
 
               // Also ensure notifications are still scheduled
               try {
-                const { default: NotificationService } =
-                  await import("../../infrastructure/notifications/notificationService");
                 const notificationService = NotificationService.getInstance();
 
                 // Smart check - only reschedules if needed
@@ -123,9 +129,9 @@ export function useAppBootstrap() {
             }
           },
         );
+
+        // Initialize Notification Service
         try {
-          const { default: NotificationService } =
-            await import("../../infrastructure/notifications/notificationService");
           const notificationService = NotificationService.getInstance();
           await notificationService.initialize();
         } catch (error) {
@@ -158,6 +164,10 @@ export function useAppBootstrap() {
             console.warn("SMS service init failed (non-critical):", e);
           }
         }
+
+        // Note: Initial cloud pull will happen after user authentication
+        // See AuthContext for post-authentication cloud restore logic
+
         setIsLoading(false);
       } catch (error) {
         console.error("App initialization failed:", error);

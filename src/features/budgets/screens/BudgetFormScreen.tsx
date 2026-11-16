@@ -40,7 +40,7 @@ const BudgetFormScreen: React.FC = () => {
       <KeyboardAvoidingView
         style={{ flex: 1 }}
         behavior={Platform.OS === "ios" ? "padding" : undefined}>
-        {/* Custom Top Bar matching AddTransactionScreen */}
+        {/* Top Bar */}
         <View style={styles.topBar}>
           <TouchableOpacity
             style={[
@@ -53,8 +53,8 @@ const BudgetFormScreen: React.FC = () => {
           <Text style={[styles.title, { color: colors.onBackground }]}>
             {budget ? "Edit Budget" : "New Budget"}
           </Text>
-          <View style={{ flexDirection: "row", gap: 8, alignItems: "center" }}>
-            {budget && (
+          <View style={{ width: 40, height: 40, alignItems: "center", justifyContent: "center" }}>
+            {budget ? (
               <TouchableOpacity
                 style={[
                   styles.iconButton,
@@ -64,20 +64,7 @@ const BudgetFormScreen: React.FC = () => {
                 disabled={loading}>
                 <Ionicons name="trash-outline" size={20} color={colors.error} />
               </TouchableOpacity>
-            )}
-            <TouchableOpacity
-              style={[
-                styles.iconButton,
-                { backgroundColor: colors.primaryContainer },
-              ]}
-              onPress={handleSave}
-              disabled={loading}>
-              <Ionicons
-                name="checkmark"
-                size={24}
-                color={colors.onPrimaryContainer}
-              />
-            </TouchableOpacity>
+            ) : null}
           </View>
         </View>
 

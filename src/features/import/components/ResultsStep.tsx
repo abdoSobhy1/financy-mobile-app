@@ -88,6 +88,49 @@ export const ResultsStep: React.FC<ResultsStepProps> = ({
         </>
       )}
 
+      {/* Created Wallets */}
+      {result.createdWallets && result.createdWallets.length > 0 && (
+        <>
+          <SectionHeading text={`NEW WALLETS CREATED (${result.createdWallets.length})`} />
+          <Card variant="outlined" style={{ marginBottom: spacing.lg }}>
+            <Text
+              style={[
+                typography.bodySmall,
+                { color: colors.onSurfaceVariant, marginBottom: spacing.sm },
+              ]}>
+              Automatically created for unrecognized accounts:
+            </Text>
+            <View style={styles.categoriesWrap}>
+              {result.createdWallets.map((walletName, index) => (
+                <Badge
+                  key={`${walletName}-${index}`}
+                  label={walletName}
+                  role="primary"
+                  size="medium"
+                />
+              ))}
+            </View>
+          </Card>
+        </>
+      )}
+
+      {/* Backup Restore Summary */}
+      {result.isBackupRestore && result.backupStats && (
+        <>
+          <SectionHeading text="RESTORED DATABASE ITEMS" />
+          <Card variant="outlined" padding="medium" style={{ marginBottom: spacing.lg }}>
+            <Text style={[typography.bodySmall, { color: colors.onSurfaceVariant, lineHeight: 22 }]}>
+              • {result.backupStats.transactions || 0} Transactions restored{"\n"}
+              • {result.backupStats.wallets || 0} Wallets restored{"\n"}
+              • {result.backupStats.categories || 0} Categories restored{"\n"}
+              • {result.backupStats.budgets || 0} Budgets restored{"\n"}
+              • {result.backupStats.debts || 0} Debts restored{"\n"}
+              • {result.backupStats.debtPayments || 0} Debt Payments restored
+            </Text>
+          </Card>
+        </>
+      )}
+
       <ImportIssueList
         issues={result.errors}
         headingPrefix="ISSUES ENCOUNTERED"

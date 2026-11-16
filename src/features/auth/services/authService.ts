@@ -16,22 +16,23 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { getFirebaseAuth, getFirestoreInstance } from "../../../infrastructure/firebase/client";
 import { doc, setDoc, serverTimestamp } from "firebase/firestore";
 import { User } from "../../../shared/types";
+import {
+  AUTH_SESSION_KEY,
+  AUTH_LAST_USER_KEY,
+  AUTH_GUEST_DATA_PENDING_KEY,
+  AUTH_SESSION_DURATION,
+  SessionData,
+} from "./authSessionStorage";
 
 import { DatabaseManager } from "../../../infrastructure/database";
-
-interface SessionData {
-  user: User;
-  lastActivity: number;
-  expiresAt: number;
-}
 
 export class AuthService {
   private static instance: AuthService;
   private auth: any = null;
-  private static readonly SESSION_KEY = "financy_user_session";
-  private static readonly SESSION_DURATION = 30 * 24 * 60 * 60 * 1000; // 30 days in milliseconds
-  private static readonly LAST_USER_KEY = "financy_last_user_id";
-  private static readonly GUEST_DATA_PENDING_KEY = "financy_guest_data_pending_migration_v1";
+  private static readonly SESSION_KEY = AUTH_SESSION_KEY;
+  private static readonly SESSION_DURATION = AUTH_SESSION_DURATION;
+  private static readonly LAST_USER_KEY = AUTH_LAST_USER_KEY;
+  private static readonly GUEST_DATA_PENDING_KEY = AUTH_GUEST_DATA_PENDING_KEY;
   // True while signOut() is running, so the auth listener can't resurrect the stored session
   private signingOut = false;
   // Per-user leftovers that used to survive sign-out
@@ -50,9 +51,9 @@ export class AuthService {
   // Stop polling/queues that belong to the outgoing user
   private async stopBackgroundSync(): Promise<void> {
     try {
-      const { syncService } = await import("../../../infrastructure/sync/syncService");
+      const { syncService } = require("../../../infrastructure/sync/syncService");
       syncService.resetState();
-      const { offlineFirstSync } = await import("../../../infrastructure/sync/OfflineFirstSync");
+      const { offlineFirstSync } = require("../../../infrastructure/sync/OfflineFirstSync");
       offlineFirstSync.cancelScheduledRetry();
     } catch (e) {
       console.warn("Failed to stop background sync:", e);
@@ -255,25 +256,8 @@ export class AuthService {
       // Save session to AsyncStorage
       await this.saveSession(user);
 
-      // Defaults belong to first-time registration, never to login or restore.
-      // Linked guest accounts already have their own local categories and wallets.
-      if (!linkingGuest) {
-        const database = DatabaseManager.getInstance().getDatabase();
-        const categories = await database.getFirstAsync<{ count: number }>(
-          "SELECT COUNT(*) as count FROM categories",
-        );
-        const wallets = await database.getFirstAsync<{ count: number }>(
-          "SELECT COUNT(*) as count FROM wallets",
-        );
-        if (!categories?.count) {
-          const { CategoryRepository } = await import("../../categories/repositories/categoriesRepository");
-          await new CategoryRepository().seedDefaultArabicCategories();
-        }
-        if (!wallets?.count) {
-          const { WalletRepository } = await import("../../wallets/repositories/walletsRepository");
-          await new WalletRepository().seedDefaultWallets();
-        }
-      }
+      // Defaults for first-time registration are managed by UserOnboardingService.
+
       return user;
     } catch (error) {
       console.error("Sign up error:", error);
@@ -297,6 +281,7 @@ export class AuthService {
 
       // Save session to AsyncStorage (implements rolling 30-day renewal)
       await this.saveSession(user);
+
       return user;
     } catch (error) {
       console.error("Sign in error:", error);
@@ -478,14 +463,15 @@ export class AuthService {
         try {
           await AsyncStorage.multiRemove(AuthService.USER_SCOPED_KEYS);
           const { clearUserPreferences } =
-            await import("../../settings/utils/userPreferences");
+            require("../../settings/utils/userPreferences");
           await clearUserPreferences();
-          const { walletService } = await import("../../wallets/services/walletService");
+          const { walletService } = require("../../wallets/services/walletService");
           walletService.clearCache();
         } catch (prefError) {
           console.warn("Failed to clear user-scoped data on sign out:", prefError);
         }
       }
+
     } catch (error) {
       console.error("Sign out error:", error);
       throw new Error("Failed to sign out");

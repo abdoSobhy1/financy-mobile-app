@@ -8,6 +8,8 @@ import NotificationService from "../notifications/notificationService";
 import { normalizeSyncTimestamp } from "../../shared/utils/syncTimestamp";
 import { hasRestoredCloudData, markCloudDataRestored, invalidateCloudRestore } from "./cloudRestoreState";
 import { applyRestoreBatches, RestoreWrite, RestoreWriter } from "./restoreBatches";
+import { SmsSettingsRepository, validateSmsPreferences } from "../../features/sms/services/smsSettingsRepository";
+import { cleanDebtData } from "../../shared/utils/validation";
 
 export type SyncDispatchListener = (tableName: string, recordId: string) => void;
 let syncDispatchListener: SyncDispatchListener | null = null;
@@ -105,6 +107,17 @@ class OfflineFirstSync {
         ],
       );
 
+      // Rows inserted by repositories inherit the column default, which is 'synced' on
+      // transactions/categories/budgets (added via ALTER TABLE). processSingleOperation skips
+      // rows that are already 'synced', so a brand-new record would be marked processed
+      // without ever being uploaded. Every logged write must therefore start as 'pending'.
+      if (operation !== "delete" && this.TABLE_TO_COLLECTION[tableName]) {
+        await database.runAsync(
+          `UPDATE ${tableName} SET sync_status = 'pending' WHERE id = ?`,
+          [recordId],
+        );
+      }
+
       // More verbose debug: include a short payload preview and stack trace origin
       const preview = logEntry.payload
         ? logEntry.payload.length > 200
@@ -181,6 +194,25 @@ class OfflineFirstSync {
       for (const logEntry of result) {
         await this.processSingleOperation(logEntry);
       }
+
+      // If we hit the 50-row batch limit, continue processing remaining queued operations
+      if (result.length === 50) {
+        const attemptedLogIds = new Set<number>(
+          result.map((r) => r.log_id).filter((id): id is number => id !== undefined),
+        );
+        while (true) {
+          const nextBatch = ((await database.getAllAsync(sql)) as SyncLogEntry[]).filter(
+            (entry) => entry.log_id === undefined || !attemptedLogIds.has(entry.log_id),
+          );
+          if (nextBatch.length === 0) break;
+          for (const logEntry of nextBatch) {
+            if (logEntry.log_id !== undefined) attemptedLogIds.add(logEntry.log_id);
+            await this.processSingleOperation(logEntry);
+          }
+          if (nextBatch.length < 50) break;
+        }
+      }
+
     } catch (error) {
       console.error("Error processing sync operations:", error);
       throw error;
@@ -346,6 +378,7 @@ class OfflineFirstSync {
     // Exponential backoff: 5s, 10s, 20s, 40s, 60s max
     const retryDelay = Math.min(5000 * Math.pow(2, retryCount), 60000);
 
+
     this.retryTimeout = setTimeout(() => {
       this.attemptSync();
     }, retryDelay);
@@ -453,6 +486,7 @@ class OfflineFirstSync {
          WHERE is_processed = 1 AND created_at < ?`,
         [sevenDaysAgo],
       );
+
     } catch (error) {
       console.error("Error cleaning up old operations:", error);
     }
@@ -628,6 +662,7 @@ class OfflineFirstSync {
         if (!netInfo.isConnected) {
           throw new Error("No internet connection");
         }
+
         await invalidateCloudRestore();
         const userId = await authService.requireUserIdAsync();
 
@@ -665,7 +700,7 @@ class OfflineFirstSync {
 
         // Sync progress is metadata, not an edit to the user's preferences.
         try {
-          const { SettingsRepository } = await import("../../features/settings/repositories/settingsRepository");
+          const { SettingsRepository } = require("../../features/settings/repositories/settingsRepository");
           const settingsRepo = new SettingsRepository();
           const now = Date.now();
           await settingsRepo.setLastSyncAttempt(now);
@@ -673,6 +708,7 @@ class OfflineFirstSync {
         } catch (e) {
           console.warn("Could not update syncUpdatedAt setting:", e);
         }
+
 
         return {
           push: {
@@ -713,6 +749,7 @@ class OfflineFirstSync {
 
       // Sync conflicts in Firebase
       await syncService.syncConflictsOnly();
+
     } catch (error) {
       console.error("❌ Conflicts-only sync failed:", error);
       throw error;
@@ -747,6 +784,7 @@ class OfflineFirstSync {
       "debts",
       "debt_payments",
     ];
+
     for (const tableName of independentCollections) {
       const collectionName = this.TABLE_TO_COLLECTION[tableName];
       if (collectionName) {
@@ -766,6 +804,7 @@ class OfflineFirstSync {
         }
       }
     }
+
     for (const tableName of dependentCollections) {
       const collectionName = this.TABLE_TO_COLLECTION[tableName];
       if (collectionName) {
@@ -792,7 +831,7 @@ class OfflineFirstSync {
     }
 
     try {
-      const { DebtRepository } = await import("../../features/debts/repositories/debtsRepository");
+      const { DebtRepository } = require("../../features/debts/repositories/debtsRepository");
       await new DebtRepository().reconcileDebtBalances();
     } catch (reconcileErr) {
       console.warn("Could not reconcile debt balances after cloud restore:", reconcileErr);
@@ -827,6 +866,7 @@ class OfflineFirstSync {
 
       const result = await this.executePhasedCloudRestore();
       const totalPulled = result.itemsCreated + result.itemsUpdated;
+
       return totalPulled > 0;
     } catch (error) {
       console.error("❌ Initial cloud pull failed:", error);
@@ -864,6 +904,7 @@ class OfflineFirstSync {
       }
 
       const result = await this.executePhasedCloudRestore();
+
 
       // Dismiss sync notification
       if (notificationId) {
@@ -918,8 +959,16 @@ class OfflineFirstSync {
         [tableName],
       );
       const pendingDeleteIds = new Set(pendingDeleteRows.map((r) => r.record_id));
+      const pendingWriteRows = await database.getAllAsync<{ record_id: string; max_created_at: number }>(
+        `SELECT record_id, MAX(created_at) as max_created_at FROM sync_log WHERE table_name = ? AND operation IN ('insert', 'update') AND is_processed = 0 GROUP BY record_id`,
+        [tableName],
+      );
+      const pendingWriteTimeById = new Map(
+        pendingWriteRows.map((r) => [r.record_id, Number(r.max_created_at) || 0]),
+      );
       const localWrites: RestoreWrite[] = [];
       const remoteDeletes: Array<() => Promise<void>> = [];
+
 
       // Process each cloud document
       for (const cloudDoc of cloudDocuments) {
@@ -979,6 +1028,7 @@ class OfflineFirstSync {
           );
 
           if (!localDoc) {
+            // Document doesn't exist locally - create it
             localWrites.push((writer) => this.insertCloudDocumentToLocal(tableName, cloudDoc, writer));
             result.created++;
           } else {
@@ -1006,14 +1056,19 @@ class OfflineFirstSync {
             }
 
             // Document exists locally - check if cloud version is newer
-            const localUpdatedAt = this.parseTimestampMs(
-              (localDoc as any).sync_updated_at ?? (localDoc as any).updated_at,
+            const pendingWriteTime = pendingWriteTimeById.get(cloudDoc.id) || 0;
+            const localUpdatedAt = Math.max(
+              this.parseTimestampMs(
+                (localDoc as any).sync_updated_at ?? (localDoc as any).updated_at,
+              ),
+              pendingWriteTime,
             );
 
             // Special rule for settings: if local is an untouched default placeholder, cloud settings ALWAYS win
             const isSettingsTable = tableName === "settings";
             const localIsUntouchedDefault =
               isSettingsTable &&
+              pendingWriteTime === 0 &&
               (!(localDoc as any).sync_updated_at ||
                 (localDoc as any).sync_updated_at === 0 ||
                 (localDoc as any).sync_status === "synced");
@@ -1022,6 +1077,14 @@ class OfflineFirstSync {
               localWrites.push((writer) => this.updateLocalDocumentFromCloud(tableName, cloudDoc, writer));
               result.updated++;
             } else {
+              if (pendingWriteTime > 0 && (localDoc as any).sync_status === "synced") {
+                localWrites.push(async (writer) => {
+                  await writer.runAsync(
+                    `UPDATE ${tableName} SET sync_status = 'pending', sync_updated_at = ? WHERE id = ?`,
+                    [localUpdatedAt, cloudDoc.id],
+                  );
+                });
+              }
             }
           }
         } catch (error) {
@@ -1035,15 +1098,15 @@ class OfflineFirstSync {
 
       await applyRestoreBatches(database, localWrites);
       if (tableName === "sms_settings") {
-        const { SmsSettingsRepository } = await import("../../features/sms/services/smsSettingsRepository");
         await new SmsSettingsRepository().refreshCache();
       }
       for (const removeRemote of remoteDeletes) await removeRemote();
 
+
       if (tableName === "settings" && result.updated + result.created > 0) {
         try {
-          const { store } = await import("../../app/store");
-          const { fetchSettings } = await import("../../features/settings/store/settingsSlice");
+          const { store } = require("../../app/store");
+          const { fetchSettings } = require("../../features/settings/store/settingsSlice");
           store.dispatch(fetchSettings());
         } catch (e) {
           console.warn("Could not dispatch fetchSettings after cloud restore:", e);
@@ -1067,7 +1130,6 @@ class OfflineFirstSync {
     await this.db.ensureInitialized();
     const database = this.db.getDatabase();
     if (tableName === "sms_settings") {
-      const { SmsSettingsRepository } = await import("../../features/sms/services/smsSettingsRepository");
       await new SmsSettingsRepository().migrateLegacy();
     }
     const whereClause = includeDeleted
@@ -1119,11 +1181,8 @@ class OfflineFirstSync {
       case "settings":
         // Handle both legacy key-value format and new structured format
         if (localData.key && localData.value) {
-          // Legacy key-value format
-          await database.runAsync(
-            `UPDATE settings SET key = ?, value = ?, updated_at = ? WHERE id = ?`,
-            [localData.key, localData.value, localData.updatedAt, localData.id],
-          );
+          // Legacy key-value format is not stored in the structured SQLite settings table
+          console.warn(`⏭️ Skipping legacy key-value settings document: ${localData.id}`);
         } else {
           // New structured format with billing period and other settings
           const updates: string[] = ["updated_at = ?", "sync_updated_at = ?", "sync_status = ?"];
@@ -1162,7 +1221,7 @@ class OfflineFirstSync {
           }
           if (localData.theme !== undefined) {
             updates.push("theme = ?");
-            params.push(localData.theme);
+            params.push(localData.theme === "light" ? "light" : "dark");
           }
 
           params.push(localData.id);
@@ -1268,6 +1327,7 @@ class OfflineFirstSync {
             result.collections[tableName] = stats;
             result.totalUploaded += stats.uploaded;
             result.totalSkipped += stats.skipped;
+
           } catch (error) {
             const errorMsg = `Failed to push ${tableName}: ${error instanceof Error ? error.message : error}`;
             result.errors.push(errorMsg);
@@ -1280,6 +1340,7 @@ class OfflineFirstSync {
           }
         }
       }
+
 
       // Dismiss sync notification
       if (notificationId) {
@@ -1308,7 +1369,6 @@ class OfflineFirstSync {
     since: number = 0,
   ): Promise<{ uploaded: number; skipped: number; errors: number }> {
     // Check if user is authenticated first
-    const { authService } = await import("../../features/auth/services/authService");
     const canSync = await authService.isCloudSyncAllowedAsync();
     if (!canSync) {
       return { uploaded: 0, skipped: 0, errors: 0 };
@@ -1336,6 +1396,7 @@ class OfflineFirstSync {
       const cloudDocuments =
         await syncService.getAllDocumentsFromCollection(collectionName);
       const cloudById = new Map(cloudDocuments.map((doc) => [doc.id, doc]));
+
 
       // Process each local document
       for (const localDoc of localDocuments) {
@@ -1377,6 +1438,7 @@ class OfflineFirstSync {
               result.skipped++;
               continue;
             }
+            // Document doesn't exist in cloud - upload it
             await syncService.syncLocalChanges(
               collectionName,
               "create",
@@ -1406,6 +1468,7 @@ class OfflineFirstSync {
                 result.skipped++;
                 continue;
               }
+
               await syncService.syncLocalChanges(
                 collectionName,
                 "update",
@@ -1415,6 +1478,9 @@ class OfflineFirstSync {
               await this.markRecordSynced(tableName, localDoc.id);
               result.uploaded++;
             } else {
+              if ((localDoc as any).sync_status !== "synced") {
+                await this.markRecordSynced(tableName, (localDoc as any).id);
+              }
               result.skipped++;
             }
           }
@@ -1464,6 +1530,7 @@ class OfflineFirstSync {
       return 0;
     }
 
+
     let successCount = 0;
     const stillFailed: Array<{
       collectionName: CollectionName;
@@ -1493,6 +1560,7 @@ class OfflineFirstSync {
         `⚠️ Document ${failedItem.collectionName}:${failedItem.doc.id} still failing after retry`,
       );
     }
+
     return successCount;
   }
 
@@ -1528,7 +1596,6 @@ class OfflineFirstSync {
 
     switch (tableName) {
       case "sms_settings": {
-        const { validateSmsPreferences } = await import("../../features/sms/services/smsSettingsRepository");
         const preferences = validateSmsPreferences(document.data || document);
         const timestamp = this.parseTimestampMs(document.updatedAt ?? document.data?.updatedAt);
         await database.runAsync(`INSERT OR REPLACE INTO sms_settings
@@ -1620,7 +1687,6 @@ class OfflineFirstSync {
 
       case "debts": {
         // Use validation to ensure all required fields are present and valid
-        const { cleanDebtData } = await import("../../shared/utils/validation");
         const cleanedDebt = cleanDebtData(localData);
         let validCategoryId = cleanedDebt.categoryId || null;
         if (validCategoryId) {
@@ -1701,10 +1767,12 @@ class OfflineFirstSync {
         break;
       }
 
-      case "debt_payments":
+      case "debt_payments": {
+        const paymentSyncUpdatedAt =
+          this.parseTimestampMs(localData.updatedAt) || Date.now();
         await database.runAsync(
-          `INSERT OR REPLACE INTO debt_payments (id, debt_id, amount, date, payment_date, principal, interest, note, updated_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          `INSERT OR REPLACE INTO debt_payments (id, debt_id, amount, date, payment_date, principal, interest, note, created_at, updated_at, sync_updated_at, deleted, sync_status)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 'synced')`,
           [
             localData.id,
             localData.debtId,
@@ -1714,20 +1782,19 @@ class OfflineFirstSync {
             localData.principal || 0,
             localData.interest || 0,
             localData.note,
-            localData.updatedAt,
+            localData.createdAt || localData.updatedAt || new Date().toISOString(),
+            localData.updatedAt || new Date().toISOString(),
+            paymentSyncUpdatedAt,
           ],
         );
         break;
+      }
 
       case "settings":
         // Handle both legacy key-value format and new structured format
         if (localData.key && localData.value) {
-          // Legacy key-value format
-          await database.runAsync(
-            `INSERT OR REPLACE INTO settings (id, key, value, updated_at)
-             VALUES (?, ?, ?, ?)`,
-            [localData.id, localData.key, localData.value, localData.updatedAt],
-          );
+          // Legacy key-value format is not stored in the structured SQLite settings table
+          console.warn(`⏭️ Skipping legacy key-value settings document: ${localData.id}`);
         } else {
           // New structured format with billing period and other settings
           await database.runAsync(
@@ -1744,7 +1811,7 @@ class OfflineFirstSync {
                   ? 1
                   : 0
                 : localData.firebase_sync || 0,
-              localData.theme || "system",
+              localData.theme === "light" ? "light" : "dark",
               localData.createdAt ||
                 localData.created_at ||
                 new Date().toISOString(),
@@ -1795,7 +1862,11 @@ class OfflineFirstSync {
 
     switch (tableName) {
       case "sms_settings":
-        return { ...baseFields, config: JSON.parse(document.config), enabled: Boolean(document.enabled) };
+        return {
+          ...baseFields,
+          config: typeof document.config === "string" ? JSON.parse(document.config) : document.config,
+          enabled: Boolean(document.enabled),
+        };
       case "settings":
         return {
           ...baseFields,
@@ -1809,7 +1880,7 @@ class OfflineFirstSync {
             document.firebase_sync !== undefined
               ? Boolean(document.firebase_sync)
               : document.firebaseSync || false,
-          theme: document.theme || "system",
+          theme: document.theme === "light" ? "light" : "dark",
           // Remove legacy key-value fields if they exist
           key: undefined,
           value: undefined,
@@ -2108,7 +2179,7 @@ class OfflineFirstSync {
                   ? 1
                   : 0
                 : 0,
-            theme: ensureValue(getValue("theme"), "system"),
+            theme: getValue("theme") === "light" ? "light" : "dark",
             created_at: ensureValue(
               getValue("createdAt", "created_at"),
               new Date().toISOString(),

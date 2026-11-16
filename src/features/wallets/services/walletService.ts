@@ -79,7 +79,7 @@ export const DEFAULT_WALLETS: WalletAccount[] = [
 ];
 
 const getDb = async () => {
-  const { db } = await import("../../../infrastructure/database/repositories");
+  const { db } = require("../../../infrastructure/database/repositories");
   return db;
 };
 

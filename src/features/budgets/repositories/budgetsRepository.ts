@@ -81,8 +81,9 @@ export class BudgetRepository {
   async updateBudget(id: string, updates: Partial<Omit<Budget, "id" | "createdAt" | "updatedAt">>, options?: { skipSync?: boolean }): Promise<void> {
     const database = this.db.getDatabase();
 
-    const setParts: string[] = ["updated_at = ?"];
-    const params: any[] = [new Date().toISOString()];
+    const nowMs = Date.now();
+    const setParts: string[] = ["updated_at = ?", "sync_updated_at = ?", "sync_status = ?"];
+    const params: any[] = [new Date(nowMs).toISOString(), nowMs, options?.skipSync ? "synced" : "pending"];
 
     if (updates.name !== undefined) {
       setParts.push("name = ?");

@@ -41,7 +41,7 @@ export const useSyncDataRefresh = () => {
             await dispatch(fetchSettings()).unwrap();
             break;
           case "wallets": {
-            const { walletService } = await import("../../../features/wallets/services/walletService");
+            const { walletService } = require("../../../features/wallets/services/walletService");
             await walletService.refreshCache();
             break;
           }
