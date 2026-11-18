@@ -140,13 +140,10 @@ export const walletService = {
   },
 
   isSecretTransactionExcluded(
-    transaction: { accountId?: string; toAccountId?: string; budgetId?: string },
+    transaction: { accountId?: string; toAccountId?: string },
     secretWalletIds: Set<string>,
   ): boolean {
-    const isSecret = this.isSecretTransaction(transaction, secretWalletIds);
-    if (!isSecret) return false;
-    // If a secret wallet transaction has a budget, it affects totals (not excluded)
-    return !transaction.budgetId;
+    return this.isSecretTransaction(transaction, secretWalletIds);
   },
 
   async getWallets(options?: { includeArchived?: boolean }): Promise<WalletAccount[]> {
@@ -292,7 +289,6 @@ export const walletService = {
     fromWalletId: string,
     toWalletId: string,
     amount: number,
-    budgetId?: string,
   ): Promise<WalletAccount[]> {
     const cleanAmount = normalizeMoney(amount);
     if (!fromWalletId || !toWalletId || fromWalletId === toWalletId || cleanAmount <= 0) {
@@ -309,7 +305,6 @@ export const walletService = {
         type: "transfer",
         accountId: fromWalletId,
         toAccountId: toWalletId,
-        budgetId: budgetId || undefined,
         description: `Transfer: ${fromWallet.name} -> ${toWallet.name}`,
         date: new Date().toISOString(),
         updatedAt: Date.now(),

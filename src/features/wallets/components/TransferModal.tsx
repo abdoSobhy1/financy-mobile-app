@@ -25,7 +25,7 @@ export const TransferModal: React.FC<TransferModalProps> = ({
   initialToWalletId,
   onSuccess,
 }) => {
-  const { budgetsMap, fromWalletId, toWalletId, setToWalletId, transferAmount, setTransferAmount, transferBudgetId, setTransferBudgetId, transferError, setTransferError, loading, amountInputRef, visibleWallets, handleFromWalletChange, handleTransferSubmit, confirmExit, destinationOptions } = useTransferModal({ visible, onClose, wallets, initialFromWalletId, initialToWalletId, onSuccess });
+  const { fromWalletId, toWalletId, setToWalletId, transferAmount, setTransferAmount, transferError, setTransferError, loading, amountInputRef, visibleWallets, handleFromWalletChange, handleTransferSubmit, confirmExit, destinationOptions } = useTransferModal({ visible, onClose, wallets, initialFromWalletId, initialToWalletId, onSuccess });
   const { colors, typography, spacing, radius, currencySymbol } = useAppTheme();
 
   return (
@@ -161,81 +161,6 @@ export const TransferModal: React.FC<TransferModalProps> = ({
                 );
               })}
             </ScrollView>
-
-            {/* Optional Budget Assignment */}
-            {Object.values(budgetsMap).some((b) => !b.deleted) && (
-              <>
-                <Text
-                  style={{
-                    fontSize: 12,
-                    fontWeight: "700",
-                    color: colors.onSurfaceVariant,
-                    marginBottom: 8,
-                    letterSpacing: 0.5,
-                  }}>
-                  ASSIGN TO BUDGET (OPTIONAL)
-                </Text>
-                <ScrollView
-                  horizontal
-                  showsHorizontalScrollIndicator={false}
-                  contentContainerStyle={{ gap: 8, marginBottom: spacing.md }}>
-                  <TouchableOpacity
-                    onPress={() => setTransferBudgetId("")}
-                    style={{
-                      paddingHorizontal: 14,
-                      paddingVertical: 9,
-                      borderRadius: 14,
-                      backgroundColor: !transferBudgetId
-                        ? colors.primaryContainer
-                        : colors.surfaceVariant,
-                      borderWidth: 1,
-                      borderColor: !transferBudgetId ? colors.primary : colors.outlineVariant,
-                    }}>
-                    <Text
-                      style={{
-                        fontSize: 13,
-                        fontWeight: "700",
-                        color: !transferBudgetId
-                          ? colors.onPrimaryContainer
-                          : colors.onSurface,
-                      }}>
-                      None
-                    </Text>
-                  </TouchableOpacity>
-                  {Object.values(budgetsMap)
-                    .filter((b) => !b.deleted)
-                    .map((b) => {
-                      const selected = b.id === transferBudgetId;
-                      return (
-                        <TouchableOpacity
-                          key={`transfer_b_${b.id}`}
-                          onPress={() => setTransferBudgetId(b.id)}
-                          style={{
-                            paddingHorizontal: 14,
-                            paddingVertical: 9,
-                            borderRadius: 14,
-                            backgroundColor: selected
-                              ? colors.primaryContainer
-                              : colors.surfaceVariant,
-                            borderWidth: 1,
-                            borderColor: selected ? colors.primary : colors.outlineVariant,
-                          }}>
-                          <Text
-                            style={{
-                              fontSize: 13,
-                              fontWeight: "700",
-                              color: selected
-                                ? colors.onPrimaryContainer
-                                : colors.onSurface,
-                            }}>
-                            {b.name}
-                          </Text>
-                        </TouchableOpacity>
-                      );
-                    })}
-                </ScrollView>
-              </>
-            )}
 
             {/* TRANSFER AMOUNT */}
             <Text

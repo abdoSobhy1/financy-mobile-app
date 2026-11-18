@@ -1,5 +1,6 @@
 import { createSlice, createAsyncThunk, PayloadAction } from "@reduxjs/toolkit";
 import { Budget, BudgetFormData } from "../../../shared/types";
+import { addMoney, parseMoneyInput, subtractMoney } from "../../../shared/utils";
 import { db } from "../../../infrastructure/database/repositories";
 
 // Async thunks for database operations
@@ -12,10 +13,11 @@ export const fetchBudgetProgress = createAsyncThunk("budgets/fetchBudgetProgress
 });
 
 export const addBudget = createAsyncThunk("budgets/addBudget", async (budgetData: BudgetFormData) => {
+  const parsedAmount = parseMoneyInput(budgetData.amount);
   const budget: Omit<Budget, "id" | "createdAt" | "updatedAt"> = {
     name: budgetData.name,
-    amount: parseFloat(budgetData.amount),
-    currentBalance: parseFloat(budgetData.amount), // Start with full amount
+    amount: parsedAmount,
+    currentBalance: parsedAmount, // Start with full amount
     period: budgetData.period || "monthly",
     alertsEnabled: budgetData.alertsEnabled ?? true,
     resetDay: budgetData.resetDay,
@@ -32,7 +34,7 @@ export const updateBudget = createAsyncThunk("budgets/updateBudget", async ({ id
     budgetUpdates.name = updates.name;
   }
   if (updates.amount !== undefined) {
-    budgetUpdates.amount = parseFloat(updates.amount);
+    budgetUpdates.amount = parseMoneyInput(updates.amount);
   }
   if (updates.resetDay !== undefined) {
     budgetUpdates.resetDay = updates.resetDay;
@@ -114,12 +116,13 @@ const budgetsSlice = createSlice({
       const { budgetId, amount, isIncome } = action.payload;
       const budget = state.items[budgetId];
       if (budget) {
-        const changeAmount = isIncome ? amount : -amount;
-        budget.currentBalance += changeAmount;
+        budget.currentBalance = isIncome
+          ? addMoney(budget.currentBalance, amount)
+          : subtractMoney(budget.currentBalance, amount);
 
         // Update progress
         if (state.progress[budgetId]) {
-          const spent = budget.amount - budget.currentBalance;
+          const spent = subtractMoney(budget.amount, budget.currentBalance);
           state.progress[budgetId] = {
             spent: Math.max(0, spent),
             remaining: Math.max(0, budget.currentBalance),

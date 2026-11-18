@@ -8,7 +8,12 @@ import { fetchBudgets } from "../store/budgetsSlice";
 import { fetchTransactions } from "../../transactions/store/transactionsSlice";
 import { fetchCategories } from "../../categories/store/categoriesSlice";
 import { getCurrentBillingPeriod } from "../utils/billingPeriod";
-import { getDateRangeForBillingPeriod, percentage } from "../../../shared/utils";
+import {
+  getDateRangeForBillingPeriod,
+  percentage,
+  subtractMoney,
+  sumMoney,
+} from "../../../shared/utils";
 import { startOfWeek, endOfWeek } from "date-fns";
 import { BudgetStackParamList } from "../../../shared/types";
 type BudgetListNavigationProp = StackNavigationProp<
@@ -99,15 +104,12 @@ export function useBudgetListScreen() {
     setRefreshing(false);
   };
 
-  const totalBudget = ids.reduce((sum, id) => sum + (budgets[id]?.amount || 0), 0);
+  const totalBudget = sumMoney(ids, (id) => budgets[id]?.amount || 0);
   const totalSpent = progressLoaded
-    ? ids.reduce((sum, id) => {
-      const p = budgetProgressMap[id];
-      return sum + (p ? p.spent : 0);
-    }, 0)
+    ? sumMoney(ids, (id) => budgetProgressMap[id]?.spent || 0)
     : 0;
 
-  const totalRemaining = totalBudget - totalSpent;
+  const totalRemaining = subtractMoney(totalBudget, totalSpent);
   const totalProgressPercentage = totalBudget > 0 ? percentage(totalSpent, totalBudget) : 0;
   const isTotalOver = totalSpent > totalBudget;
   return { navigation, refreshing, progressLoaded, budgetProgressMap, budgets, ids, budgetsLoading, categoriesMap, handleRefresh, totalBudget, totalSpent, totalRemaining, totalProgressPercentage, isTotalOver };

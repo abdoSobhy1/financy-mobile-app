@@ -11,7 +11,12 @@ import { useCustomAlert, useToast } from "../../../shared/ui";
 import NotificationService, { NotificationSettings } from "../../../infrastructure/notifications/notificationService";
 
 import { fetchSettings, updateBillingPeriodStartDay, updateCurrency, updateTheme } from "../store/settingsSlice";
-import { formatRelativeTime, getDateRangeForBillingPeriod } from "../../../shared/utils";
+import {
+  formatRelativeTime,
+  getDateRangeForBillingPeriod,
+  subtractMoney,
+  sumMoney,
+} from "../../../shared/utils";
 import { fetchCategories } from "../../categories/store/categoriesSlice";
 import { fetchTransactions } from "../../transactions/store/transactionsSlice";
 import { syncWithFirebase } from "../../../infrastructure/sync/store/syncSlice";
@@ -288,15 +293,18 @@ export function useSettingsScreen() {
         return acc;
       }, {} as Record<string, any>);
 
-      const totalIncome = filtered
-        .filter((t) => t.type === "income")
-        .reduce((s, t) => s + t.amount, 0);
-      const totalExpenses = filtered
-        .filter((t) => t.type === "expense")
-        .reduce((s, t) => s + t.amount, 0);
-      const totalTransfers = filtered
-        .filter((t) => t.type === "transfer")
-        .reduce((s, t) => s + t.amount, 0);
+      const totalIncome = sumMoney(
+        filtered.filter((t) => t.type === "income"),
+        (t) => t.amount,
+      );
+      const totalExpenses = sumMoney(
+        filtered.filter((t) => t.type === "expense"),
+        (t) => t.amount,
+      );
+      const totalTransfers = sumMoney(
+        filtered.filter((t) => t.type === "transfer"),
+        (t) => t.amount,
+      );
 
       const data: ExportData = {
         exportDate: new Date().toISOString(),
@@ -312,7 +320,7 @@ export function useSettingsScreen() {
           totalIncome,
           totalExpenses,
           totalTransfers,
-          netSavings: totalIncome - totalExpenses,
+          netSavings: subtractMoney(totalIncome, totalExpenses),
         },
       };
 

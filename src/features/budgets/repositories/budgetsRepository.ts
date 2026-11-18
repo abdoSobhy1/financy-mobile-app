@@ -258,10 +258,10 @@ export class BudgetRepository {
       WHERE COALESCE(deleted, 0) = 0
         AND description != 'Balance adjustment'
         AND (budget_id = ? OR (? IS NOT NULL AND category_id = ?))
-        AND (type = 'expense' OR (type = 'transfer' AND budget_id = ?))
+        AND type = 'expense'
         AND date >= ? AND date <= ?
     `,
-      [id, budget.categoryId || null, budget.categoryId || null, id, startDate, endDate]
+      [id, budget.categoryId || null, budget.categoryId || null, startDate, endDate]
     )) as { spent: number } | null;
 
     const spent = spentResult?.spent || 0;

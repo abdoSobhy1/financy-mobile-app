@@ -9,10 +9,20 @@ import { store } from "../store";
 
 import { initializeFirebase } from "../../infrastructure/firebase/client";
 
-import { markSynced as markBudgetSynced } from "../../features/budgets/store/budgetsSlice";
-import { markSynced as markCategorySynced } from "../../features/categories/store/categoriesSlice";
+import {
+  fetchBudgets,
+  markSynced as markBudgetSynced,
+} from "../../features/budgets/store/budgetsSlice";
+import {
+  fetchCategories,
+  markSynced as markCategorySynced,
+} from "../../features/categories/store/categoriesSlice";
 import { markSynced as markDebtSynced } from "../../features/debts/store/debtsSlice";
-import { markSynced as markTransactionSynced } from "../../features/transactions/store/transactionsSlice";
+import {
+  fetchTransactions,
+  markSynced as markTransactionSynced,
+} from "../../features/transactions/store/transactionsSlice";
+import { walletService } from "../../features/wallets/services/walletService";
 import { offlineFirstSync, registerSyncDispatchListener } from "../../infrastructure/sync/OfflineFirstSync";
 import { setLastSync } from "../../infrastructure/sync/store/syncSlice";
 import { registerDeltaSyncListener } from "../../infrastructure/sync/syncService";
@@ -78,11 +88,17 @@ export function useAppBootstrap() {
         const dbManager = DatabaseManager.getInstance();
         await dbManager.init();
 
-        // Hydrate theme & currency settings early
+        // Hydrate settings, wallets, and core dashboard state before hiding splash screen
         try {
-          await store.dispatch(fetchSettings()).unwrap();
+          await Promise.all([
+            store.dispatch(fetchSettings()),
+            store.dispatch(fetchTransactions()),
+            store.dispatch(fetchCategories()),
+            store.dispatch(fetchBudgets()),
+            walletService.getWallets(),
+          ]);
         } catch (e) {
-          console.warn("Could not pre-fetch settings:", e);
+          console.warn("Could not pre-fetch initial dashboard state:", e);
         }
 
         // Initialize sync service (includes network listener and periodic sync)

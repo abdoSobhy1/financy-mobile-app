@@ -11,6 +11,7 @@ import { fetchDebts, deletePayment } from "../store/debtsSlice";
 import { DebtPayment } from "../../../shared/types";
 
 import { DebtStackParamList } from "../../../shared/types";
+import { isZeroMoney, normalizeMoney, sumMoney } from "../../../shared/utils";
 import { db } from "../../../infrastructure/database/repositories";
 
 type DebtPaymentsScreenNavigationProp = StackNavigationProp<
@@ -107,16 +108,13 @@ export function useDebtPaymentsScreen() {
   };
 
   // ── Computed stats ─────────────────────────────────────────
-  const totalPaid = payments.reduce((sum, p) => sum + p.amount, 0);
-  const totalPrincipal = payments.reduce(
-    (sum, p) => sum + (p.principal || 0),
-    0,
-  );
-  const totalInterest = payments.reduce((sum, p) => sum + (p.interest || 0), 0);
-  const avgPayment = payments.length > 0 ? totalPaid / payments.length : 0;
+  const totalPaid = sumMoney(payments, (p) => p.amount);
+  const totalPrincipal = sumMoney(payments, (p) => p.principal || 0);
+  const totalInterest = sumMoney(payments, (p) => p.interest || 0);
+  const avgPayment = payments.length > 0 ? normalizeMoney(totalPaid / payments.length) : 0;
   const latestPaymentDate =
     payments.length > 0 ? payments[0].paymentDate : null;
-  const isPaidOff = Boolean(debt && debt.currentBalance <= 0.005);
+  const isPaidOff = Boolean(debt && isZeroMoney(debt.currentBalance));
   return {
     navigation,
     debtName,

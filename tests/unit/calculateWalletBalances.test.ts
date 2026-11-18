@@ -322,14 +322,12 @@ const wallets: WalletAccount[] = [
   assertStrictEqual(walletService.isSecretTransaction(secretSourceTx, secretIds), true);
   assertStrictEqual(walletService.isSecretTransaction(transferToSecretTx, secretIds), true);
 
-  // Excluded from totals when NO budget:
+  // Always excluded from public totals when involving a secret wallet:
   assertStrictEqual(walletService.isSecretTransactionExcluded(normalTx, secretIds), false);
   assertStrictEqual(walletService.isSecretTransactionExcluded(secretSourceTx, secretIds), true);
   assertStrictEqual(walletService.isSecretTransactionExcluded(transferToSecretTx, secretIds), true);
-
-  // Affects totals (NOT excluded) when it HAS a budget:
-  assertStrictEqual(walletService.isSecretTransactionExcluded(secretBudgetedTx, secretIds), false);
-  assertStrictEqual(walletService.isSecretTransactionExcluded(transferToSecretWithBudgetTx, secretIds), false);
+  assertStrictEqual(walletService.isSecretTransactionExcluded(secretBudgetedTx, secretIds), true);
+  assertStrictEqual(walletService.isSecretTransactionExcluded(transferToSecretWithBudgetTx, secretIds), true);
 
   console.log("✓ Test 9: Secret wallet helper functions passed");
 }

@@ -1,6 +1,11 @@
 import { Alert } from "react-native";
 import { deleteBudget } from "../store/budgetsSlice";
-import { percentage, getDateRangeForBillingPeriod } from "../../../shared/utils";
+import {
+  percentage,
+  getDateRangeForBillingPeriod,
+  subtractMoney,
+  sumMoney,
+} from "../../../shared/utils";
 import { useMemo } from "react";
 
 import { useDispatch, useSelector } from "react-redux";
@@ -48,8 +53,8 @@ export function useBudgetDetailsScreen() {
       })
       .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
   }, [transactions, budget, budgetId, periodRange]);
-  const spent = budgetTransactions.reduce((sum, tx) => sum + tx.amount, 0);
-  const remaining = (budget?.amount ?? 0) - spent;
+  const spent = sumMoney(budgetTransactions, (tx) => tx.amount);
+  const remaining = subtractMoney(budget?.amount ?? 0, spent);
   const progressPercentage = percentage(spent, budget?.amount ?? 0);
   const isOver = spent > (budget?.amount ?? 0);
   const daysLeft = Math.max(1, Math.ceil((periodRange.end.getTime() - Date.now()) / (1000 * 60 * 60 * 24)));

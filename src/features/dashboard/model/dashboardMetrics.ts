@@ -1,4 +1,5 @@
 import { Budget, Category, Transaction } from "../../../shared/types";
+import { addMoney, subtractMoney, sumMoney } from "../../../shared/utils";
 import { walletService } from "../../wallets/services/walletService";
 
 export interface QuickAddSlot {
@@ -15,6 +16,51 @@ export interface OverspentBudgetAlert {
   excess: number;
   spent: number;
   amount: number;
+}
+
+export interface SparklinePaths {
+  strokePath: string;
+  fillPath: string;
+}
+
+export function generateSmoothPath(
+  data: number[],
+  width: number,
+  height: number,
+): SparklinePaths {
+  if (data.length < 2) {
+    const midY = height / 2;
+    return {
+      strokePath: `M 0 ${midY} L ${width} ${midY}`,
+      fillPath: `M 0 ${midY} L ${width} ${midY} L ${width} ${height} L 0 ${height} Z`,
+    };
+  }
+
+  const max = Math.max(...data);
+  const min = Math.min(...data);
+  const range = max - min || 1;
+
+  const stepX = width / (data.length - 1);
+  const padding = height * 0.2;
+  const drawHeight = height - padding * 2;
+
+  const points = data.map((val, i) => ({
+    x: i * stepX,
+    y: height - padding - ((val - min) / range) * drawHeight,
+  }));
+
+  let d = `M ${points[0].x} ${points[0].y}`;
+  for (let i = 0; i < points.length - 1; i++) {
+    const p0 = points[i];
+    const p1 = points[i + 1];
+    const cx = (p0.x + p1.x) / 2;
+    d += ` C ${cx} ${p0.y}, ${cx} ${p1.y}, ${p1.x} ${p1.y}`;
+  }
+
+  return {
+    strokePath: d,
+    fillPath: `${d} L ${width} ${height} L 0 ${height} Z`,
+  };
 }
 
 export function computeTopExpenseCategories(
@@ -124,45 +170,39 @@ export function computeDashboardMetrics(params: {
   });
   const publicPeriodTxs = periodTxs.filter((t) => !isSecretExcluded(t));
 
-  const totalIncome = publicPeriodTxs
-    .filter((t) => t.type === "income" && !isAdjustment(t))
-    .reduce((sum, t) => sum + t.amount, 0);
+  const totalIncome = sumMoney(
+    publicPeriodTxs.filter((t) => t.type === "income" && !isAdjustment(t)),
+    (t) => t.amount,
+  );
 
-  const totalExpenses = publicPeriodTxs
-    .filter(
-      (t) =>
-        !isAdjustment(t) &&
-        (t.type === "expense" || (t.type === "transfer" && Boolean(t.budgetId))),
-    )
-    .reduce((sum, t) => sum + t.amount, 0);
+  const totalExpenses = sumMoney(
+    publicPeriodTxs.filter((t) => !isAdjustment(t) && t.type === "expense"),
+    (t) => t.amount,
+  );
 
-  const budgetedExpenses = publicPeriodTxs
-    .filter(
-      (t) =>
-        !isAdjustment(t) &&
-        Boolean(t.budgetId) &&
-        (t.type === "expense" || t.type === "transfer"),
-    )
-    .reduce((sum, t) => sum + t.amount, 0);
+  const budgetedExpenses = sumMoney(
+    publicPeriodTxs.filter(
+      (t) => !isAdjustment(t) && Boolean(t.budgetId) && t.type === "expense",
+    ),
+    (t) => t.amount,
+  );
 
-  const balance = totalIncome - totalExpenses;
+  const balance = subtractMoney(totalIncome, totalExpenses);
 
   const prevPeriodTxs = allTransactions.filter((t) => {
     const d = new Date(t.date);
     return d >= prevStart && d <= prevEnd;
   });
   const prevPublicPeriodTxs = prevPeriodTxs.filter((t) => !isSecretExcluded(t));
-  const prevIncome = prevPublicPeriodTxs
-    .filter((t) => t.type === "income" && !isAdjustment(t))
-    .reduce((sum, t) => sum + t.amount, 0);
-  const prevExpenses = prevPublicPeriodTxs
-    .filter(
-      (t) =>
-        !isAdjustment(t) &&
-        (t.type === "expense" || (t.type === "transfer" && Boolean(t.budgetId))),
-    )
-    .reduce((sum, t) => sum + t.amount, 0);
-  const previousBalance = prevIncome - prevExpenses;
+  const prevIncome = sumMoney(
+    prevPublicPeriodTxs.filter((t) => t.type === "income" && !isAdjustment(t)),
+    (t) => t.amount,
+  );
+  const prevExpenses = sumMoney(
+    prevPublicPeriodTxs.filter((t) => !isAdjustment(t) && t.type === "expense"),
+    (t) => t.amount,
+  );
+  const previousBalance = subtractMoney(prevIncome, prevExpenses);
 
   let balanceChangePct = 0;
   if (previousBalance !== 0) {
@@ -173,55 +213,51 @@ export function computeDashboardMetrics(params: {
   }
 
   const activeBudgets = Object.values(budgetsMap).filter((b) => !b.deleted);
-  const totalBudget = activeBudgets.reduce((sum, b) => sum + b.amount, 0);
+  const totalBudget = sumMoney(activeBudgets, (b) => b.amount);
 
   const overspentBudgets: OverspentBudgetAlert[] = [];
-  activeBudgets.forEach((b) => {
+  for (const b of activeBudgets) {
     if (b.alertsEnabled !== false && b.amount > 0) {
-      const spent = publicPeriodTxs
-        .filter(
+      const spent = sumMoney(
+        publicPeriodTxs.filter(
           (t) =>
             (t.budgetId === b.id ||
               (Boolean(b.categoryId) && t.categoryId === b.categoryId)) &&
-            (t.type === "expense" ||
-              (t.type === "transfer" && t.budgetId === b.id)) &&
+            t.type === "expense" &&
             !isAdjustment(t),
-        )
-        .reduce((sum, t) => sum + t.amount, 0);
+        ),
+        (t) => t.amount,
+      );
       if (spent > b.amount) {
         overspentBudgets.push({
           id: b.id,
           name: b.name,
-          excess: spent - b.amount,
+          excess: subtractMoney(spent, b.amount),
           spent,
           amount: b.amount,
         });
       }
     }
-  });
+  }
 
   const sortedPeriodTxs = [...publicPeriodTxs]
-    .filter(
-      (t) =>
-        !isAdjustment(t) && (t.type !== "transfer" || Boolean(t.budgetId)),
-    )
+    .filter((t) => !isAdjustment(t) && t.type !== "transfer")
     .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
 
   let runningBalance = 0;
   const balanceHistory = [0];
-  sortedPeriodTxs.forEach((t) => {
+  for (const t of sortedPeriodTxs) {
     if (t.type === "income") {
-      runningBalance += t.amount;
+      runningBalance = addMoney(runningBalance, t.amount);
       balanceHistory.push(runningBalance);
-    } else if (
-      t.type === "expense" ||
-      (t.type === "transfer" && Boolean(t.budgetId))
-    ) {
-      runningBalance -= t.amount;
+    } else if (t.type === "expense") {
+      runningBalance = subtractMoney(runningBalance, t.amount);
       balanceHistory.push(runningBalance);
     }
-  });
-  if (balanceHistory.length < 2) balanceHistory.push(runningBalance);
+  }
+  if (balanceHistory.length < 2) {
+    balanceHistory.push(runningBalance);
+  }
 
   const nonSecretTransactions = allTransactions.filter(
     (t) => !isSecretExcluded(t),

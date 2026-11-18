@@ -4,6 +4,7 @@ import { createSelector } from "@reduxjs/toolkit";
 import { RootState } from "../../../app/store";
 import { format, parseISO, subDays, subMonths, startOfMonth, endOfMonth } from "date-fns";
 import { Transaction, Category, Budget, Debt, DebtPayment } from "../../../shared/types";
+import { addMoney, subtractMoney, sumMoney } from "../../../shared/utils";
 import { walletService } from "../../wallets/services/walletService";
 
 const EMPTY_RECORD: Record<string, never> = {};
@@ -134,9 +135,9 @@ export const useAnalysisData = (
 
       const transactionDate = parseISO(transaction.date);
 
-      // Exclude pure transfers (without a budget) and balance adjustments from income/expense analysis
+      // Exclude transfers and balance adjustments from income/expense analysis
       if (
-        (transaction.type === "transfer" && !transaction.budgetId) ||
+        transaction.type === "transfer" ||
         transaction.description === "Balance adjustment"
       ) {
         return false;
@@ -176,22 +177,20 @@ export const useAnalysisData = (
     const categoryMap = new Map(categories.map((cat) => [cat.id, cat]));
 
     // Calculate summary
-    const summary = filteredTransactions.reduce(
-      (acc, transaction) => {
-        if (transaction.type === "income") {
-          acc.totalIncome += transaction.amount;
-        } else if (
-          transaction.type === "expense" ||
-          (transaction.type === "transfer" && Boolean(transaction.budgetId))
-        ) {
-          acc.totalExpenses += transaction.amount;
-        }
-        acc.transactionCount++;
-        return acc;
-      },
-      { totalIncome: 0, totalExpenses: 0, balance: 0, transactionCount: 0 }
+    const totalIncome = sumMoney(
+      filteredTransactions.filter((t) => t.type === "income"),
+      (t) => t.amount,
     );
-    summary.balance = summary.totalIncome - summary.totalExpenses;
+    const totalExpenses = sumMoney(
+      filteredTransactions.filter((t) => t.type === "expense"),
+      (t) => t.amount,
+    );
+    const summary = {
+      totalIncome,
+      totalExpenses,
+      balance: subtractMoney(totalIncome, totalExpenses),
+      transactionCount: filteredTransactions.length,
+    };
 
     // Calculate category breakdown
     const categoryBreakdown = new Map<string, { amount: number; count: number }>();
@@ -200,7 +199,7 @@ export const useAnalysisData = (
       if (transaction.categoryId) {
         const existing = categoryBreakdown.get(transaction.categoryId) || { amount: 0, count: 0 };
         categoryBreakdown.set(transaction.categoryId, {
-          amount: existing.amount + transaction.amount,
+          amount: addMoney(existing.amount, transaction.amount),
           count: existing.count + 1,
         });
       }
@@ -226,7 +225,7 @@ export const useAnalysisData = (
     const trendTransactions = transactions.filter((transaction) => {
       if (walletService.isSecretTransactionExcluded(transaction, secretWalletIds)) return false;
       if (
-        (transaction.type === "transfer" && !transaction.budgetId) ||
+        transaction.type === "transfer" ||
         transaction.description === "Balance adjustment"
       ) {
         return false;
@@ -262,26 +261,20 @@ export const useAnalysisData = (
         return date >= monthStart && date <= monthEnd;
       });
 
-      const monthData = monthTransactions.reduce(
-        (acc, transaction) => {
-          if (transaction.type === "income") {
-            acc.income += transaction.amount;
-          } else if (
-            transaction.type === "expense" ||
-            (transaction.type === "transfer" && Boolean(transaction.budgetId))
-          ) {
-            acc.expenses += transaction.amount;
-          }
-          return acc;
-        },
-        { income: 0, expenses: 0 }
+      const monthIncome = sumMoney(
+        monthTransactions.filter((t) => t.type === "income"),
+        (t) => t.amount,
+      );
+      const monthExpenses = sumMoney(
+        monthTransactions.filter((t) => t.type === "expense"),
+        (t) => t.amount,
       );
 
       monthlyTrends.push({
         month: format(monthStart, "MMM yyyy"),
-        income: monthData.income,
-        expenses: monthData.expenses,
-        balance: monthData.income - monthData.expenses,
+        income: monthIncome,
+        expenses: monthExpenses,
+        balance: subtractMoney(monthIncome, monthExpenses),
       });
     }
 
@@ -290,7 +283,7 @@ export const useAnalysisData = (
       .map((budget) => {
         const budgetTransactions = filteredTransactions.filter((transaction) => transaction.budgetId === budget.id);
 
-        const used = budgetTransactions.reduce((sum, transaction) => sum + transaction.amount, 0);
+        const used = sumMoney(budgetTransactions, (transaction) => transaction.amount);
         const percentage = budget.amount > 0 ? (used / budget.amount) * 100 : 0;
 
         let status: "under" | "over" | "exact" = "under";
@@ -307,25 +300,24 @@ export const useAnalysisData = (
       .sort((a, b) => b.percentage - a.percentage);
 
     // Calculate debt overview
+    const debtItems = debts.map((debt) => {
+      const payments = debtPayments.filter((payment) => payment.debtId === debt.id);
+      const totalPaid = sumMoney(payments, (payment) => payment.amount);
+      const remainingAmount = Math.max(0, subtractMoney(debt.totalAmount || 0, totalPaid));
+
+      return {
+        debt,
+        totalPaid,
+        remainingAmount,
+      };
+    });
+
     const debtOverview = {
-      totalDebt: debts.reduce((sum, debt) => sum + (debt.totalAmount || 0), 0),
-      totalPaid: 0,
-      remainingDebt: 0,
-      debts: debts.map((debt) => {
-        const payments = debtPayments.filter((payment) => payment.debtId === debt.id);
-        const totalPaid = payments.reduce((sum, payment) => sum + payment.amount, 0);
-        const remainingAmount = Math.max(0, (debt.totalAmount || 0) - totalPaid);
-
-        return {
-          debt,
-          totalPaid,
-          remainingAmount,
-        };
-      }),
+      totalDebt: sumMoney(debts, (debt) => debt.totalAmount || 0),
+      totalPaid: sumMoney(debtItems, (item) => item.totalPaid),
+      remainingDebt: sumMoney(debtItems, (item) => item.remainingAmount),
+      debts: debtItems,
     };
-
-    debtOverview.totalPaid = debtOverview.debts.reduce((sum, item) => sum + item.totalPaid, 0);
-    debtOverview.remainingDebt = debtOverview.debts.reduce((sum, item) => sum + item.remainingAmount, 0);
 
     // Calculate top categories
     const topCategories = {

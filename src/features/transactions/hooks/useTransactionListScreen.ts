@@ -17,7 +17,7 @@ import { walletService } from "../../wallets/services/walletService";
 import { useToast } from "../../../shared/ui";
 
 import { useTransactionActions } from "./useTransactionActions";
-import { getDateRangeForBillingPeriod } from "../../../shared/utils";
+import { getDateRangeForBillingPeriod, sumMoney } from "../../../shared/utils";
 import { format, isToday, isYesterday, startOfDay, endOfDay, subDays, startOfYear, endOfYear } from "date-fns";
 
 type NavigationProp = StackNavigationProp<
@@ -412,12 +412,12 @@ export function useTransactionListScreen() {
 
     return Object.keys(groups).map((title) => {
       const data = groups[title];
-      const dailyTotal = data.reduce((sum, t) => {
-        if (isExcludedFromCalculations(t)) return sum;
-        if (t.type === "income") return sum + t.amount;
-        if (t.type === "expense") return sum - t.amount;
-        return sum;
-      }, 0);
+      const dailyTotal = sumMoney(data, (t) => {
+        if (isExcludedFromCalculations(t)) return 0;
+        if (t.type === "income") return t.amount;
+        if (t.type === "expense") return -t.amount;
+        return 0;
+      });
 
       return {
         title,
@@ -429,10 +429,10 @@ export function useTransactionListScreen() {
   }, [filteredTransactions, isExcludedFromCalculations]);
 
   const totalAmount = useMemo(() => {
-    return filteredTransactions.reduce((sum, t) => {
-      if (isExcludedFromCalculations(t)) return sum;
-      return t.type === "income" ? sum + t.amount : sum - t.amount;
-    }, 0);
+    return sumMoney(filteredTransactions, (t) => {
+      if (isExcludedFromCalculations(t)) return 0;
+      return t.type === "income" ? t.amount : -t.amount;
+    });
   }, [filteredTransactions, isExcludedFromCalculations]);
 
   const allCategoriesList = useMemo(

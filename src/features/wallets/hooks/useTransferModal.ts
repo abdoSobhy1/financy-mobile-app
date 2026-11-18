@@ -1,15 +1,16 @@
 import { useState, useEffect, useRef } from "react";
 import { TextInput } from "react-native";
 
-import { useDispatch, useSelector } from "react-redux";
+import { useDispatch } from "react-redux";
 import { WalletAccount } from "../../../shared/types";
 
 import { useToast } from "../../../shared/ui";
-import { AppDispatch, RootState } from "../../../app/store";
+import { AppDispatch } from "../../../app/store";
 import { fetchTransactions } from "../../transactions/store/transactionsSlice";
 import { walletService } from "../services/walletService";
-import { formatCurrency, parseMoneyInput } from "../../../shared/utils";
+import { parseMoneyInput } from "../../../shared/utils";
 import { useUnsavedChanges } from "../../../shared/hooks";
+
 export interface TransferModalProps {
   visible: boolean;
   onClose: () => void;
@@ -18,6 +19,7 @@ export interface TransferModalProps {
   initialToWalletId?: string;
   onSuccess?: (fromId: string, toId: string, amount: number) => Promise<void> | void;
 }
+
 export function useTransferModal({
   visible,
   onClose,
@@ -26,16 +28,12 @@ export function useTransferModal({
   initialToWalletId,
   onSuccess,
 }: TransferModalProps) {
-
   const dispatch = useDispatch<AppDispatch>();
   const { showSuccess, showError, showInfo } = useToast();
-
-  const budgetsMap = useSelector((state: RootState) => state.budgets.items);
 
   const [fromWalletId, setFromWalletId] = useState<string>("");
   const [toWalletId, setToWalletId] = useState<string>("");
   const [transferAmount, setTransferAmount] = useState<string>("");
-  const [transferBudgetId, setTransferBudgetId] = useState<string>("");
   const [transferError, setTransferError] = useState<string>("");
   const [loading, setLoading] = useState(false);
 
@@ -52,7 +50,6 @@ export function useTransferModal({
       }
 
       setTransferAmount("");
-      setTransferBudgetId("");
       setTransferError("");
       setLoading(false);
 
@@ -64,8 +61,8 @@ export function useTransferModal({
       const defaultToCandidates = visibleWallets.filter((w) => w.id !== defaultFrom);
       const defaultTo =
         initialToWalletId &&
-          initialToWalletId !== defaultFrom &&
-          defaultToCandidates.some((w) => w.id === initialToWalletId)
+        initialToWalletId !== defaultFrom &&
+        defaultToCandidates.some((w) => w.id === initialToWalletId)
           ? initialToWalletId
           : defaultToCandidates[0]?.id || "";
 
@@ -78,7 +75,6 @@ export function useTransferModal({
     setFromWalletId(newFromId);
     if (transferError) setTransferError("");
 
-    // If destination is now the same as source, pick the first other available wallet
     if (toWalletId === newFromId) {
       const otherCandidate = visibleWallets.find((w) => w.id !== newFromId);
       if (otherCandidate) {
@@ -105,51 +101,8 @@ export function useTransferModal({
     setTransferError("");
 
     try {
-      await walletService.transferBetweenWallets(
-        fromWalletId,
-        toWalletId,
-        amt,
-        transferBudgetId || undefined,
-      );
-
+      await walletService.transferBetweenWallets(fromWalletId, toWalletId, amt);
       await dispatch(fetchTransactions());
-
-      // If budget assigned, trigger notification if over 80%
-      if (transferBudgetId) {
-        const targetBudget = budgetsMap[transferBudgetId];
-        if (targetBudget && !targetBudget.deleted && targetBudget.alertsEnabled !== false) {
-          try {
-            const now = new Date();
-            const isWeekly = targetBudget.period === "weekly";
-            const diffToMon = (now.getDay() + 6) % 7;
-            const start = isWeekly
-              ? new Date(now.getFullYear(), now.getMonth(), now.getDate() - diffToMon, 0, 0, 0, 0)
-              : new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0, 0);
-            const end = isWeekly
-              ? new Date(now.getFullYear(), now.getMonth(), now.getDate() - diffToMon + 6, 23, 59, 59, 999)
-              : new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
-
-            const { db } = require("../../../infrastructure/database/repositories");
-            const progress = await db.budgets.getBudgetProgressForPeriod(
-              targetBudget.id,
-              start.toISOString(),
-              end.toISOString(),
-            );
-            if (progress && progress.percentageUsed >= 80) {
-              const NotificationService = require(
-                "../../../infrastructure/notifications/notificationService"
-              ).default;
-              await NotificationService.getInstance().sendBudgetAlertNotification(
-                targetBudget.name,
-                formatCurrency(progress.spent),
-                formatCurrency(targetBudget.amount),
-                progress.percentageUsed,
-                targetBudget.id,
-              );
-            }
-          } catch { }
-        }
-      }
 
       showSuccess("Transfer completed successfully");
       await onSuccess?.(fromWalletId, toWalletId, amt);
@@ -169,9 +122,23 @@ export function useTransferModal({
     enabled: visible,
   });
 
-  // Only wallets other than fromWalletId can be selected as destination
   const destinationOptions = visibleWallets.filter((w) => w.id !== fromWalletId);
-  return { budgetsMap, fromWalletId, toWalletId, setToWalletId, transferAmount, setTransferAmount, transferBudgetId, setTransferBudgetId, transferError, setTransferError, loading, amountInputRef, visibleWallets, handleFromWalletChange, handleTransferSubmit, confirmExit, destinationOptions };
+  return {
+    fromWalletId,
+    toWalletId,
+    setToWalletId,
+    transferAmount,
+    setTransferAmount,
+    transferError,
+    setTransferError,
+    loading,
+    amountInputRef,
+    visibleWallets,
+    handleFromWalletChange,
+    handleTransferSubmit,
+    confirmExit,
+    destinationOptions,
+  };
 }
 
 export type TransferModalController = ReturnType<typeof useTransferModal>;

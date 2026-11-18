@@ -5,12 +5,16 @@ import {
   TransactionFormData,
 } from "../../../shared/types";
 import { db } from "../../../infrastructure/database/repositories";
-import { formatCurrency, getDateRangeForBillingPeriod } from "../../../shared/utils";
+import {
+  formatCurrency,
+  getDateRangeForBillingPeriod,
+  parseMoneyInput,
+} from "../../../shared/utils";
 import { startOfWeek, endOfWeek } from "date-fns";
 
 async function checkAndTriggerBudgetAlert(tx: Transaction, state: any) {
   try {
-    if (tx.type !== "expense" && !(tx.type === "transfer" && Boolean(tx.budgetId))) return;
+    if (tx.type !== "expense") return;
     const budgetsMap = state?.budgets?.items || {};
     const settingsData = state?.settings?.data;
     const allBudgets = Object.values(budgetsMap) as any[];
@@ -66,7 +70,7 @@ export const addTransaction = createAsyncThunk(
   "transactions/addTransaction",
   async (transactionData: TransactionFormData, { getState }) => {
     const transaction: Omit<Transaction, "id" | "createdAt"> = {
-      amount: parseFloat(transactionData.amount),
+      amount: parseMoneyInput(transactionData.amount),
       type: transactionData.type,
       categoryId: transactionData.categoryId,
       budgetId: transactionData.budgetId,
@@ -99,7 +103,7 @@ export const updateTransaction = createAsyncThunk(
       {};
 
     if (updates.amount !== undefined) {
-      transactionUpdates.amount = parseFloat(updates.amount);
+      transactionUpdates.amount = parseMoneyInput(updates.amount);
     }
     if (updates.type !== undefined) {
       transactionUpdates.type = updates.type;

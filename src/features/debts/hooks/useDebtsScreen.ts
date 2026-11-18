@@ -8,6 +8,7 @@ import { StackNavigationProp } from "@react-navigation/stack";
 import { RootState, AppDispatch } from "../../../app/store";
 import { fetchDebts } from "../store/debtsSlice";
 import { DebtStackParamList } from "../../../shared/types";
+import { isZeroMoney, subtractMoney, sumMoney } from "../../../shared/utils";
 
 type DebtsScreenNavigationProp = StackNavigationProp<
   DebtStackParamList,
@@ -39,19 +40,19 @@ export function useDebtsScreen() {
     .filter((d) => d && !d.deleted);
 
   // Compute real stats using debt.type ("owed_to_me" vs "i_owe")
-  const iOweList = debts.filter((d) => d.type !== "owed_to_me" && d.currentBalance > 0.005);
-  const owedToMeList = debts.filter((d) => d.type === "owed_to_me" && d.currentBalance > 0.005);
+  const iOweList = debts.filter((d) => d.type !== "owed_to_me" && !isZeroMoney(d.currentBalance));
+  const owedToMeList = debts.filter((d) => d.type === "owed_to_me" && !isZeroMoney(d.currentBalance));
   const overdueList = debts.filter(
     (d) =>
-      d.currentBalance > 0.005 && d.dueDate && new Date(d.dueDate) < new Date()
+      !isZeroMoney(d.currentBalance) && d.dueDate && new Date(d.dueDate) < new Date()
   );
 
-  const totalYouOwe = iOweList.reduce((sum, d) => sum + d.currentBalance, 0);
-  const totalOwedToYou = owedToMeList.reduce(
-    (sum, d) => sum + Math.abs(d.currentBalance),
-    0
+  const totalYouOwe = sumMoney(iOweList, (d) => d.currentBalance);
+  const totalOwedToYou = sumMoney(
+    owedToMeList,
+    (d) => Math.abs(d.currentBalance)
   );
-  const netPosition = totalOwedToYou - totalYouOwe;
+  const netPosition = subtractMoney(totalOwedToYou, totalYouOwe);
 
   const [filter, setFilter] = useState<
     "All Debts" | "Owed to Me" | "I Owe" | "Overdue" | "Paid Off"
@@ -62,9 +63,9 @@ export function useDebtsScreen() {
     if (filter === "I Owe") return d.type !== "owed_to_me";
     if (filter === "Overdue")
       return (
-        d.currentBalance > 0.005 && d.dueDate && new Date(d.dueDate) < new Date()
+        !isZeroMoney(d.currentBalance) && d.dueDate && new Date(d.dueDate) < new Date()
       );
-    if (filter === "Paid Off") return d.currentBalance <= 0.005;
+    if (filter === "Paid Off") return isZeroMoney(d.currentBalance);
     return true;
   });
   return {
