@@ -3,6 +3,12 @@ import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { useSelector, useDispatch } from "react-redux";
 import { RootState, AppDispatch } from "../../../app/store";
 import { WalletAccount, WalletType } from "../../../shared/types";
+import {
+  isZeroMoney,
+  parseMoneyInput,
+  subtractMoney,
+  sumMoney,
+} from "../../../shared/utils";
 import { walletService } from "../services/walletService";
 import { fetchTransactions } from "../../transactions/store/transactionsSlice";
 
@@ -65,9 +71,10 @@ export function useWalletManagementScreen() {
   }, [dispatch, loadWallets]);
 
   const totalNetWorth = useMemo(() => {
-    return wallets
-      .filter((w) => !walletService.isSecretWallet(w))
-      .reduce((sum, w) => sum + (walletBalances[w.id] || 0), 0);
+    return sumMoney(
+      wallets.filter((w) => !walletService.isSecretWallet(w)),
+      (w) => walletBalances[w.id] || 0,
+    );
   }, [wallets, walletBalances]);
 
   const filteredWallets = useMemo(() => {
@@ -103,14 +110,14 @@ export function useWalletManagementScreen() {
     }
 
     isSavingWalletRef.current = true;
-    const initBal = parseFloat(values.initialBalance.replace(/,/g, "")) || 0;
+    const initBal = parseMoneyInput(values.initialBalance);
     try {
       if (editingWallet) {
-        const enteredBal = parseFloat(values.initialBalance.replace(/,/g, "")) || 0;
+        const enteredBal = parseMoneyInput(values.initialBalance);
         const currentBal = walletBalances[editingWallet.id] || 0;
-        const diff = enteredBal - currentBal;
+        const diff = subtractMoney(enteredBal, currentBal);
 
-        if (Math.abs(diff) > 0.001) {
+        if (!isZeroMoney(diff)) {
           const { db } = require("../../../infrastructure/database/repositories");
           await db.transactions.createTransaction({
             amount: Math.abs(diff),

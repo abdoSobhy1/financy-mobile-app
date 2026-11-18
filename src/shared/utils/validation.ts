@@ -1,5 +1,6 @@
 // Data validation and cleaning utilities for Firebase sync
 import { Transaction, TransactionType } from "../types";
+import { normalizeMoney } from "./money";
 import { normalizeSyncTimestamp } from "./syncTimestamp";
 
 /**
@@ -80,8 +81,8 @@ export const cleanTransactionData = (transaction: any): any => {
     toAccountId: transaction.toAccountId || transaction.to_account_id || null,
     receiptUri: transaction.receiptUri || null,
     note: transaction.note?.trim() || null,
-    // Ensure numbers are properly typed
-    amount: Number(transaction.amount),
+    // Ensure numbers are properly typed and normalized to minor units
+    amount: normalizeMoney(transaction.amount),
   };
 
   // Handle date fields safely
@@ -127,8 +128,8 @@ export const cleanBudgetData = (budget: any): any => {
   const cleaned = {
     ...budget,
     name: budget.name?.trim() || "",
-    amount: Number(budget.amount),
-    currentBalance: Number(budget.currentBalance) || Number(budget.amount),
+    amount: normalizeMoney(budget.amount),
+    currentBalance: normalizeMoney(budget.currentBalance ?? budget.amount),
     period: budget.period === "weekly" ? "weekly" : "monthly",
     alertsEnabled: budget.alertsEnabled === false ? false : true,
     resetDay: Number(budget.resetDay) || 1,
@@ -340,12 +341,16 @@ export const cleanDebtData = (debt: any): any => {
     ...debt,
     type: debt.type === "owed_to_me" || debt.debt_type === "owed_to_me" ? "owed_to_me" : "i_owe",
     // Ensure required numeric fields are properly typed and preserve 0 for paid-off debts
-    totalAmount: Number(rawTotalAmount),
-    currentBalance: Number(rawCurrentBalance),
+    totalAmount: normalizeMoney(rawTotalAmount),
+    currentBalance: normalizeMoney(rawCurrentBalance),
     // Ensure optional numeric fields are properly typed
     interestRate: debt.interestRate !== undefined ? Number(debt.interestRate) : debt.interest_rate !== undefined ? Number(debt.interest_rate) : null,
     minimumPayment:
-      debt.minimumPayment !== undefined ? Number(debt.minimumPayment) : debt.minimum_payment !== undefined ? Number(debt.minimum_payment) : null,
+      debt.minimumPayment !== undefined && debt.minimumPayment !== null
+        ? normalizeMoney(debt.minimumPayment)
+        : debt.minimum_payment !== undefined && debt.minimum_payment !== null
+        ? normalizeMoney(debt.minimum_payment)
+        : null,
     // Ensure string fields are properly typed
     name: String(debt.name || "Unnamed Debt"),
     creditor: debt.creditor ? String(debt.creditor) : null,
@@ -417,9 +422,9 @@ export const cleanDebtPaymentData = (payment: any): any => {
   const cleaned = {
     ...payment,
     // Ensure required numeric fields are properly typed and have valid values
-    amount: Number(payment.amount || 0),
-    principal: Number(payment.principal || payment.amount || 0),
-    interest: Number(payment.interest || 0),
+    amount: normalizeMoney(payment.amount || 0),
+    principal: normalizeMoney(payment.principal || payment.amount || 0),
+    interest: normalizeMoney(payment.interest || 0),
     // Ensure required string fields
     debtId: payment.debtId || payment.debt_id || "",
     id: payment.id || `payment_${Date.now()}`,

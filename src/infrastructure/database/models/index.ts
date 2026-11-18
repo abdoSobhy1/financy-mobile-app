@@ -1,4 +1,5 @@
 import { Transaction, Category, Budget, Settings, Debt, DebtPayment, WalletAccount, WalletType } from "../../../shared/types";
+import { normalizeMoney } from "../../../shared/utils";
 
 // Database table schemas
 export interface WalletTable {
@@ -124,7 +125,7 @@ export interface DebtPaymentTable {
 // Model transformation functions
 export const transformTransaction = (row: TransactionTable): Transaction => ({
   id: row.id,
-  amount: row.amount,
+  amount: normalizeMoney(row.amount),
   type: row.type as Transaction["type"],
   categoryId: row.category_id || undefined,
   budgetId: row.budget_id,
@@ -160,8 +161,8 @@ export const transformCategory = (row: CategoryTable): Category => ({
 export const transformBudget = (row: BudgetTable): Budget => ({
   id: row.id,
   name: row.name,
-  amount: row.amount,
-  currentBalance: row.current_balance,
+  amount: normalizeMoney(row.amount),
+  currentBalance: normalizeMoney(row.current_balance),
   period: (row.period_type as "weekly" | "monthly") || "monthly",
   alertsEnabled: row.alerts_enabled !== undefined && row.alerts_enabled !== null ? Boolean(row.alerts_enabled) : true,
   resetDay: row.reset_day,
@@ -190,7 +191,7 @@ export const transformSettings = (row: SettingsTable): Settings => ({
 
 // Table conversion functions (for inserts/updates)
 export const toTransactionTable = (transaction: Omit<Transaction, "id" | "createdAt">): Omit<TransactionTable, "id" | "created_at"> => ({
-  amount: transaction.amount,
+  amount: normalizeMoney(transaction.amount),
   type: transaction.type,
   category_id: transaction.categoryId || null,
   budget_id: transaction.budgetId,
@@ -222,8 +223,8 @@ export const toCategoryTable = (category: Omit<Category, "id" | "createdAt">): O
 
 export const toBudgetTable = (budget: Omit<Budget, "id" | "createdAt" | "updatedAt">): Omit<BudgetTable, "id" | "created_at" | "updated_at"> => ({
   name: budget.name,
-  amount: budget.amount,
-  current_balance: budget.currentBalance,
+  amount: normalizeMoney(budget.amount),
+  current_balance: normalizeMoney(budget.currentBalance),
   period_type: budget.period || "monthly",
   alerts_enabled: budget.alertsEnabled === false ? 0 : 1,
   reset_day: budget.resetDay,
@@ -251,11 +252,11 @@ export const toSettingsTable = (
 export const toDebtTable = (debt: Omit<Debt, "id" | "createdAt" | "updatedAt">): Omit<DebtTable, "id" | "created_at" | "updated_at"> => ({
   name: debt.name,
   debt_type: debt.type || "i_owe",
-  amount: debt.totalAmount, // Use totalAmount for amount field
-  total_amount: debt.totalAmount,
-  current_balance: debt.currentBalance,
+  amount: normalizeMoney(debt.totalAmount), // Use totalAmount for amount field
+  total_amount: normalizeMoney(debt.totalAmount),
+  current_balance: normalizeMoney(debt.currentBalance),
   interest_rate: debt.interestRate ?? null,
-  minimum_payment: debt.minimumPayment ?? null,
+  minimum_payment: debt.minimumPayment !== undefined && debt.minimumPayment !== null ? normalizeMoney(debt.minimumPayment) : null,
   due_date: debt.dueDate ?? null,
   creditor: debt.creditor ?? null,
   description: debt.description ?? null,
@@ -269,11 +270,11 @@ export const toDebtTable = (debt: Omit<Debt, "id" | "createdAt" | "updatedAt">):
 
 export const toDebtPaymentTable = (payment: Omit<DebtPayment, "id" | "createdAt">): Omit<DebtPaymentTable, "id" | "created_at"> => ({
   debt_id: payment.debtId,
-  amount: payment.amount,
+  amount: normalizeMoney(payment.amount),
   date: payment.date, // Include date field
   payment_date: payment.paymentDate || payment.date, // Use paymentDate or fallback to date
-  principal: payment.principal,
-  interest: payment.interest,
+  principal: normalizeMoney(payment.principal),
+  interest: normalizeMoney(payment.interest),
   note: payment.note ?? null,
   // Don't include linked_transaction_id as it's not in the base schema
   // Sync fields
@@ -286,10 +287,10 @@ export const fromDebtTable = (row: DebtTable): Debt => ({
   id: row.id,
   name: row.name,
   type: (row.debt_type === "owed_to_me" ? "owed_to_me" : "i_owe"),
-  totalAmount: row.total_amount,
-  currentBalance: row.current_balance,
+  totalAmount: normalizeMoney(row.total_amount),
+  currentBalance: normalizeMoney(row.current_balance),
   interestRate: row.interest_rate ?? undefined,
-  minimumPayment: row.minimum_payment ?? undefined,
+  minimumPayment: row.minimum_payment !== null && row.minimum_payment !== undefined ? normalizeMoney(row.minimum_payment) : undefined,
   dueDate: row.due_date ?? undefined,
   creditor: row.creditor ?? undefined,
   description: row.description ?? undefined,
@@ -306,11 +307,11 @@ export const fromDebtTable = (row: DebtTable): Debt => ({
 export const fromDebtPaymentTable = (row: DebtPaymentTable): DebtPayment => ({
   id: row.id,
   debtId: row.debt_id,
-  amount: row.amount,
+  amount: normalizeMoney(row.amount),
   date: row.date, // Add date field
   paymentDate: row.payment_date,
-  principal: row.principal,
-  interest: row.interest,
+  principal: normalizeMoney(row.principal),
+  interest: normalizeMoney(row.interest),
   note: row.note ?? undefined,
   linkedTransactionId: row.linked_transaction_id,
   createdAt: row.created_at,
@@ -326,7 +327,7 @@ export const transformWallet = (row: WalletTable): WalletAccount => ({
   type: row.type as WalletType,
   icon: row.icon || "wallet-outline",
   color: row.color || "teal",
-  initialBalance: row.initial_balance ?? 0,
+  initialBalance: normalizeMoney(row.initial_balance ?? 0),
   isSecret: Boolean(row.is_secret),
   archived: Boolean(row.archived),
   createdAt: row.created_at,
@@ -342,7 +343,7 @@ export const toWalletTable = (
   type: wallet.type,
   icon: wallet.icon || "wallet-outline",
   color: wallet.color || "teal",
-  initial_balance: wallet.initialBalance ?? 0,
+  initial_balance: normalizeMoney(wallet.initialBalance ?? 0),
   is_secret: wallet.isSecret ? 1 : 0,
   archived: wallet.archived ? 1 : 0,
   updated_at: wallet.updatedAt || Date.now(),

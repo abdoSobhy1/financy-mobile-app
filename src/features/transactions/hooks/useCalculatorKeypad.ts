@@ -1,10 +1,16 @@
 import { useEffect, useRef, useState } from "react";
 import { Animated, Easing } from "react-native";
+import {
+  addMoney,
+  arabicToWesternDigits,
+  formatMoneyInput,
+  normalizeMoney,
+  subtractMoney,
+} from "../../../shared/utils";
 
 export const KEYPAD_HEIGHT = 350;
 
-export const arabicToWestern = (str: string): string =>
-  str.replace(/[٠-٩]/g, (d) => String(d.charCodeAt(0) - 0x0660));
+export const arabicToWestern = (str: string): string => arabicToWesternDigits(str);
 
 export const evaluateMath = (expr: string): number => {
   const normalized = arabicToWestern(expr);
@@ -23,7 +29,7 @@ export const evaluateMath = (expr: string): number => {
       if (op !== "+" && op !== "-") break;
       index += 1;
       const right = parseTerm();
-      value = op === "+" ? value + right : value - right;
+      value = op === "+" ? addMoney(value, right) : subtractMoney(value, right);
     }
     return value;
   };
@@ -81,7 +87,7 @@ export const evaluateMath = (expr: string): number => {
   if (index !== sanitized.length || !Number.isFinite(result)) {
     return 0;
   }
-  return result;
+  return normalizeMoney(result);
 };
 
 interface UseCalculatorKeypadOptions {
@@ -183,7 +189,7 @@ export function useCalculatorKeypad({
     if (!amountStr) return;
     const result = evaluateMath(amountStr);
     if (result > 0) {
-      setAmountStr(parseFloat(result.toFixed(2)).toString());
+      setAmountStr(formatMoneyInput(result));
     }
   };
 

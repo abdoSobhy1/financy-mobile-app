@@ -1,7 +1,7 @@
 import { DatabaseManager } from "../../../infrastructure/database";
 import { Debt, DebtPayment, Transaction } from "../../../shared/types";
 import { DebtTable, DebtPaymentTable, fromDebtTable, fromDebtPaymentTable, toDebtTable, toDebtPaymentTable } from "../../../infrastructure/database/models";
-import { generateId } from "../../../shared/utils";
+import { addMoney, generateId, isZeroMoney, normalizeMoney, subtractMoney } from "../../../shared/utils";
 import { offlineFirstSync } from "../../../infrastructure/sync/OfflineFirstSync";
 
 export class DebtRepository {
@@ -100,13 +100,9 @@ export class DebtRepository {
       for (const row of rows) {
         if (row.payment_count > 0) {
           const paidAmount = Math.max(row.total_paid_amount, row.total_paid_principal);
-          const rawExpected = Math.max(
-            0,
-            Math.round((row.total_amount - paidAmount) * 100) / 100
-          );
-          const expectedBalance = rawExpected < 0.01 ? 0 : rawExpected;
+          const expectedBalance = Math.max(0, subtractMoney(row.total_amount, paidAmount));
 
-          if (Math.abs(row.current_balance - expectedBalance) >= 0.01) {
+          if (!isZeroMoney(subtractMoney(row.current_balance, expectedBalance))) {
             await database.runAsync(
               `UPDATE debts SET current_balance = ?, updated_at = ?, sync_updated_at = ? WHERE id = ?`,
               [expectedBalance, now, Date.now(), row.id]
@@ -377,11 +373,7 @@ export class DebtRepository {
     );
 
     // Update debt balance safely (subtract payment amount and clamp to >= 0)
-    const rawNewBalance = Math.max(
-      0,
-      Math.round((debt.currentBalance - payment.amount) * 100) / 100
-    );
-    const finalBalance = rawNewBalance < 0.01 ? 0 : rawNewBalance;
+    const finalBalance = Math.max(0, subtractMoney(debt.currentBalance, payment.amount));
 
     await database.runAsync(
       `UPDATE debts SET current_balance = ?, updated_at = ?, sync_updated_at = ? WHERE id = ?`,
@@ -516,10 +508,10 @@ export class DebtRepository {
 
     const restoredBalance = currentDebtRow
       ? Math.min(
-          currentDebtRow.total_amount,
-          Math.round((currentDebtRow.current_balance + payment.amount) * 100) / 100
+          normalizeMoney(currentDebtRow.total_amount),
+          addMoney(currentDebtRow.current_balance, payment.amount)
         )
-      : payment.amount;
+      : normalizeMoney(payment.amount);
 
     const now = new Date().toISOString();
     await database.runAsync(
@@ -589,15 +581,14 @@ export class DebtRepository {
 
     // Update debt balance if payment amount changed
     if (updates.amount !== undefined && updates.amount !== payment.amount) {
-      const balanceChange = payment.amount - updates.amount;
-      const rawNewBalance = Math.max(
+      const balanceChange = subtractMoney(payment.amount, updates.amount);
+      const finalBalance = Math.max(
         0,
         Math.min(
-          debt.totalAmount,
-          Math.round((debt.currentBalance + balanceChange) * 100) / 100
+          normalizeMoney(debt.totalAmount),
+          addMoney(debt.currentBalance, balanceChange)
         )
       );
-      const finalBalance = rawNewBalance < 0.01 ? 0 : rawNewBalance;
       const now = new Date().toISOString();
       await database.runAsync(
         `UPDATE debts SET current_balance = ?, updated_at = ?, sync_updated_at = ? WHERE id = ?`,

@@ -2,6 +2,11 @@ import { useState, useEffect, useRef, useMemo } from "react";
 import { TextInput } from "react-native";
 
 import { WalletAccount, WalletType } from "../../../shared/types";
+import {
+  arabicToWesternDigits,
+  formatMoneyInput,
+  toMinorUnits,
+} from "../../../shared/utils";
 
 import { useUnsavedChanges } from "../../../shared/hooks";
 import { WALLET_COLORS, WALLET_ICONS } from "../model/walletEditorOptions";
@@ -51,10 +56,8 @@ export function useWalletEditorModal({
         setFormType(editingWallet.type);
         setFormIcon(editingWallet.icon || "wallet-outline");
         setFormColor(editingWallet.color || "teal");
-        setFormInitialBalance(currentBalance.toString());
-        setFormIsSecret(
-          Boolean(editingWallet.isSecret || (editingWallet as any).type === "secret")
-        );
+        setFormInitialBalance(formatMoneyInput(currentBalance));
+        setFormIsSecret(Boolean(editingWallet.isSecret));
       } else {
         setFormName("");
         setFormType("bank");
@@ -79,7 +82,9 @@ export function useWalletEditorModal({
       newErrors.name = "Account name is required";
     }
 
-    const cleanedBalance = formInitialBalance.trim().replace(/,/g, "");
+    const cleanedBalance = arabicToWesternDigits(formInitialBalance)
+      .trim()
+      .replace(/,/g, "");
     if (cleanedBalance && isNaN(Number(cleanedBalance))) {
       newErrors.initialBalance = "Please enter a valid amount";
     }
@@ -125,7 +130,8 @@ export function useWalletEditorModal({
         formType !== origType ||
         formColor !== origColor ||
         formIcon !== origIcon ||
-        formIsSecret !== origSecret
+        formIsSecret !== origSecret ||
+        toMinorUnits(formInitialBalance) !== toMinorUnits(currentBalance)
       );
     } else {
       return (
@@ -138,6 +144,7 @@ export function useWalletEditorModal({
   }, [
     visible,
     editingWallet,
+    currentBalance,
     formName,
     formType,
     formColor,

@@ -1,8 +1,10 @@
 import { format, parseISO, startOfDay, endOfDay, isValid, subDays } from "date-fns";
 import { CURRENCY, DATE_FORMATS } from "../constants";
 
-// Export date utilities
+// Export date and money utilities
 export * from "./dateUtils";
+export * from "./money";
+import { normalizeMoney, parseMoneyInput, subtractMoney } from "./money";
 
 // Dynamic active currency state (synced with Redux settingsSlice)
 let activeCurrencyCode: string = CURRENCY.DEFAULT;
@@ -34,10 +36,11 @@ export const getCurrencySymbol = (code: string = activeCurrencyCode): string => 
 
 // Currency formatting utilities
 export const formatCurrency = (
-  amount: number,
+  rawAmount: number,
   currency: string = activeCurrencyCode,
   locale?: string
 ): string => {
+  const amount = normalizeMoney(rawAmount);
   const code = (currency || activeCurrencyCode || CURRENCY.DEFAULT).toUpperCase();
   const meta = CURRENCY_METADATA[code];
   const resolvedLocale = locale || meta?.locale || CURRENCY.LOCALE;
@@ -66,10 +69,7 @@ export const formatCurrency = (
 };
 
 export const parseCurrencyInput = (input: string): number => {
-  // Remove currency symbols and formatting
-  const cleaned = input.replace(/[^0-9.-]/g, "");
-  const parsed = parseFloat(cleaned);
-  return isNaN(parsed) ? 0 : Math.abs(parsed); // Always return positive
+  return Math.abs(parseMoneyInput(input)); // Always return positive
 };
 
 // Date formatting utilities
@@ -288,7 +288,7 @@ export const sortBy = <T>(array: T[], key: keyof T | ((item: T) => any), directi
 
 // Number utilities
 export const roundToTwo = (num: number): number => {
-  return Math.round((num + Number.EPSILON) * 100) / 100;
+  return normalizeMoney(num);
 };
 
 export const percentage = (part: number, total: number): number => {
@@ -302,13 +302,15 @@ export const clamp = (value: number, min: number, max: number): number => {
 
 // Budget calculation utilities
 export const calculateBudgetProgress = (spent: number, budgetAmount: number) => {
-  const remaining = Math.max(0, budgetAmount - spent);
-  const percentageUsed = budgetAmount > 0 ? (spent / budgetAmount) * 100 : 0;
-  const isOverBudget = spent > budgetAmount;
+  const cleanSpent = normalizeMoney(spent);
+  const cleanBudget = normalizeMoney(budgetAmount);
+  const remaining = Math.max(0, subtractMoney(cleanBudget, cleanSpent));
+  const percentageUsed = cleanBudget > 0 ? (cleanSpent / cleanBudget) * 100 : 0;
+  const isOverBudget = cleanSpent > cleanBudget;
 
   return {
-    spent: roundToTwo(spent),
-    remaining: roundToTwo(remaining),
+    spent: cleanSpent,
+    remaining,
     percentageUsed: roundToTwo(percentageUsed),
     isOverBudget,
   };

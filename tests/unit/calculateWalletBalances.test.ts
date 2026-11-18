@@ -6,6 +6,15 @@ function assertStrictEqual(actual: any, expected: any, message?: string) {
 
 import { walletService } from "../../src/features/wallets/services/walletService";
 import { Transaction, WalletAccount } from "../../src/shared/types";
+import {
+  addMoney,
+  formatMoneyInput,
+  fromMinorUnits,
+  normalizeMoney,
+  parseMoneyInput,
+  subtractMoney,
+  toMinorUnits,
+} from "../../src/shared/utils/money";
 import { validateTransactionData } from "../../src/shared/utils/validation";
 
 console.log("Running calculateWalletBalances unit tests...\n");
@@ -430,6 +439,69 @@ const wallets: WalletAccount[] = [
   assertStrictEqual(transferError, null, "Transfer transaction does not require category");
 
   console.log("✓ Test 11: validateTransactionData permits Balance adjustment transactions without category passed");
+}
+
+{
+  // Test 12: Minor-unit money engine eliminates IEEE-754 float drift and *100/100 rounding bugs
+  assertStrictEqual(toMinorUnits(25), 2500, "25 -> 2500 minor units");
+  assertStrictEqual(toMinorUnits("24.999999"), 2500, "24.999999 -> 2500 minor units");
+  assertStrictEqual(toMinorUnits(24.999999999999996), 2500, "float drift 24.999999999999996 -> 2500");
+  // Cases where naive Math.round(x * 100) / 100 fails due to binary float multiplication:
+  assertStrictEqual(toMinorUnits(1.005), 101, "1.005 -> 101 minor units (not 100)");
+  assertStrictEqual(normalizeMoney(1.005), 1.01, "1.005 normalizes to 1.01");
+  assertStrictEqual(normalizeMoney(35.855), 35.86, "35.855 normalizes to 35.86");
+  assertStrictEqual(fromMinorUnits(2500), 25, "2500 minor units -> 25");
+  assertStrictEqual(formatMoneyInput(24.999999), "25", "formatMoneyInput strips float noise");
+  assertStrictEqual(parseMoneyInput("٢٥.٥٠"), 25.5, "Arabic-Indic digits parsed accurately");
+  assertStrictEqual(subtractMoney(25.3, addMoney(0.1, 0.2)), 25, "25.3 - (0.1 + 0.2) === 25");
+
+  const driftWallet: WalletAccount = {
+    id: "drift_wallet",
+    name: "Drift Test",
+    type: "bank",
+    icon: "business-outline",
+    color: "blue",
+    initialBalance: 0,
+    isSecret: false,
+    createdAt: "2025-01-01T00:00:00.000Z",
+  };
+  const driftTxs: Transaction[] = [
+    {
+      id: "d1",
+      amount: 25.3,
+      type: "income",
+      accountId: "drift_wallet",
+      description: "Deposit",
+      date: "2025-01-01T00:00:00.000Z",
+      createdAt: "2025-01-01T00:00:00.000Z",
+      updatedAt: 1,
+    },
+    {
+      id: "d2",
+      amount: 0.1,
+      type: "expense",
+      accountId: "drift_wallet",
+      description: "Fee 1",
+      date: "2025-01-01T00:00:00.000Z",
+      createdAt: "2025-01-01T00:00:00.000Z",
+      updatedAt: 2,
+    },
+    {
+      id: "d3",
+      amount: 0.2,
+      type: "expense",
+      accountId: "drift_wallet",
+      description: "Fee 2",
+      date: "2025-01-01T00:00:00.000Z",
+      createdAt: "2025-01-01T00:00:00.000Z",
+      updatedAt: 3,
+    },
+  ];
+  const driftBalances = walletService.calculateWalletBalances([driftWallet], driftTxs);
+  assertStrictEqual(driftBalances["drift_wallet"], 25, "Wallet balance is exact 25, never 24.999999999999996");
+  assertStrictEqual(formatMoneyInput(driftBalances["drift_wallet"]), "25", "Editor modal displays exact '25'");
+
+  console.log("✓ Test 12: Minor-unit money engine and float-drift prevention passed");
 }
 
 console.log("\nAll calculateWalletBalances unit tests passed successfully! 🎉");

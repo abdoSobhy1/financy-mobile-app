@@ -1,5 +1,11 @@
 import { Transaction, WalletAccount, WalletType } from "../../../shared/types";
 import {
+  fromMinorUnits,
+  isZeroMoney,
+  normalizeMoney,
+  toMinorUnits,
+} from "../../../shared/utils";
+import {
   getVisibleWallets,
   isSecretTransaction,
   isSecretWallet,
@@ -192,9 +198,8 @@ export const walletService = {
     archived?: boolean;
   }): Promise<WalletAccount[]> {
     const trimmedName = data.name.trim();
-    const isSecret = Boolean(data.isSecret || (data.type as any) === "secret");
-    const safeType: WalletType =
-      (data.type as any) === "secret" ? "cash" : data.type;
+    const isSecret = Boolean(data.isSecret);
+    const safeType: WalletType = data.type;
 
     // Prevent rapid duplicate submissions for the same account name & type (within 1.5s)
     const now = Date.now();
@@ -213,7 +218,7 @@ export const walletService = {
     lastAddWalletCall = { name: trimmedName, type: safeType, timestamp: now };
 
     try {
-      const initBal = Number(data.initialBalance) || 0;
+      const initBal = normalizeMoney(data.initialBalance);
       const db = await getDb();
       const newWallet = await db.wallets.createWallet({
         name: trimmedName,
@@ -225,7 +230,7 @@ export const walletService = {
         archived: Boolean(data.archived),
       });
 
-      if (Math.abs(initBal) > 0.001) {
+      if (!isZeroMoney(initBal)) {
         await db.transactions.createTransaction({
           amount: Math.abs(initBal),
           type: initBal >= 0 ? "income" : "expense",
@@ -246,24 +251,8 @@ export const walletService = {
     id: string,
     updates: Partial<Omit<WalletAccount, "id" | "createdAt">>,
   ): Promise<WalletAccount[]> {
-    const isSecret =
-      updates.isSecret !== undefined
-        ? updates.isSecret
-        : (updates.type as any) === "secret"
-        ? true
-        : undefined;
-
-    const safeType: WalletType | undefined =
-      (updates.type as any) === "secret"
-        ? "cash"
-        : updates.type;
-
     const db = await getDb();
-    await db.wallets.updateWallet(id, {
-      ...updates,
-      ...(safeType ? { type: safeType } : {}),
-      ...(isSecret !== undefined ? { isSecret } : {}),
-    });
+    await db.wallets.updateWallet(id, updates);
 
     return this.getWallets();
   },
@@ -305,7 +294,8 @@ export const walletService = {
     amount: number,
     budgetId?: string,
   ): Promise<WalletAccount[]> {
-    if (!fromWalletId || !toWalletId || fromWalletId === toWalletId || amount <= 0) {
+    const cleanAmount = normalizeMoney(amount);
+    if (!fromWalletId || !toWalletId || fromWalletId === toWalletId || cleanAmount <= 0) {
       return this.getWallets();
     }
 
@@ -315,7 +305,7 @@ export const walletService = {
 
     if (fromWallet && toWallet) {
       await db.transactions.createTransaction({
-        amount,
+        amount: cleanAmount,
         type: "transfer",
         accountId: fromWalletId,
         toAccountId: toWalletId,
@@ -334,11 +324,11 @@ export const walletService = {
     transactions: Transaction[],
     options?: { periodOnly?: boolean },
   ): Record<string, number> {
-    const balances: Record<string, number> = {};
+    const minorBalances: Record<string, number> = {};
     const periodOnly = options?.periodOnly ?? false;
 
     for (const w of wallets) {
-      balances[w.id] = periodOnly ? 0 : (w.initialBalance || 0);
+      minorBalances[w.id] = periodOnly ? 0 : toMinorUnits(w.initialBalance);
     }
 
     // Default cash wallet fallback for missing or unknown account IDs
@@ -349,12 +339,12 @@ export const walletService = {
       wallets[0];
     const fallbackCashWalletId = cashWallet?.id || "default_cash";
 
-    if (balances[fallbackCashWalletId] === undefined) {
-      balances[fallbackCashWalletId] = 0;
+    if (minorBalances[fallbackCashWalletId] === undefined) {
+      minorBalances[fallbackCashWalletId] = 0;
     }
 
     const resolveWalletId = (accountId?: string, _txId?: string): string => {
-      if (accountId && balances[accountId] !== undefined) {
+      if (accountId && minorBalances[accountId] !== undefined) {
         return accountId;
       }
       return fallbackCashWalletId;
@@ -362,35 +352,41 @@ export const walletService = {
 
     for (const tx of transactions) {
       if (tx.deleted) continue;
+      const amountMinor = toMinorUnits(tx.amount);
 
       if (tx.type === "transfer") {
         const fromWalletId = resolveWalletId(tx.accountId, tx.id);
         const toWalletId = resolveWalletId(tx.toAccountId, tx.id);
 
-        if (balances[fromWalletId] === undefined) {
-          balances[fromWalletId] = 0;
+        if (minorBalances[fromWalletId] === undefined) {
+          minorBalances[fromWalletId] = 0;
         }
-        balances[fromWalletId] -= tx.amount;
+        minorBalances[fromWalletId] -= amountMinor;
 
-        if (balances[toWalletId] === undefined) {
-          balances[toWalletId] = 0;
+        if (minorBalances[toWalletId] === undefined) {
+          minorBalances[toWalletId] = 0;
         }
-        balances[toWalletId] += tx.amount;
+        minorBalances[toWalletId] += amountMinor;
       } else if (tx.type === "income") {
         const walletId = resolveWalletId(tx.accountId, tx.id);
 
-        if (balances[walletId] === undefined) {
-          balances[walletId] = 0;
+        if (minorBalances[walletId] === undefined) {
+          minorBalances[walletId] = 0;
         }
-        balances[walletId] += tx.amount;
+        minorBalances[walletId] += amountMinor;
       } else if (tx.type === "expense" || tx.type === "debt") {
         const walletId = resolveWalletId(tx.accountId, tx.id);
 
-        if (balances[walletId] === undefined) {
-          balances[walletId] = 0;
+        if (minorBalances[walletId] === undefined) {
+          minorBalances[walletId] = 0;
         }
-        balances[walletId] -= tx.amount;
+        minorBalances[walletId] -= amountMinor;
       }
+    }
+
+    const balances: Record<string, number> = {};
+    for (const id of Object.keys(minorBalances)) {
+      balances[id] = fromMinorUnits(minorBalances[id]);
     }
 
     return balances;

@@ -8,7 +8,7 @@ import { useToast } from "../../../shared/ui";
 import { AppDispatch, RootState } from "../../../app/store";
 import { fetchTransactions } from "../../transactions/store/transactionsSlice";
 import { walletService } from "../services/walletService";
-import { formatCurrency } from "../../../shared/utils";
+import { formatCurrency, parseMoneyInput } from "../../../shared/utils";
 import { useUnsavedChanges } from "../../../shared/hooks";
 export interface TransferModalProps {
   visible: boolean;
@@ -88,8 +88,7 @@ export function useTransferModal({
   };
 
   const handleTransferSubmit = async () => {
-    const cleaned = transferAmount.trim().replace(/,/g, "");
-    const amt = parseFloat(cleaned);
+    const amt = parseMoneyInput(transferAmount);
 
     if (!amt || isNaN(amt) || amt <= 0) {
       setTransferError("Please enter a valid transfer amount");

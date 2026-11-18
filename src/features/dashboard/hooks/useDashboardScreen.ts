@@ -8,7 +8,7 @@ import { Dimensions } from "react-native";
 import { RootState, AppDispatch } from "../../../app/store";
 import { Transaction, WalletAccount, ParsedTransaction } from "../../../shared/types";
 import { getCurrentBillingPeriod, getPreviousBillingPeriod } from "../../budgets/utils/billingPeriod";
-import { formatCurrency } from "../../../shared/utils";
+import { formatCurrency, parseMoneyInput } from "../../../shared/utils";
 import { useToast } from "../../../shared/ui";
 
 import type { WalletEditorFormValues } from "../../wallets/components/WalletEditorModal";
@@ -306,7 +306,7 @@ export function useDashboardScreen() {
       return;
     }
     isCreatingWalletRef.current = true;
-    const initBal = parseFloat(values.initialBalance.replace(/,/g, "")) || 0;
+    const initBal = parseMoneyInput(values.initialBalance);
     try {
       const updatedWallets = await walletService.addWallet({
         name: values.name.trim(),

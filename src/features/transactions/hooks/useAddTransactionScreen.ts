@@ -11,6 +11,7 @@ import { addTransaction, updateTransaction } from "../store/transactionsSlice";
 import { fetchCategories, addCategory } from "../../categories/store/categoriesSlice";
 import { fetchBudgets } from "../../budgets/store/budgetsSlice";
 import { TransactionFormData, TransactionStackParamList, TransactionType, WalletAccount } from "../../../shared/types";
+import { formatMoneyInput } from "../../../shared/utils";
 
 import { useToast } from "../../../shared/ui";
 
@@ -234,7 +235,7 @@ export function useAddTransactionScreen() {
         navigation.goBack();
         return;
       }
-      setAmountStr(editTransaction.amount.toString());
+      setAmountStr(formatMoneyInput(editTransaction.amount));
       setType(editTransaction.type);
       setCategoryId(editTransaction.categoryId || "");
       setBudgetId(editTransaction.budgetId || "");
@@ -247,7 +248,7 @@ export function useAddTransactionScreen() {
         setAmountFocused(true);
       }
     } else if (prefilledData) {
-      if (prefilledData.amount) setAmountStr(prefilledData.amount.toString());
+      if (prefilledData.amount) setAmountStr(formatMoneyInput(prefilledData.amount));
       if (prefilledData.type) setType(prefilledData.type);
       if (prefilledData.categoryId) setCategoryId(prefilledData.categoryId);
       if (prefilledData.budgetId) setBudgetId(prefilledData.budgetId);
@@ -342,7 +343,7 @@ export function useAddTransactionScreen() {
       description.trim() ? description : categories[categoryId]?.name || "";
 
     const transactionData: TransactionFormData = {
-      amount: finalAmount.toString(),
+      amount: formatMoneyInput(finalAmount),
       type,
       categoryId,
       budgetId: budgetId || undefined,

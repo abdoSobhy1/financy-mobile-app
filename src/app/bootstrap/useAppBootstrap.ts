@@ -17,11 +17,9 @@ import { offlineFirstSync, registerSyncDispatchListener } from "../../infrastruc
 import { setLastSync } from "../../infrastructure/sync/store/syncSlice";
 import { registerDeltaSyncListener } from "../../infrastructure/sync/syncService";
 
-import AsyncStorage from "@react-native-async-storage/async-storage";
 import { fetchSettings } from "../../features/settings/store/settingsSlice";
 import { clearSmsTransaction, retrieveSmsTransaction, smsService, getSmsDetectionEnabled } from "../../features/sms/services/smsService";
 import { subscribeSmsConfig } from "../../features/sms/services/smsConfigService";
-import { databaseMigration } from "../../infrastructure/database/migrations/databaseMigration";
 import NotificationService from "../../infrastructure/notifications/notificationService";
 
 SplashScreen.preventAutoHideAsync();
@@ -86,21 +84,6 @@ export function useAppBootstrap() {
         } catch (e) {
           console.warn("Could not pre-fetch settings:", e);
         }
-
-        // Clean up legacy app lock state if present
-        AsyncStorage.multiRemove([
-          "financy_app_lock_enabled_v1",
-          "financy_app_lock_pin_hash_v1",
-        ]).catch(() => { });
-
-        // Run database migrations if needed for cloud compatibility
-        const needsMigrations = await databaseMigration.needsMigrations();
-        if (needsMigrations) {
-          await databaseMigration.runCloudCompatibilityMigrations();
-        } else {
-        }
-
-        // Initialize Offline-First Sync
 
         // Initialize sync service (includes network listener and periodic sync)
         networkUnsubscribe = offlineFirstSync.initialize();

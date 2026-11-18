@@ -4,7 +4,7 @@ import { useNavigation, useRoute, RouteProp } from "@react-navigation/native";
 import { StackNavigationProp } from "@react-navigation/stack";
 import { TransactionStackParamList, ParsedTransaction } from "../../../shared/types";
 
-import { formatCurrency } from "../../../shared/utils";
+import { formatCurrency, subtractMoney, sumMoney } from "../../../shared/utils";
 import { useToast } from "../../../shared/ui";
 import { useSelector, useDispatch } from "react-redux";
 import { RootState, AppDispatch } from "../../../app/store";
@@ -95,7 +95,7 @@ export function useVoiceVerifyScreen() {
   const transactions = useMemo(() => Object.values(transactionsMap), [transactionsMap]);
 
   const itemsSum = useMemo(
-    () => Math.round(parsedTransactions.reduce((sum, t) => sum + (t.amount || 0), 0) * 100) / 100,
+    () => sumMoney(parsedTransactions, (t) => t.amount || 0),
     [parsedTransactions]
   );
 
@@ -103,7 +103,7 @@ export function useVoiceVerifyScreen() {
 
   const totalAmount = useMemo(() => {
     if (discount > 0) {
-      return Math.max(0, Math.round((itemsSum - discount) * 100) / 100);
+      return Math.max(0, subtractMoney(itemsSum, discount));
     }
     return itemsSum;
   }, [itemsSum, discount]);

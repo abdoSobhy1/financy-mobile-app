@@ -13,6 +13,7 @@ import { Image } from "react-native";
 import * as FileSystem from "expo-file-system/legacy";
 import NetInfo from "@react-native-community/netinfo";
 import { Category, ParsedTransaction, TransactionType } from "../../shared/types";
+import { normalizeMoney, sumMoney } from "../../shared/utils";
 import { guessCategoryId } from "../../features/categories/utils/categoryDictionary";
 import { detectCategory } from "../../features/voice/services/voiceParser";
 import { getAIConfig } from "./aiConfigService";
@@ -574,13 +575,13 @@ function buildOcrResultFromExtracted(
     const qty = it.quantity && it.quantity > 0 ? it.quantity : 1;
     const price = typeof it.price === "number" ? it.price : parseFloat(String(it.price));
     const unitPrice =
-      it.unitPrice || (qty > 1 && price > 0 ? Math.round((price / qty) * 100) / 100 : undefined);
+      it.unitPrice || (qty > 1 && price > 0 ? normalizeMoney(price / qty) : undefined);
 
     return {
       id: `item_${Math.random().toString(36).substring(2, 9)}`,
       name: it.name.trim(),
       quantity: qty,
-      price: isNaN(price) ? 0 : price,
+      price: isNaN(price) ? 0 : normalizeMoney(price),
       unitPrice,
       categoryId: detectCategory(it.name, categories),
       selected: true,
@@ -588,7 +589,7 @@ function buildOcrResultFromExtracted(
   });
 
   const itemsSum =
-    items.length > 0 ? Math.round(items.reduce((sum, it) => sum + it.price, 0) * 100) / 100 : undefined;
+    items.length > 0 ? sumMoney(items, (it) => it.price) : undefined;
 
   let grandTotal = extracted.total || fallbackGrandTotal || undefined;
   if (!grandTotal && itemsSum) {

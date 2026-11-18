@@ -15,6 +15,7 @@ import * as FileSystem from "expo-file-system/legacy";
 import * as ImagePicker from "expo-image-picker";
 import * as DocumentPicker from "expo-document-picker";
 import { Category, TransactionType } from "../../../shared/types";
+import { normalizeMoney, sumMoney } from "../../../shared/utils";
 import { guessCategoryId } from "../../categories/utils/categoryDictionary";
 import { detectCategory } from "../../voice/services/voiceParser";
 import { AIService, isReceiptMetadataOrTotal } from "../../../infrastructure/ai/aiService";
@@ -168,7 +169,7 @@ export function parseAmount(str?: string): number | undefined {
 
   const val = parseFloat(cleaned);
   if (isNaN(val) || val <= 0 || val > 50000000) return undefined;
-  return Math.round(val * 100) / 100;
+  return normalizeMoney(val);
 }
 
 /**
@@ -590,7 +591,7 @@ function parseSingleLineItem(line: string): OcrReceiptItem | null {
     ) {
       let unitPrice: number | undefined = undefined;
       if (qty > 1 && price > 0) {
-        unitPrice = Math.round((price / qty) * 100) / 100;
+        unitPrice = normalizeMoney(price / qty);
       }
       return {
         id: `item_${Math.random().toString(36).substring(2, 9)}`,
@@ -1010,7 +1011,7 @@ export function parseReceiptText(
   // 4d. Total Amount Calculation:
   // Items sum is computed from validated line items.
   if (items.length > 0) {
-    itemsSum = Math.round(items.reduce((acc, it) => acc + it.price, 0) * 100) / 100;
+    itemsSum = sumMoney(items, (it) => it.price);
     // If no explicit grand total keyword was found, derive amount from items sum.
     // If an explicit grand total was found and items sum is closely aligned, adopt items sum for decimal accuracy.
     if (!amount) {

@@ -1,4 +1,3 @@
-import AsyncStorage from "@react-native-async-storage/async-storage";
 import {
   getStoredUser,
   isCurrentSessionCloudAllowed,
@@ -6,13 +5,10 @@ import {
   markSessionSeeded,
 } from "../../auth/services/authSessionStorage";
 import { DatabaseManager } from "../../../infrastructure/database";
-import { WalletAccount, WalletType } from "../../../shared/types";
+import { WalletAccount } from "../../../shared/types";
 import { WalletTable, transformWallet } from "../../../infrastructure/database/models";
-import { generateId } from "../../../shared/utils";
+import { generateId, normalizeMoney } from "../../../shared/utils";
 import { offlineFirstSync } from "../../../infrastructure/sync/OfflineFirstSync";
-
-export const WALLETS_STORAGE_KEY = "financy_wallets_v1";
-export const WALLETS_MIGRATED_KEY = "financy_wallets_migrated_to_sqlite_v1";
 
 import { DEFAULT_WALLETS } from "../services/walletService";
 export { DEFAULT_WALLETS };
@@ -33,7 +29,7 @@ export class WalletRepository {
         return;
       }
     }
-    await this.migrateAndSeedIfNeeded();
+    await this.seedIfNeeded();
     this.initialized = true;
   }
 
@@ -59,63 +55,10 @@ export class WalletRepository {
     }
   }
 
-  private async migrateAndSeedIfNeeded(): Promise<void> {
+  private async seedIfNeeded(): Promise<void> {
     const database = this.db.getDatabase();
 
     try {
-      const migrationDone = await AsyncStorage.getItem(WALLETS_MIGRATED_KEY);
-      if (!migrationDone) {
-        const legacyData = await AsyncStorage.getItem(WALLETS_STORAGE_KEY);
-        if (legacyData) {
-          try {
-            const parsed = JSON.parse(legacyData);
-            if (Array.isArray(parsed) && parsed.length > 0) {
-              for (const item of parsed) {
-                const isSecret = Boolean(item.isSecret || item.type === "secret");
-                const walletType: WalletType =
-                  item.type === "secret"
-                    ? "cash"
-                    : ["cash", "bank", "card", "wallet"].includes(item.type)
-                    ? item.type
-                    : "cash";
-
-                const existing = await database.getFirstAsync<{ id: string }>(
-                  "SELECT id FROM wallets WHERE id = ?",
-                  [item.id],
-                );
-
-                if (!existing) {
-                  const now = Date.now();
-                  await database.runAsync(
-                    `INSERT INTO wallets (id, name, type, icon, color, initial_balance, is_secret, archived, created_at, updated_at, sync_updated_at, deleted, sync_status)
-                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-                    [
-                      item.id,
-                      item.name || "Wallet",
-                      walletType,
-                      item.icon || "wallet-outline",
-                      item.color || (isSecret ? "gray" : "teal"),
-                      Number(item.initialBalance) || 0,
-                      isSecret ? 1 : 0,
-                      item.archived ? 1 : 0,
-                      item.createdAt || new Date().toISOString(),
-                      now,
-                      now,
-                      0,
-                      "pending",
-                    ],
-                  );
-                }
-              }
-            }
-          } catch (e) {
-            console.warn("Failed to parse legacy wallets from AsyncStorage:", e);
-          }
-        }
-        await AsyncStorage.setItem(WALLETS_MIGRATED_KEY, "true");
-      }
-
-      // Check if table has any wallets
       const anyRow = await database.getFirstAsync<{ count: number }>(
         "SELECT COUNT(*) as count FROM wallets",
       );
@@ -126,7 +69,7 @@ export class WalletRepository {
         }
       }
     } catch (error) {
-      console.warn("Error during wallets migrate/seed check:", error);
+      console.warn("Error during wallets seed check:", error);
     }
   }
 
@@ -248,7 +191,7 @@ export class WalletRepository {
     const now = Date.now();
     const isSecret = Boolean(wallet.isSecret);
     const type = wallet.type;
-    const initialBalance = Number(wallet.initialBalance) || 0;
+    const initialBalance = normalizeMoney(wallet.initialBalance);
     const icon =
       wallet.icon ||
       (type === "cash"
@@ -332,7 +275,7 @@ export class WalletRepository {
     }
     if (updates.initialBalance !== undefined) {
       setParts.push("initial_balance = ?");
-      params.push(Number(updates.initialBalance) || 0);
+      params.push(normalizeMoney(updates.initialBalance));
     }
     if (updates.isSecret !== undefined) {
       setParts.push("is_secret = ?");
@@ -414,21 +357,12 @@ export class WalletRepository {
     await this.ensureInitialized();
     const database = this.db.getDatabase();
 
-    try {
-      const row = await database.getFirstAsync<{ count: number }>(
-        `SELECT COUNT(*) as count FROM transactions 
-         WHERE (account_id = ? OR to_account_id = ?) AND (deleted = 0 OR deleted IS NULL)`,
-        [walletId, walletId],
-      );
-      return row?.count || 0;
-    } catch {
-      const row = await database.getFirstAsync<{ count: number }>(
-        `SELECT COUNT(*) as count FROM transactions 
-         WHERE account_id = ? AND (deleted = 0 OR deleted IS NULL)`,
-        [walletId],
-      );
-      return row?.count || 0;
-    }
+    const row = await database.getFirstAsync<{ count: number }>(
+      `SELECT COUNT(*) as count FROM transactions 
+       WHERE (account_id = ? OR to_account_id = ?) AND (deleted = 0 OR deleted IS NULL)`,
+      [walletId, walletId],
+    );
+    return row?.count || 0;
   }
 
   async reassignTransactions(
@@ -453,16 +387,12 @@ export class WalletRepository {
       );
       affected += resFrom.changes;
 
-      try {
-        const resTo = await database.runAsync(
-          `UPDATE transactions SET to_account_id = ?, updated_at = ?, sync_updated_at = ?, sync_status = 'pending'
-           WHERE to_account_id = ?`,
-          [toWalletId, now, now, fromWalletId],
-        );
-        affected += resTo.changes;
-      } catch {
-        // to_account_id might not exist yet before phase 3
-      }
+      const resTo = await database.runAsync(
+        `UPDATE transactions SET to_account_id = ?, updated_at = ?, sync_updated_at = ?, sync_status = 'pending'
+         WHERE to_account_id = ?`,
+        [toWalletId, now, now, fromWalletId],
+      );
+      affected += resTo.changes;
     });
 
     // Log updated transactions so Firebase reflects the new wallet assignment

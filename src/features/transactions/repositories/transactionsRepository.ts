@@ -288,7 +288,7 @@ export class TransactionRepository {
         const restoredAmount = debtPayment.amount || debtPayment.principal || 0;
         // Restore debt balance clamped to total_amount
         await database.runAsync(
-          "UPDATE debts SET current_balance = MIN(total_amount, ROUND((current_balance + ?) * 100) / 100), updated_at = ?, sync_updated_at = ? WHERE id = ?",
+          "UPDATE debts SET current_balance = MIN(total_amount, ROUND(current_balance + ?, 2)), updated_at = ?, sync_updated_at = ? WHERE id = ?",
           [
             restoredAmount,
             new Date().toISOString(),
